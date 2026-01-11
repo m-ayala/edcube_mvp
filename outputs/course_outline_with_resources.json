@@ -1,0 +1,888 @@
+{
+  "course_title": "mlk jr. - 5",
+  "grade_level": "5",
+  "subject": "",
+  "topic": "mlk jr.",
+  "total_duration_minutes": 325,
+  "sections": [
+    {
+      "id": "section_1",
+      "title": "Introduction to Martin Luther King Jr.",
+      "description": "Students will learn about the early life of MLK Jr. and his growing awareness of racial injustice.",
+      "duration_minutes": 20,
+      "box_id": 1,
+      "pla_pillars": [
+        "Knowledge"
+      ],
+      "subtopics": [
+        {
+          "name": "Direct Teaching",
+          "topics": [
+            "Early life",
+            "Family background",
+            "Education"
+          ],
+          "duration_minutes": 15
+        }
+      ],
+      "needs_worksheets": true,
+      "needs_activities": true,
+      "learning_objectives": [
+        "Students will recognize the early influences on MLK Jr.'s life.",
+        "Students will identify key aspects of MLK Jr.'s childhood.",
+        "Students will understand the influence of MLK's family and community on his views."
+      ],
+      "content_keywords": [
+        "MLK Jr.",
+        "early life",
+        "childhood",
+        "family",
+        "education"
+      ],
+      "what_must_be_covered": "The early life of Martin Luther King Jr., including his family background, education, and childhood experiences.",
+      "search_queries_used": [
+        "Martin Luther King Jr. early life",
+        "MLK childhood and education"
+      ],
+      "video_resources": [
+        {
+          "video_id": "snYrHgoGJ5A",
+          "title": "The Story of Martin Luther King Jr. | In Memory of Greatest Civil Rights Leader | Dr. Binocs Show",
+          "channel_name": "Peekaboo Kidz",
+          "channel_id": "UCxlJ45KjG4XVcQ_hd8j227A",
+          "channel_verified": false,
+          "duration_seconds": 359,
+          "duration_formatted": "5:59",
+          "view_count": 1193893,
+          "like_count": 6440,
+          "like_ratio": 0.0054,
+          "thumbnail_url": "https://i.ytimg.com/vi/snYrHgoGJ5A/hqdefault.jpg",
+          "video_url": "https://www.youtube.com/watch?v=snYrHgoGJ5A",
+          "description": "Martin Luther King Jr. was an American Baptist minister, activist, and political philosopher who was one of the most prominent leaders in the civil rights movement from 1955 until his assassination in 1968.\n\n#martinlutherking #martinlutherkingday #civilrightsleader #greatleader #drbinocsshow #birthdaytribute \n\nMake sure you watch the whole video to know all the answers to your curious questions! \n\nLeave your ideas, suggestions and questions for Dr. Binocs at this Email Id: peekabookidzfeedback@g",
+          "category_id": "27",
+          "relevance_score": 5.88,
+          "why_selected": "Kid-friendly channel, unique content"
+        },
+        {
+          "video_id": "q7EPHjtWjzg",
+          "title": "Martin Luther King Jr.'s Childhood Years | Drive Thru History with Dave Stotts",
+          "channel_name": "Drive Thru History with Dave Stotts",
+          "channel_id": "UCoWVztmLaeBisv69dDki0Sg",
+          "channel_verified": false,
+          "duration_seconds": 313,
+          "duration_formatted": "5:13",
+          "view_count": 19462,
+          "like_count": 380,
+          "like_ratio": 0.0195,
+          "thumbnail_url": "https://i.ytimg.com/vi/q7EPHjtWjzg/hqdefault.jpg",
+          "video_url": "https://www.youtube.com/watch?v=q7EPHjtWjzg",
+          "description": "Drive Thru History: In this clip taken from our Martin Luther King Jr. special,  Dave Stotts is in Atlanta, Georgia at MLK's childhood home. We see where Dr. King grew up, where he went to school, and his first experience of racism. We'll also go inside the church Martin Luther King pastored until his death.\n\nWatch the FULL special here! - https://watch.tbn.org/videos/drive-thru-history-special-martin-luther-king-jr-2021\n\nEnjoy this clip from Drive Thru History\u00ae: American Holidays, broadcast on ",
+          "category_id": "27",
+          "relevance_score": 4.56,
+          "why_selected": "Unique content"
+        }
+      ]
+    },
+    {
+      "id": "section_2",
+      "title": "A Brief History of Slavery in America",
+      "description": "Students will explore the history and impact of slavery in America.",
+      "duration_minutes": 25,
+      "box_id": 2,
+      "pla_pillars": [
+        "Knowledge"
+      ],
+      "subtopics": [
+        {
+          "name": "Video Explanation",
+          "topics": [
+            "Origins of slavery",
+            "Life of enslaved people",
+            "Abolition movement"
+          ],
+          "duration_minutes": 20
+        }
+      ],
+      "needs_worksheets": true,
+      "needs_activities": true,
+      "learning_objectives": [
+        "Students will gain an understanding of the historical context of slavery.",
+        "Students will summarize the history of slavery in America.",
+        "Students will describe the conditions faced by enslaved people."
+      ],
+      "content_keywords": [
+        "slavery",
+        "American history",
+        "abolition",
+        "enslaved people"
+      ],
+      "what_must_be_covered": "The origins and development of slavery in America, the conditions faced by enslaved people, and the abolition movement.",
+      "search_queries_used": [
+        "Slavery in America for students",
+        "American slavery history kids"
+      ],
+      "video_resources": []
+    },
+    {
+      "id": "section_3",
+      "title": "The Civil Rights Movement",
+      "description": "Students will learn about the key events and figures in the Civil Rights Movement.",
+      "duration_minutes": 30,
+      "box_id": 3,
+      "pla_pillars": [
+        "Knowledge"
+      ],
+      "subtopics": [
+        {
+          "name": "Guided Discovery",
+          "topics": [
+            "Key events",
+            "Major figures",
+            "Impact on society"
+          ],
+          "duration_minutes": 25
+        }
+      ],
+      "needs_worksheets": true,
+      "needs_activities": true,
+      "learning_objectives": [
+        "Students will understand the significance of the Civil Rights Movement.",
+        "Students will identify major events and figures in the Civil Rights Movement.",
+        "Students will explain the movement's impact on society."
+      ],
+      "content_keywords": [
+        "Civil Rights Movement",
+        "key events",
+        "major figures",
+        "social impact"
+      ],
+      "what_must_be_covered": "An overview of the Civil Rights Movement, including major events, figures, and its impact on American society.",
+      "search_queries_used": [
+        "Civil Rights Movement for kids",
+        "Key figures Civil Rights kids"
+      ],
+      "video_resources": [
+        {
+          "video_id": "WKEGou1zPII",
+          "title": "Civil Rights Act of 1964 | Montgomery Bus Boycott for Kids | Rosa Parks and Martin Luther King",
+          "channel_name": "Kids Academy",
+          "channel_id": "UCqb89GqploCXgz4lsdR-_ww",
+          "channel_verified": false,
+          "duration_seconds": 312,
+          "duration_formatted": "5:12",
+          "view_count": 1140288,
+          "like_count": 6825,
+          "like_ratio": 0.006,
+          "thumbnail_url": "https://i.ytimg.com/vi/WKEGou1zPII/hqdefault.jpg",
+          "video_url": "https://www.youtube.com/watch?v=WKEGou1zPII",
+          "description": "Thousands of parents and educators are turning to the kids\u2019 learning app that makes real learning truly fun. Try Kids Academy with \n 3-day FREE TRIAL! https://bit.ly/2GuGyL2\n\nCivil Rights Act of 1964 | Montgomery Bus Boycott | Rosa Parks and Martin Luther King\n\nAmerican civil rights movement took place mainly during the 1950s and 1960s. It emerged as a response to the existing discrimination based on race, color, religion, sex, and national origin. \n\nOne example of racial discrimination would be",
+          "category_id": "27",
+          "relevance_score": 4.31,
+          "why_selected": "Unique content"
+        },
+        {
+          "video_id": "8b3Y9xVvQzw",
+          "title": "Can Kids Change the World? | The Civil Rights Movement",
+          "channel_name": "Scholastic",
+          "channel_id": "UCR79JJpUPtZFwr7477T0MOg",
+          "channel_verified": false,
+          "duration_seconds": 416,
+          "duration_formatted": "6:56",
+          "view_count": 503527,
+          "like_count": 3227,
+          "like_ratio": 0.0064,
+          "thumbnail_url": "https://i.ytimg.com/vi/8b3Y9xVvQzw/hqdefault.jpg",
+          "video_url": "https://www.youtube.com/watch?v=8b3Y9xVvQzw",
+          "description": "Join us on a journey through history as we shine a spotlight on the incredible kids who played a pivotal role in the fight for civil rights.\n\nIn this inspiring video for kids, you'll learn about little heroes like 7-year-old Ayanna Najuma, who fearlessly stood up for justice, braving harsh consequences to make their communities more inclusive.\n\nHighlights:\nDiscover the stories of courageous kids who made a big impact during the Civil Rights Movement.\nExplore Ayanna Najuma's journey and the chall",
+          "category_id": "27",
+          "relevance_score": 4.31,
+          "why_selected": "Unique content"
+        }
+      ]
+    },
+    {
+      "id": "section_4",
+      "title": "The Montgomery Bus Boycott",
+      "description": "Students will learn about the Montgomery Bus Boycott and its significance.",
+      "duration_minutes": 30,
+      "box_id": 5,
+      "pla_pillars": [
+        "Knowledge",
+        "Wisdom"
+      ],
+      "subtopics": [
+        {
+          "name": "Video Explanation",
+          "topics": [
+            "Rosa Parks arrest",
+            "Bus boycott organization",
+            "Impact"
+          ],
+          "duration_minutes": 25
+        }
+      ],
+      "needs_worksheets": true,
+      "needs_activities": true,
+      "learning_objectives": [
+        "Students will understand the impact of the Montgomery Bus Boycott.",
+        "Students will understand what sparked the Montgomery Bus Boycott.",
+        "Students will identify key people involved.",
+        "Students will explain how the boycott worked and its outcome."
+      ],
+      "content_keywords": [
+        "Rosa Parks",
+        "Montgomery buses",
+        "segregation",
+        "boycott",
+        "381 days"
+      ],
+      "what_must_be_covered": "The arrest of Rosa Parks, how the boycott was organized, the role of MLK, how long it lasted, and its success.",
+      "search_queries_used": [
+        "Montgomery Bus Boycott explained",
+        "Rosa Parks and bus boycott"
+      ],
+      "video_resources": [
+        {
+          "video_id": "gixN1WQThxE",
+          "title": "Rosa Parks and the Montgomery Bus Boycott | Drive Thru History with Dave Stotts",
+          "channel_name": "Drive Thru History with Dave Stotts",
+          "channel_id": "UCoWVztmLaeBisv69dDki0Sg",
+          "channel_verified": false,
+          "duration_seconds": 325,
+          "duration_formatted": "5:25",
+          "view_count": 19040,
+          "like_count": 252,
+          "like_ratio": 0.0132,
+          "thumbnail_url": "https://i.ytimg.com/vi/gixN1WQThxE/hqdefault.jpg",
+          "video_url": "https://www.youtube.com/watch?v=gixN1WQThxE",
+          "description": "Rosa Parks and the Montgomery Bus Boycott\n\nWatch the FULL special here! - https://watch.tbn.org/videos/drive-thru-history-special-martin-luther-king-jr-2021\n\nEnjoy this clip from Drive Thru History\u00ae: American Holidays, broadcast on TBN.\n\n#martinlutherkingjr #drivethruhistory #davestotts",
+          "category_id": "27",
+          "relevance_score": 4.56,
+          "why_selected": "Unique content"
+        },
+        {
+          "video_id": "kGisA_Q0w1c",
+          "title": "Rosa Parks and the Montgomery Bus Boycott",
+          "channel_name": "Edpuzzle Curriculum",
+          "channel_id": "UCrLNn0BSE1XDg8cUyyELLew",
+          "channel_verified": false,
+          "duration_seconds": 369,
+          "duration_formatted": "6:09",
+          "view_count": 190801,
+          "like_count": 1325,
+          "like_ratio": 0.0069,
+          "thumbnail_url": "https://i.ytimg.com/vi/kGisA_Q0w1c/hqdefault.jpg",
+          "video_url": "https://www.youtube.com/watch?v=kGisA_Q0w1c",
+          "description": "Learn the history of Rosa Parks and how her actions and the boycott that followed led to the end of bus segregation in Montgomery, Alabama.\n\n#SocialStudies #Education #History To learn more:\u00a0\n- Visit our website: https://edpuzzle.com/\n- Follow us on Instagram: https://www.instagram.com/edpuzzle/\n- Follow us on X: https://x.com/edpuzzle\n- Check out our blog: https://blog.edpuzzle.com\n- Subscribe to our channel: https://www.youtube.com/@Edpuzzle\n\n#edpuzzle #edtech #videolearning #flippedclassroom ",
+          "category_id": "27",
+          "relevance_score": 4.31,
+          "why_selected": "Unique content"
+        },
+        {
+          "video_id": "WKEGou1zPII",
+          "title": "Civil Rights Act of 1964 | Montgomery Bus Boycott for Kids | Rosa Parks and Martin Luther King",
+          "channel_name": "Kids Academy",
+          "channel_id": "UCqb89GqploCXgz4lsdR-_ww",
+          "channel_verified": false,
+          "duration_seconds": 312,
+          "duration_formatted": "5:12",
+          "view_count": 1140288,
+          "like_count": 6825,
+          "like_ratio": 0.006,
+          "thumbnail_url": "https://i.ytimg.com/vi/WKEGou1zPII/hqdefault.jpg",
+          "video_url": "https://www.youtube.com/watch?v=WKEGou1zPII",
+          "description": "Thousands of parents and educators are turning to the kids\u2019 learning app that makes real learning truly fun. Try Kids Academy with \n 3-day FREE TRIAL! https://bit.ly/2GuGyL2\n\nCivil Rights Act of 1964 | Montgomery Bus Boycott | Rosa Parks and Martin Luther King\n\nAmerican civil rights movement took place mainly during the 1950s and 1960s. It emerged as a response to the existing discrimination based on race, color, religion, sex, and national origin. \n\nOne example of racial discrimination would be",
+          "category_id": "27",
+          "relevance_score": 4.31,
+          "why_selected": "Unique content"
+        }
+      ]
+    },
+    {
+      "id": "section_5",
+      "title": "The 'I Have a Dream' Speech",
+      "description": "Students will analyze the significance of MLK Jr.'s famous speech.",
+      "duration_minutes": 25,
+      "box_id": 7,
+      "pla_pillars": [
+        "Knowledge",
+        "Wisdom"
+      ],
+      "subtopics": [
+        {
+          "name": "Video Explanation",
+          "topics": [
+            "Speech analysis",
+            "Historical context",
+            "Impact"
+          ],
+          "duration_minutes": 20
+        }
+      ],
+      "needs_worksheets": true,
+      "needs_activities": true,
+      "learning_objectives": [
+        "Students will appreciate the significance of the 'I Have a Dream' speech.",
+        "Students will analyze the main themes of the 'I Have a Dream' speech.",
+        "Students will understand the historical context and impact of the speech."
+      ],
+      "content_keywords": [
+        "I Have a Dream",
+        "speech",
+        "MLK Jr.",
+        "themes",
+        "impact"
+      ],
+      "what_must_be_covered": "The main themes and historical context of the 'I Have a Dream' speech and its impact on the Civil Rights Movement.",
+      "search_queries_used": [
+        "MLK I Have a Dream analysis",
+        "MLK speech historical context"
+      ],
+      "video_resources": [
+        {
+          "video_id": "l39CL0t-jyM",
+          "title": "An analysis of Dr. Martin Luther King Jr's \"I Have a Dream\" public speech",
+          "channel_name": "Duarte, Inc.",
+          "channel_id": "UCNXK1gSHGYqtS2XeDFKPv0A",
+          "channel_verified": false,
+          "duration_seconds": 433,
+          "duration_formatted": "7:13",
+          "view_count": 119445,
+          "like_count": 1342,
+          "like_ratio": 0.0112,
+          "thumbnail_url": "https://i.ytimg.com/vi/l39CL0t-jyM/hqdefault.jpg",
+          "video_url": "https://www.youtube.com/watch?v=l39CL0t-jyM",
+          "description": "This video is on effective communication, using Martin Luther King's \"I Have a Dream\" public speech as a case study. Nancy Duarte analyzed the structure, rhetorical devices, and content of the speech to demonstrate how Dr. King effectively conveyed his message and engaged his audience.\n\n*Topics*\n\n*Analysis of Martin Luther King's \"I Have a Dream\" speech*\n--Nancy Duarte broke down King's speech into its components, analyzing the rhythm, pauses, and use of rhetorical devices.\n--Nancy Duarte noted ",
+          "category_id": "27",
+          "relevance_score": 4.56,
+          "why_selected": "Unique content"
+        }
+      ]
+    },
+    {
+      "id": "section_6",
+      "title": "Comparing Past and Present: Racial Injustice",
+      "description": "Students will compare historical and current instances of racial injustice.",
+      "duration_minutes": 30,
+      "box_id": 8,
+      "pla_pillars": [
+        "Wisdom",
+        "Application"
+      ],
+      "subtopics": [
+        {
+          "name": "Guided Discovery",
+          "topics": [
+            "Historical vs. current injustices",
+            "Social progress",
+            "Ongoing challenges"
+          ],
+          "duration_minutes": 25
+        }
+      ],
+      "needs_worksheets": true,
+      "needs_activities": true,
+      "learning_objectives": [
+        "Students will understand the connections between past and present racial injustices.",
+        "Students will compare historical and current examples of racial injustice.",
+        "Students will discuss social progress and ongoing challenges."
+      ],
+      "content_keywords": [
+        "racial injustice",
+        "historical vs. current",
+        "social progress"
+      ],
+      "what_must_be_covered": "A comparison of historical and current instances of racial injustice, including social progress and ongoing challenges.",
+      "search_queries_used": [
+        "history vs today racial injustice",
+        "racial injustice social progress kids"
+      ],
+      "video_resources": [
+        {
+          "video_id": "8b3Y9xVvQzw",
+          "title": "Can Kids Change the World? | The Civil Rights Movement",
+          "channel_name": "Scholastic",
+          "channel_id": "UCR79JJpUPtZFwr7477T0MOg",
+          "channel_verified": false,
+          "duration_seconds": 416,
+          "duration_formatted": "6:56",
+          "view_count": 503527,
+          "like_count": 3227,
+          "like_ratio": 0.0064,
+          "thumbnail_url": "https://i.ytimg.com/vi/8b3Y9xVvQzw/hqdefault.jpg",
+          "video_url": "https://www.youtube.com/watch?v=8b3Y9xVvQzw",
+          "description": "Join us on a journey through history as we shine a spotlight on the incredible kids who played a pivotal role in the fight for civil rights.\n\nIn this inspiring video for kids, you'll learn about little heroes like 7-year-old Ayanna Najuma, who fearlessly stood up for justice, braving harsh consequences to make their communities more inclusive.\n\nHighlights:\nDiscover the stories of courageous kids who made a big impact during the Civil Rights Movement.\nExplore Ayanna Najuma's journey and the chall",
+          "category_id": "27",
+          "relevance_score": 4.31,
+          "why_selected": "Unique content"
+        }
+      ]
+    },
+    {
+      "id": "section_7",
+      "title": "Art Project: Symbols of the Civil Rights Movement",
+      "description": "Students will create art representing symbols of the Civil Rights Movement.",
+      "duration_minutes": 30,
+      "box_id": 11,
+      "pla_pillars": [
+        "Self-Knowledge",
+        "Application"
+      ],
+      "subtopics": [
+        {
+          "name": "Guided Discovery",
+          "topics": [
+            "Civil Rights symbols",
+            "Art techniques",
+            "Reflection"
+          ],
+          "duration_minutes": 15
+        }
+      ],
+      "needs_worksheets": true,
+      "needs_activities": true,
+      "learning_objectives": [
+        "Students will express understanding of the Civil Rights Movement through art.",
+        "Students will create art pieces representing Civil Rights symbols.",
+        "Students will explain the significance of their chosen symbols."
+      ],
+      "content_keywords": [
+        "Civil Rights symbols",
+        "art project",
+        "creativity",
+        "reflection"
+      ],
+      "what_must_be_covered": "Creating art that represents symbols of the Civil Rights Movement, with a focus on creativity and reflection on the chosen symbols.",
+      "search_queries_used": [
+        "Civil Rights symbols art project",
+        "Civil Rights art for kids"
+      ],
+      "video_resources": [
+        {
+          "video_id": "puarPOoJUy8",
+          "title": "Social Studies for Kids Recycling, Civil Rights, The Right to Vote | Kids Academy",
+          "channel_name": "Kids Academy",
+          "channel_id": "UCqb89GqploCXgz4lsdR-_ww",
+          "channel_verified": false,
+          "duration_seconds": 837,
+          "duration_formatted": "13:57",
+          "view_count": 251702,
+          "like_count": 1728,
+          "like_ratio": 0.0069,
+          "thumbnail_url": "https://i.ytimg.com/vi/puarPOoJUy8/hqdefault.jpg",
+          "video_url": "https://www.youtube.com/watch?v=puarPOoJUy8",
+          "description": "Thousands of parents and educators are turning to the kids\u2019 learning app that makes real learning truly fun. Try Kids Academy with \n 3-day FREE TRIAL! https://bit.ly/2GuGyL2\n\nIt's Kids Academy and welcome back to our channel! Social studies for kids is an essential subject in their initial classes. The three very important lessons of social studies are recycling, civil rights and the right to vote. Let\u2019s describe these concepts in simpler words for kids.\n\nRecycling simply means converting waste ",
+          "category_id": "27",
+          "relevance_score": 4.81,
+          "why_selected": "Unique content"
+        }
+      ]
+    },
+    {
+      "id": "section_8",
+      "title": "Exploring MLK Jr.'s Speeches",
+      "description": "Students will explore various speeches by MLK Jr. and their messages.",
+      "duration_minutes": 30,
+      "box_id": 13,
+      "pla_pillars": [
+        "Knowledge",
+        "Wisdom"
+      ],
+      "subtopics": [
+        {
+          "name": "Video Explanation",
+          "topics": [
+            "Speech themes",
+            "Public speaking",
+            "Rhetorical techniques"
+          ],
+          "duration_minutes": 25
+        }
+      ],
+      "needs_worksheets": true,
+      "needs_activities": true,
+      "learning_objectives": [
+        "Students will appreciate MLK Jr.'s skills as a speaker.",
+        "Students will analyze themes and messages in MLK Jr.'s speeches.",
+        "Students will identify rhetorical techniques used in the speeches."
+      ],
+      "content_keywords": [
+        "MLK Jr. speeches",
+        "themes",
+        "rhetoric",
+        "public speaking"
+      ],
+      "what_must_be_covered": "An exploration of various MLK Jr. speeches, focusing on themes, messages, and rhetorical techniques.",
+      "search_queries_used": [
+        "MLK Jr. speech themes",
+        "MLK Jr. public speaking"
+      ],
+      "video_resources": [
+        {
+          "video_id": "qHc3FY9il1s",
+          "title": "ENGLISH SPEECH | MARTIN LUTHER KING JR.: I Have a Dream! (English Subtitles)",
+          "channel_name": "English Speeches",
+          "channel_id": "UCLyr-hfWVCKHcZjV5fg3jbw",
+          "channel_verified": false,
+          "duration_seconds": 485,
+          "duration_formatted": "8:05",
+          "view_count": 1530611,
+          "like_count": 26285,
+          "like_ratio": 0.0172,
+          "thumbnail_url": "https://i.ytimg.com/vi/qHc3FY9il1s/hqdefault.jpg",
+          "video_url": "https://www.youtube.com/watch?v=qHc3FY9il1s",
+          "description": "Learn English with Martin Luther King Jr. MLK delivers his powerful and historic \"I Have a Dream\" speech during the March on Washington. This speech, symbolizing the fight for equality and justice, resonates with the aspirations of millions for a society free from discrimination and segregation. King's eloquent words and compelling vision continue to inspire the quest for civil rights and freedom for all.\n\n\u2b50\ufe0f Download this speech's LESSONS, TRANSCRIPT, and AUDIO here:\nhttps://www.englishspeeches",
+          "category_id": "27",
+          "relevance_score": 4.56,
+          "why_selected": "Unique content"
+        }
+      ]
+    },
+    {
+      "id": "section_9",
+      "title": "The Role of Youth in the Civil Rights Movement",
+      "description": "Students will learn about the involvement of youth in the Civil Rights Movement.",
+      "duration_minutes": 20,
+      "box_id": 14,
+      "pla_pillars": [
+        "Knowledge"
+      ],
+      "subtopics": [
+        {
+          "name": "Guided Discovery",
+          "topics": [
+            "Youth activism",
+            "Major contributions",
+            "Impact on movement"
+          ],
+          "duration_minutes": 15
+        }
+      ],
+      "needs_worksheets": true,
+      "needs_activities": true,
+      "learning_objectives": [
+        "Students will recognize the contributions of young people to the movement.",
+        "Students will identify the role of youth in the Civil Rights Movement.",
+        "Students will describe the impact of youth activism on the movement."
+      ],
+      "content_keywords": [
+        "youth activism",
+        "Civil Rights Movement",
+        "impact",
+        "contributions"
+      ],
+      "what_must_be_covered": "The involvement of youth in the Civil Rights Movement, including major contributions and impact.",
+      "search_queries_used": [
+        "youth in civil rights movement",
+        "kids activism civil rights"
+      ],
+      "video_resources": [
+        {
+          "video_id": "puarPOoJUy8",
+          "title": "Social Studies for Kids Recycling, Civil Rights, The Right to Vote | Kids Academy",
+          "channel_name": "Kids Academy",
+          "channel_id": "UCqb89GqploCXgz4lsdR-_ww",
+          "channel_verified": false,
+          "duration_seconds": 837,
+          "duration_formatted": "13:57",
+          "view_count": 251702,
+          "like_count": 1728,
+          "like_ratio": 0.0069,
+          "thumbnail_url": "https://i.ytimg.com/vi/puarPOoJUy8/hqdefault.jpg",
+          "video_url": "https://www.youtube.com/watch?v=puarPOoJUy8",
+          "description": "Thousands of parents and educators are turning to the kids\u2019 learning app that makes real learning truly fun. Try Kids Academy with \n 3-day FREE TRIAL! https://bit.ly/2GuGyL2\n\nIt's Kids Academy and welcome back to our channel! Social studies for kids is an essential subject in their initial classes. The three very important lessons of social studies are recycling, civil rights and the right to vote. Let\u2019s describe these concepts in simpler words for kids.\n\nRecycling simply means converting waste ",
+          "category_id": "27",
+          "relevance_score": 5.06,
+          "why_selected": "Unique content"
+        },
+        {
+          "video_id": "WKEGou1zPII",
+          "title": "Civil Rights Act of 1964 | Montgomery Bus Boycott for Kids | Rosa Parks and Martin Luther King",
+          "channel_name": "Kids Academy",
+          "channel_id": "UCqb89GqploCXgz4lsdR-_ww",
+          "channel_verified": false,
+          "duration_seconds": 312,
+          "duration_formatted": "5:12",
+          "view_count": 1140288,
+          "like_count": 6825,
+          "like_ratio": 0.006,
+          "thumbnail_url": "https://i.ytimg.com/vi/WKEGou1zPII/hqdefault.jpg",
+          "video_url": "https://www.youtube.com/watch?v=WKEGou1zPII",
+          "description": "Thousands of parents and educators are turning to the kids\u2019 learning app that makes real learning truly fun. Try Kids Academy with \n 3-day FREE TRIAL! https://bit.ly/2GuGyL2\n\nCivil Rights Act of 1964 | Montgomery Bus Boycott | Rosa Parks and Martin Luther King\n\nAmerican civil rights movement took place mainly during the 1950s and 1960s. It emerged as a response to the existing discrimination based on race, color, religion, sex, and national origin. \n\nOne example of racial discrimination would be",
+          "category_id": "27",
+          "relevance_score": 4.31,
+          "why_selected": "Unique content"
+        },
+        {
+          "video_id": "8b3Y9xVvQzw",
+          "title": "Can Kids Change the World? | The Civil Rights Movement",
+          "channel_name": "Scholastic",
+          "channel_id": "UCR79JJpUPtZFwr7477T0MOg",
+          "channel_verified": false,
+          "duration_seconds": 416,
+          "duration_formatted": "6:56",
+          "view_count": 503527,
+          "like_count": 3227,
+          "like_ratio": 0.0064,
+          "thumbnail_url": "https://i.ytimg.com/vi/8b3Y9xVvQzw/hqdefault.jpg",
+          "video_url": "https://www.youtube.com/watch?v=8b3Y9xVvQzw",
+          "description": "Join us on a journey through history as we shine a spotlight on the incredible kids who played a pivotal role in the fight for civil rights.\n\nIn this inspiring video for kids, you'll learn about little heroes like 7-year-old Ayanna Najuma, who fearlessly stood up for justice, braving harsh consequences to make their communities more inclusive.\n\nHighlights:\nDiscover the stories of courageous kids who made a big impact during the Civil Rights Movement.\nExplore Ayanna Najuma's journey and the chall",
+          "category_id": "27",
+          "relevance_score": 4.31,
+          "why_selected": "Unique content"
+        }
+      ]
+    },
+    {
+      "id": "section_10",
+      "title": "Civil Rights Movement Songs and Their Messages",
+      "description": "Students will explore songs from the Civil Rights Movement and their messages.",
+      "duration_minutes": 25,
+      "box_id": 18,
+      "pla_pillars": [
+        "Knowledge",
+        "Wisdom"
+      ],
+      "subtopics": [
+        {
+          "name": "Video Explanation",
+          "topics": [
+            "Music in the movement",
+            "Song analysis",
+            "Cultural impact"
+          ],
+          "duration_minutes": 20
+        }
+      ],
+      "needs_worksheets": true,
+      "needs_activities": true,
+      "learning_objectives": [
+        "Students will appreciate the role of music in social movements.",
+        "Students will analyze the messages of songs from the Civil Rights Movement.",
+        "Students will understand the role of music in the movement."
+      ],
+      "content_keywords": [
+        "Civil Rights songs",
+        "music",
+        "cultural impact",
+        "song analysis"
+      ],
+      "what_must_be_covered": "An exploration of songs from the Civil Rights Movement, their messages, and their cultural impact.",
+      "search_queries_used": [
+        "Civil Rights songs meaning",
+        "Civil Rights music impact"
+      ],
+      "video_resources": [
+        {
+          "video_id": "DwmOADOVLGA",
+          "title": "Music in Civil Rights Movement (excerpt from PBS \"Let Freedom Sing\", 2009)",
+          "channel_name": "folkarchivist",
+          "channel_id": "UC6diD3ugw2PjSQhUxQ5maPQ",
+          "channel_verified": false,
+          "duration_seconds": 372,
+          "duration_formatted": "6:12",
+          "view_count": 36890,
+          "like_count": 257,
+          "like_ratio": 0.007,
+          "thumbnail_url": "https://i.ytimg.com/vi/DwmOADOVLGA/hqdefault.jpg",
+          "video_url": "https://www.youtube.com/watch?v=DwmOADOVLGA",
+          "description": "The role of music in 1960s Civil Rights Movement (excerpt from PBS \"Let Freedom Sing\", 2009) -- Ruby Dee, Pete Seeger, Betsy Siggins, Mavis Staples, and others....\n\nCopyright Disclaimer Under Section 107 of the Copyright Act 1976, allowance is made for \"fair use\" for purposes such as criticism, comment, news reporting, teaching, scholarship, and research. Fair use is a use permitted by copyright statute that might otherwise be infringing. Non-profit, educational or personal use tips the balance ",
+          "category_id": "27",
+          "relevance_score": 4.31,
+          "why_selected": "Unique content"
+        }
+      ]
+    },
+    {
+      "id": "section_11",
+      "title": "Panel Discussion: The Relevance of MLK Jr.'s Teachings Today",
+      "description": "Students will participate in a panel discussion about the relevance of MLK Jr.'s teachings today.",
+      "duration_minutes": 30,
+      "box_id": 19,
+      "pla_pillars": [
+        "Wisdom",
+        "Application"
+      ],
+      "subtopics": [
+        {
+          "name": "Guided Discovery",
+          "topics": [
+            "Panel discussion",
+            "Current relevance",
+            "MLK's teachings"
+          ],
+          "duration_minutes": 20
+        }
+      ],
+      "needs_worksheets": true,
+      "needs_activities": true,
+      "learning_objectives": [
+        "Students will articulate the relevance of MLK Jr.'s teachings in today's world.",
+        "Students will engage in a panel discussion on the relevance of MLK Jr.'s teachings today.",
+        "Students will develop communication and critical thinking skills."
+      ],
+      "content_keywords": [
+        "panel discussion",
+        "MLK Jr. relevance",
+        "communication",
+        "critical thinking"
+      ],
+      "what_must_be_covered": "A panel discussion where students debate the current relevance of MLK Jr.'s teachings, developing communication and critical thinking skills.",
+      "search_queries_used": [
+        "MLK Jr. relevance today kids",
+        "MLK Jr. teachings panel discussion"
+      ],
+      "video_resources": [
+        {
+          "video_id": "snYrHgoGJ5A",
+          "title": "The Story of Martin Luther King Jr. | In Memory of Greatest Civil Rights Leader | Dr. Binocs Show",
+          "channel_name": "Peekaboo Kidz",
+          "channel_id": "UCxlJ45KjG4XVcQ_hd8j227A",
+          "channel_verified": false,
+          "duration_seconds": 359,
+          "duration_formatted": "5:59",
+          "view_count": 1193893,
+          "like_count": 6440,
+          "like_ratio": 0.0054,
+          "thumbnail_url": "https://i.ytimg.com/vi/snYrHgoGJ5A/hqdefault.jpg",
+          "video_url": "https://www.youtube.com/watch?v=snYrHgoGJ5A",
+          "description": "Martin Luther King Jr. was an American Baptist minister, activist, and political philosopher who was one of the most prominent leaders in the civil rights movement from 1955 until his assassination in 1968.\n\n#martinlutherking #martinlutherkingday #civilrightsleader #greatleader #drbinocsshow #birthdaytribute \n\nMake sure you watch the whole video to know all the answers to your curious questions! \n\nLeave your ideas, suggestions and questions for Dr. Binocs at this Email Id: peekabookidzfeedback@g",
+          "category_id": "27",
+          "relevance_score": 5.88,
+          "why_selected": "Kid-friendly channel, unique content"
+        },
+        {
+          "video_id": "rrd2EFtJKDg",
+          "title": "Martin Luther King Jr for Kids|  Black History Month for Kids",
+          "channel_name": "Kids Academy",
+          "channel_id": "UCqb89GqploCXgz4lsdR-_ww",
+          "channel_verified": false,
+          "duration_seconds": 141,
+          "duration_formatted": "2:21",
+          "view_count": 26983,
+          "like_count": 160,
+          "like_ratio": 0.0059,
+          "thumbnail_url": "https://i.ytimg.com/vi/rrd2EFtJKDg/hqdefault.jpg",
+          "video_url": "https://www.youtube.com/watch?v=rrd2EFtJKDg",
+          "description": "Discover the inspiring story of Martin Luther King Jr., one of the greatest leaders in American history! In this kid-friendly video, we\u2019ll explore his early life, his dream of equality, and his powerful role in the Civil Rights Movement. Learn how Dr. King fought for justice through peaceful protests and how his famous \"I Have a Dream\" speech changed the world.\n\nAs we celebrate Black History Month, this video helps children understand why Martin Luther King Jr.\u2019s message of love, unity, and fair",
+          "category_id": "27",
+          "relevance_score": 4.31,
+          "why_selected": "Unique content"
+        },
+        {
+          "video_id": "xdXqoAPRcUI",
+          "title": "Martin Luther King Jr. song - Kids Learn about MLK #blackhistorymonth #simplesongs #specialeducation",
+          "channel_name": "Swingsetmamas",
+          "channel_id": "UCCJsfJzeXbB8vNMGdkOmhag",
+          "channel_verified": false,
+          "duration_seconds": 134,
+          "duration_formatted": "2:14",
+          "view_count": 12938,
+          "like_count": 86,
+          "like_ratio": 0.0066,
+          "thumbnail_url": "https://i.ytimg.com/vi/xdXqoAPRcUI/hqdefault.jpg",
+          "video_url": "https://www.youtube.com/watch?v=xdXqoAPRcUI",
+          "description": "Who was Martin Luther King and why is there a national holiday marking his birthday? Celebrate Dr. King\u2019s legacy by helping children understand the importance of love, justice and equality with this fun and catchy song.  With inspiring images of Martin Luther King Jr. and AAC images,  this catchy song appeals to learners of ALL ages and abilities!  Sing along and learn for Martin Luther King Jr. day and Black History Month.  \n\n#mlksong #martinlutherkingday #whowasmlk #martinlutherkingforkids #ma",
+          "category_id": "27",
+          "relevance_score": 4.31,
+          "why_selected": "Unique content"
+        }
+      ]
+    },
+    {
+      "id": "section_12",
+      "title": "Creating a Nonviolent Protest Plan",
+      "description": "Students will create a plan for a nonviolent protest on a current issue.",
+      "duration_minutes": 30,
+      "box_id": 20,
+      "pla_pillars": [
+        "Application"
+      ],
+      "subtopics": [
+        {
+          "name": "Guided Discovery",
+          "topics": [
+            "Protest planning",
+            "Nonviolent strategies",
+            "Presentation"
+          ],
+          "duration_minutes": 15
+        }
+      ],
+      "needs_worksheets": true,
+      "needs_activities": true,
+      "learning_objectives": [
+        "Students will apply nonviolent strategies to modern issues.",
+        "Students will create a detailed plan for a nonviolent protest.",
+        "Students will present their plan to the class."
+      ],
+      "content_keywords": [
+        "protest plan",
+        "nonviolent strategies",
+        "presentation",
+        "current issues"
+      ],
+      "what_must_be_covered": "Creating a plan for a nonviolent protest addressing a current issue, including strategies and a class presentation.",
+      "search_queries_used": [
+        "nonviolent protest ideas kids",
+        "how to plan protest children"
+      ],
+      "video_resources": [
+        {
+          "video_id": "c_g1BMVFcuw",
+          "title": "How to turn protest into powerful change - Eric Liu",
+          "channel_name": "TED-Ed",
+          "channel_id": "UCsooa4yRKGN_zEE8iknghZA",
+          "channel_verified": false,
+          "duration_seconds": 297,
+          "duration_formatted": "4:57",
+          "view_count": 408497,
+          "like_count": 8579,
+          "like_ratio": 0.021,
+          "thumbnail_url": "https://i.ytimg.com/vi/c_g1BMVFcuw/hqdefault.jpg",
+          "video_url": "https://www.youtube.com/watch?v=c_g1BMVFcuw",
+          "description": "View full lesson: http://ed.ted.com/lessons/how-to-turn-protest-into-powerful-change-eric-liu\n\nWe live in an age of protest. On campuses, in public squares, on streets and social media, protestors around the world are challenging the status quo. But while protest is often necessary, is it sufficient? Eric Liu outlines three strategies for peacefully turning awareness into action and protest into durable political power. \n\nLesson by Eric Liu, animation by Sarah Saidan.",
+          "category_id": "27",
+          "relevance_score": 4.88,
+          "why_selected": "Educational channel, unique content"
+        },
+        {
+          "video_id": "TyP09S0UEzA",
+          "title": "Teaching Laws, Rights, and Responsibilities to Kids | Freedom of Speech | Kids Academy",
+          "channel_name": "Kids Academy",
+          "channel_id": "UCqb89GqploCXgz4lsdR-_ww",
+          "channel_verified": false,
+          "duration_seconds": 156,
+          "duration_formatted": "2:36",
+          "view_count": 1072900,
+          "like_count": 5712,
+          "like_ratio": 0.0053,
+          "thumbnail_url": "https://i.ytimg.com/vi/TyP09S0UEzA/hqdefault.jpg",
+          "video_url": "https://www.youtube.com/watch?v=TyP09S0UEzA",
+          "description": "Thousands of parents and educators are turning to the kids\u2019 learning app that makes real learning truly fun. Try Kids Academy with \n 3-day FREE TRIAL! https://bit.ly/2GuGyL2\n\nSocial Studies for Kids\n\nIf your child is now growing up and has started going to school then along with teaching him addition, subtraction, and multiplication, etc, you need to teach him about the laws of the country, his rights and responsibilities too. You see, it\u2019s all about creating a strong base of your child so that ",
+          "category_id": "27",
+          "relevance_score": 4.31,
+          "why_selected": "Unique content"
+        },
+        {
+          "video_id": "G1_Dm1ZjRAM",
+          "title": "Mahatma Gandhi, The Salt March, The Dandi March: Learn English (IND)",
+          "channel_name": "bookboxinc",
+          "channel_id": "UCHD0-6opjI0paLJj6P-f2sA",
+          "channel_verified": false,
+          "duration_seconds": 301,
+          "duration_formatted": "5:01",
+          "view_count": 1824566,
+          "like_count": 15357,
+          "like_ratio": 0.0084,
+          "thumbnail_url": "https://i.ytimg.com/vi/G1_Dm1ZjRAM/hqdefault.jpg",
+          "video_url": "https://www.youtube.com/watch?v=G1_Dm1ZjRAM",
+          "description": "Learn about \"The Salt March\" also called the \"The Dandi march\", a non violent protest organized by Mahatma Gandhi. This event later became a turning point in the history of the Indian independence movement.\n\nGet our FREE App for Android: https://bit.ly/2oAUev9 and for iOS: https://apple.co/2Isv5th\n\nSubscribe for new videos every week!: https://www.youtube.com/user/bookboxinc/?sub_confirmation=1\nMore English(IND) AniBooks: https://www.youtube.com/watch?v=bSd_juQV5NM&list=PLPDzF0B97OtG-C041UdZQQ56",
+          "category_id": "27",
+          "relevance_score": 4.31,
+          "why_selected": "Unique content"
+        }
+      ]
+    }
+  ]
+}

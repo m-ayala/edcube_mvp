@@ -1,0 +1,439 @@
+{
+  "course_title": "mlk jr. - 5",
+  "grade_level": "5",
+  "subject": "",
+  "topic": "mlk jr.",
+  "total_duration_minutes": 325,
+  "sections": [
+    {
+      "id": "section_1",
+      "title": "Introduction to Martin Luther King Jr.",
+      "description": "Students will learn about the early life of MLK Jr. and his growing awareness of racial injustice.",
+      "duration_minutes": 20,
+      "box_id": 1,
+      "pla_pillars": [
+        "Knowledge"
+      ],
+      "subtopics": [
+        {
+          "name": "Direct Teaching",
+          "topics": [
+            "Early life",
+            "Family background",
+            "Education"
+          ],
+          "duration_minutes": 15
+        }
+      ],
+      "needs_worksheets": true,
+      "needs_activities": true,
+      "learning_objectives": [
+        "Students will recognize the early influences on MLK Jr.'s life.",
+        "Students will identify key aspects of MLK Jr.'s childhood.",
+        "Students will understand the influence of MLK's family and community on his views."
+      ],
+      "content_keywords": [
+        "MLK Jr.",
+        "early life",
+        "childhood",
+        "family",
+        "education"
+      ],
+      "what_must_be_covered": "The early life of Martin Luther King Jr., including his family background, education, and childhood experiences."
+    },
+    {
+      "id": "section_2",
+      "title": "A Brief History of Slavery in America",
+      "description": "Students will explore the history and impact of slavery in America.",
+      "duration_minutes": 25,
+      "box_id": 2,
+      "pla_pillars": [
+        "Knowledge"
+      ],
+      "subtopics": [
+        {
+          "name": "Video Explanation",
+          "topics": [
+            "Origins of slavery",
+            "Life of enslaved people",
+            "Abolition movement"
+          ],
+          "duration_minutes": 20
+        }
+      ],
+      "needs_worksheets": true,
+      "needs_activities": true,
+      "learning_objectives": [
+        "Students will gain an understanding of the historical context of slavery.",
+        "Students will summarize the history of slavery in America.",
+        "Students will describe the conditions faced by enslaved people."
+      ],
+      "content_keywords": [
+        "slavery",
+        "American history",
+        "abolition",
+        "enslaved people"
+      ],
+      "what_must_be_covered": "The origins and development of slavery in America, the conditions faced by enslaved people, and the abolition movement."
+    },
+    {
+      "id": "section_3",
+      "title": "The Civil Rights Movement",
+      "description": "Students will learn about the key events and figures in the Civil Rights Movement.",
+      "duration_minutes": 30,
+      "box_id": 3,
+      "pla_pillars": [
+        "Knowledge"
+      ],
+      "subtopics": [
+        {
+          "name": "Guided Discovery",
+          "topics": [
+            "Key events",
+            "Major figures",
+            "Impact on society"
+          ],
+          "duration_minutes": 25
+        }
+      ],
+      "needs_worksheets": true,
+      "needs_activities": true,
+      "learning_objectives": [
+        "Students will understand the significance of the Civil Rights Movement.",
+        "Students will identify major events and figures in the Civil Rights Movement.",
+        "Students will explain the movement's impact on society."
+      ],
+      "content_keywords": [
+        "Civil Rights Movement",
+        "key events",
+        "major figures",
+        "social impact"
+      ],
+      "what_must_be_covered": "An overview of the Civil Rights Movement, including major events, figures, and its impact on American society."
+    },
+    {
+      "id": "section_4",
+      "title": "The Montgomery Bus Boycott",
+      "description": "Students will learn about the Montgomery Bus Boycott and its significance.",
+      "duration_minutes": 30,
+      "box_id": 5,
+      "pla_pillars": [
+        "Knowledge",
+        "Wisdom"
+      ],
+      "subtopics": [
+        {
+          "name": "Video Explanation",
+          "topics": [
+            "Rosa Parks arrest",
+            "Bus boycott organization",
+            "Impact"
+          ],
+          "duration_minutes": 25
+        }
+      ],
+      "needs_worksheets": true,
+      "needs_activities": true,
+      "learning_objectives": [
+        "Students will understand the impact of the Montgomery Bus Boycott.",
+        "Students will understand what sparked the Montgomery Bus Boycott.",
+        "Students will identify key people involved.",
+        "Students will explain how the boycott worked and its outcome."
+      ],
+      "content_keywords": [
+        "Rosa Parks",
+        "Montgomery buses",
+        "segregation",
+        "boycott",
+        "381 days"
+      ],
+      "what_must_be_covered": "The arrest of Rosa Parks, how the boycott was organized, the role of MLK, how long it lasted, and its success."
+    },
+    {
+      "id": "section_5",
+      "title": "The 'I Have a Dream' Speech",
+      "description": "Students will analyze the significance of MLK Jr.'s famous speech.",
+      "duration_minutes": 25,
+      "box_id": 7,
+      "pla_pillars": [
+        "Knowledge",
+        "Wisdom"
+      ],
+      "subtopics": [
+        {
+          "name": "Video Explanation",
+          "topics": [
+            "Speech analysis",
+            "Historical context",
+            "Impact"
+          ],
+          "duration_minutes": 20
+        }
+      ],
+      "needs_worksheets": true,
+      "needs_activities": true,
+      "learning_objectives": [
+        "Students will appreciate the significance of the 'I Have a Dream' speech.",
+        "Students will analyze the main themes of the 'I Have a Dream' speech.",
+        "Students will understand the historical context and impact of the speech."
+      ],
+      "content_keywords": [
+        "I Have a Dream",
+        "speech",
+        "MLK Jr.",
+        "themes",
+        "impact"
+      ],
+      "what_must_be_covered": "The main themes and historical context of the 'I Have a Dream' speech and its impact on the Civil Rights Movement."
+    },
+    {
+      "id": "section_6",
+      "title": "Comparing Past and Present: Racial Injustice",
+      "description": "Students will compare historical and current instances of racial injustice.",
+      "duration_minutes": 30,
+      "box_id": 8,
+      "pla_pillars": [
+        "Wisdom",
+        "Application"
+      ],
+      "subtopics": [
+        {
+          "name": "Guided Discovery",
+          "topics": [
+            "Historical vs. current injustices",
+            "Social progress",
+            "Ongoing challenges"
+          ],
+          "duration_minutes": 25
+        }
+      ],
+      "needs_worksheets": true,
+      "needs_activities": true,
+      "learning_objectives": [
+        "Students will understand the connections between past and present racial injustices.",
+        "Students will compare historical and current examples of racial injustice.",
+        "Students will discuss social progress and ongoing challenges."
+      ],
+      "content_keywords": [
+        "racial injustice",
+        "historical vs. current",
+        "social progress"
+      ],
+      "what_must_be_covered": "A comparison of historical and current instances of racial injustice, including social progress and ongoing challenges."
+    },
+    {
+      "id": "section_7",
+      "title": "Art Project: Symbols of the Civil Rights Movement",
+      "description": "Students will create art representing symbols of the Civil Rights Movement.",
+      "duration_minutes": 30,
+      "box_id": 11,
+      "pla_pillars": [
+        "Self-Knowledge",
+        "Application"
+      ],
+      "subtopics": [
+        {
+          "name": "Guided Discovery",
+          "topics": [
+            "Civil Rights symbols",
+            "Art techniques",
+            "Reflection"
+          ],
+          "duration_minutes": 15
+        }
+      ],
+      "needs_worksheets": true,
+      "needs_activities": true,
+      "learning_objectives": [
+        "Students will express understanding of the Civil Rights Movement through art.",
+        "Students will create art pieces representing Civil Rights symbols.",
+        "Students will explain the significance of their chosen symbols."
+      ],
+      "content_keywords": [
+        "Civil Rights symbols",
+        "art project",
+        "creativity",
+        "reflection"
+      ],
+      "what_must_be_covered": "Creating art that represents symbols of the Civil Rights Movement, with a focus on creativity and reflection on the chosen symbols."
+    },
+    {
+      "id": "section_8",
+      "title": "Exploring MLK Jr.'s Speeches",
+      "description": "Students will explore various speeches by MLK Jr. and their messages.",
+      "duration_minutes": 30,
+      "box_id": 13,
+      "pla_pillars": [
+        "Knowledge",
+        "Wisdom"
+      ],
+      "subtopics": [
+        {
+          "name": "Video Explanation",
+          "topics": [
+            "Speech themes",
+            "Public speaking",
+            "Rhetorical techniques"
+          ],
+          "duration_minutes": 25
+        }
+      ],
+      "needs_worksheets": true,
+      "needs_activities": true,
+      "learning_objectives": [
+        "Students will appreciate MLK Jr.'s skills as a speaker.",
+        "Students will analyze themes and messages in MLK Jr.'s speeches.",
+        "Students will identify rhetorical techniques used in the speeches."
+      ],
+      "content_keywords": [
+        "MLK Jr. speeches",
+        "themes",
+        "rhetoric",
+        "public speaking"
+      ],
+      "what_must_be_covered": "An exploration of various MLK Jr. speeches, focusing on themes, messages, and rhetorical techniques."
+    },
+    {
+      "id": "section_9",
+      "title": "The Role of Youth in the Civil Rights Movement",
+      "description": "Students will learn about the involvement of youth in the Civil Rights Movement.",
+      "duration_minutes": 20,
+      "box_id": 14,
+      "pla_pillars": [
+        "Knowledge"
+      ],
+      "subtopics": [
+        {
+          "name": "Guided Discovery",
+          "topics": [
+            "Youth activism",
+            "Major contributions",
+            "Impact on movement"
+          ],
+          "duration_minutes": 15
+        }
+      ],
+      "needs_worksheets": true,
+      "needs_activities": true,
+      "learning_objectives": [
+        "Students will recognize the contributions of young people to the movement.",
+        "Students will identify the role of youth in the Civil Rights Movement.",
+        "Students will describe the impact of youth activism on the movement."
+      ],
+      "content_keywords": [
+        "youth activism",
+        "Civil Rights Movement",
+        "impact",
+        "contributions"
+      ],
+      "what_must_be_covered": "The involvement of youth in the Civil Rights Movement, including major contributions and impact."
+    },
+    {
+      "id": "section_10",
+      "title": "Civil Rights Movement Songs and Their Messages",
+      "description": "Students will explore songs from the Civil Rights Movement and their messages.",
+      "duration_minutes": 25,
+      "box_id": 18,
+      "pla_pillars": [
+        "Knowledge",
+        "Wisdom"
+      ],
+      "subtopics": [
+        {
+          "name": "Video Explanation",
+          "topics": [
+            "Music in the movement",
+            "Song analysis",
+            "Cultural impact"
+          ],
+          "duration_minutes": 20
+        }
+      ],
+      "needs_worksheets": true,
+      "needs_activities": true,
+      "learning_objectives": [
+        "Students will appreciate the role of music in social movements.",
+        "Students will analyze the messages of songs from the Civil Rights Movement.",
+        "Students will understand the role of music in the movement."
+      ],
+      "content_keywords": [
+        "Civil Rights songs",
+        "music",
+        "cultural impact",
+        "song analysis"
+      ],
+      "what_must_be_covered": "An exploration of songs from the Civil Rights Movement, their messages, and their cultural impact."
+    },
+    {
+      "id": "section_11",
+      "title": "Panel Discussion: The Relevance of MLK Jr.'s Teachings Today",
+      "description": "Students will participate in a panel discussion about the relevance of MLK Jr.'s teachings today.",
+      "duration_minutes": 30,
+      "box_id": 19,
+      "pla_pillars": [
+        "Wisdom",
+        "Application"
+      ],
+      "subtopics": [
+        {
+          "name": "Guided Discovery",
+          "topics": [
+            "Panel discussion",
+            "Current relevance",
+            "MLK's teachings"
+          ],
+          "duration_minutes": 20
+        }
+      ],
+      "needs_worksheets": true,
+      "needs_activities": true,
+      "learning_objectives": [
+        "Students will articulate the relevance of MLK Jr.'s teachings in today's world.",
+        "Students will engage in a panel discussion on the relevance of MLK Jr.'s teachings today.",
+        "Students will develop communication and critical thinking skills."
+      ],
+      "content_keywords": [
+        "panel discussion",
+        "MLK Jr. relevance",
+        "communication",
+        "critical thinking"
+      ],
+      "what_must_be_covered": "A panel discussion where students debate the current relevance of MLK Jr.'s teachings, developing communication and critical thinking skills."
+    },
+    {
+      "id": "section_12",
+      "title": "Creating a Nonviolent Protest Plan",
+      "description": "Students will create a plan for a nonviolent protest on a current issue.",
+      "duration_minutes": 30,
+      "box_id": 20,
+      "pla_pillars": [
+        "Application"
+      ],
+      "subtopics": [
+        {
+          "name": "Guided Discovery",
+          "topics": [
+            "Protest planning",
+            "Nonviolent strategies",
+            "Presentation"
+          ],
+          "duration_minutes": 15
+        }
+      ],
+      "needs_worksheets": true,
+      "needs_activities": true,
+      "learning_objectives": [
+        "Students will apply nonviolent strategies to modern issues.",
+        "Students will create a detailed plan for a nonviolent protest.",
+        "Students will present their plan to the class."
+      ],
+      "content_keywords": [
+        "protest plan",
+        "nonviolent strategies",
+        "presentation",
+        "current issues"
+      ],
+      "what_must_be_covered": "Creating a plan for a nonviolent protest addressing a current issue, including strategies and a class presentation."
+    }
+  ]
+}
