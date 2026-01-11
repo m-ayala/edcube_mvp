@@ -1,0 +1,19 @@
+# Environment files with API keys
+.env
+*.env
+**/.env
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+**/__pycache__/
+
+# VS Code
+.vscode/
+
+# Output files (optional - if you don't want to commit generated courses)
+outputs/*.json
+
+# OS files
+.DS_Store
