@@ -5,7 +5,7 @@ EdCube MVP - Phase 2: Video Resource Generation
 
 import os
 import json
-from config import OUTPUTS_DIR, INPUT_OUTLINE_FILE, OUTPUT_OUTLINE_FILE, OUTPUT_OUTLINE_TXT_FILE
+from populator.populator_config import OUTPUTS_DIR, INPUT_OUTLINE_FILE, OUTPUT_OUTLINE_FILE, OUTPUT_OUTLINE_TXT_FILE
 from cli_interface import (
     display_phase2_start,
     display_section_progress,
@@ -86,7 +86,7 @@ def main():
             # Search and filter videos
             from youtube_handler import search_videos, get_video_details
             from video_filter import filter_and_rank_videos, select_top_videos
-            from config import YOUTUBE_MAX_VIDEOS_PER_SECTION
+            from populator.populator_config import YOUTUBE_MAX_VIDEOS_PER_SECTION
             from resource_generator import generate_selection_rationale
             
             all_video_ids = []

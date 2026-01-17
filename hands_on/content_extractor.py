@@ -13,7 +13,7 @@ import openai
 import json
 import os
 from typing import Dict, Optional, List
-from prompts import (
+from hands_on_prompts import (
     get_worksheet_image_analysis_prompt, 
     get_activity_synthesis_prompt
 )

@@ -11,7 +11,7 @@ import openai
 import json
 import os
 from typing import List, Dict, Optional
-from prompts import get_relevance_check_prompt
+from hands_on_prompts import get_relevance_check_prompt
 
 
 class ResourceFilter:
@@ -258,6 +258,126 @@ class ResourceFilter:
             overall_score += 5
         
         return min(overall_score, 100)
+    
+    
+    def filter_and_rank_activities(
+        self, 
+        activities: List[Dict], 
+        section_requirements: Dict
+    ) -> List[Dict]:
+        """
+        Filter and rank activities based on quality and relevance.
+        
+        Args:
+            activities: List of extracted activities
+            section_requirements: Learning objectives and keywords from outline
+            
+        Returns:
+            Filtered and ranked list of activities (best first)
+        """
+        filtered_activities = []
+        
+        for activity in activities:
+            # Skip if extraction failed
+            if not activity:
+                continue
+            
+            # Basic quality checks
+            if not self._is_quality_activity(activity):
+                print(f"      Skipping low-quality activity: {activity.get('name', 'Unknown')}")
+                continue
+            
+            # Check relevance using LLM
+            relevance_data = self._check_relevance(activity, section_requirements)
+            if not relevance_data:
+                continue
+            
+            # Add relevance scores to activity
+            activity['relevance_data'] = relevance_data
+            
+            # Only keep suitable activities - LENIENT FILTERING
+            is_lenient_suitable = (
+                relevance_data.get('is_suitable', False) or
+                relevance_data.get('coverage_percentage', 0) >= 40 or
+                relevance_data.get('quality_score', 0) >= 6
+            )
+            
+            if is_lenient_suitable:
+                # Calculate overall score
+                activity['overall_score'] = self._calculate_activity_score(activity, relevance_data)
+                filtered_activities.append(activity)
+            else:
+                print(f"      Activity not suitable: {activity.get('name', 'Unknown')} - {relevance_data.get('reasoning', '')}")
+        
+        # FALLBACK: If NO activities passed, take top 3 by quality anyway
+        if len(filtered_activities) == 0 and len(activities) > 0:
+            print(f"      ⚠️  No activities met strict criteria - showing top 3 by description quality")
+            # Sort by having good description and steps
+            quality_sorted = sorted(
+                [a for a in activities if a and a.get('name') and a.get('description')],
+                key=lambda x: len(x.get('steps', [])) + (10 if x.get('materials') else 0),
+                reverse=True
+            )
+            for act in quality_sorted[:3]:
+                act['overall_score'] = 7.0  # Default score
+                filtered_activities.append(act)
+        
+        # Sort by overall score (highest first)
+        filtered_activities.sort(key=lambda x: x.get('overall_score', 0), reverse=True)
+        
+        return filtered_activities
+
+    def _is_quality_activity(self, activity: Dict) -> bool:
+        """
+        Check if activity meets minimum quality standards.
+        
+        Args:
+            activity: Extracted activity data
+            
+        Returns:
+            True if meets quality standards
+        """
+        # Must have a name
+        if not activity.get('name'):
+            return False
+        
+        # Must have description
+        if not activity.get('description'):
+            return False
+        
+        # Must have either steps or materials
+        if not activity.get('steps') and not activity.get('materials'):
+            return False
+        
+        return True
+
+    def _calculate_activity_score(self, activity: Dict, relevance_data: Dict) -> float:
+        """
+        Calculate overall score for an activity.
+        
+        Args:
+            activity: Activity data
+            relevance_data: Relevance evaluation from LLM
+            
+        Returns:
+            Overall score (0-10)
+        """
+        # Relevance factors (70% of score)
+        coverage = relevance_data.get('coverage_percentage', 50) / 10  # Scale to 0-10
+        quality = relevance_data.get('quality_score', 5)
+        relevance_score = (coverage * 0.5 + quality * 0.5) * 0.7
+        
+        # Content quality factors (30% of score)
+        has_steps = 2.0 if activity.get('steps') else 0
+        has_materials = 1.0 if activity.get('materials') else 0
+        has_duration = 0.5 if activity.get('duration') else 0
+        has_objectives = 0.5 if activity.get('learning_objectives') else 0
+        
+        content_score = (has_steps + has_materials + has_duration + has_objectives) * 0.75
+        
+        overall = relevance_score + content_score
+        
+        return min(overall, 10.0)  # Cap at 10
 
 
 # Example usage

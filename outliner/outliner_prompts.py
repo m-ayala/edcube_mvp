@@ -1,4 +1,4 @@
-from config import PLA_FRAMEWORK, MAX_BOX_DURATION_MINUTES
+from outliner_config import PLA_FRAMEWORK, MAX_BOX_DURATION_MINUTES
 
 def get_box_generation_prompt(teacher_input):
     """

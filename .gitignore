@@ -17,3 +17,13 @@ outputs/*.json
 
 # OS files
 .DS_Store
+
+# Dependencies - MUST BE ON ITS OWN LINE
+node_modules/
+
+# Build outputs
+dist/
+build/
+
+# Lock files
+package-lock.json

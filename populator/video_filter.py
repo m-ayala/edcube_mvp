@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from config import (
+from populator_config import (
     MIN_VIEW_COUNT,
     MIN_LIKE_RATIO,
     PREFER_VERIFIED_CHANNELS,

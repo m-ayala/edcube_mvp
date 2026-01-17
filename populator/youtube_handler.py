@@ -1,6 +1,6 @@
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from config import (
+from populator_config import (
     YOUTUBE_API_KEY,
     YOUTUBE_MAX_RESULTS_PER_QUERY
 )

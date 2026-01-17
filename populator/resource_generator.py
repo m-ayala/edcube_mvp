@@ -5,7 +5,7 @@ from youtube_handler import search_videos, get_video_details
 from transcript_handler import get_transcript, extract_transcript_text, calculate_wpm
 from content_analyzer import analyze_video_content, calculate_content_coverage, detect_redundancy
 from video_filter import filter_and_rank_videos, select_top_videos
-from config import (
+from populator_config import (
     YOUTUBE_MAX_VIDEOS_PER_SECTION,
     MAX_SEARCH_ITERATIONS,
     CONVERGENCE_THRESHOLD,

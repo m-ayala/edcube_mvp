@@ -1,5 +1,5 @@
 import json
-from prompts import get_box_generation_prompt
+from outliner_prompts import get_box_generation_prompt
 from llm_handler import call_openai, validate_boxes_response
 
 

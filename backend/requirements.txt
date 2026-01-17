@@ -1,0 +1,26 @@
+# EdCube Backend Dependencies
+
+# FastAPI and server
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic==2.5.3
+
+# Firebase
+firebase-admin==6.4.0
+
+# OpenAI (already used in your phases)
+openai==1.10.0
+
+# Environment variables
+python-dotenv==1.0.0
+
+# CORS and middleware
+python-multipart==0.0.6
+
+# Async support
+aiofiles==23.2.1
+
+# Already in your project (from outliner/populator)
+# youtube-transcript-api
+# googleapiclient
+# etc. (these are imported from your existing phase folders)

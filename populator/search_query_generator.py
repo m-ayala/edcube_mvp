@@ -1,5 +1,5 @@
 from llm_handler import call_openai
-from prompts import get_search_query_generation_prompt
+from populator_prompts import get_search_query_generation_prompt
 
 
 def generate_queries_for_section(section, grade_level, teacher_comments=""):
