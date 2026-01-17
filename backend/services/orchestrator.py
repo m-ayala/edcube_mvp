@@ -1,53 +1,30 @@
 """
 Curriculum Orchestrator Service
-Coordinates execution of Phase 1 (outliner) and Phase 2 (populator)
+Coordinates execution of all three phases with new single-section processing
 """
 
-import sys
-import os
-import json
-from typing import Dict, Optional
-import asyncio
-import importlib.util
+import logging
+from typing import Dict, Optional, List
+
+from outliner.outline_generator import generate_boxes, create_final_outline
+from populator.video_generator import generate_videos_for_section
+from hands_on.worksheet_generator import generate_worksheets_for_section
+from hands_on.activity_generator import generate_activities_for_section
+from hands_on.resource_prompts import (
+    generate_worksheet_prompt_suggestions,
+    generate_activity_prompt_suggestions
+)
+
+# Initialize logger
+logger = logging.getLogger(__name__)
 
 
 class CurriculumOrchestrator:
     """Orchestrates the curriculum generation pipeline"""
     
     def __init__(self):
-        """Initialize orchestrator and load phase modules"""
-        self.temp_dir = "/tmp/edcube"
-        os.makedirs(self.temp_dir, exist_ok=True)
-        
-        # Get project root (edcube_v1/)
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../'))
-        
-        # Save current sys.path
-        original_path = sys.path.copy()
-        
-        # Load outliner module in isolation
-        outliner_dir = os.path.join(project_root, 'outliner')
-        sys.path = [outliner_dir] + original_path  # Outliner first
-        
-        outliner_path = os.path.join(outliner_dir, 'outline_generator.py')
-        spec = importlib.util.spec_from_file_location("outliner_gen", outliner_path)
-        self.outliner_module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(self.outliner_module)
-        
-        # Restore original path before loading populator
-        sys.path = original_path.copy()
-        
-        # Load populator module in isolation
-        populator_dir = os.path.join(project_root, 'populator')
-        sys.path = [populator_dir] + original_path  # Populator first
-        
-        populator_path = os.path.join(populator_dir, 'resource_generator.py')
-        spec = importlib.util.spec_from_file_location("populator_gen", populator_path)
-        self.populator_module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(self.populator_module)
-        
-        # Restore original path
-        sys.path = original_path
+        """Initialize orchestrator"""
+        logger.info("Initialized CurriculumOrchestrator")
     
     @staticmethod
     def transform_frontend_input_to_phase1_format(request_data: Dict) -> Dict:
@@ -56,41 +33,27 @@ class CurriculumOrchestrator:
         
         Handles field name mapping and adds total_minutes calculation.
         
-        Frontend may send various field names, we normalize them to what Phase 1 expects.
+        Args:
+            request_data: Raw request from frontend
         
-        Phase 1 expects:
-        {
-            "grade_level": "5",
-            "subject": "History",
-            "topic": "MLK",
-            "duration": "700 minutes",  # Can be minutes or time periods
-            "total_minutes": 700,
-            "requirements": "Teacher objectives..."
-        }
+        Returns:
+            dict: Standardized Phase 1 input format
         """
-        
         # STEP 1: Extract and normalize grade_level
-        # Frontend might send: "grade_level", "class", "grade"
         grade_level = (
             request_data.get('grade_level') or 
             request_data.get('class') or 
             request_data.get('grade') or 
-            '5'  # default
+            '5'
         )
-        # Remove "Class " prefix if exists (e.g., "Class 1" -> "1")
         if isinstance(grade_level, str) and grade_level.lower().startswith('class '):
             grade_level = grade_level.split()[-1]
         
-        # STEP 2: Extract subject and topic (usually correct)
+        # STEP 2: Extract subject and topic
         subject = request_data.get('subject', 'General')
         topic = request_data.get('topic', 'Untitled Topic')
         
         # STEP 3: Handle duration and calculate total_minutes
-        # Frontend might send:
-        # - "duration": "700" with "duration_unit": "minutes"
-        # - "time_duration": 700 with "time_duration_unit": "minutes" 
-        # - "duration": "2 weeks"
-        
         duration_value = (
             request_data.get('duration') or 
             request_data.get('time_duration') or
@@ -107,41 +70,23 @@ class CurriculumOrchestrator:
         
         # Calculate total_minutes
         if isinstance(duration_value, int):
-            # Already a number
             total_minutes = duration_value
             duration_str = f"{duration_value} {duration_unit}"
-        elif duration_value.isdigit():
-            # String number like "700"
+        elif str(duration_value).isdigit():
             total_minutes = int(duration_value)
             duration_str = f"{duration_value} {duration_unit}"
         else:
-            # It's a time period like "2 weeks"
+            # Time period mapping
             duration_map = {
-                # Weeks
-                '1 week': 5 * 60,
-                '2 weeks': 10 * 60,
-                '3 weeks': 15 * 60,
-                '1 month': 20 * 60,
-                '2 months': 40 * 60,
-                '3 months': 60 * 60,
-                # Hours
-                '1 hour': 60,
-                '2 hours': 120,
-                '3 hours': 180,
-                '4 hours': 240,
-                '5 hours': 300,
-                # Days
-                '1 day': 60,
-                '2 days': 120,
-                '3 days': 180,
-                '4 days': 240,
-                '5 days': 300,
+                '1 week': 5 * 60, '2 weeks': 10 * 60, '3 weeks': 15 * 60,
+                '1 month': 20 * 60, '2 months': 40 * 60, '3 months': 60 * 60,
+                '1 hour': 60, '2 hours': 120, '3 hours': 180, '4 hours': 240, '5 hours': 300,
+                '1 day': 60, '2 days': 120, '3 days': 180, '4 days': 240, '5 days': 300,
             }
             total_minutes = duration_map.get(duration_value, 600)
             duration_str = duration_value
         
-        # STEP 4: Extract requirements/objectives/comments
-        # Frontend might send: "requirements", "objectives", "comments", "objectives_requirements_comments"
+        # STEP 4: Extract requirements
         requirements = (
             request_data.get('requirements') or
             request_data.get('objectives') or
@@ -151,11 +96,10 @@ class CurriculumOrchestrator:
             'None'
         )
         
-        # STEP 5: Extract worksheet and activity counts
+        # STEP 5: Extract resource counts
         num_worksheets = request_data.get('num_worksheets') or request_data.get('worksheets') or 0
         num_activities = request_data.get('num_activities') or request_data.get('activities') or 0
         
-        # STEP 6: Build the standardized Phase 1 input
         return {
             'grade_level': str(grade_level),
             'subject': subject,
@@ -169,127 +113,275 @@ class CurriculumOrchestrator:
     
     async def run_phase1(self, course_data: Dict) -> Optional[Dict]:
         """
-        Run Phase 1: Generate curriculum outline
+        Run Phase 1: Generate curriculum outline.
         
         Args:
-            course_data: Dictionary from frontend with grade_level, subject, topic, duration, etc.
-            
+            course_data: Dictionary from frontend with grade_level, subject, topic, etc.
+        
         Returns:
-            Course outline dictionary or None if failed
+            dict: Course outline or None if failed
         """
         try:
-            print("\n=== PHASE 1: Generating Curriculum Outline ===")
+            logger.info("="*70)
+            logger.info("PHASE 1: Generating Curriculum Outline")
+            logger.info("="*70)
             
-            # STEP 1: Transform frontend input to Phase 1 format
+            # Transform frontend input
             teacher_input = self.transform_frontend_input_to_phase1_format(course_data)
             
-            print(f"\nTransformed input:")
-            print(f"  - Grade: {teacher_input['grade_level']}")
-            print(f"  - Subject: {teacher_input['subject']}")
-            print(f"  - Topic: {teacher_input['topic']}")
-            print(f"  - Duration: {teacher_input['duration']} ({teacher_input['total_minutes']} minutes)")
+            logger.info(f"Grade: {teacher_input['grade_level']}")
+            logger.info(f"Subject: {teacher_input['subject']}")
+            logger.info(f"Topic: {teacher_input['topic']}")
+            logger.info(f"Duration: {teacher_input['duration']} ({teacher_input['total_minutes']} min)")
             
-            # STEP 2: Generate boxes (curriculum options)
-            print(f"\nGenerating curriculum options...")
-            boxes_data = await asyncio.to_thread(
-                self.outliner_module.generate_boxes,
-                teacher_input
-            )
+            # Generate boxes
+            boxes_data = generate_boxes(teacher_input)
             
             if not boxes_data or 'boxes' not in boxes_data:
-                print("❌ Failed to generate boxes")
+                logger.error("Failed to generate boxes")
                 return None
             
-            print(f"✅ Generated {len(boxes_data['boxes'])} curriculum boxes")
+            logger.info(f"Generated {len(boxes_data['boxes'])} curriculum boxes")
             
-            # STEP 3: Auto-select all boxes for API (no teacher interaction needed)
+            # Auto-select all boxes (no teacher interaction for API)
             selected_boxes = boxes_data['boxes']
             
-            # STEP 4: Format final outline using Phase 1's create_final_outline function
-            outline = self.outliner_module.create_final_outline(selected_boxes, boxes_data)
+            # Create final outline
+            outline = create_final_outline(selected_boxes, boxes_data)
             
-            # STEP 5: Add metadata from original request
+            # Add metadata
             outline['num_worksheets_requested'] = course_data.get('num_worksheets', 0)
             outline['num_activities_requested'] = course_data.get('num_activities', 0)
             outline['teacher_comments'] = course_data.get('requirements', '')
             
-            print(f"✅ Phase 1 complete: {len(outline['sections'])} sections generated")
+            logger.info(f"✅ Phase 1 complete: {len(outline['sections'])} sections generated")
+            logger.info("="*70)
             
             return outline
         
         except Exception as e:
-            print(f"❌ Phase 1 error: {str(e)}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"Phase 1 error: {e}", exc_info=True)
             return None
     
     async def run_phase2(self, outline_data: Dict) -> Optional[Dict]:
         """
-        Run Phase 2: Add video resources to curriculum
+        Run Phase 2: Add video resources to ALL sections in curriculum.
         
         Args:
             outline_data: Course outline from Phase 1
-            
+        
         Returns:
-            Enriched curriculum with video resources or None if failed
+            dict: Enriched curriculum with video resources or None if failed
         """
         try:
-            print("\n=== PHASE 2: Adding Video Resources ===")
+            logger.info("="*70)
+            logger.info("PHASE 2: Adding Video Resources")
+            logger.info("="*70)
             
             grade_level = outline_data.get('grade_level', '5')
+            teacher_comments = outline_data.get('teacher_comments', '')
+            sections = outline_data.get('sections', [])
             
-            # Run Phase 2 resource generation
-            print(f"\nProcessing {len(outline_data['sections'])} sections...")
+            logger.info(f"Processing {len(sections)} sections...")
             
-            enriched_data, api_units, videos_added = await asyncio.to_thread(
-                self.populator_module.generate_resources_for_outline,
-                outline_data,
-                grade_level
-            )
+            total_videos_added = 0
             
-            if not enriched_data:
-                print("❌ Failed to add video resources")
-                return None
+            # Process each section individually
+            for i, section in enumerate(sections, 1):
+                logger.info(f"\n--- Section {i}/{len(sections)}: {section.get('title', 'Unknown')} ---")
+                
+                try:
+                    # Generate videos for this section
+                    enriched_section = generate_videos_for_section(
+                        section=section,
+                        grade_level=grade_level,
+                        teacher_comments=teacher_comments
+                    )
+                    
+                    # Update section with enriched data
+                    sections[i-1] = enriched_section
+                    
+                    videos_added = len(enriched_section.get('video_resources', []))
+                    total_videos_added += videos_added
+                    
+                except Exception as e:
+                    logger.error(f"Error processing section {i}: {e}")
+                    # Continue with other sections even if one fails
+                    continue
             
-            print(f"✅ Phase 2 complete: Added {videos_added} video resources")
-            print(f"   API units used: {api_units}")
+            logger.info(f"\n{'='*70}")
+            logger.info(f"✅ Phase 2 complete: Added {total_videos_added} videos across {len(sections)} sections")
+            logger.info("="*70)
             
-            return enriched_data
+            return outline_data
         
         except Exception as e:
-            print(f"❌ Phase 2 error: {str(e)}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"Phase 2 error: {e}", exc_info=True)
             return None
     
-    async def generate_worksheets(self, sections: list, grade_level: str) -> list:
+    async def run_phase2_single_section(
+        self,
+        section: Dict,
+        grade_level: str,
+        teacher_comments: str = ""
+    ) -> Optional[Dict]:
         """
-        Generate worksheet options for specific sections (on-demand Phase 3)
+        Run Phase 2 for a SINGLE section (on-demand).
         
         Args:
-            sections: List of section dictionaries
-            grade_level: Grade level string
-            
+            section: Section data
+            grade_level: Target grade level
+            teacher_comments: Optional teacher context
+        
         Returns:
-            List of worksheet resources
+            dict: Section enriched with video resources
         """
-        # TODO: Implement Phase 3 worksheet generation
-        # For now, return placeholder
-        print("\n⚠️  Worksheet generation not yet implemented")
-        return []
+        try:
+            logger.info(f"Generating videos for section: {section.get('title', 'Unknown')}")
+            
+            enriched_section = generate_videos_for_section(
+                section=section,
+                grade_level=grade_level,
+                teacher_comments=teacher_comments
+            )
+            
+            videos_added = len(enriched_section.get('video_resources', []))
+            logger.info(f"✅ Added {videos_added} videos to section")
+            
+            return enriched_section
+        
+        except Exception as e:
+            logger.error(f"Error generating videos for section: {e}", exc_info=True)
+            return None
     
-    async def generate_activities(self, sections: list, grade_level: str) -> list:
+    async def get_worksheet_prompts(
+        self,
+        section: Dict,
+        grade_level: str
+    ) -> List[Dict]:
         """
-        Generate activity options for specific sections (on-demand Phase 3)
+        Get worksheet type suggestions for a section.
         
         Args:
-            sections: List of section dictionaries
-            grade_level: Grade level string
-            
+            section: Section data
+            grade_level: Target grade level
+        
         Returns:
-            List of activity resources
+            list: Worksheet prompt suggestions
         """
-        # TODO: Implement Phase 3 activity generation
-        # For now, return placeholder
-        print("\n⚠️  Activity generation not yet implemented")
-        return []
+        try:
+            logger.info(f"Getting worksheet prompts for: {section.get('title', 'Unknown')}")
+            
+            prompts = generate_worksheet_prompt_suggestions(section, grade_level)
+            
+            logger.info(f"Generated {len(prompts)} worksheet prompt suggestions")
+            return prompts
+        
+        except Exception as e:
+            logger.error(f"Error getting worksheet prompts: {e}", exc_info=True)
+            return []
+    
+    async def get_activity_prompts(
+        self,
+        section: Dict,
+        grade_level: str
+    ) -> List[Dict]:
+        """
+        Get activity type suggestions for a section.
+        
+        Args:
+            section: Section data
+            grade_level: Target grade level
+        
+        Returns:
+            list: Activity prompt suggestions
+        """
+        try:
+            logger.info(f"Getting activity prompts for: {section.get('title', 'Unknown')}")
+            
+            prompts = generate_activity_prompt_suggestions(section, grade_level)
+            
+            logger.info(f"Generated {len(prompts)} activity prompt suggestions")
+            return prompts
+        
+        except Exception as e:
+            logger.error(f"Error getting activity prompts: {e}", exc_info=True)
+            return []
+    
+    async def generate_worksheets(
+        self,
+        section: Dict,
+        grade_level: str,
+        user_prompt: str,
+        num_options: int = 3
+    ) -> Dict:
+        """
+        Generate worksheet options for a single section (on-demand).
+        
+        Args:
+            section: Section data
+            grade_level: Target grade level
+            user_prompt: Teacher's selected worksheet type
+            num_options: Number of options to return
+        
+        Returns:
+            dict: Section enriched with worksheet_options
+        """
+        try:
+            logger.info(f"Generating worksheets for: {section.get('title', 'Unknown')}")
+            logger.info(f"User prompt: {user_prompt}")
+            
+            enriched_section = generate_worksheets_for_section(
+                section=section,
+                grade_level=grade_level,
+                user_prompt=user_prompt,
+                num_options=num_options
+            )
+            
+            worksheets_added = len(enriched_section.get('worksheet_options', []))
+            logger.info(f"✅ Generated {worksheets_added} worksheet options")
+            
+            return enriched_section
+        
+        except Exception as e:
+            logger.error(f"Error generating worksheets: {e}", exc_info=True)
+            return section  # Return original section if generation fails
+    
+    async def generate_activities(
+        self,
+        section: Dict,
+        grade_level: str,
+        user_prompt: str,
+        num_options: int = 3
+    ) -> Dict:
+        """
+        Generate activity options for a single section (on-demand).
+        
+        Args:
+            section: Section data
+            grade_level: Target grade level
+            user_prompt: Teacher's selected activity type
+            num_options: Number of options to return
+        
+        Returns:
+            dict: Section enriched with activity_options
+        """
+        try:
+            logger.info(f"Generating activities for: {section.get('title', 'Unknown')}")
+            logger.info(f"User prompt: {user_prompt}")
+            
+            enriched_section = generate_activities_for_section(
+                section=section,
+                grade_level=grade_level,
+                user_prompt=user_prompt,
+                num_options=num_options
+            )
+            
+            activities_added = len(enriched_section.get('activity_options', []))
+            logger.info(f"✅ Generated {activities_added} activity options")
+            
+            return enriched_section
+        
+        except Exception as e:
+            logger.error(f"Error generating activities: {e}", exc_info=True)
+            return section  # Return original section if generation fails
