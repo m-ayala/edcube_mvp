@@ -15,13 +15,13 @@ import { db } from './config';
 /**
  * Save a new curriculum or update existing one
  */
-export const saveCurriculum = async (teacherId, curriculumData) => {
+export const saveCurriculum = async (teacherUid, curriculumData) => {
   try {
     // Generate curriculum ID (use existing ID if updating, otherwise create new)
     const curriculumId = curriculumData.id || doc(collection(db, 'curricula')).id;
     
     const curriculumDoc = {
-      teacherId: teacherId,
+      teacherUid: teacherUid,
       courseName: curriculumData.courseName,
       subject: curriculumData.subject,
       class: curriculumData.class,
@@ -51,11 +51,11 @@ export const saveCurriculum = async (teacherId, curriculumData) => {
 /**
  * Get all curricula for a specific teacher
  */
-export const getTeacherCurricula = async (teacherId) => {
+export const getTeacherCurricula = async (teacherUid) => {
   try {
     const q = query(
       collection(db, 'curricula'),
-      where('teacherId', '==', teacherId),
+      where('teacherUid', '==', teacherUid),
       orderBy('lastModified', 'desc')
     );
 
@@ -124,9 +124,9 @@ export const deleteCurriculum = async (curriculumId) => {
 /**
  * Get teacher profile
  */
-export const getTeacherProfile = async (teacherId) => {
+export const getTeacherProfile = async (teacherUid) => {
   try {
-    const docRef = doc(db, 'teachers', teacherId);
+    const docRef = doc(db, 'teachers', teacherUid);
     const docSnap = await getDoc(docRef);
 
     if (docSnap.exists()) {

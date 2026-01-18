@@ -23,41 +23,58 @@ class FirebaseService:
         self.db = firestore.client()
         self.curricula_collection = self.db.collection('curricula')
     
-    async def save_curriculum(self, teacher_id: str, curriculum_data: Dict) -> str:
+    async def save_curriculum(self, teacherUid: str, curriculum_data: Dict) -> str:
         """
-        Save a new curriculum to Firestore
+        Save a new curriculum to Firestore (FLAT STRUCTURE)
         
         Args:
-            teacher_id: Firebase user ID
+            teacherUid: Firebase user ID
             curriculum_data: Curriculum data to save
             
         Returns:
             Document ID of saved curriculum
         """
         try:
-            # Add metadata
-            curriculum_data['teacher_id'] = teacher_id
-            curriculum_data['created_at'] = datetime.utcnow()
-            curriculum_data['updated_at'] = datetime.utcnow()
+            import uuid
             
-            # Save to Firestore
-            doc_ref = self.curricula_collection.add(curriculum_data)
-            doc_id = doc_ref[1].id
+            # Generate unique course ID
+            course_id = str(uuid.uuid4())
             
-            print(f"✅ Saved curriculum to Firebase: {doc_id}")
-            return doc_id
+            # Prepare flat structure document
+            doc_data = {
+                'courseId': course_id,
+                'teacherUid': teacherUid,
+                'courseName': curriculum_data.get('course_name', ''),
+                'class': curriculum_data.get('grade_level', ''),
+                'subject': curriculum_data.get('subject', ''),
+                'topic': curriculum_data.get('topic', ''),
+                'duration': curriculum_data.get('duration', ''),
+                'sections': curriculum_data.get('sections', []),
+                'generatedTopics': curriculum_data.get('boxes', []),
+                'handsOnResources': curriculum_data.get('handsOnResources', {}),
+                'isPublic': False,
+                'sharedWith': [],
+                'createdAt': datetime.utcnow().isoformat(),
+                'lastModified': datetime.utcnow().isoformat()
+            }
+            
+            # Save to flat structure: curricula/{course_id}
+            self.curricula_collection.document(course_id).set(doc_data)
+            
+            print(f"✅ Saved curriculum to Firebase: {course_id}")
+            return course_id
         
         except Exception as e:
             print(f"❌ Error saving curriculum: {str(e)}")
             raise
     
-    async def get_curriculum(self, curriculum_id: str, teacher_id: str) -> Optional[Dict]:
+    async def get_curriculum(self, curriculum_id: str, teacherUid: str) -> Optional[Dict]:
         """
         Fetch a curriculum by ID
         
         Args:
             curriculum_id: Firestore document ID
-            teacher_id: User ID for authorization
+            teacherUid: User ID for authorization
             
         Returns:
             Curriculum data or None if not found
@@ -71,8 +88,8 @@ class FirebaseService:
             curriculum = doc.to_dict()
             
             # Verify ownership
-            if curriculum.get('teacher_id') != teacher_id:
-                print(f"⚠️  Authorization failed: User {teacher_id} tried to access curriculum owned by {curriculum.get('teacher_id')}")
+            if curriculum.get('teacherUid') != teacherUid:
+                print(f"⚠️  Authorization failed: User {teacherUid} tried to access curriculum owned by {curriculum.get('teacherUid')}")
                 return None
             
             curriculum['id'] = doc.id
@@ -82,35 +99,35 @@ class FirebaseService:
             print(f"❌ Error fetching curriculum: {str(e)}")
             raise
     
-    async def list_teacher_curricula(self, teacher_id: str) -> List[Dict]:
+    async def list_teacher_curricula(self, teacherUid: str) -> List[Dict]:
         """
-        List all curricula for a teacher
+        List all curricula for a teacher (FLAT STRUCTURE)
         
         Args:
-            teacher_id: Firebase user ID
+            teacherUid: Firebase user ID
             
         Returns:
             List of curriculum summaries
         """
         try:
             docs = self.curricula_collection\
-                .where('teacher_id', '==', teacher_id)\
-                .order_by('created_at', direction=firestore.Query.DESCENDING)\
+                .where('teacherUid', '==', teacherUid)\
+                .order_by('createdAt', direction=firestore.Query.DESCENDING)\
                 .stream()
             
             curricula = []
             for doc in docs:
                 data = doc.to_dict()
-                # Return only summary data, not full outline
                 curricula.append({
                     'id': doc.id,
-                    'course_name': data.get('course_name'),
+                    'courseId': data.get('courseId'),
+                    'courseName': data.get('courseName'),
                     'subject': data.get('subject'),
                     'topic': data.get('topic'),
-                    'grade_level': data.get('grade_level'),
+                    'class': data.get('class'),
                     'duration': data.get('duration'),
-                    'created_at': data.get('created_at'),
-                    'updated_at': data.get('updated_at')
+                    'createdAt': data.get('createdAt'),
+                    'lastModified': data.get('lastModified')
                 })
             
             return curricula
@@ -119,20 +136,20 @@ class FirebaseService:
             print(f"❌ Error listing curricula: {str(e)}")
             raise
     
-    async def delete_curriculum(self, curriculum_id: str, teacher_id: str) -> bool:
+    async def delete_curriculum(self, curriculum_id: str, teacherUid: str) -> bool:
         """
         Delete a curriculum
         
         Args:
             curriculum_id: Firestore document ID
-            teacher_id: User ID for authorization
+            teacherUid: User ID for authorization
             
         Returns:
             True if deleted, False if not found
         """
         try:
             # First verify ownership
-            curriculum = await self.get_curriculum(curriculum_id, teacher_id)
+            curriculum = await self.get_curriculum(curriculum_id, teacherUid)
             
             if not curriculum:
                 return False
@@ -149,7 +166,7 @@ class FirebaseService:
     async def add_resources_to_curriculum(
         self,
         curriculum_id: str,
-        teacher_id: str,
+        teacherUid: str,
         section_ids: List[str],
         resources: list,
         resource_type: str
@@ -159,14 +176,14 @@ class FirebaseService:
         
         Args:
             curriculum_id: Firestore document ID
-            teacher_id: User ID for authorization
+            teacherUid: User ID for authorization
             section_ids: List of section IDs to update
             resources: List of resource dictionaries
             resource_type: "worksheets" or "activities"
         """
         try:
             # Fetch curriculum
-            curriculum = await self.get_curriculum(curriculum_id, teacher_id)
+            curriculum = await self.get_curriculum(curriculum_id, teacherUid)
             
             if not curriculum:
                 raise ValueError("Curriculum not found")
@@ -256,7 +273,7 @@ class FirebaseService:
         self,
         curriculum_id: str,
         section_id: str,
-        teacher_id: str
+        teacherUid: str
     ) -> dict:
         """
         Get a specific section's data from a curriculum.
@@ -266,7 +283,7 @@ class FirebaseService:
         Args:
             curriculum_id: Firestore document ID
             section_id: Section ID within the curriculum
-            teacher_id: User ID for authorization
+            teacherUid: User ID for authorization
         
         Returns:
             dict: Section data or None if not found
@@ -282,8 +299,8 @@ class FirebaseService:
             curriculum = doc.to_dict()
             
             # Verify teacher authorization
-            if curriculum.get('teacher_id') != teacher_id:
-                logger.warning(f"Unauthorized access attempt by {teacher_id}")
+            if curriculum.get('teacherUid') != teacherUid:
+                logger.warning(f"Unauthorized access attempt by {teacherUid}")
                 return None
             
             # Find the specific section

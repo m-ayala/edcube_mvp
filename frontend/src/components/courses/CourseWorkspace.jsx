@@ -158,26 +158,44 @@ const CourseWorkspace = () => {
 
   const saveCourse = async () => {
     try {
-      // Save to Firebase
-      const { saveCurriculum } = await import('../../firebase/dbService');
-      await saveCurriculum(currentUser.uid, {
+        // Get Firebase ID token
+        const idToken = await currentUser.getIdToken();
+        
+        // Prepare course data
+        const courseData = {
         courseName,
-        ...formData,
+        class: formData.class,
+        subject: formData.subject,
         sections: sections.map(section => ({
-          ...section,
-          topics: section.topics || []
+            ...section,
+            topics: section.topics || []
         })),
         handsOnResources,
-        createdAt: new Date().toISOString()
-      });
-      
-      alert('Course saved successfully!');
-      navigate('/my-courses');
+        generatedTopics: topics,
+        };
+        
+        // Send to backend with teacherUid as query param
+        const response = await fetch(`http://localhost:8000/api/save-course?teacherUid=${currentUser.uid}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${idToken}`
+        },
+        body: JSON.stringify(courseData)
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+        alert('Course saved successfully!');
+        } else {
+        alert('Failed to save course: ' + (result.error || 'Unknown error'));
+        }
     } catch (error) {
-      console.error('Error saving course:', error);
-      alert('Failed to save course');
+        console.error('Error saving course:', error);
+        alert('Failed to save course');
     }
-  };
+    };
 
   // Get all topics that have been added to sections
   const topicsInSections = sections

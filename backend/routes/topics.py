@@ -100,7 +100,7 @@ async def populate_section(request: PopulateSectionRequest):
 
 
 @router.get("/section/{curriculum_id}/{section_id}")
-async def get_section(curriculum_id: str, section_id: str, teacher_id: str):
+async def get_section(curriculum_id: str, section_id: str, teacherUid: str):
     """
     Get a specific section's data (for viewing populated content).
     
@@ -109,13 +109,13 @@ async def get_section(curriculum_id: str, section_id: str, teacher_id: str):
     Args:
         curriculum_id: Firestore document ID
         section_id: Section ID within the curriculum
-        teacher_id: User ID for authorization
+        teacherUid: User ID for authorization
     
     Returns:
         dict: Section data with video resources
     """
     try:
-        section = await firebase.get_section(curriculum_id, section_id, teacher_id)
+        section = await firebase.get_section(curriculum_id, section_id, teacherUid)
         
         if not section:
             raise HTTPException(status_code=404, detail="Section not found")

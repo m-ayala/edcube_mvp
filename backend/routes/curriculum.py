@@ -29,7 +29,7 @@ class CourseRequest(BaseModel):
     num_worksheets: int
     num_activities: int
     objectives: Optional[str] = ""
-    teacher_id: str
+    teacherUid: str
 
 
 @router.post("/generate-curriculum")
@@ -79,7 +79,7 @@ async def generate_curriculum(request: CourseRequest):
             yield f"data: {json.dumps({'phase': 1, 'message': 'Saving curriculum...', 'progress': 90})}\n\n"
             
             curriculum_id = await firebase.save_curriculum(
-                teacher_id=request.teacher_id,
+                teacherUid=request.teacherUid,
                 curriculum_data={
                     'course_name': request.course_name,
                     'grade_level': request.grade_level,
@@ -117,16 +117,16 @@ async def generate_curriculum(request: CourseRequest):
 
 
 @router.get("/curricula/{curriculum_id}")
-async def get_curriculum(curriculum_id: str, teacher_id: str):
+async def get_curriculum(curriculum_id: str, teacherUid: str):
     """
     Fetch a saved curriculum by ID
     
     Args:
         curriculum_id: Firestore document ID
-        teacher_id: User ID for authorization
+        teacherUid: User ID for authorization
     """
     try:
-        curriculum = await firebase.get_curriculum(curriculum_id, teacher_id)
+        curriculum = await firebase.get_curriculum(curriculum_id, teacherUid)
         
         if not curriculum:
             raise HTTPException(status_code=404, detail="Curriculum not found")
@@ -138,15 +138,15 @@ async def get_curriculum(curriculum_id: str, teacher_id: str):
 
 
 @router.get("/curricula")
-async def list_curricula(teacher_id: str):
+async def list_curricula(teacherUid: str):
     """
     List all curricula for a teacher
     
     Args:
-        teacher_id: Firebase user ID
+        teacherUid: Firebase user ID
     """
     try:
-        curricula = await firebase.list_teacher_curricula(teacher_id)
+        curricula = await firebase.list_teacher_curricula(teacherUid)
         return {"curricula": curricula}
     
     except Exception as e:
@@ -154,21 +154,69 @@ async def list_curricula(teacher_id: str):
 
 
 @router.delete("/curricula/{curriculum_id}")
-async def delete_curriculum(curriculum_id: str, teacher_id: str):
+async def delete_curriculum(curriculum_id: str, teacherUid: str):
     """
     Delete a curriculum
     
     Args:
         curriculum_id: Firestore document ID
-        teacher_id: User ID for authorization
+        teacherUid: User ID for authorization
     """
     try:
-        success = await firebase.delete_curriculum(curriculum_id, teacher_id)
+        success = await firebase.delete_curriculum(curriculum_id, teacherUid)
         
         if not success:
             raise HTTPException(status_code=404, detail="Curriculum not found")
         
         return {"message": "Curriculum deleted successfully"}
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+@router.post("/save-course")
+async def save_course(course_data: dict, teacherUid: str):
+    """
+    Save course from CourseWorkspace (after teacher builds it)
+    
+    Args:
+        course_data: Course data from frontend
+        teacherUid: Firebase user ID (passed as query parameter)
+    """
+    try:
+        # Ensure teacherUid is in the data
+        if not teacherUid:
+            raise HTTPException(status_code=400, detail="teacherUid is required")
+        
+        # Save to Firebase
+        course_id = await firebase.save_curriculum(
+            teacherUid=teacherUid,
+            curriculum_data=course_data
+        )
+        
+        return {
+            'success': True,
+            'courseId': course_id,
+            'message': 'Course saved successfully'
+        }
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+@router.get("/my-courses")
+async def get_my_courses(teacherUid: str):
+    """
+    Get all courses for the logged-in teacher
+    
+    Args:
+        teacherUid: Firebase user ID
+    """
+    try:
+        curricula = await firebase.list_teacher_curricula(teacherUid)
+        
+        return {
+            'success': True,
+            'courses': curricula
+        }
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

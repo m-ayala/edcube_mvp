@@ -44,7 +44,7 @@ const CourseDesigner = () => {
           num_worksheets: parseInt(formData.numWorksheets),
           num_activities: parseInt(formData.numActivities),
           objectives: formData.objectives,
-          teacher_id: currentUser.uid
+          teacherUid: currentUser.uid
         })
       });
 
@@ -53,7 +53,6 @@ const CourseDesigner = () => {
       const decoder = new TextDecoder();
       let buffer = '';
       let curriculumId = null;
-      let generatedBoxes = [];
 
       while (true) {
         const { done, value } = await reader.read();
@@ -89,23 +88,38 @@ const CourseDesigner = () => {
       }
 
       // Fetch the generated curriculum to get boxes
+      let generatedBoxes = [];
+      
       if (curriculumId) {
+        console.log('Fetching curriculum:', curriculumId);
+        
         const curriculumResponse = await fetch(
-          `http://localhost:8000/api/curricula/${curriculumId}?teacher_id=${currentUser.uid}`
+          `http://localhost:8000/api/curricula/${curriculumId}?teacherUid=${currentUser.uid}`
         );
         const curriculumData = await curriculumResponse.json();
-        const sections = curriculumData.boxes || [];
+        
+        console.log('Curriculum data received:', curriculumData);
+        
+        // Get boxes from the outline.sections
+        const boxes = curriculumData.outline?.sections || curriculumData.generatedTopics || [];
+        
+        console.log('Boxes found:', boxes);
 
-        // Transform sections to match TopicBox format
-        generatedBoxes = sections.map(section => ({
-        id: section.id || `box-${Math.random()}`,
-        title: section.title,
-        duration: `${section.duration_minutes} min`,
-        plaType: section.pla_pillars?.[0] || 'Knowledge',
-        subtopics: section.subtopics?.flatMap(st => st.topics) || [],
-        description: section.description
+        // Transform boxes to match TopicBox format
+        generatedBoxes = boxes.map((box, index) => ({
+          id: box.id || `box-${index}`,
+          title: box.title,
+          duration: `${box.duration_minutes} min`,
+          plaType: box.pla_pillars?.[0] || 'Knowledge',
+          subtopics: box.subtopics?.flatMap(st => st.topics || []) || [],
+          description: box.description,
+          learningObjectives: box.learning_objectives || []
         }));
+        
+        console.log('Transformed boxes:', generatedBoxes);
       }
+
+      console.log('Navigating with topics:', generatedBoxes);
 
       // Navigate to workspace with generated boxes
       navigate('/course-workspace', {

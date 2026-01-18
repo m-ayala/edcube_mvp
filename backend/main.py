@@ -1,68 +1,33 @@
-"""
-backend/main.py - PHASE 1 ONLY VERSION
-
-This version only includes the curriculum route for box generation.
-Other routes (topics, resources) are commented out.
-"""
-
-import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import uvicorn
 
-# Import only curriculum route for Phase 1
-from routes import curriculum
-# from routes import topics, resources  # COMMENTED OUT FOR PHASE 1 TESTING
+# Import route modules
+from routes import curriculum, resources, topics
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+app = FastAPI(title="EdCube API")
 
-# Initialize FastAPI app
-app = FastAPI(
-    title="EdCube API - Phase 1 Only",
-    description="Curriculum box generation (Phase 1 testing)",
-    version="0.1.0"
-)
-
-# CORS middleware
+# CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=["http://localhost:5173"],  # Vite default port
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Include ONLY curriculum router for Phase 1
+# Include routers
 app.include_router(curriculum.router, prefix="/api", tags=["curriculum"])
-
-# Topics and Resources routes are commented out for Phase 1 testing
-# app.include_router(topics.router, prefix="/api", tags=["topics"])
-# app.include_router(resources.router, prefix="/api", tags=["resources"])
+app.include_router(resources.router, prefix="/api", tags=["resources"])
+app.include_router(topics.router, prefix="/api", tags=["topics"])
 
 @app.get("/")
 async def root():
-    """Root endpoint"""
-    return {
-        "message": "EdCube API - Phase 1 Only",
-        "status": "running",
-        "phase": "1 - Box Generation Only"
-    }
+    return {"message": "EdCube API is running"}
 
 @app.get("/health")
-async def health_check():
-    """Health check endpoint"""
-    return {"status": "healthy", "phase": "1"}
+async def health():
+    return {"status": "healthy"}
 
 if __name__ == "__main__":
-    import uvicorn
-    logger.info("Starting EdCube API server (Phase 1 Only)...")
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True
-    )
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
