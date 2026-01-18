@@ -12,11 +12,18 @@ const CourseWorkspace = () => {
   const navigate = useNavigate();
   const location = useLocation();
   
-  const { formData, generatedTopics } = location.state || {};
+  const { 
+    formData, 
+    generatedTopics, 
+    existingSections,
+    existingHandsOnResources,
+    isEditing,
+    curriculumId 
+  } = location.state || {};
   
   const [courseName, setCourseName] = useState(formData?.courseName || '');
   const [topics, setTopics] = useState(generatedTopics || []);
-  const [sections, setSections] = useState([]);
+  const [sections, setSections] = useState(existingSections || []);
   const [showBreakModal, setShowBreakModal] = useState(false);
   const [handsOnResources, setHandsOnResources] = useState({});
   const [history, setHistory] = useState([]);
@@ -26,10 +33,14 @@ const CourseWorkspace = () => {
 
   // Save to history whenever sections change
   useEffect(() => {
-    if (sections.length > 0) {
-      saveToHistory();
-    }
-  }, [sections]);
+    console.log('📦 CourseWorkspace loaded with:', {
+      courseName,
+      topicsCount: topics.length,
+      sectionsCount: sections.length,
+      isEditing,
+      curriculumId
+    });
+  }, []);
 
   const saveToHistory = () => {
     const newHistory = history.slice(0, historyIndex + 1);
@@ -158,38 +169,65 @@ const CourseWorkspace = () => {
 
   const saveCourse = async () => {
     try {
-        // Get Firebase ID token
         const idToken = await currentUser.getIdToken();
         
-        // Prepare course data
+        // Prepare course data with correct field names
         const courseData = {
-        courseName,
-        class: formData.class,
-        subject: formData.subject,
-        sections: sections.map(section => ({
-            ...section,
-            topics: section.topics || []
-        })),
-        handsOnResources,
-        generatedTopics: topics,
+            courseName,
+            class: formData.class,
+            subject: formData.subject,
+            topic: formData.topic,
+            timeDuration: formData.timeDuration,
+            objectives: formData.objectives || '',
+            sections: sections.map(section => ({
+                ...section,
+                topics: section.topics || []
+            })),
+            handsOnResources,
+            generatedTopics: topics,
         };
         
-        // Send to backend with teacherUid as query param
-        const response = await fetch(`http://localhost:8000/api/save-course?teacherUid=${currentUser.uid}`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${idToken}`
-        },
-        body: JSON.stringify(courseData)
+        // If we're editing, include the courseId
+        if (isEditing && curriculumId) {
+            courseData.courseId = curriculumId;
+        }
+        
+        // Choose the right endpoint
+        const endpoint = isEditing && curriculumId 
+            ? `http://localhost:8000/api/update-course?teacherUid=${currentUser.uid}`
+            : `http://localhost:8000/api/save-course?teacherUid=${currentUser.uid}`;
+        
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${idToken}`
+            },
+            body: JSON.stringify(courseData)
         });
         
         const result = await response.json();
         
         if (result.success) {
-        alert('Course saved successfully!');
+            alert(isEditing ? 'Course updated successfully!' : 'Course saved successfully!');
+            
+            // If this was a new course, update curriculumId so future saves are updates
+            if (!isEditing && result.courseId) {
+                // Update the state to reflect we're now editing
+                navigate('/course-workspace', {
+                    state: {
+                        formData,
+                        generatedTopics: topics,
+                        existingSections: sections,
+                        existingHandsOnResources: handsOnResources,
+                        isEditing: true,
+                        curriculumId: result.courseId
+                    },
+                    replace: true  // Replace current history entry
+                });
+            }
         } else {
-        alert('Failed to save course: ' + (result.error || 'Unknown error'));
+            alert('Failed to save course: ' + (result.error || 'Unknown error'));
         }
     } catch (error) {
         console.error('Error saving course:', error);

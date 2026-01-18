@@ -40,6 +40,57 @@ const MyCourses = () => {
     setDeleteModalData({ id: curriculumId, name: courseName });
   };
 
+  const handleEditCourse = (curriculum) => {
+    console.log('🔧 Editing course:', curriculum);
+    
+    // Transform sections to match CourseWorkspace format
+    const transformedSections = (curriculum.sections || []).map(section => {
+      return {
+        id: section.id || `section-${Date.now()}-${Math.random()}`,
+        name: section.name || section.title || 'Unnamed Section',
+        type: section.type || 'section',
+        topics: Array.isArray(section.topics) ? section.topics : []
+      };
+    });
+
+    // Transform generatedTopics to match TopicBox format
+    const transformedTopics = (curriculum.generatedTopics || []).map((topic, index) => {
+      return {
+        id: topic.id || topic.box_id || `topic-${index}`,
+        title: topic.title,
+        duration: topic.duration || `${topic.duration_minutes || 0} min`,
+        plaType: topic.pla_pillars?.[0] || topic.plaType || 'Knowledge',
+        subtopics: topic.subtopics || [],
+        description: topic.description || '',
+        learningObjectives: topic.learning_objectives || topic.learningObjectives || []
+      };
+    });
+
+    console.log('🔧 Transformed data:', {
+      sections: transformedSections,
+      topics: transformedTopics
+    });
+
+    // Navigate to CourseWorkspace with transformed data
+    navigate('/course-workspace', {
+      state: {
+        formData: {
+          courseName: curriculum.courseName,
+          class: curriculum.class,
+          subject: curriculum.subject,
+          topic: curriculum.topic,
+          timeDuration: curriculum.timeDuration,
+          objectives: curriculum.objectives || ''
+        },
+        generatedTopics: transformedTopics,
+        existingSections: transformedSections,
+        existingHandsOnResources: curriculum.handsOnResources || {},
+        isEditing: true,
+        curriculumId: curriculum.courseId || curriculum.id
+      }
+    });
+  };
+
   const handleLogout = async () => {
     try {
       await logoutTeacher();
@@ -120,7 +171,8 @@ const MyCourses = () => {
           curriculum={selectedCurriculum}
           onClose={() => setSelectedCurriculum(null)}
           onEdit={() => {
-            navigate('/course-designer', { state: { curriculum: selectedCurriculum } });
+            handleEditCourse(selectedCurriculum);
+            setSelectedCurriculum(null);
           }}
         />
       )}
@@ -134,7 +186,7 @@ const MyCourses = () => {
               const { deleteCurriculum } = await import('../../firebase/dbService');
               await deleteCurriculum(deleteModalData.id);
               setDeleteModalData(null);
-              loadCurricula(); // Reload the list
+              loadCurricula();
             } catch (error) {
               console.error('Delete error:', error);
               alert('Error deleting course. Please try again.');

@@ -45,6 +45,9 @@ const Section = ({ section, onDrop, onDragOver, onUpdateName, onRemove, onRemove
     setIsEditingName(false);
   };
 
+  // Safely get topics array
+  const topics = Array.isArray(section.topics) ? section.topics : [];
+
   return (
     <div style={{
       border: '2px solid #007bff',
@@ -82,7 +85,7 @@ const Section = ({ section, onDrop, onDragOver, onUpdateName, onRemove, onRemove
             style={{ margin: 0, cursor: 'pointer', flex: 1 }}
             onClick={() => setIsEditingName(true)}
           >
-            {section.name}
+            {section.name || 'Unnamed Section'}
           </h4>
         )}
         
@@ -112,41 +115,57 @@ const Section = ({ section, onDrop, onDragOver, onUpdateName, onRemove, onRemove
           backgroundColor: '#f9f9f9'
         }}
       >
-        {section.topics && section.topics.length > 0 ? (
-          section.topics.map(topic => (
-            <div
-              key={topic.id}
-              style={{
-                padding: '10px',
-                marginBottom: '8px',
-                backgroundColor: 'white',
-                border: '1px solid #ddd',
-                borderRadius: '4px',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center'
-              }}
-            >
-              <div>
-                <div style={{ fontWeight: '500', fontSize: '14px' }}>{topic.title}</div>
-                <div style={{ fontSize: '12px', color: '#666' }}>
-                  {topic.duration} • {topic.plaType}
-                </div>
-              </div>
-              <button
-                onClick={() => onRemoveTopic(section.id, topic.id)}
+        {topics.length > 0 ? (
+          topics.map((topic, index) => {
+            // Make sure we have a valid topic object
+            if (!topic || typeof topic !== 'object') {
+              console.warn('Invalid topic:', topic);
+              return null;
+            }
+
+            // Get topic properties safely
+            const topicId = topic.id || `topic-${index}`;
+            const topicTitle = topic.title || 'Unnamed Topic';
+            const topicDuration = topic.duration || 'Unknown duration';
+            const topicPlaType = topic.plaType || topic.pla_pillars?.[0] || 'Knowledge';
+
+            return (
+              <div
+                key={topicId}
                 style={{
-                  background: 'none',
-                  border: 'none',
-                  color: '#dc3545',
-                  cursor: 'pointer',
-                  fontSize: '16px'
+                  padding: '10px',
+                  marginBottom: '8px',
+                  backgroundColor: 'white',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
                 }}
               >
-                ×
-              </button>
-            </div>
-          ))
+                <div>
+                  <div style={{ fontWeight: '500', fontSize: '14px' }}>
+                    {topicTitle}
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#666' }}>
+                    {topicDuration} • {topicPlaType}
+                  </div>
+                </div>
+                <button
+                  onClick={() => onRemoveTopic(section.id, topicId)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#dc3545',
+                    cursor: 'pointer',
+                    fontSize: '16px'
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+            );
+          })
         ) : (
           <div style={{ 
             textAlign: 'center', 

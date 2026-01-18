@@ -73,24 +73,7 @@ const CourseDetailsModal = ({ curriculum, onClose, onEdit }) => {
         {/* Sections Preview */}
         {curriculum.sections && curriculum.sections.length > 0 && (
           <div style={{ marginBottom: '15px' }}>
-            <strong>Sections:</strong>
-            <ul style={{ marginTop: '5px' }}>
-              {curriculum.sections.map((section, index) => (
-                <li key={index} style={{ marginBottom: '10px' }}>
-                  <strong>{section.sectionName}</strong>
-                  {section.selectedWorksheets && (
-                    <div style={{ fontSize: '14px', color: '#666', marginTop: '5px' }}>
-                      Worksheets: {section.selectedWorksheets.length}
-                    </div>
-                  )}
-                  {section.selectedActivities && (
-                    <div style={{ fontSize: '14px', color: '#666' }}>
-                      Activities: {section.selectedActivities.length}
-                    </div>
-                  )}
-                </li>
-              ))}
-            </ul>
+            <strong>Sections:</strong> {curriculum.sections.length}
           </div>
         )}
 

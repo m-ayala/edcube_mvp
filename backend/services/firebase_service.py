@@ -8,6 +8,8 @@ from typing import Dict, List, Optional
 import firebase_admin
 from firebase_admin import credentials, firestore
 from datetime import datetime
+from schemas.curriculum_schema import CurriculumFields as F
+import uuid
 
 
 class FirebaseService:
@@ -23,47 +25,38 @@ class FirebaseService:
         self.db = firestore.client()
         self.curricula_collection = self.db.collection('curricula')
     
+    # In firebase_service.py - save_curriculum method
     async def save_curriculum(self, teacherUid: str, curriculum_data: Dict) -> str:
-        """
-        Save a new curriculum to Firestore (FLAT STRUCTURE)
-        
-        Args:
-            teacherUid: Firebase user ID
-            curriculum_data: Curriculum data to save
-            
-        Returns:
-            Document ID of saved curriculum
-        """
+        """Save a new curriculum to Firestore (FLAT STRUCTURE)"""
         try:
             import uuid
             
-            # Generate unique course ID
             course_id = str(uuid.uuid4())
             
             # Prepare flat structure document
             doc_data = {
                 'courseId': course_id,
                 'teacherUid': teacherUid,
-                'courseName': curriculum_data.get('course_name', ''),
-                'class': curriculum_data.get('grade_level', ''),
+                'courseName': curriculum_data.get('course_name', ''),  # ← Check this
+                'class': curriculum_data.get('grade_level', ''),  # ← Check this
                 'subject': curriculum_data.get('subject', ''),
                 'topic': curriculum_data.get('topic', ''),
-                'duration': curriculum_data.get('duration', ''),
+                'timeDuration': curriculum_data.get('duration', ''),  # ← FIX: should get 'timeDuration'
+                'objectives': curriculum_data.get('objectives', ''),  # ← Add this
                 'sections': curriculum_data.get('sections', []),
                 'generatedTopics': curriculum_data.get('boxes', []),
                 'handsOnResources': curriculum_data.get('handsOnResources', {}),
+                'outline': curriculum_data.get('outline', {}),  # ← Add this
                 'isPublic': False,
                 'sharedWith': [],
                 'createdAt': datetime.utcnow().isoformat(),
                 'lastModified': datetime.utcnow().isoformat()
             }
             
-            # Save to flat structure: curricula/{course_id}
             self.curricula_collection.document(course_id).set(doc_data)
             
             print(f"✅ Saved curriculum to Firebase: {course_id}")
             return course_id
-        
         except Exception as e:
             print(f"❌ Error saving curriculum: {str(e)}")
             raise
@@ -315,3 +308,60 @@ class FirebaseService:
         except Exception as e:
             logger.error(f"Error fetching section: {e}", exc_info=True)
             return None
+        
+    async def list_teacher_curricula(self, teacherUid: str) -> List[Dict]:
+        """List all curricula for a teacher (FLAT STRUCTURE)"""
+        try:
+            docs = self.curricula_collection\
+                .where(F.TEACHER_UID, '==', teacherUid)\
+                .order_by(F.CREATED_AT, direction=firestore.Query.DESCENDING)\
+                .stream()
+            
+            curricula = []
+            for doc in docs:
+                data = doc.to_dict()
+                curricula.append({
+                    'id': doc.id,
+                    F.COURSE_ID: data.get(F.COURSE_ID),
+                    F.COURSE_NAME: data.get(F.COURSE_NAME),
+                    F.SUBJECT: data.get(F.SUBJECT),
+                    F.TOPIC: data.get(F.TOPIC),
+                    F.CLASS: data.get(F.CLASS),
+                    F.TIME_DURATION: data.get(F.TIME_DURATION),  # ← FIX: was 'duration'
+                    F.CREATED_AT: data.get(F.CREATED_AT),
+                    F.LAST_MODIFIED: data.get(F.LAST_MODIFIED)
+                })
+            
+            return curricula
+        
+        except Exception as e:
+            print(f"❌ Error listing curricula: {str(e)}")
+            raise
+
+    async def update_curriculum(self, course_id: str, updates: Dict):
+        """
+        Update an existing curriculum.
+        
+        Args:
+            course_id: Course ID
+            updates: Fields to update
+        
+        Returns:
+            dict: Success response
+        """
+        try:
+            # Add lastModified timestamp
+            updates['lastModified'] = datetime.utcnow().isoformat()
+            
+            # Update the document
+            self.curricula_collection.document(course_id).update(updates)
+            
+            print(f"✅ Updated curriculum: {course_id}")
+            return {
+                'success': True,
+                'message': 'Course updated successfully'
+            }
+            
+        except Exception as e:
+            print(f"❌ Error updating curriculum: {e}")
+            raise

@@ -173,24 +173,31 @@ async def delete_curriculum(curriculum_id: str, teacherUid: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
+# In backend/routes/curriculum.py
 @router.post("/save-course")
 async def save_course(course_data: dict, teacherUid: str):
-    """
-    Save course from CourseWorkspace (after teacher builds it)
-    
-    Args:
-        course_data: Course data from frontend
-        teacherUid: Firebase user ID (passed as query parameter)
-    """
+    """Save course from CourseWorkspace"""
     try:
-        # Ensure teacherUid is in the data
         if not teacherUid:
             raise HTTPException(status_code=400, detail="teacherUid is required")
         
-        # Save to Firebase
+        # FIX: Ensure course_data has the right structure
+        curriculum_data = {
+            'course_name': course_data.get('courseName'),  # Convert from frontend format
+            'grade_level': course_data.get('class'),
+            'subject': course_data.get('subject'),
+            'topic': course_data.get('topic', ''),
+            'duration': course_data.get('timeDuration'),  # This will become 'timeDuration' in Firebase
+            'objectives': course_data.get('objectives', ''),
+            'sections': course_data.get('sections', []),
+            'boxes': course_data.get('generatedTopics', []),
+            'handsOnResources': course_data.get('handsOnResources', {}),
+            'outline': course_data.get('outline', {})
+        }
+        
         course_id = await firebase.save_curriculum(
             teacherUid=teacherUid,
-            curriculum_data=course_data
+            curriculum_data=curriculum_data
         )
         
         return {
@@ -198,7 +205,6 @@ async def save_course(course_data: dict, teacherUid: str):
             'courseId': course_id,
             'message': 'Course saved successfully'
         }
-    
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
@@ -219,4 +225,54 @@ async def get_my_courses(teacherUid: str):
         }
     
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+@router.post("/update-course")
+async def update_course(course_data: dict, teacherUid: str):
+    """
+    Update an existing course in Firebase
+    
+    Args:
+        course_data: Updated course data (must include courseId)
+        teacherUid: Firebase user ID (passed as query parameter)
+    """
+    try:
+        if not teacherUid:
+            raise HTTPException(status_code=400, detail="teacherUid is required")
+        
+        course_id = course_data.get('courseId')
+        if not course_id:
+            raise HTTPException(status_code=400, detail="courseId is required for updates")
+        
+        # Verify ownership before updating
+        existing_course = await firebase.get_curriculum(course_id, teacherUid)
+        if not existing_course:
+            raise HTTPException(status_code=404, detail="Course not found or unauthorized")
+        
+        # Prepare update data (keep the same courseId)
+        update_data = {
+            'courseName': course_data.get('courseName'),
+            'class': course_data.get('class'),
+            'subject': course_data.get('subject'),
+            'topic': course_data.get('topic'),
+            'timeDuration': course_data.get('timeDuration'),
+            'objectives': course_data.get('objectives', ''),
+            'sections': course_data.get('sections', []),
+            'generatedTopics': course_data.get('generatedTopics', []),
+            'handsOnResources': course_data.get('handsOnResources', {}),
+        }
+        
+        # Update in Firebase (this will use the existing document)
+        await firebase.update_curriculum(course_id, update_data)
+        
+        return {
+            'success': True,
+            'courseId': course_id,
+            'message': 'Course updated successfully'
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating course: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
