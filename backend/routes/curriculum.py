@@ -1,5 +1,8 @@
+# FILE 1: backend/routes/curriculum.py
+
 """
-Curriculum generation routes with live progress streaming
+Curriculum generation routes - PHASE 1 ONLY
+Generates boxes/topics without any video or worksheet population
 """
 
 from fastapi import APIRouter, HTTPException
@@ -22,42 +25,38 @@ class CourseRequest(BaseModel):
     grade_level: str
     subject: str
     topic: str
-    time_duration: str  # e.g., "1 week", "2 hours"
+    time_duration: str
     num_worksheets: int
     num_activities: int
     objectives: Optional[str] = ""
-    teacher_id: str  # Firebase user ID
-
-
-class CurriculumResponse(BaseModel):
-    """Response model for generated curriculum"""
-    curriculum_id: str
-    status: str
-    message: str
+    teacher_id: str
 
 
 @router.post("/generate-curriculum")
 async def generate_curriculum(request: CourseRequest):
     """
-    Generate curriculum with live progress updates via Server-Sent Events
+    PHASE 1 ONLY: Generate curriculum boxes/topics
+    
+    This endpoint ONLY generates boxes. It does NOT:
+    - Generate videos (Phase 2)
+    - Generate worksheets/activities (Phase 3)
     
     Flow:
     1. Validate request
-    2. Run Phase 1 (outliner) - stream progress
-    3. Run Phase 2 (populator) - stream progress
-    4. Save to Firebase
-    5. Return curriculum ID
+    2. Run Phase 1 (outliner) - generate boxes
+    3. Save boxes to Firebase
+    4. Return curriculum ID and boxes
     """
     
     async def generate():
         """Generator function for SSE streaming"""
         try:
             # Initial status
-            yield f"data: {json.dumps({'phase': 0, 'message': 'Starting curriculum generation...', 'progress': 0})}\n\n"
+            yield f"data: {json.dumps({'phase': 0, 'message': 'Starting box generation...', 'progress': 0})}\n\n"
             await asyncio.sleep(0.1)
             
-            # Phase 1: Generate outline
-            yield f"data: {json.dumps({'phase': 1, 'message': 'Phase 1/2: Generating curriculum structure...', 'progress': 10})}\n\n"
+            # Phase 1: Generate boxes ONLY
+            yield f"data: {json.dumps({'phase': 1, 'message': 'Generating curriculum boxes...', 'progress': 10})}\n\n"
             
             outline_data = await orchestrator.run_phase1({
                 'grade_level': request.grade_level,
@@ -70,26 +69,14 @@ async def generate_curriculum(request: CourseRequest):
             })
             
             if not outline_data:
-                yield f"data: {json.dumps({'phase': 1, 'message': 'Error: Phase 1 failed', 'progress': 0, 'error': True})}\n\n"
+                yield f"data: {json.dumps({'phase': 1, 'message': 'Error: Failed to generate boxes', 'progress': 0, 'error': True})}\n\n"
                 return
             
-            yield f"data: {json.dumps({'phase': 1, 'message': 'Phase 1 complete! Generated curriculum structure', 'progress': 40})}\n\n"
+            yield f"data: {json.dumps({'phase': 1, 'message': 'Boxes generated successfully!', 'progress': 80})}\n\n"
             await asyncio.sleep(0.5)
             
-            # Phase 2: Add video resources
-            yield f"data: {json.dumps({'phase': 2, 'message': 'Phase 2/2: Finding educational videos...', 'progress': 50})}\n\n"
-            
-            enriched_data = await orchestrator.run_phase2(outline_data)
-            
-            if not enriched_data:
-                yield f"data: {json.dumps({'phase': 2, 'message': 'Error: Phase 2 failed', 'progress': 40, 'error': True})}\n\n"
-                return
-            
-            yield f"data: {json.dumps({'phase': 2, 'message': 'Phase 2 complete! Added video resources', 'progress': 80})}\n\n"
-            await asyncio.sleep(0.5)
-            
-            # Save to Firebase
-            yield f"data: {json.dumps({'phase': 3, 'message': 'Saving curriculum to database...', 'progress': 90})}\n\n"
+            # Save to Firebase (just the boxes, NO VIDEOS)
+            yield f"data: {json.dumps({'phase': 1, 'message': 'Saving curriculum...', 'progress': 90})}\n\n"
             
             curriculum_id = await firebase.save_curriculum(
                 teacher_id=request.teacher_id,
@@ -99,12 +86,20 @@ async def generate_curriculum(request: CourseRequest):
                     'subject': request.subject,
                     'topic': request.topic,
                     'duration': request.time_duration,
-                    'outline': enriched_data
+                    'outline': outline_data,
+                    'boxes': outline_data.get('sections', [])
                 }
             )
             
             # Complete
-            yield f"data: {json.dumps({'phase': 3, 'message': 'Complete! Curriculum generated successfully', 'progress': 100, 'curriculum_id': curriculum_id, 'done': True})}\n\n"
+            result = {
+                'phase': 1,
+                'message': 'Complete! Boxes ready to drag into outline',
+                'progress': 100,
+                'curriculum_id': curriculum_id,
+                'done': True
+            }
+            yield f"data: {json.dumps(result)}\n\n"
             
         except Exception as e:
             error_msg = f"Error during generation: {str(e)}"
@@ -116,7 +111,7 @@ async def generate_curriculum(request: CourseRequest):
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
-            "X-Accel-Buffering": "no"  # Disable nginx buffering
+            "X-Accel-Buffering": "no"
         }
     )
 

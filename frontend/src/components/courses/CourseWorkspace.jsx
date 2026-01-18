@@ -17,11 +17,12 @@ const CourseWorkspace = () => {
   const [courseName, setCourseName] = useState(formData?.courseName || '');
   const [topics, setTopics] = useState(generatedTopics || []);
   const [sections, setSections] = useState([]);
-  const [selectedTopicForModal, setSelectedTopicForModal] = useState(null);
   const [showBreakModal, setShowBreakModal] = useState(false);
   const [handsOnResources, setHandsOnResources] = useState({});
   const [history, setHistory] = useState([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
+  const [selectedTopic, setSelectedTopic] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Save to history whenever sections change
   useEffect(() => {
@@ -80,28 +81,14 @@ const CourseWorkspace = () => {
     setSections(sections.filter(s => s.id !== sectionId));
   };
 
-  const handleTopicClick = async (topic) => {
-    // Run Phase 2 (Populator) for this topic
-    setSelectedTopicForModal({ ...topic, loading: true });
-    
-    try {
-      const response = await fetch('http://localhost:8000/api/populate-topic', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          topicId: topic.id,
-          topicTitle: topic.title,
-          gradeLevel: formData.class
-        })
-      });
-      
-      const populatedData = await response.json();
-      setSelectedTopicForModal({ ...topic, ...populatedData, loading: false });
-    } catch (error) {
-      console.error('Error populating topic:', error);
-      alert('Failed to load topic details');
-      setSelectedTopicForModal(null);
-    }
+  const handleTopicClick = (topic) => {
+    setSelectedTopic(topic);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedTopic(null);
   };
 
   const handleDragStart = (e, topic) => {
@@ -459,7 +446,7 @@ const CourseWorkspace = () => {
               <TopicBox
                 key={topic.id}
                 topic={topic}
-                onClick={() => handleTopicClick(topic)}
+                onClick={handleTopicClick}
                 onDragStart={handleDragStart}
               />
             ))
@@ -468,10 +455,10 @@ const CourseWorkspace = () => {
       </div>
 
       {/* Topic Details Modal */}
-      {selectedTopicForModal && (
+      {isModalOpen && selectedTopic && (
         <TopicDetailsModal
-          topic={selectedTopicForModal}
-          onClose={() => setSelectedTopicForModal(null)}
+          topic={selectedTopic}
+          onClose={handleCloseModal}
         />
       )}
 

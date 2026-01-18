@@ -1,47 +1,55 @@
 // src/components/courses/TopicBox.jsx
 const TopicBox = ({ topic, onClick, onDragStart }) => {
-  const getPlaColor = (plaType) => {
-    const colors = {
-      'Knowledge': '#ff6b6b',
-      'Self-Knowledge': '#4ecdc4',
-      'Wisdom': '#45b7d1',
-      'Application': '#f9ca24'
-    };
-    return colors[plaType] || '#95a5a6';
+  const handleClick = (e) => {
+    // Only trigger onClick if not dragging
+    if (onClick) {
+      onClick(topic);
+    }
+  };
+
+  const handleDragStart = (e) => {
+    if (onDragStart) {
+      onDragStart(e, topic);
+    }
   };
 
   return (
     <div
       draggable
-      onDragStart={(e) => onDragStart(e, topic)}
-      onClick={onClick}
+      onDragStart={handleDragStart}
+      onClick={handleClick}
       style={{
         border: '1px solid #ddd',
         borderRadius: '8px',
         padding: '15px',
-        marginBottom: '12px',
-        cursor: 'grab',
+        marginBottom: '15px',
         backgroundColor: 'white',
-        transition: 'all 0.2s',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+        cursor: 'pointer',
+        transition: 'all 0.2s ease',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.1)';
+        e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)';
         e.currentTarget.style.transform = 'translateY(-2px)';
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.05)';
+        e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
         e.currentTarget.style.transform = 'translateY(0)';
       }}
     >
-      <h4 style={{ margin: '0 0 10px 0', fontSize: '16px' }}>
+      <h4 style={{ margin: '0 0 8px 0', fontSize: '16px' }}>
         {topic.title}
       </h4>
       
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px' }}>
+      <div style={{ 
+        display: 'flex', 
+        gap: '8px', 
+        marginBottom: '10px',
+        flexWrap: 'wrap'
+      }}>
         <span style={{ 
-          padding: '4px 8px', 
-          backgroundColor: getPlaColor(topic.plaType),
+          padding: '4px 10px', 
+          backgroundColor: '#007bff',
           color: 'white',
           borderRadius: '4px',
           fontSize: '12px',
@@ -50,15 +58,23 @@ const TopicBox = ({ topic, onClick, onDragStart }) => {
           {topic.plaType}
         </span>
         
-        <span style={{ color: '#666' }}>
+        <span style={{ 
+          padding: '4px 10px', 
+          backgroundColor: '#6c757d',
+          color: 'white',
+          borderRadius: '4px',
+          fontSize: '12px'
+        }}>
           ⏱️ {topic.duration}
         </span>
       </div>
 
       {topic.subtopics && topic.subtopics.length > 0 && (
-        <div style={{ marginTop: '10px', fontSize: '12px', color: '#888' }}>
+        <div style={{ fontSize: '13px', color: '#666' }}>
           • {topic.subtopics[0]}
-          {topic.subtopics.length > 1 && ` +${topic.subtopics.length - 1} more`}
+          {topic.subtopics.length > 1 && (
+            <span style={{ color: '#999' }}> +{topic.subtopics.length - 1} more</span>
+          )}
         </div>
       )}
     </div>

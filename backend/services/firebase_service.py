@@ -194,3 +194,107 @@ class FirebaseService:
         except Exception as e:
             print(f"❌ Error adding resources: {str(e)}")
             raise
+    async def update_section(
+        self,
+        curriculum_id: str,
+        section_id: str,
+        section_data: dict
+    ) -> bool:
+        """
+        Update a specific section within a curriculum document.
+        
+        Called after Phase 2 populates a section with videos.
+        
+        Args:
+            curriculum_id: Firestore document ID
+            section_id: Section ID within the curriculum
+            section_data: Updated section data with video_resources
+        
+        Returns:
+            bool: True if successful
+        """
+        try:
+            doc_ref = self.curricula_collection.document(curriculum_id)
+            doc = doc_ref.get()
+            
+            if not doc.exists:
+                logger.error(f"Curriculum {curriculum_id} not found")
+                return False
+            
+            # Get current data
+            curriculum = doc.to_dict()
+            sections = curriculum.get('outline', {}).get('sections', [])
+            
+            # Find and update the specific section
+            updated = False
+            for i, section in enumerate(sections):
+                if section.get('id') == section_id or section.get('title') == section_data.get('title'):
+                    # Update this section with populated data
+                    sections[i] = section_data
+                    updated = True
+                    break
+            
+            if not updated:
+                logger.error(f"Section {section_id} not found in curriculum")
+                return False
+            
+            # Save back to Firestore
+            doc_ref.update({
+                'outline.sections': sections,
+                'updated_at': firestore.SERVER_TIMESTAMP
+            })
+            
+            logger.info(f"Updated section {section_id} in curriculum {curriculum_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error updating section: {e}", exc_info=True)
+            return False
+
+
+    async def get_section(
+        self,
+        curriculum_id: str,
+        section_id: str,
+        teacher_id: str
+    ) -> dict:
+        """
+        Get a specific section's data from a curriculum.
+        
+        Called when teacher clicks on a populated box to view details.
+        
+        Args:
+            curriculum_id: Firestore document ID
+            section_id: Section ID within the curriculum
+            teacher_id: User ID for authorization
+        
+        Returns:
+            dict: Section data or None if not found
+        """
+        try:
+            doc_ref = self.curricula_collection.document(curriculum_id)
+            doc = doc_ref.get()
+            
+            if not doc.exists:
+                logger.error(f"Curriculum {curriculum_id} not found")
+                return None
+            
+            curriculum = doc.to_dict()
+            
+            # Verify teacher authorization
+            if curriculum.get('teacher_id') != teacher_id:
+                logger.warning(f"Unauthorized access attempt by {teacher_id}")
+                return None
+            
+            # Find the specific section
+            sections = curriculum.get('outline', {}).get('sections', [])
+            for section in sections:
+                if section.get('id') == section_id or section.get('title') == section_id:
+                    return section
+            
+            logger.error(f"Section {section_id} not found")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error fetching section: {e}", exc_info=True)
+            return None

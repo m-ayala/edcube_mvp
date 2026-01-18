@@ -81,8 +81,8 @@ async def populate_section(request: PopulateSectionRequest):
             
             # Complete - send the populated section
             video_count = len(populated_section.get('video_resources', []))
-            yield f"data: {json.dumps({{'message': f'Complete! Found {video_count} videos', 'progress': 100, 'section': populated_section, 'done': True})}}\n\n"
-            
+            yield f"data: {json.dumps({'message': f'Complete! Found {video_count} videos', 'progress': 100, 'section': populated_section, 'done': True})}\n\n"
+
         except Exception as e:
             error_msg = f"Error populating section: {str(e)}"
             logger.error(error_msg, exc_info=True)

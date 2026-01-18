@@ -1,78 +1,65 @@
 """
-EdCube Backend API Server
-FastAPI server to expose curriculum generation pipeline to React frontend
+backend/main.py - PHASE 1 ONLY VERSION
+
+This version only includes the curriculum route for box generation.
+Other routes (topics, resources) are commented out.
 """
 
 import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import uvicorn
 
-from routes import curriculum, resources, topics  # ADD topics here
-from config import LoggingConfig
+# Import only curriculum route for Phase 1
+from routes import curriculum
+# from routes import topics, resources  # COMMENTED OUT FOR PHASE 1 TESTING
 
 # Configure logging
 logging.basicConfig(
-    level=getattr(logging, LoggingConfig.LOG_LEVEL),
-    format=LoggingConfig.LOG_FORMAT,
-    datefmt=LoggingConfig.LOG_DATE_FORMAT
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
-
 logger = logging.getLogger(__name__)
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="EdCube API",
-    description="AI-powered curriculum generation for teachers",
-    version="1.0.0"
+    title="EdCube API - Phase 1 Only",
+    description="Curriculum box generation (Phase 1 testing)",
+    version="0.1.0"
 )
 
-# Configure CORS for React frontend
+# CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://localhost:4000",
-        "http://localhost:3000",
-        "https://edcube-mvp.vercel.app"
-    ],
+    allow_origins=["http://localhost:5173", "http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Include routers
+# Include ONLY curriculum router for Phase 1
 app.include_router(curriculum.router, prefix="/api", tags=["curriculum"])
-app.include_router(resources.router, prefix="/api", tags=["resources"])
-app.include_router(topics.router, prefix="/api", tags=["topics"])  # ADD THIS LINE
 
+# Topics and Resources routes are commented out for Phase 1 testing
+# app.include_router(topics.router, prefix="/api", tags=["topics"])
+# app.include_router(resources.router, prefix="/api", tags=["resources"])
 
 @app.get("/")
 async def root():
-    """Health check endpoint"""
+    """Root endpoint"""
     return {
-        "status": "online",
-        "message": "EdCube API is running",
-        "version": "1.0.0"
+        "message": "EdCube API - Phase 1 Only",
+        "status": "running",
+        "phase": "1 - Box Generation Only"
     }
-
 
 @app.get("/health")
 async def health_check():
-    """Detailed health check"""
-    logger.info("Health check requested")
-    return {
-        "status": "healthy",
-        "services": {
-            "api": "operational",
-            "firebase": "connected",
-            "openai": "available"
-        }
-    }
-
+    """Health check endpoint"""
+    return {"status": "healthy", "phase": "1"}
 
 if __name__ == "__main__":
-    logger.info("Starting EdCube API server...")
+    import uvicorn
+    logger.info("Starting EdCube API server (Phase 1 Only)...")
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
