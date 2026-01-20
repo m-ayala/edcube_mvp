@@ -125,7 +125,9 @@ const CourseDesigner = () => {
       navigate('/course-workspace', {
         state: {
           formData,
-          generatedTopics: generatedBoxes
+          generatedTopics: generatedBoxes,
+          isEditing: true,
+          curriculumId: curriculumId  // ✅ Pass the ID from backend response
         }
       });
 

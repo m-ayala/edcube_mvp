@@ -32,7 +32,7 @@ const CourseWorkspace = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [videosByTopic, setVideosByTopic] = useState({}); // Add this line
 
-  // Save to history whenever sections change
+  // Load videos from sections when component mounts
   useEffect(() => {
     console.log('📦 CourseWorkspace loaded with:', {
       courseName,
@@ -41,7 +41,27 @@ const CourseWorkspace = () => {
       isEditing,
       curriculumId
     });
-  }, []);
+
+    // Extract video_resources from loaded sections and populate videosByTopic state
+    if (sections.length > 0) {
+      const loadedVideos = {};
+      
+      sections.forEach(section => {
+        if (section.topics) {
+          section.topics.forEach(topic => {
+            if (topic.video_resources && topic.video_resources.length > 0) {
+              loadedVideos[topic.id] = topic.video_resources;
+            }
+          });
+        }
+      });
+
+      if (Object.keys(loadedVideos).length > 0) {
+        console.log('🎥 Loaded videos from saved course:', loadedVideos);
+        setVideosByTopic(loadedVideos);
+      }
+    }
+  }, []); // Empty dependency array - only run once on mount
 
   const saveToHistory = () => {
     const newHistory = history.slice(0, historyIndex + 1);
@@ -168,110 +188,127 @@ const CourseWorkspace = () => {
     }
   };
 
+  const generateVideosFromBackend = async (topicId, topic, sectionId) => {
+    try {
+      console.log('🎬 Calling backend to generate videos...');
+      
+      const response = await fetch('http://localhost:8000/api/generate-videos', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          topicId: topicId,
+          topicTitle: topic.title,
+          topicData: {
+            title: topic.title,
+            duration: topic.duration,
+            plaType: topic.plaType,
+            learningObjectives: topic.learningObjectives,
+            subtopics: topic.subtopics
+          },
+          sectionId: sectionId,
+          gradeLevel: formData.class,
+          courseId: curriculumId || 'new-course'
+        })
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setVideosByTopic(prev => ({
+          ...prev,
+          [topicId]: result.videos
+        }));
+        console.log('✅ Videos received from backend:', result.videos.length);
+      } else {
+        console.error('❌ Failed to generate videos');
+        alert('Failed to generate videos');
+      }
+    } catch (error) {
+      console.error('❌ Error calling backend:', error);
+      alert('Error generating videos');
+    }
+  };
+
   const saveCourse = async () => {
     try {
-        const idToken = await currentUser.getIdToken();
-        
-        // Prepare course data with correct field names
-        const courseData = {
-            courseName,
-            class: formData.class,
-            subject: formData.subject,
-            topic: formData.topic,
-            timeDuration: formData.timeDuration,
-            objectives: formData.objectives || '',
-            sections: sections.map(section => ({
-                ...section,
-                topics: section.topics || []
-            })),
-            handsOnResources,
-            generatedTopics: topics,
+      const idToken = await currentUser.getIdToken();
+      
+      // Prepare sections with video_resources
+      const sectionsWithVideos = sections.map(section => {
+        const sectionData = {
+          ...section,
+          topics: section.topics || []
         };
         
-        // If we're editing, include the courseId
-        if (isEditing && curriculumId) {
-            courseData.courseId = curriculumId;
+        // Add video_resources to each topic that has generated videos
+        if (section.topics) {
+          sectionData.topics = section.topics.map(topic => ({
+            ...topic,
+            video_resources: videosByTopic[topic.id] || []
+          }));
         }
         
-        // Choose the right endpoint
-        const endpoint = isEditing && curriculumId 
-            ? `http://localhost:8000/api/update-course?teacherUid=${currentUser.uid}`
-            : `http://localhost:8000/api/save-course?teacherUid=${currentUser.uid}`;
-        
-        const response = await fetch(endpoint, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${idToken}`
-            },
-            body: JSON.stringify(courseData)
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            alert(isEditing ? 'Course updated successfully!' : 'Course saved successfully!');
-            
-            // If this was a new course, update curriculumId so future saves are updates
-            if (!isEditing && result.courseId) {
-                // Update the state to reflect we're now editing
-                navigate('/course-workspace', {
-                    state: {
-                        formData,
-                        generatedTopics: topics,
-                        existingSections: sections,
-                        existingHandsOnResources: handsOnResources,
-                        isEditing: true,
-                        curriculumId: result.courseId
-                    },
-                    replace: true  // Replace current history entry
-                });
-            }
-        } else {
-            alert('Failed to save course: ' + (result.error || 'Unknown error'));
-        }
+        return sectionData;
+      });
+      
+      // Prepare course data
+      const courseData = {
+        courseName,
+        class: formData.class,
+        subject: formData.subject,
+        topic: formData.topic,
+        timeDuration: formData.timeDuration,
+        objectives: formData.objectives || '',
+        sections: sectionsWithVideos,
+        handsOnResources,
+        generatedTopics: topics,
+      };
+      
+      console.log('💾 Saving course:', {
+        isEditing,
+        curriculumId,
+        sectionsCount: sectionsWithVideos.length,
+        videosCount: Object.keys(videosByTopic).length
+      });
+      
+      // ALWAYS use update-course if we have a curriculumId
+      const hasExistingId = curriculumId && curriculumId !== 'new-course';
+      
+      if (hasExistingId) {
+        courseData.courseId = curriculumId;
+      }
+      
+      const endpoint = hasExistingId
+        ? `http://localhost:8000/api/update-course?teacherUid=${currentUser.uid}`
+        : `http://localhost:8000/api/save-course?teacherUid=${currentUser.uid}`;
+      
+      console.log('📡 Using endpoint:', endpoint, 'with courseId:', courseData.courseId);
+      
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`
+        },
+        body: JSON.stringify(courseData)
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        console.log('✅ Course saved successfully!');
+        alert(hasExistingId ? 'Course updated!' : 'Course saved!');
+      } else {
+        console.error('❌ Save failed:', result);
+        alert('Failed to save: ' + (result.error || 'Unknown error'));
+      }
     } catch (error) {
-        console.error('Error saving course:', error);
-        alert('Failed to save course');
+      console.error('Error saving course:', error);
+      alert('Failed to save course');
     }
-    };
-
-    const generateMockVideos = (topicId, topicTitle) => {
-      // Mock video data
-      const mockVideos = [
-        {
-          videoId: 'dQw4w9WgXcQ',
-          title: `Educational Video: ${topicTitle} - Part 1`,
-          channelName: 'Khan Academy',
-          duration: '8:45',
-          thumbnailUrl: `https://img.youtube.com/vi/dQw4w9WgXcQ/mqdefault.jpg`,
-          url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
-        },
-        {
-          videoId: 'jNQXAC9IVRw',
-          title: `Understanding ${topicTitle} - Detailed Explanation`,
-          channelName: 'Crash Course',
-          duration: '12:30',
-          thumbnailUrl: `https://img.youtube.com/vi/jNQXAC9IVRw/mqdefault.jpg`,
-          url: 'https://www.youtube.com/watch?v=jNQXAC9IVRw'
-        },
-        {
-          videoId: 'y8Kyi0WNg40',
-          title: `${topicTitle} Basics for Beginners`,
-          channelName: 'TED-Ed',
-          duration: '5:20',
-          thumbnailUrl: `https://img.youtube.com/vi/y8Kyi0WNg40/mqdefault.jpg`,
-          url: 'https://www.youtube.com/watch?v=y8Kyi0WNg40'
-        }
-      ];
-
-      setVideosByTopic(prev => ({
-        ...prev,
-        [topicId]: mockVideos
-      }));
-
-  console.log('✅ Mock videos generated for topic:', topicId);
-};
+  };
 
   // Get all topics that have been added to sections
   const topicsInSections = sections
@@ -499,7 +536,12 @@ const CourseWorkspace = () => {
               
               {!videosByTopic[topic.id] ? (
                 <button
-                  onClick={() => generateMockVideos(topic.id, topic.title)}
+                  onClick={() => {
+                    const section = sections.find(s => 
+                      s.topics && s.topics.some(t => t.id === topic.id)
+                    );
+                    generateVideosFromBackend(topic.id, topic, section?.id || 'unknown');
+                  }}
                   style={{
                     width: '100%',
                     padding: '10px',
@@ -522,7 +564,13 @@ const CourseWorkspace = () => {
                   {videosByTopic[topic.id].map((video, idx) => (
                     <div 
                       key={idx}
-                      onClick={() => window.open(video.url, '_blank')}
+                      onClick={() => {
+                        // Find which section this topic belongs to
+                        const section = sections.find(s => 
+                          s.topics && s.topics.some(t => t.id === topic.id)
+                        );
+                        generateVideosFromBackend(topic.id, topic, section?.id || 'unknown');
+                      }}
                       style={{
                         display: 'flex',
                         gap: '10px',

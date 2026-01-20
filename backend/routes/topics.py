@@ -29,6 +29,15 @@ class PopulateSectionRequest(BaseModel):
     grade_level: str
     teacher_comments: Optional[str] = ""
 
+class GenerateVideosRequest(BaseModel):
+    """Request model for generating videos for a topic"""
+    topicId: str
+    topicTitle: str
+    topicData: dict
+    sectionId: str
+    gradeLevel: str
+    courseId: str
+
 
 @router.post("/populate-section")
 async def populate_section(request: PopulateSectionRequest):
@@ -124,4 +133,54 @@ async def get_section(curriculum_id: str, section_id: str, teacherUid: str):
     
     except Exception as e:
         logger.error(f"Error fetching section: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/generate-videos")
+async def generate_videos(request: GenerateVideosRequest):
+    """
+    Generate videos for a specific topic (Phase 2 on-demand).
+    Currently returns mock data - will be replaced with orchestrator.populate_single_section()
+    """
+    try:
+        logger.info(f"Generating videos for topic: {request.topicTitle}")
+        
+        # MOCK DATA - will replace with:
+        # populated_section = await orchestrator.populate_single_section(...)
+        # return populated_section['video_resources']
+        
+        mock_videos = [
+            {
+                "videoId": "dQw4w9WgXcQ",
+                "title": f"Educational Video: {request.topicTitle} - Part 1",
+                "channelName": "Khan Academy",
+                "duration": "8:45",
+                "thumbnailUrl": "https://img.youtube.com/vi/dQw4w9WgXcQ/mqdefault.jpg",
+                "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+            },
+            {
+                "videoId": "jNQXAC9IVRw",
+                "title": f"Understanding {request.topicTitle}",
+                "channelName": "Crash Course",
+                "duration": "12:30",
+                "thumbnailUrl": "https://img.youtube.com/vi/jNQXAC9IVRw/mqdefault.jpg",
+                "url": "https://www.youtube.com/watch?v=jNQXAC9IVRw"
+            },
+            {
+                "videoId": "y8Kyi0WNg40",
+                "title": f"{request.topicTitle} Basics",
+                "channelName": "TED-Ed",
+                "duration": "5:20",
+                "thumbnailUrl": "https://img.youtube.com/vi/y8Kyi0WNg40/mqdefault.jpg",
+                "url": "https://www.youtube.com/watch?v=y8Kyi0WNg40"
+            }
+        ]
+        
+        return {
+            "success": True,
+            "topicId": request.topicId,
+            "videos": mock_videos
+        }
+        
+    except Exception as e:
+        logger.error(f"Error generating videos: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
