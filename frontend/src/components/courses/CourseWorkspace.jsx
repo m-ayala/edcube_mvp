@@ -321,13 +321,42 @@ const CourseWorkspace = () => {
       {/* 3-Column Layout */}
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         
-        {/* LEFT COLUMN - Course Outline */}
+        {/* LEFT COLUMN - Generated Topics */}
         <div style={{ 
-          width: '33%', 
+          width: '25%', 
           borderRight: '1px solid #ddd', 
           padding: '20px',
           overflowY: 'auto',
           backgroundColor: '#fafafa'
+        }}>
+          <h3>📚 Generated Topics</h3>
+          <p style={{ fontSize: '14px', color: '#666', marginBottom: '20px' }}>
+            Click to view details • Drag to add to course
+          </p>
+          
+          {topics.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px 20px', color: '#999' }}>
+              <p>No topics generated yet</p>
+            </div>
+          ) : (
+            topics.map(topic => (
+              <TopicBox
+                key={topic.id}
+                topic={topic}
+                onClick={handleTopicClick}
+                onDragStart={handleDragStart}
+              />
+            ))
+          )}
+        </div>
+
+        {/* MIDDLE COLUMN - Course Outline */}
+        <div style={{ 
+          width: '42%', 
+          borderRight: '1px solid #ddd', 
+          padding: '20px',
+          overflowY: 'auto',
+          backgroundColor: 'white'
         }}>
           <h3>Course Outline</h3>
           
@@ -392,15 +421,14 @@ const CourseWorkspace = () => {
           )}
         </div>
 
-        {/* CENTER COLUMN - Hands-On Resources */}
+        {/* RIGHT COLUMN - Video Resources (renamed from Hands-On Resources) */}
         <div style={{ 
-          width: '34%', 
-          borderRight: '1px solid #ddd', 
+          width: '33%', 
           padding: '20px',
           overflowY: 'auto',
-          backgroundColor: 'white'
+          backgroundColor: '#fafafa'
         }}>
-          <h3>📝 Hands-On Resources</h3>
+          <h3>🎥 Video Resources</h3>
           
           {topicsInSections.length === 0 ? (
             <div style={{ 
@@ -411,8 +439,8 @@ const CourseWorkspace = () => {
               borderRadius: '8px',
               marginTop: '20px'
             }}>
-              <p style={{ fontSize: '18px', marginBottom: '10px' }}>📚</p>
-              <p>Add topics to your course outline to generate worksheets and activities here.</p>
+              <p style={{ fontSize: '18px', marginBottom: '10px' }}>📹</p>
+              <p>Add topics to your course outline to generate videos here.</p>
             </div>
           ) : (
             topicsInSections.map(topic => (
@@ -431,80 +459,22 @@ const CourseWorkspace = () => {
                   {topic.duration} • {topic.plaType}
                 </p>
                 
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <button
-                    onClick={() => generateResource(topic.id, 'worksheet')}
-                    style={{
-                      flex: 1,
-                      padding: '8px',
-                      backgroundColor: '#17a2b8',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontSize: '14px'
-                    }}
-                  >
-                    + Worksheet
-                  </button>
-                  
-                  <button
-                    onClick={() => generateResource(topic.id, 'activity')}
-                    style={{
-                      flex: 1,
-                      padding: '8px',
-                      backgroundColor: '#28a745',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontSize: '14px'
-                    }}
-                  >
-                    + Activity
-                  </button>
-                </div>
-
-                {/* Show generated resources */}
-                {handsOnResources[topic.id] && handsOnResources[topic.id].length > 0 && (
-                  <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #ddd' }}>
-                    <p style={{ fontSize: '12px', fontWeight: '600', color: '#666' }}>Generated:</p>
-                    {handsOnResources[topic.id].map((resource, idx) => (
-                      <div key={idx} style={{ fontSize: '13px', padding: '5px 0', color: '#333' }}>
-                        • {resource.type}: {resource.title}
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <button
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    backgroundColor: '#dc3545',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: '600'
+                  }}
+                >
+                  🎬 Generate Videos
+                </button>
               </div>
-            ))
-          )}
-        </div>
-
-        {/* RIGHT COLUMN - Topics Library */}
-        <div style={{ 
-          width: '33%', 
-          padding: '20px',
-          overflowY: 'auto',
-          backgroundColor: '#fafafa'
-        }}>
-          <h3>📚 Generated Topics</h3>
-          <p style={{ fontSize: '14px', color: '#666', marginBottom: '20px' }}>
-            Click to view details • Drag to add to course
-          </p>
-          
-          {topics.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px 20px', color: '#999' }}>
-              <p>No topics generated yet</p>
-            </div>
-          ) : (
-            topics.map(topic => (
-              <TopicBox
-                key={topic.id}
-                topic={topic}
-                onClick={handleTopicClick}
-                onDragStart={handleDragStart}
-              />
             ))
           )}
         </div>
