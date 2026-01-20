@@ -30,6 +30,7 @@ const CourseWorkspace = () => {
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [selectedTopic, setSelectedTopic] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [videosByTopic, setVideosByTopic] = useState({}); // Add this line
 
   // Save to history whenever sections change
   useEffect(() => {
@@ -234,6 +235,43 @@ const CourseWorkspace = () => {
         alert('Failed to save course');
     }
     };
+
+    const generateMockVideos = (topicId, topicTitle) => {
+      // Mock video data
+      const mockVideos = [
+        {
+          videoId: 'dQw4w9WgXcQ',
+          title: `Educational Video: ${topicTitle} - Part 1`,
+          channelName: 'Khan Academy',
+          duration: '8:45',
+          thumbnailUrl: `https://img.youtube.com/vi/dQw4w9WgXcQ/mqdefault.jpg`,
+          url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
+        },
+        {
+          videoId: 'jNQXAC9IVRw',
+          title: `Understanding ${topicTitle} - Detailed Explanation`,
+          channelName: 'Crash Course',
+          duration: '12:30',
+          thumbnailUrl: `https://img.youtube.com/vi/jNQXAC9IVRw/mqdefault.jpg`,
+          url: 'https://www.youtube.com/watch?v=jNQXAC9IVRw'
+        },
+        {
+          videoId: 'y8Kyi0WNg40',
+          title: `${topicTitle} Basics for Beginners`,
+          channelName: 'TED-Ed',
+          duration: '5:20',
+          thumbnailUrl: `https://img.youtube.com/vi/y8Kyi0WNg40/mqdefault.jpg`,
+          url: 'https://www.youtube.com/watch?v=y8Kyi0WNg40'
+        }
+      ];
+
+      setVideosByTopic(prev => ({
+        ...prev,
+        [topicId]: mockVideos
+      }));
+
+  console.log('✅ Mock videos generated for topic:', topicId);
+};
 
   // Get all topics that have been added to sections
   const topicsInSections = sections
@@ -444,32 +482,24 @@ const CourseWorkspace = () => {
             </div>
           ) : (
             topicsInSections.map(topic => (
-              <div 
-                key={topic.id}
-                style={{
-                  border: '1px solid #ddd',
-                  borderRadius: '8px',
-                  padding: '15px',
-                  marginBottom: '15px',
-                  backgroundColor: '#f9f9f9'
-                }}
-              >
-                <h4 style={{ margin: '0 0 10px 0' }}>{topic.title}</h4>
-                <p style={{ fontSize: '14px', color: '#666', margin: '0 0 15px 0' }}>
-                  {topic.duration} • {topic.plaType}
-                </p>
-                
+            <div 
+              key={topic.id}
+              style={{
+                border: '1px solid #ddd',
+                borderRadius: '8px',
+                padding: '15px',
+                marginBottom: '20px',
+                backgroundColor: '#f9f9f9'
+              }}
+            >
+              <h4 style={{ margin: '0 0 10px 0' }}>{topic.title}</h4>
+              <p style={{ fontSize: '14px', color: '#666', margin: '0 0 15px 0' }}>
+                {topic.duration} • {topic.plaType}
+              </p>
+              
+              {!videosByTopic[topic.id] ? (
                 <button
-                  onClick={() => {
-                    console.log('🎬 Generate Videos clicked for topic:', {
-                      id: topic.id,
-                      title: topic.title,
-                      duration: topic.duration,
-                      plaType: topic.plaType,
-                      learningObjectives: topic.learningObjectives,
-                      subtopics: topic.subtopics
-                    });
-                  }}
+                  onClick={() => generateMockVideos(topic.id, topic.title)}
                   style={{
                     width: '100%',
                     padding: '10px',
@@ -484,8 +514,60 @@ const CourseWorkspace = () => {
                 >
                   🎬 Generate Videos
                 </button>
-              </div>
-            ))
+              ) : (
+                <div>
+                  <p style={{ fontSize: '12px', fontWeight: '600', color: '#666', marginBottom: '10px' }}>
+                    📹 Videos ({videosByTopic[topic.id].length})
+                  </p>
+                  {videosByTopic[topic.id].map((video, idx) => (
+                    <div 
+                      key={idx}
+                      onClick={() => window.open(video.url, '_blank')}
+                      style={{
+                        display: 'flex',
+                        gap: '10px',
+                        padding: '10px',
+                        marginBottom: '8px',
+                        backgroundColor: 'white',
+                        border: '1px solid #e0e0e0',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0f0f0'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                    >
+                      <img 
+                        src={video.thumbnailUrl} 
+                        alt={video.title}
+                        style={{
+                          width: '80px',
+                          height: '60px',
+                          objectFit: 'cover',
+                          borderRadius: '4px'
+                        }}
+                      />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ 
+                          fontSize: '13px', 
+                          fontWeight: '500', 
+                          margin: '0 0 4px 0',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap'
+                        }}>
+                          {video.title}
+                        </p>
+                        <p style={{ fontSize: '11px', color: '#666', margin: '0' }}>
+                          {video.channelName} • {video.duration}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))
           )}
         </div>
       </div>
