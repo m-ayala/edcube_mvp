@@ -460,6 +460,16 @@ const CourseWorkspace = () => {
                 </p>
                 
                 <button
+                  onClick={() => {
+                    console.log('🎬 Generate Videos clicked for topic:', {
+                      id: topic.id,
+                      title: topic.title,
+                      duration: topic.duration,
+                      plaType: topic.plaType,
+                      learningObjectives: topic.learningObjectives,
+                      subtopics: topic.subtopics
+                    });
+                  }}
                   style={{
                     width: '100%',
                     padding: '10px',
