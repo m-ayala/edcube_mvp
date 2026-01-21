@@ -163,28 +163,45 @@ const CourseWorkspace = () => {
   };
 
   const generateResource = async (topicId, resourceType) => {
+    // Find the topic to get its details
+    const topic = topicsInSections.find(t => t.id === topicId);
+    if (!topic) {
+      console.error('Topic not found:', topicId);
+      return;
+    }
+
     try {
+      console.log(`🔨 Generating ${resourceType} for topic:`, topic.title);
+      
       const response = await fetch('http://localhost:8000/api/generate-resource', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          topicId,
-          resourceType, // 'worksheet' or 'activity'
-          gradeLevel: formData.class
+          topicId: topicId,
+          resourceType: resourceType, // 'worksheet' or 'activity'
+          gradeLevel: formData.class,
+          topicTitle: topic.title,
+          topicDescription: topic.description || '',
+          learningObjectives: topic.learningObjectives || []
         })
       });
       
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const resource = await response.json();
+      console.log(`✅ ${resourceType} generated:`, resource);
       
       setHandsOnResources(prev => ({
         ...prev,
         [topicId]: [...(prev[topicId] || []), resource]
       }));
       
-      alert(`${resourceType} generated successfully!`);
+      alert(`${resourceType.charAt(0).toUpperCase() + resourceType.slice(1)} generated successfully!`);
     } catch (error) {
-      console.error('Error generating resource:', error);
-      alert('Failed to generate resource');
+      console.error(`Error generating ${resourceType}:`, error);
+      alert(`Failed to generate ${resourceType}`);
     }
   };
 
@@ -396,12 +413,12 @@ const CourseWorkspace = () => {
         </div>
       </div>
 
-      {/* 3-Column Layout */}
+      {/* 4-Column Layout */}
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         
-        {/* LEFT COLUMN - Generated Topics */}
+        {/* FIRST COLUMN - Generated Topics */}
         <div style={{ 
-          width: '25%', 
+          width: '20%', 
           borderRight: '1px solid #ddd', 
           padding: '20px',
           overflowY: 'auto',
@@ -428,9 +445,9 @@ const CourseWorkspace = () => {
           )}
         </div>
 
-        {/* MIDDLE COLUMN - Course Outline */}
+        {/* SECOND COLUMN - Course Outline */}
         <div style={{ 
-          width: '42%', 
+          width: '30%', 
           borderRight: '1px solid #ddd', 
           padding: '20px',
           overflowY: 'auto',
@@ -499,9 +516,10 @@ const CourseWorkspace = () => {
           )}
         </div>
 
-        {/* RIGHT COLUMN - Video Resources (renamed from Hands-On Resources) */}
+        {/* THIRD COLUMN - Video Resources (renamed from Hands-On Resources) */}
         <div style={{ 
-          width: '33%', 
+          width: '25%', 
+          borderRight: '1px solid #ddd',
           padding: '20px',
           overflowY: 'auto',
           backgroundColor: '#fafafa'
@@ -620,6 +638,164 @@ const CourseWorkspace = () => {
               )}
             </div>
           ))
+          )}
+        </div>
+
+        {/* FOURTH COLUMN - Worksheets & Activities */}
+        <div style={{ 
+          width: '25%', 
+          padding: '20px',
+          overflowY: 'auto',
+          backgroundColor: 'white'
+        }}>
+          <h3>📝 Hands-On Resources</h3>
+          
+          {topicsInSections.length === 0 ? (
+            <div style={{ 
+              textAlign: 'center', 
+              padding: '40px 20px', 
+              color: '#999',
+              backgroundColor: '#f5f5f5',
+              borderRadius: '8px',
+              marginTop: '20px'
+            }}>
+              <p style={{ fontSize: '18px', marginBottom: '10px' }}>📚</p>
+              <p>Add topics to your course outline to generate resources here.</p>
+            </div>
+          ) : (
+            topicsInSections.map(topic => (
+              <div 
+                key={`handson-${topic.id}`}
+                style={{
+                  border: '1px solid #ddd',
+                  borderRadius: '8px',
+                  padding: '15px',
+                  marginBottom: '20px',
+                  backgroundColor: '#f9f9f9'
+                }}
+              >
+                <h4 style={{ margin: '0 0 10px 0', fontSize: '16px' }}>{topic.title}</h4>
+                
+                {/* Worksheets Section */}
+                <div style={{ marginBottom: '15px' }}>
+                  <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center',
+                    marginBottom: '10px'
+                  }}>
+                    <p style={{ fontSize: '13px', fontWeight: '600', color: '#666', margin: 0 }}>
+                      📄 Worksheets
+                    </p>
+                    <button
+                      onClick={() => generateResource(topic.id, 'worksheet')}
+                      style={{
+                        padding: '5px 10px',
+                        backgroundColor: '#007bff',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                        fontWeight: '600'
+                      }}
+                    >
+                      + Add
+                    </button>
+                  </div>
+                  
+                  {!handsOnResources[topic.id]?.filter(r => r.type === 'worksheet').length ? (
+                    <p style={{ fontSize: '12px', color: '#999', fontStyle: 'italic' }}>
+                      No worksheets yet
+                    </p>
+                  ) : (
+                    handsOnResources[topic.id]
+                      .filter(r => r.type === 'worksheet')
+                      .map((worksheet, idx) => (
+                        <div 
+                          key={idx}
+                          style={{
+                            padding: '8px',
+                            marginBottom: '6px',
+                            backgroundColor: 'white',
+                            border: '1px solid #e0e0e0',
+                            borderRadius: '4px',
+                            fontSize: '12px'
+                          }}
+                        >
+                          <p style={{ margin: 0, fontWeight: '500' }}>{worksheet.title}</p>
+                          {worksheet.sourceUrl && (
+                            <a 
+                              href={worksheet.sourceUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ fontSize: '11px', color: '#007bff' }}
+                            >
+                              View Source
+                            </a>
+                          )}
+                        </div>
+                      ))
+                  )}
+                </div>
+
+                {/* Activities Section */}
+                <div>
+                  <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignments: 'center',
+                    marginBottom: '10px'
+                  }}>
+                    <p style={{ fontSize: '13px', fontWeight: '600', color: '#666', margin: 0 }}>
+                      🎯 Activities
+                    </p>
+                    <button
+                      onClick={() => generateResource(topic.id, 'activity')}
+                      style={{
+                        padding: '5px 10px',
+                        backgroundColor: '#28a745',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                        fontWeight: '600'
+                      }}
+                    >
+                      + Add
+                    </button>
+                  </div>
+                  
+                  {!handsOnResources[topic.id]?.filter(r => r.type === 'activity').length ? (
+                    <p style={{ fontSize: '12px', color: '#999', fontStyle: 'italic' }}>
+                      No activities yet
+                    </p>
+                  ) : (
+                    handsOnResources[topic.id]
+                      .filter(r => r.type === 'activity')
+                      .map((activity, idx) => (
+                        <div 
+                          key={idx}
+                          style={{
+                            padding: '8px',
+                            marginBottom: '6px',
+                            backgroundColor: 'white',
+                            border: '1px solid #e0e0e0',
+                            borderRadius: '4px',
+                            fontSize: '12px'
+                          }}
+                        >
+                          <p style={{ margin: '0 0 4px 0', fontWeight: '500' }}>{activity.title}</p>
+                          <p style={{ margin: 0, fontSize: '11px', color: '#666' }}>
+                            {activity.description}
+                          </p>
+                        </div>
+                      ))
+                  )}
+                </div>
+              </div>
+            ))
           )}
         </div>
       </div>
