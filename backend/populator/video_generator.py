@@ -111,7 +111,7 @@ def generate_videos_for_section(
     iteration = 0
     previous_coverage = 0
     
-    while (iteration < PopulatorConfig.MAX_SEARCH_ITERATIONS) and (not selected_videos):
+    while (iteration < PopulatorConfig.MAX_SEARCH_ITERATIONS):
         iteration += 1
         logger.info(f"--- Search Iteration {iteration}/{PopulatorConfig.MAX_SEARCH_ITERATIONS} ---")
         
