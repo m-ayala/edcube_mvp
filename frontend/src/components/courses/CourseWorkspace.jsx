@@ -205,7 +205,10 @@ const CourseWorkspace = () => {
             duration: topic.duration,
             plaType: topic.plaType,
             learningObjectives: topic.learningObjectives,
-            subtopics: topic.subtopics
+            subtopics: topic.subtopics,
+            subject: formData.subject,
+            courseName: formData.courseName,
+            courseTopic: formData.topic
           },
           sectionId: sectionId,
           gradeLevel: formData.class,
@@ -551,10 +554,11 @@ const CourseWorkspace = () => {
                     borderRadius: '4px',
                     cursor: 'pointer',
                     fontSize: '14px',
-                    fontWeight: '600'
+                    fontWeight: '600',
+                    marginBottom: videosByTopic[topic.id] ? '10px' : '0'
                   }}
                 >
-                  🎬 Generate Videos
+                  {videosByTopic[topic.id] ? '🔄 Regenerate Videos' : '🎬 Generate Videos'}
                 </button>
               ) : (
                 <div>

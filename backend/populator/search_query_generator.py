@@ -74,49 +74,55 @@ def generate_queries_for_section(
     
     except Exception as e:
         logger.error(f"Error generating queries: {e}")
-        logger.info("Using fallback queries...")
         return _generate_fallback_queries(section, grade_level)
 
 
 def _generate_fallback_queries(section: Dict, grade_level: str) -> List[Dict]:
-    """
-    Generate simple fallback queries if LLM fails.
-    
-    Args:
-        section: Section data
-        grade_level: Grade level
-    
-    Returns:
-        list: Basic query list
-    """
+    """Generate 4 simple fallback queries if LLM fails."""
     section_title = section.get('title', '')
+    course_name = section.get('course_name', '')  # ADD THIS
     
-    # Extract keywords if available
     instruction = section.get('components', {}).get('instruction', {})
     keywords = instruction.get('content_keywords', [])
     
-    # Build queries
+    # ADD THIS: Use course_name as context prefix
+    context = f"{course_name} " if course_name else ""
+    
     queries = []
     
-    # Primary: section title + top keyword
-    if keywords:
-        primary_query = f"{section_title} {keywords[0]}"
-    else:
-        primary_query = section_title
-    
+    # Query 1: course_name + Title + grade level
     queries.append({
         "priority": "primary",
-        "query": primary_query[:50],  # Truncate if too long
-        "rationale": "Fallback query using section title and keywords"
+        "query": f"{context}{section_title} grade {grade_level}",
+        "rationale": "Basic title with grade level and course context"
     })
     
-    # Secondary: simplified version
+    # Query 2: course_name + Title + "for kids"
     queries.append({
         "priority": "secondary",
-        "query": f"{section_title} explained",
-        "rationale": "Fallback explanatory query"
+        "query": f"{context}{section_title} for kids",
+        "rationale": "Child-friendly search with course context"
     })
     
-    logger.info(f"Generated {len(queries)} fallback queries")
+    # Query 3: course_name + Title + "explained"
+    queries.append({
+        "priority": "tertiary",
+        "query": f"{context}{section_title} explained simply",
+        "rationale": "Explanatory content with course context"
+    })
+    
+    # Query 4: course_name + Title + first keyword (if available)
+    if keywords:
+        queries.append({
+            "priority": "quaternary",
+            "query": f"{context}{section_title} {keywords[0]}",
+            "rationale": "Topic with key concept and course context"
+        })
+    else:
+        queries.append({
+            "priority": "quaternary",
+            "query": f"{context}{section_title} lesson",
+            "rationale": "Educational lesson with course context"
+        })
     
     return queries

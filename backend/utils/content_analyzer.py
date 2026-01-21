@@ -36,19 +36,20 @@ def analyze_video_content(
         >>> 'photosynthesis' in analysis['topics_covered']
         True
     """
+    
     if not transcript_text:
         # Fallback to title/description analysis if no transcript
         logger.warning("No transcript available, analyzing from metadata only")
         return _analyze_from_metadata(video_metadata, section_requirements)
     
     # Truncate transcript for token efficiency (use first 2000 chars)
-    transcript_sample = transcript_text[:2000] if len(transcript_text) > 2000 else transcript_text
+    transcript_sample = transcript_text
     
     prompt = f"""
 Analyze this educational video to determine what topics and concepts it covers.
 
 VIDEO TITLE: {video_metadata.get('title', 'N/A')}
-VIDEO DESCRIPTION: {video_metadata.get('description', 'N/A')[:300]}
+VIDEO DESCRIPTION: {video_metadata.get('description', 'N/A')}
 
 TRANSCRIPT SAMPLE:
 {transcript_sample}
@@ -96,19 +97,25 @@ def _analyze_from_metadata(video_metadata: Dict, section_requirements: Dict) -> 
         dict: Basic analysis from metadata
     """
     prompt = f"""
-Based only on the video title and description, infer what topics this video likely covers.
+    Based on the video title and description, determine what specific topics and concepts this video covers.
 
-VIDEO TITLE: {video_metadata.get('title', 'N/A')}
-VIDEO DESCRIPTION: {video_metadata.get('description', 'N/A')[:500]}
+    VIDEO TITLE: {video_metadata.get('title', 'N/A')}
+    VIDEO DESCRIPTION: {video_metadata.get('description', 'N/A')}
 
-Output as JSON:
-{{
-  "topics_covered": ["topic1", "topic2"],
-  "main_focus": "inferred primary subject",
-  "content_depth": "surface|moderate|deep"
-}}
-"""
-    
+    SECTION CONTEXT (what we're looking for):
+    Section Title: {section_requirements.get('title', 'N/A')}
+    Learning Objectives: {section_requirements.get('components', {}).get('instruction', {}).get('learning_objectives', [])}
+
+    Extract SPECIFIC topics mentioned in the video. Be detailed - don't just say the broad subject, list individual concepts.
+
+    Output as JSON:
+    {{
+    "topics_covered": ["specific topic 1", "specific topic 2", "specific topic 3"],
+    "main_focus": "primary subject of the video",
+    "content_depth": "surface|moderate|deep"
+    }}
+    """
+        
     system_message = "You are an expert at inferring video content from titles and descriptions."
     
     try:
@@ -117,12 +124,13 @@ Output as JSON:
         return analysis
     
     except Exception as e:
-        logger.error(f"Error analyzing from metadata: {e}")
+        logger.error(f"Error analyzing from metadata")
         return {
             "topics_covered": [],
             "main_focus": "unknown",
             "content_depth": "unknown"
         }
+    
 
 
 def calculate_content_coverage(video_analysis: Dict, section_requirements: Dict) -> Dict:
@@ -168,6 +176,14 @@ WHAT MUST BE COVERED:
 VIDEO ACTUALLY COVERS:
 {video_topics}
 
+IMPORTANT GUIDELINES FOR SCORING:
+- If the video covers the GENERAL TOPIC well, even if not every specific detail, give 60-80%
+- Only give 0-20% if the video is completely off-topic or irrelevant
+- Give 40-60% for partial coverage (covers some aspects but not all)
+- Give 80-100% only if it comprehensively covers all or most objectives
+- Be GENEROUS - educational videos often cover concepts without explicitly naming every keyword
+- Consider that different videos may teach the same concept using different terminology
+
 Analyze the match and output as JSON:
 {{
   "coverage_percentage": 0-100,
@@ -183,17 +199,29 @@ Analyze the match and output as JSON:
     try:
         logger.info("Calculating content coverage for video")
         coverage = call_openai(prompt, system_message)
+        
+        # ADD DEBUG LOGGING:
+        logger.warning("=" * 60)
+        logger.warning(f"🔍 COVERAGE DEBUG:")
+        logger.warning(f"  Video topics: {video_topics}")
+        logger.warning(f"  Required objectives: {required_objectives}")
+        logger.warning(f"  Required keywords: {required_keywords}")
+        logger.warning(f"  ✅ Coverage returned: {coverage.get('coverage_percentage', 'ERROR')}%")
+        logger.warning(f"  📝 Assessment: {coverage.get('assessment', 'N/A')}")
+        logger.warning("=" * 60)
+        
         logger.info(f"Coverage calculated: {coverage.get('coverage_percentage', 0)}%")
         return coverage
-    
+
     except Exception as e:
-        logger.error(f"Error calculating coverage: {e}")
+        logger.error(f"❌ ERROR calculating coverage: {e}")
+        logger.error(f"   Returning fallback 50% coverage")  # Make it obvious this is fallback
         return {
             "coverage_percentage": 50,
             "matched_objectives": [],
             "missing_content": [],
             "extra_content": [],
-            "assessment": "Unable to assess"
+            "assessment": "Unable to assess - API error"
         }
 
 

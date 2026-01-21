@@ -137,48 +137,40 @@ async def get_section(curriculum_id: str, section_id: str, teacherUid: str):
 
 @router.post("/generate-videos")
 async def generate_videos(request: GenerateVideosRequest):
-    """
-    Generate videos for a specific topic (Phase 2 on-demand).
-    Currently returns mock data - will be replaced with orchestrator.populate_single_section()
-    """
+    """Generate videos for a specific topic (Phase 2 on-demand)."""
     try:
-        logger.info(f"Generating videos for topic: {request.topicTitle}")
         
-        # MOCK DATA - will replace with:
-        # populated_section = await orchestrator.populate_single_section(...)
-        # return populated_section['video_resources']
-        
-        mock_videos = [
-            {
-                "videoId": "dQw4w9WgXcQ",
-                "title": f"Educational Video: {request.topicTitle} - Part 1",
-                "channelName": "Khan Academy",
-                "duration": "8:45",
-                "thumbnailUrl": "https://img.youtube.com/vi/dQw4w9WgXcQ/mqdefault.jpg",
-                "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-            },
-            {
-                "videoId": "jNQXAC9IVRw",
-                "title": f"Understanding {request.topicTitle}",
-                "channelName": "Crash Course",
-                "duration": "12:30",
-                "thumbnailUrl": "https://img.youtube.com/vi/jNQXAC9IVRw/mqdefault.jpg",
-                "url": "https://www.youtube.com/watch?v=jNQXAC9IVRw"
-            },
-            {
-                "videoId": "y8Kyi0WNg40",
-                "title": f"{request.topicTitle} Basics",
-                "channelName": "TED-Ed",
-                "duration": "5:20",
-                "thumbnailUrl": "https://img.youtube.com/vi/y8Kyi0WNg40/mqdefault.jpg",
-                "url": "https://www.youtube.com/watch?v=y8Kyi0WNg40"
+        # Build section object from topic data
+        section = {
+            'id': request.topicId,
+            'title': request.topicTitle,
+            'subject': request.topicData.get('subject', ''),
+            'course_name': request.topicData.get('courseName', ''),
+            'course_topic': request.topicData.get('courseTopic', ''),
+            'description': request.topicData.get('description', ''),
+            'duration_minutes': int(request.topicData.get('duration', '0').split()[0]),
+            'components': {
+                'instruction': {
+                    'learning_objectives': request.topicData.get('learningObjectives', []),
+                    'content_keywords': request.topicData.get('subtopics', [])
+                }
             }
-        ]
+        }
+        
+        # Call Phase 2 orchestrator
+        populated_section = await orchestrator.populate_single_section(
+            section=section,
+            grade_level=request.gradeLevel,
+            teacher_comments=""
+        )
+        
+        # Extract videos
+        videos = populated_section.get('video_resources', [])
         
         return {
             "success": True,
             "topicId": request.topicId,
-            "videos": mock_videos
+            "videos": videos
         }
         
     except Exception as e:

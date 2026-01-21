@@ -21,6 +21,9 @@ def get_search_query_generation_prompt(section: Dict, grade_level: str, teacher_
     duration_minutes = section.get('duration_minutes', 0)
     subtopics = section.get('subtopics', [])
     
+    subject = section.get('subject', '')
+    course_name = section.get('course_name', '')
+    course_topic = section.get('course_topic', '')
     # Extract detailed objectives and keywords from instruction
     instruction = section.get('components', {}).get('instruction', {})
     learning_objectives = instruction.get('learning_objectives', [])
@@ -58,7 +61,10 @@ TEACHER'S PRIORITY OBJECTIVES (HIGHEST PRIORITY):
 {teacher_comments if teacher_comments else "No special comments provided"}
 
 SECTION DETAILS:
-- Title: {section_title}
+- Subject: {subject if subject else "Not specified"}
+- Course Name: {course_name if course_name else "Not specified"}
+- Course Topic: {course_topic if course_topic else "Not specified"}
+- Section Title: {section_title}
 - Description: {section_description}
 - Subtopics: {subtopics_text}
 - Duration: {duration_minutes} minutes
@@ -75,26 +81,41 @@ WHAT MUST BE COVERED IN THIS SECTION:
 
 REQUIREMENTS FOR QUERY GENERATION:
 
-1. PRIORITIZE teacher's comments - these are non-negotiable learning goals
-2. Generate 1-3 search queries ranked by priority (Primary, Secondary, Tertiary if needed)
-3. Queries should be optimized to find age-appropriate content for grade {grade_level}
-4. Each query should be 3-8 words maximum
-5. Use natural search terms that will find quality educational content
-6. DO NOT force generic keywords like "for kids" or "grade X" - be smart and context-aware
-7. Consider what terms would naturally return appropriate content:
-   - For grades 2-3: Terms that attract simple, visual, narrative content
-   - For grades 4-5: Terms that find balanced educational content (not dumbed down, not college-level)
-   - For grades 6+: More sophisticated educational terminology acceptable
+1. ⚠️ MANDATORY: You MUST include "{course_name}" in EVERY query. Queries without "{course_name}" will be rejected.
+   Example: Instead of "yarn types for kids" → "crochet yarn types for kids"
+   
+2. PRIORITIZE teacher's comments - these are non-negotiable learning goals
+
+3. Each query should be 3-8 words maximum
+
+4. DO NOT use redundant terms:
+   - If course_name is "crochet" and subject is "Art", use ONLY "crochet" (not "art crochet")
+   - Remove generic subject if course_name is more specific
+
+EXAMPLE OUTPUT for course_name="crochet", section_title="Yarn Types and Uses":
+{{
+  "queries": [
+    {{"priority": "primary", "query": "crochet yarn types for beginners"}},
+    {{"priority": "secondary", "query": "different crochet yarn explained for kids"}},
+    {{"priority": "tertiary", "query": "crochet yarn characteristics kids"}},
+    {{"priority": "quaternary", "query": "understanding crochet yarn varieties"}}
+  ]
+}}
+
+Now generate queries for THIS section (remember: include "{course_name}" in every query): 
 
 QUERY STRATEGY:
 - Primary query: Most specific to learning objectives and teacher's comments
 - Secondary query: Broader backup if primary returns limited results
-- Tertiary query (optional): Alternative angle or complementary content
+- Tertiary query: Alternative angle or complementary content
+- Quaternary query: Fallback with simplified educational terms
 
 AVOID:
 - Overly generic queries that return thousands of irrelevant results
 - Forced age indicators unless naturally appropriate
 - Terms that would return college-level content (e.g., "documentary", "comprehensive analysis")
+
+Generate EXACTLY 4 queries ranked by priority.
 
 OUTPUT FORMAT (strict JSON):
 {{
@@ -104,12 +125,22 @@ OUTPUT FORMAT (strict JSON):
     {{
       "priority": "primary",
       "query": "string (3-8 words)",
-      "rationale": "string (why this query will find appropriate videos)"
+      "rationale": "string"
     }},
     {{
       "priority": "secondary",
       "query": "string (3-8 words)",
-      "rationale": "string (backup query rationale)"
+      "rationale": "string"
+    }},
+    {{
+      "priority": "tertiary",
+      "query": "string (3-8 words)",
+      "rationale": "string"
+    }},
+    {{
+      "priority": "quaternary",
+      "query": "string (3-8 words)",
+      "rationale": "string"
     }}
   ]
 }}

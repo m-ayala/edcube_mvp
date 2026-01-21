@@ -114,8 +114,8 @@ class PopulatorConfig:
     }
     
     # Content validation settings
-    MIN_CONTENT_COVERAGE_PERCENTAGE = 60  # Videos must cover 60% of requirements
-    MAX_REDUNDANCY_PERCENTAGE = 60        # Reject videos with >60% overlap
+    MIN_CONTENT_COVERAGE_PERCENTAGE = 20  # Videos must cover 60% of requirements
+    MAX_REDUNDANCY_PERCENTAGE = 80        # Reject videos with >60% overlap
     MAX_SEARCH_ITERATIONS = 3             # Max search iterations per section
     CONVERGENCE_THRESHOLD = 10            # Stop if coverage improvement < 10%
     

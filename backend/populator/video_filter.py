@@ -21,11 +21,10 @@ def filter_and_rank_videos(
     """
     Filter and rank videos based on multiple criteria.
     
-    Filtering Criteria:
-    1. Content coverage (must meet minimum threshold)
-    2. Duration appropriateness for grade level
-    3. Redundancy check (avoid overlapping content)
-    4. Basic quality checks (views, engagement)
+    1. Fetch video details (including FULL description)
+    2. Filter by description quality first
+    3. ONLY fetch transcripts for videos that pass description filter
+    4. Use transcript to validate/enhance (not as primary requirement)
     
     Args:
         videos: List of videos with analysis data
@@ -37,17 +36,21 @@ def filter_and_rank_videos(
         list: Filtered and ranked videos (best first)
     """
     logger.info(f"Filtering {len(videos)} videos for grade {grade_level}")
+    logger.info(f"📊 FILTER DEBUG: Checking {len(videos)} videos")
+    logger.info(f"Section: {section.get('title', 'Unknown')}")
     
     filtered_videos = []
     
     for video in videos:
         # Skip if missing critical data
-        if not video.get('video_id'):
+        if not video.get('videoId'):
+            logger.warning(f"❌ REJECTED: Missing videoId")
             continue
         
         # Filter 1: Content coverage check
         coverage = video.get('content_coverage', {})
-        if coverage.get('coverage_percentage', 0) < PopulatorConfig.MIN_CONTENT_COVERAGE:
+        if coverage.get('coverage_percentage', 0) < PopulatorConfig.MIN_CONTENT_COVERAGE_PERCENTAGE:
+            logger.warning(f"❌ REJECTED: Coverage too low")
             logger.debug(
                 f"Rejected: '{video.get('title')}' - "
                 f"coverage {coverage.get('coverage_percentage', 0)}%"
@@ -57,6 +60,7 @@ def filter_and_rank_videos(
         # Filter 2: Redundancy check
         redundancy = video.get('redundancy_analysis', {})
         if redundancy.get('is_redundant', False):
+            logger.warning(f"❌ REJECTED: Too redundant")
             logger.debug(
                 f"Rejected: '{video.get('title')}' - "
                 f"redundant ({redundancy.get('overlap_percentage', 0)}%)"
@@ -65,14 +69,16 @@ def filter_and_rank_videos(
         
         # Filter 3: Duration check (flexible, just avoid extremes)
         if not _passes_duration_filter(video, grade_level):
+            logger.warning(f"❌ REJECTED: Duration out of range (2-30 min)")
             logger.debug(
                 f"Rejected: '{video.get('title')}' - "
-                f"duration {video.get('duration_seconds', 0)}s"
+                f"duration {video.get('durationSeconds', 0)}s"
             )
             continue
         
         # Filter 4: Basic quality check (views and engagement)
         if not _passes_quality_filter(video):
+            logger.warning(f"❌ REJECTED: Quality check failed")
             logger.debug(
                 f"Rejected: '{video.get('title')}' - "
                 f"low quality/engagement"
@@ -112,14 +118,14 @@ def _passes_duration_filter(video: Dict, grade_level: str) -> bool:
     - Too short: < 2 minutes (likely not enough content)
     - Too long: > 30 minutes (too much for classroom use)
     """
-    duration = video.get('duration_seconds', 0)
+    duration = video.get('durationSeconds', 0)
     if not duration:
         return False
     
     # Avoid extremes
-    if duration < 120:  # Less than 2 minutes
+    if duration < 120:  # Less than 1 minute
         return False
-    if duration > 1800:  # More than 30 minutes
+    if duration > 3600:  # More than 60 minutes
         return False
     
     return True
@@ -131,10 +137,10 @@ def _passes_quality_filter(video: Dict) -> bool:
     
     We're being lenient here - just filtering out very low quality content.
     """
-    view_count = video.get('view_count', 0)
+    view_count = video.get('viewCount', 0)
     
     # Require at least 100 views (very lenient)
-    if view_count < 100:
+    if view_count < 5000:
         return False
     
     return True

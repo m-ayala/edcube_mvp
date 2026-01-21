@@ -144,20 +144,20 @@ def _parse_video_data(item: Dict) -> Dict:
     channel_verified = snippet.get('channelTitle', '').endswith('✓') or 'customUrl' in snippet
     
     video_data = {
-        'video_id': video_id,
+        'videoId': video_id,  # Changed from video_id
         'title': snippet.get('title', ''),
-        'channel_name': snippet.get('channelTitle', ''),
-        'channel_id': snippet.get('channelId', ''),
-        'channel_verified': channel_verified,
-        'duration_seconds': duration_seconds,
-        'duration_formatted': duration_formatted,
-        'view_count': view_count,
-        'like_count': like_count,
-        'like_ratio': round(like_ratio, 4),
-        'thumbnail_url': snippet.get('thumbnails', {}).get('high', {}).get('url', ''),
-        'video_url': f"https://www.youtube.com/watch?v={video_id}",
-        'description': snippet.get('description', '')[:500],  # First 500 chars
-        'category_id': snippet.get('categoryId', '')
+        'channelName': snippet.get('channelTitle', ''),  # Changed from channel_name
+        'channelId': snippet.get('channelId', ''),  # Changed from channel_id
+        'channelVerified': channel_verified,  # Changed from channel_verified
+        'durationSeconds': duration_seconds,  # Changed from duration_seconds
+        'duration': duration_formatted,  # Changed from duration_formatted
+        'viewCount': view_count,  # Changed from view_count
+        'likeCount': like_count,  # Changed from like_count
+        'likeRatio': round(like_ratio, 4),  # Changed from like_ratio
+        'thumbnailUrl': snippet.get('thumbnails', {}).get('high', {}).get('url', ''),  # Changed from thumbnail_url
+        'url': f"https://www.youtube.com/watch?v={video_id}",  # Changed from video_url
+        'description': snippet.get('description', ''),
+        'categoryId': snippet.get('categoryId', '')  # Changed from category_id
     }
     
     return video_data

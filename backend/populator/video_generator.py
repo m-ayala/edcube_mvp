@@ -96,31 +96,46 @@ def generate_videos_for_section(
     section_id = section.get('id', 'unknown')
     section_title = section.get('title', 'Unknown Section')
     
-    logger.info(f"="*70)
-    logger.info(f"Generating videos for section: {section_title}")
-    logger.info(f"Grade level: {grade_level}")
-    logger.info(f"="*70)
-    
     # Generate search queries for this section
     queries = generate_queries_for_section(section, grade_level, teacher_comments)
     section['search_queries_used'] = [q.get('query', '') for q in queries]
     
     logger.info(f"Generated {len(queries)} search queries")
+
+    logger.info("🔍 SEARCH QUERIES:")
+    for i, q in enumerate(queries, 1):
+        logger.info(f"  {i}. '{q.get('query', '')}'")
     
     # Iterative search with content validation
     selected_videos = []
     iteration = 0
     previous_coverage = 0
     
-    while iteration < PopulatorConfig.MAX_SEARCH_ITERATIONS:
+    while (iteration < PopulatorConfig.MAX_SEARCH_ITERATIONS) and (not selected_videos):
         iteration += 1
         logger.info(f"--- Search Iteration {iteration}/{PopulatorConfig.MAX_SEARCH_ITERATIONS} ---")
         
+        # Use different queries each iteration for diversity
+        queries_this_iteration = []
+        if iteration == 1:
+            # First iteration: Use primary and secondary
+            queries_this_iteration = [q for q in queries if q.get('priority') in ['primary', 'secondary']]
+        elif iteration == 2:
+            # Second iteration: Use tertiary and quaternary
+            queries_this_iteration = [q for q in queries if q.get('priority') in ['tertiary', 'quaternary']]
+        elif iteration == 3:
+            # Third iteration: Use all queries (cast wider net)
+            queries_this_iteration = queries
+        
+        # If no queries for this iteration, use all available
+        if not queries_this_iteration:
+            queries_this_iteration = queries
+        
         # Search YouTube for each query
         all_video_ids = []
-        for query_data in queries:
+        for query_data in queries_this_iteration:
             query = query_data.get('query', '')
-            logger.info(f"Searching YouTube: '{query}'")
+            logger.info(f"🔍 Iteration {iteration} - Searching: '{query}'")
             
             video_ids = search_videos(query, PopulatorConfig.YOUTUBE_MAX_RESULTS_PER_QUERY)
             all_video_ids.extend(video_ids)
@@ -144,20 +159,13 @@ def generate_videos_for_section(
         # Get transcripts and analyze content
         logger.info(f"Analyzing content for {len(videos)} videos...")
         for video in videos:
-            # Get transcript
-            transcript = get_transcript(video['video_id'])
-            
-            if transcript:
-                transcript_text = extract_transcript_text(transcript)
-                video['wpm'] = calculate_wpm(transcript, video['duration_seconds'])
-                video['transcript_available'] = True
-            else:
-                transcript_text = ""
-                video['wpm'] = None
-                video['transcript_available'] = False
+
+            # Skip transcripts
+            video['transcript_available'] = False
+            video['wpm'] = None
             
             # Analyze content
-            content_analysis = analyze_video_content(transcript_text, video, section)
+            content_analysis = analyze_video_content(transcript_text="", video_metadata=video, section_requirements=section)
             video['topics_covered'] = content_analysis.get('topics_covered', [])
             video['main_focus'] = content_analysis.get('main_focus', '')
             video['content_depth'] = content_analysis.get('content_depth', 'unknown')
@@ -175,8 +183,15 @@ def generate_videos_for_section(
         filtered_videos = filter_and_rank_videos(videos, section, grade_level, selected_videos)
         
         if not filtered_videos:
-            logger.warning(f"No videos passed filters in iteration {iteration}")
-            break
+            logger.warning(f"⚠️  No videos passed filters in iteration {iteration}")
+            
+            # Don't give up - continue to next iteration unless we've exhausted all attempts
+            if iteration >= PopulatorConfig.MAX_SEARCH_ITERATIONS:
+                logger.error("❌ No videos passed filters after all iterations")
+                break
+            else:
+                logger.info("🔄 Trying next iteration with different queries...")
+                continue  # Skip to next iteration
         
         # Select additional videos (up to max)
         remaining_slots = PopulatorConfig.YOUTUBE_MAX_VIDEOS_PER_SECTION - len(selected_videos)
@@ -198,16 +213,18 @@ def generate_videos_for_section(
         logger.info(f"Content coverage: {current_coverage}%")
         
         # Check for convergence
+        # Check for convergence
         if len(selected_videos) >= PopulatorConfig.YOUTUBE_MAX_VIDEOS_PER_SECTION:
-            logger.info("Reached maximum number of videos")
+            logger.info("✅ Reached maximum number of videos")
             break
-        
-        improvement = current_coverage - previous_coverage
-        if improvement < PopulatorConfig.CONVERGENCE_THRESHOLD:
-            logger.info(f"Coverage improvement minimal ({improvement}%), stopping iterations")
-            break
-        
-        previous_coverage = current_coverage
+
+        # Only check improvement if we have videos selected
+        if selected_videos:
+            improvement = current_coverage - previous_coverage
+            if improvement < PopulatorConfig.CONVERGENCE_THRESHOLD:
+                logger.info(f"Coverage improvement minimal ({improvement}%), stopping iterations")
+                break
+            previous_coverage = current_coverage
     
     # Store results in section
     section['video_resources'] = selected_videos
@@ -306,7 +323,7 @@ def _generate_selection_rationale(video: Dict, section: Dict) -> str:
     
     # Kid-friendly channel
     from utils.channel_database import get_channel_tier
-    tier = get_channel_tier(video.get('channel_name', ''))
+    tier = get_channel_tier(video.get('channelName', ''))
     if tier == 1:
         reasons.append("kid-friendly channel")
     elif tier == 2:

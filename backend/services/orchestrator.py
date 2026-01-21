@@ -131,15 +131,36 @@ class CurriculumOrchestrator:
     # PHASE 2 METHODS - COMMENTED OUT FOR PHASE 1 TESTING
     # Uncomment these when ready to test Phase 2
     
-    # async def run_phase2(self, outline_data: Dict) -> Dict:
-    #     """Run Phase 2: Add video resources (DISABLED FOR TESTING)"""
-    #     logger.warning("Phase 2 is disabled - boxes will not be populated with videos")
-    #     return outline_data
+    async def run_phase2(self, outline_data: Dict) -> Dict:
+        """Run Phase 2: Add video resources (DISABLED FOR TESTING)"""
+        logger.warning("Phase 2 is disabled - boxes will not be populated with videos")
+        return outline_data
     
-    # async def populate_single_section(self, section: Dict, grade_level: str, teacher_comments: str = "") -> Dict:
-    #     """Populate a single section with videos (DISABLED FOR TESTING)"""
-    #     logger.warning("Phase 2 is disabled - section will not be populated")
-    #     return section
+    async def populate_single_section(
+    self,
+    section: Dict,
+    grade_level: str,
+    teacher_comments: str = ""
+) -> Dict:
+        """
+        Populate a single section with video resources (Phase 2 on-demand).
+        """
+        from populator.video_generator import generate_videos_for_section
+        
+        print("Calling Orchstrator HIT", section.get('title', 'Unknown'))
+        
+        try:
+            enriched_section = generate_videos_for_section(
+                section=section,
+                grade_level=grade_level,
+                teacher_comments=teacher_comments
+            )
+            
+            return enriched_section
+            
+        except Exception as e:
+            logger.error(f"Error populating section: {e}", exc_info=True)
+            return section  # Return original section if fails
     
     # PHASE 3 METHODS - COMMENTED OUT FOR PHASE 1 TESTING
     # Uncomment these when ready to test Phase 3
