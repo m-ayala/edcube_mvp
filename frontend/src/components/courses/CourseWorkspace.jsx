@@ -45,6 +45,7 @@ const CourseWorkspace = () => {
     // Extract video_resources from loaded sections and populate videosByTopic state
     if (sections.length > 0) {
       const loadedVideos = {};
+      const loadedHandsOn = {};
       
       sections.forEach(section => {
         if (section.topics) {
@@ -52,6 +53,18 @@ const CourseWorkspace = () => {
             if (topic.video_resources && topic.video_resources.length > 0) {
               loadedVideos[topic.id] = topic.video_resources;
             }
+
+            const resources = [];
+            if (topic.worksheets && topic.worksheets.length > 0) {
+              resources.push(...topic.worksheets);
+            }
+            if (topic.activities && topic.activities.length > 0) {
+              resources.push(...topic.activities);
+            }
+            if (resources.length > 0) {
+              loadedHandsOn[topic.id] = resources;
+            }
+
           });
         }
       });
@@ -59,6 +72,11 @@ const CourseWorkspace = () => {
       if (Object.keys(loadedVideos).length > 0) {
         console.log('🎥 Loaded videos from saved course:', loadedVideos);
         setVideosByTopic(loadedVideos);
+      }
+
+      if (Object.keys(loadedHandsOn).length > 0) {
+        console.log('📝 Loaded hands-on resources from saved course:', loadedHandsOn);
+        setHandsOnResources(loadedHandsOn);
       }
     }
   }, []); // Empty dependency array - only run once on mount
@@ -266,7 +284,9 @@ const CourseWorkspace = () => {
         if (section.topics) {
           sectionData.topics = section.topics.map(topic => ({
             ...topic,
-            video_resources: videosByTopic[topic.id] || []
+            video_resources: videosByTopic[topic.id] || [],
+            worksheets: handsOnResources[topic.id]?.filter(r => r.type === 'worksheet') || [],
+            activities: handsOnResources[topic.id]?.filter(r => r.type === 'activity') || []
           }));
         }
         

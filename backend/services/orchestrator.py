@@ -8,6 +8,7 @@ Phase 2 and Phase 3 are commented out for testing.
 """
 
 import logging
+import asyncio
 from typing import Dict
 
 logger = logging.getLogger(__name__)
@@ -162,15 +163,76 @@ class CurriculumOrchestrator:
             logger.error(f"Error populating section: {e}", exc_info=True)
             return section  # Return original section if fails
     
-    # PHASE 3 METHODS - COMMENTED OUT FOR PHASE 1 TESTING
-    # Uncomment these when ready to test Phase 3
-    
-    # async def generate_worksheets(self, section: Dict, grade_level: str, user_prompt: str, num_options: int = 3) -> Dict:
-    #     """Generate worksheets (DISABLED FOR TESTING)"""
-    #     logger.warning("Phase 3 is disabled - no worksheets will be generated")
-    #     return section
-    
-    # async def generate_activities(self, section: Dict, grade_level: str, user_prompt: str, num_options: int = 3) -> Dict:
-    #     """Generate activities (DISABLED FOR TESTING)"""
-    #     logger.warning("Phase 3 is disabled - no activities will be generated")
-    #     return section
+    # PHASE 3 METHODS
+    async def generate_worksheets(
+    self,
+    section: dict,
+    grade_level: str,
+    user_prompt: str,
+    num_options: int = 3
+) -> dict:
+        """
+        Generate worksheet options for a section (Phase 3).
+        
+        Args:
+            section: Section data with title, learning_objectives
+            grade_level: Target grade level
+            user_prompt: Type of worksheet to generate
+            num_options: Number of options to return
+        
+        Returns:
+            dict: Section enriched with 'worksheet_options'
+        """
+        from hands_on.worksheet_generator import generate_worksheets_for_section
+        
+        logger.info(f"📝 Generating {num_options} worksheet(s) for: {section.get('title', 'Unknown')}")
+        
+        # Call Phase 3 worksheet generator (runs in thread pool)
+        loop = asyncio.get_event_loop()
+        enriched_section = await loop.run_in_executor(
+            None,
+            generate_worksheets_for_section,
+            section,
+            grade_level,
+            user_prompt,
+            num_options
+        )
+        
+        return enriched_section
+
+
+    async def generate_activities(
+        self,
+        section: dict,
+        grade_level: str,
+        user_prompt: str,
+        num_options: int = 3
+    ) -> dict:
+        """
+        Generate activity options for a section (Phase 3).
+        
+        Args:
+            section: Section data with title, learning_objectives
+            grade_level: Target grade level
+            user_prompt: Type of activity to generate
+            num_options: Number of options to return
+        
+        Returns:
+            dict: Section enriched with 'activity_options'
+        """
+        from hands_on.activity_generator import generate_activities_for_section
+        
+        logger.info(f"🎯 Generating {num_options} activit(ies) for: {section.get('title', 'Unknown')}")
+        
+        # Call Phase 3 activity generator (runs in thread pool)
+        loop = asyncio.get_event_loop()
+        enriched_section = await loop.run_in_executor(
+            None,
+            generate_activities_for_section,
+            section,
+            grade_level,
+            user_prompt,
+            num_options
+        )
+        
+        return enriched_section
