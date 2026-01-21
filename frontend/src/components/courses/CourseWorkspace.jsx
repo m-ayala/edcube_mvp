@@ -584,15 +584,11 @@ const CourseWorkspace = () => {
                     📹 Videos ({videosByTopic[topic.id].length})
                   </p>
                   {videosByTopic[topic.id].map((video, idx) => (
-                    <div 
+                    <a
                       key={idx}
-                      onClick={() => {
-                        // Find which section this topic belongs to
-                        const section = sections.find(s => 
-                          s.topics && s.topics.some(t => t.id === topic.id)
-                        );
-                        generateVideosFromBackend(topic.id, topic, section?.id || 'unknown');
-                      }}
+                      href={`https://www.youtube.com/watch?v=${video.videoId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
                       style={{
                         display: 'flex',
                         gap: '10px',
@@ -602,7 +598,9 @@ const CourseWorkspace = () => {
                         border: '1px solid #e0e0e0',
                         borderRadius: '6px',
                         cursor: 'pointer',
-                        transition: 'all 0.2s'
+                        transition: 'all 0.2s',
+                        textDecoration: 'none',
+                        color: 'inherit'
                       }}
                       onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0f0f0'}
                       onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
@@ -632,7 +630,7 @@ const CourseWorkspace = () => {
                           {video.channelName} • {video.duration}
                         </p>
                       </div>
-                    </div>
+                    </a>
                   ))}
                 </div>
               )}
