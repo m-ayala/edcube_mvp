@@ -3,7 +3,7 @@ import { useState } from 'react';
 
 const Section = ({ section, onDrop, onDragOver, onUpdateName, onRemove, onRemoveTopic }) => {
   const [isEditingName, setIsEditingName] = useState(false);
-  const [tempName, setTempName] = useState(section.name);
+  const [tempName, setTempName] = useState(section.title);
 
   if (section.type === 'break') {
     return (
@@ -40,13 +40,13 @@ const Section = ({ section, onDrop, onDragOver, onUpdateName, onRemove, onRemove
     if (tempName.trim()) {
       onUpdateName(section.id, tempName);
     } else {
-      setTempName(section.name);
+      setTempName(section.title);
     }
     setIsEditingName(false);
   };
 
   // Safely get topics array
-  const topics = Array.isArray(section.topics) ? section.topics : [];
+  const topics = Array.isArray(section.subsections) ? section.subsections : [];
 
   return (
     <div style={{
@@ -85,7 +85,7 @@ const Section = ({ section, onDrop, onDragOver, onUpdateName, onRemove, onRemove
             style={{ margin: 0, cursor: 'pointer', flex: 1 }}
             onClick={() => setIsEditingName(true)}
           >
-            {section.name || 'Unnamed Section'}
+            {section.title || 'Unnamed Section'}
           </h4>
         )}
         
@@ -126,8 +126,8 @@ const Section = ({ section, onDrop, onDragOver, onUpdateName, onRemove, onRemove
             // Get topic properties safely
             const topicId = topic.id || `topic-${index}`;
             const topicTitle = topic.title || 'Unnamed Topic';
-            const topicDuration = topic.duration || 'Unknown duration';
-            const topicPlaType = topic.plaType || topic.pla_pillars?.[0] || 'Knowledge';
+            const topicDuration = topic.duration_minutes ? `${topic.duration_minutes} min` : 'Unknown duration';
+            const topicPlaType = topic.pla_pillars?.[0] || 'Knowledge';
 
             return (
               <div

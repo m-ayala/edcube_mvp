@@ -42,36 +42,29 @@ const MyCourses = () => {
 
   const handleEditCourse = (curriculum) => {
     console.log('🔧 Editing course:', curriculum);
-    
-    // Transform sections to match CourseWorkspace format
-    const transformedSections = (curriculum.sections || []).map(section => {
-      return {
-        id: section.id || `section-${Date.now()}-${Math.random()}`,
-        name: section.name || section.title || 'Unnamed Section',
-        type: section.type || 'section',
-        topics: Array.isArray(section.topics) ? section.topics : []
-      };
-    });
 
-    // Transform generatedTopics to match TopicBox format
-    const transformedTopics = (curriculum.generatedTopics || []).map((topic, index) => {
-      return {
-        id: topic.id || topic.box_id || `topic-${index}`,
-        title: topic.title,
-        duration: topic.duration || `${topic.duration_minutes || 0} min`,
-        plaType: topic.pla_pillars?.[0] || topic.plaType || 'Knowledge',
-        subtopics: topic.subtopics || [],
-        description: topic.description || '',
-        learningObjectives: topic.learning_objectives || topic.learningObjectives || []
-      };
-    });
+    // New shape: sections come directly from outline, each has subsections
+    const sections = (curriculum.outline?.sections || curriculum.sections || []).map(section => ({
+      id: section.id,
+      title: section.title,
+      description: section.description || '',
+      subsections: (section.subsections || []).map(sub => ({
+        id: sub.id,
+        title: sub.title,
+        description: sub.description || '',
+        duration_minutes: sub.duration_minutes || 0,
+        pla_pillars: sub.pla_pillars || [],
+        learning_objectives: sub.learning_objectives || [],
+        content_keywords: sub.content_keywords || [],
+        what_must_be_covered: sub.what_must_be_covered || '',
+        video_resources: sub.video_resources || [],
+        worksheets: sub.worksheets || [],
+        activities: sub.activities || []
+      }))
+    }));
 
-    console.log('🔧 Transformed data:', {
-      sections: transformedSections,
-      topics: transformedTopics
-    });
+    console.log('🔧 Sections for workspace:', sections);
 
-    // Navigate to CourseWorkspace with transformed data
     navigate('/course-workspace', {
       state: {
         formData: {
@@ -82,9 +75,7 @@ const MyCourses = () => {
           timeDuration: curriculum.timeDuration,
           objectives: curriculum.objectives || ''
         },
-        generatedTopics: transformedTopics,
-        existingSections: transformedSections,
-        existingHandsOnResources: curriculum.handsOnResources || {},
+        sections,
         isEditing: true,
         curriculumId: curriculum.courseId || curriculum.id
       }

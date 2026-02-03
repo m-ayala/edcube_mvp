@@ -87,6 +87,22 @@ const CourseDesigner = () => {
         }
       }
 
+      // Flush any remaining data left in the buffer after the stream closes.
+      // The final SSE event (done + curriculum_id) often lands here unparsed.
+      if (buffer.trim().startsWith('data: ')) {
+        try {
+          const data = JSON.parse(buffer.trim().slice(6));
+          setProgress({ message: data.message || '', progress: data.progress || 0 });
+          if (data.done && data.curriculum_id) {
+            curriculumId = data.curriculum_id;
+          }
+        } catch (err) {
+          console.error('Error parsing final SSE buffer:', err);
+        }
+      }
+
+      console.log('SSE complete. curriculumId =', curriculumId);
+
       // Fetch the generated curriculum — now sections with subsections
       let sections = [];
 

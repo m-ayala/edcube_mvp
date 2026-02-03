@@ -80,7 +80,7 @@ const TopicDetailsModal = ({ topic, onClose }) => {
                 borderRadius: '4px',
                 fontSize: '14px'
               }}>
-                {topic.plaType}
+                {(topic.pla_pillars || [])[0] || 'Knowledge'}
               </span>
               
               <span style={{ 
@@ -90,7 +90,7 @@ const TopicDetailsModal = ({ topic, onClose }) => {
                 borderRadius: '4px',
                 fontSize: '14px'
               }}>
-                ⏱️ {topic.duration}
+                ⏱️ {topic.duration_minutes ? `${topic.duration_minutes} min` : '—'}
               </span>
             </div>
 
@@ -103,30 +103,47 @@ const TopicDetailsModal = ({ topic, onClose }) => {
             )}
 
             {/* Subtopics */}
-            {topic.subtopics && topic.subtopics.length > 0 && (
+            {topic.content_keywords && topic.content_keywords.length > 0 && (
               <div style={{ marginBottom: '20px' }}>
-                <h3 style={{ fontSize: '16px', marginBottom: '8px' }}>Subtopics</h3>
+                <h3 style={{ fontSize: '16px', marginBottom: '8px' }}>Keywords</h3>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                  {topic.content_keywords.map((keyword, idx) => (
+                    <span
+                      key={idx}
+                      style={{
+                        padding: '4px 10px',
+                        backgroundColor: '#e9ecef',
+                        borderRadius: '12px',
+                        fontSize: '13px',
+                        color: '#495057'
+                      }}
+                    >
+                      {keyword}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Learning Objectives */}
+            {topic.learning_objectives && topic.learning_objectives.length > 0 && (
+              <div style={{ marginBottom: '20px' }}>
+                <h3 style={{ fontSize: '16px', marginBottom: '8px' }}>Learning Objectives</h3>
                 <ul style={{ paddingLeft: '20px', color: '#666' }}>
-                  {topic.subtopics.map((subtopic, idx) => (
+                  {topic.learning_objectives.map((objective, idx) => (
                     <li key={idx} style={{ marginBottom: '5px' }}>
-                      {subtopic}
+                      {objective}
                     </li>
                   ))}
                 </ul>
               </div>
             )}
 
-            {/* Learning Objectives */}
-            {topic.learningObjectives && topic.learningObjectives.length > 0 && (
+            {/* What Must Be Covered */}
+            {topic.what_must_be_covered && (
               <div style={{ marginBottom: '20px' }}>
-                <h3 style={{ fontSize: '16px', marginBottom: '8px' }}>Learning Objectives</h3>
-                <ul style={{ paddingLeft: '20px', color: '#666' }}>
-                  {topic.learningObjectives.map((objective, idx) => (
-                    <li key={idx} style={{ marginBottom: '5px' }}>
-                      {objective}
-                    </li>
-                  ))}
-                </ul>
+                <h3 style={{ fontSize: '16px', marginBottom: '8px' }}>What Must Be Covered</h3>
+                <p style={{ color: '#666', lineHeight: '1.6', margin: 0 }}>{topic.what_must_be_covered}</p>
               </div>
             )}
 
@@ -172,29 +189,6 @@ const TopicDetailsModal = ({ topic, onClose }) => {
                     )}
                   </div>
                 ))}
-              </div>
-            )}
-
-            {/* Keywords */}
-            {topic.keywords && topic.keywords.length > 0 && (
-              <div style={{ marginBottom: '20px' }}>
-                <h3 style={{ fontSize: '16px', marginBottom: '8px' }}>Keywords</h3>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                  {topic.keywords.map((keyword, idx) => (
-                    <span
-                      key={idx}
-                      style={{
-                        padding: '4px 10px',
-                        backgroundColor: '#e9ecef',
-                        borderRadius: '12px',
-                        fontSize: '13px',
-                        color: '#495057'
-                      }}
-                    >
-                      {keyword}
-                    </span>
-                  ))}
-                </div>
               </div>
             )}
 

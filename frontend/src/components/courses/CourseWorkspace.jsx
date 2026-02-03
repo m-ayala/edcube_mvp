@@ -2,8 +2,6 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import TopicBox from './TopicBox';
-import Section from './Section';
 import TopicDetailsModal from '../modals/TopicDetailsModal';
 import BreakModal from '../modals/BreakModal';
 
@@ -11,336 +9,297 @@ const CourseWorkspace = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  
-  const { 
-    formData, 
-    generatedTopics, 
-    existingSections,
-    existingHandsOnResources,
+
+  const {
+    formData,
+    sections: incomingSections,
     isEditing,
-    curriculumId 
+    curriculumId
   } = location.state || {};
-  
+
   const [courseName, setCourseName] = useState(formData?.courseName || '');
-  const [topics, setTopics] = useState(generatedTopics || []);
-  const [sections, setSections] = useState(existingSections || []);
+  const [sections, setSections] = useState(incomingSections || []);
   const [showBreakModal, setShowBreakModal] = useState(false);
-  const [handsOnResources, setHandsOnResources] = useState({});
   const [history, setHistory] = useState([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [selectedTopic, setSelectedTopic] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [videosByTopic, setVideosByTopic] = useState({}); // Add this line
+  const [videosByTopic, setVideosByTopic] = useState({});
+  const [handsOnResources, setHandsOnResources] = useState({});
+  // Track which sections/subsections are collapsed
+  const [collapsedSections, setCollapsedSections] = useState({});
 
-  // ── course-picker state (shown when user lands here with no state) ──
+  // ── course-picker state ──
   const [showCoursePicker, setShowCoursePicker] = useState(false);
   const [pickerCourses, setPickerCourses] = useState([]);
   const [pickerLoading, setPickerLoading] = useState(false);
 
-  // If the user navigated here directly (no location.state), open the picker
-  useEffect(() => {
-    if (!formData && !generatedTopics) {
-      setShowCoursePicker(true);
-      setPickerLoading(true);
-      import('../../firebase/dbService').then(({ getTeacherCurricula }) => {
-        getTeacherCurricula(currentUser.uid).then(result => {
-          setPickerCourses(result.curricula || []);
-        }).catch(() => {
-          setPickerCourses([]);
-        }).finally(() => {
-          setPickerLoading(false);
-        });
-      });
-    }
-  }, []);                                  // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Reuses the same transform logic that MyCourses already has
-  const handlePickCourse = (curriculum) => {
-    const transformedSections = (curriculum.sections || []).map(section => ({
-      id: section.id || `section-${Date.now()}-${Math.random()}`,
-      name: section.name || section.title || 'Unnamed Section',
-      type: section.type || 'section',
-      topics: Array.isArray(section.topics) ? section.topics : []
-    }));
-
-    const transformedTopics = (curriculum.generatedTopics || []).map((topic, index) => ({
-      id: topic.id || topic.box_id || `topic-${index}`,
-      title: topic.title,
-      duration: topic.duration || `${topic.duration_minutes || 0} min`,
-      plaType: topic.pla_pillars?.[0] || topic.plaType || 'Knowledge',
-      subtopics: topic.subtopics || [],
-      description: topic.description || '',
-      learningObjectives: topic.learning_objectives || topic.learningObjectives || []
-    }));
-
-    setCourseName(curriculum.courseName || '');
-    setTopics(transformedTopics);
-    setSections(transformedSections);
-    setShowCoursePicker(false);
-  };
-
-  // Load videos from sections when component mounts
+  // ─── Mount: hydrate video + hands-on caches from saved subsections ───
   useEffect(() => {
     console.log('📦 CourseWorkspace loaded with:', {
       courseName,
-      topicsCount: topics.length,
       sectionsCount: sections.length,
       isEditing,
       curriculumId
     });
 
-    // Extract video_resources from loaded sections and populate videosByTopic state
-    if (sections.length > 0) {
-      const loadedVideos = {};
-      const loadedHandsOn = {};
-      
-      sections.forEach(section => {
-        if (section.topics) {
-          section.topics.forEach(topic => {
-            if (topic.video_resources && topic.video_resources.length > 0) {
-              loadedVideos[topic.id] = topic.video_resources;
-            }
+    const loadedVideos = {};
+    const loadedHandsOn = {};
 
-            const resources = [];
-            if (topic.worksheets && topic.worksheets.length > 0) {
-              resources.push(...topic.worksheets);
-            }
-            if (topic.activities && topic.activities.length > 0) {
-              resources.push(...topic.activities);
-            }
-            if (resources.length > 0) {
-              loadedHandsOn[topic.id] = resources;
-            }
-
-          });
+    sections.forEach(section => {
+      (section.subsections || []).forEach(sub => {
+        if (sub.video_resources && sub.video_resources.length > 0) {
+          loadedVideos[sub.id] = sub.video_resources;
+        }
+        const resources = [
+          ...(sub.worksheets || []),
+          ...(sub.activities || [])
+        ];
+        if (resources.length > 0) {
+          loadedHandsOn[sub.id] = resources;
         }
       });
+    });
 
-      if (Object.keys(loadedVideos).length > 0) {
-        console.log('🎥 Loaded videos from saved course:', loadedVideos);
-        setVideosByTopic(loadedVideos);
-      }
-
-      if (Object.keys(loadedHandsOn).length > 0) {
-        console.log('📝 Loaded hands-on resources from saved course:', loadedHandsOn);
-        setHandsOnResources(loadedHandsOn);
-      }
+    if (Object.keys(loadedVideos).length > 0) {
+      console.log('🎥 Loaded videos:', loadedVideos);
+      setVideosByTopic(loadedVideos);
     }
-  }, []); // Empty dependency array - only run once on mount
+    if (Object.keys(loadedHandsOn).length > 0) {
+      console.log('📝 Loaded hands-on:', loadedHandsOn);
+      setHandsOnResources(loadedHandsOn);
+    }
+  }, []);
 
+  // ─── Course Picker ────────────────────────────────────────────────────
+  const handlePickCourse = (curriculum) => {
+    const transformed = (curriculum.outline?.sections || curriculum.sections || []).map(section => ({
+      id: section.id,
+      title: section.title,
+      description: section.description || '',
+      subsections: (section.subsections || []).map(sub => ({
+        id: sub.id,
+        title: sub.title,
+        description: sub.description || '',
+        duration_minutes: sub.duration_minutes || 0,
+        pla_pillars: sub.pla_pillars || [],
+        learning_objectives: sub.learning_objectives || [],
+        content_keywords: sub.content_keywords || [],
+        what_must_be_covered: sub.what_must_be_covered || '',
+        video_resources: sub.video_resources || [],
+        worksheets: sub.worksheets || [],
+        activities: sub.activities || []
+      }))
+    }));
+    setCourseName(curriculum.courseName || '');
+    setSections(transformed);
+    setShowCoursePicker(false);
+  };
+
+  // ─── Undo / History ───────────────────────────────────────────────────
   const saveToHistory = () => {
     const newHistory = history.slice(0, historyIndex + 1);
-    newHistory.push({ sections: [...sections], handsOnResources: {...handsOnResources} });
+    newHistory.push({ sections: [...sections], handsOnResources: { ...handsOnResources } });
     setHistory(newHistory);
     setHistoryIndex(newHistory.length - 1);
   };
 
   const undo = () => {
     if (historyIndex > 0) {
-      const previousState = history[historyIndex - 1];
-      setSections(previousState.sections);
-      setHandsOnResources(previousState.handsOnResources);
+      const prev = history[historyIndex - 1];
+      setSections(prev.sections);
+      setHandsOnResources(prev.handsOnResources);
       setHistoryIndex(historyIndex - 1);
     }
   };
 
+  // ─── Section / Subsection CRUD ────────────────────────────────────────
   const addSection = () => {
-    const newSection = {
+    setSections([...sections, {
       id: `section-${Date.now()}`,
-      name: `Section ${sections.filter(s => s.type !== 'break').length + 1}`,
-      type: 'section',
-      topics: []
-    };
-    setSections([...sections, newSection]);
+      title: `Section ${sections.length + 1}`,
+      description: '',
+      subsections: []
+    }]);
   };
 
-  const addBreak = () => {
-    setShowBreakModal(true);
-  };
+  const addBreak = () => setShowBreakModal(true);
 
   const handleBreakCreate = (duration, unit) => {
-    const newBreak = {
+    setSections([...sections, {
       id: `break-${Date.now()}`,
       type: 'break',
       duration: `${duration} ${unit}`
-    };
-    setSections([...sections, newBreak]);
+    }]);
     setShowBreakModal(false);
   };
 
-  const updateSectionName = (sectionId, newName) => {
-    setSections(sections.map(section => 
-      section.id === sectionId ? { ...section, name: newName } : section
-    ));
+  const updateSectionTitle = (sectionId, newTitle) => {
+    setSections(sections.map(s => s.id === sectionId ? { ...s, title: newTitle } : s));
+  };
+
+  const updateSectionDescription = (sectionId, newDesc) => {
+    setSections(sections.map(s => s.id === sectionId ? { ...s, description: newDesc } : s));
   };
 
   const removeSection = (sectionId) => {
     setSections(sections.filter(s => s.id !== sectionId));
   };
 
-  const handleTopicClick = (topic) => {
-    setSelectedTopic(topic);
+  const addSubsection = (sectionId) => {
+    setSections(sections.map(section => {
+      if (section.id !== sectionId) return section;
+      const idx = (section.subsections || []).length + 1;
+      return {
+        ...section,
+        subsections: [...(section.subsections || []), {
+          id: `sub-${Date.now()}-${idx}`,
+          title: `Subsection ${idx}`,
+          description: '',
+          duration_minutes: 15,
+          pla_pillars: [],
+          learning_objectives: [],
+          content_keywords: [],
+          what_must_be_covered: '',
+          video_resources: [],
+          worksheets: [],
+          activities: []
+        }]
+      };
+    }));
+  };
+
+  const updateSubsectionTitle = (sectionId, subId, newTitle) => {
+    setSections(sections.map(section => {
+      if (section.id !== sectionId) return section;
+      return {
+        ...section,
+        subsections: (section.subsections || []).map(sub =>
+          sub.id === subId ? { ...sub, title: newTitle } : sub
+        )
+      };
+    }));
+  };
+
+  const updateSubsectionDescription = (sectionId, subId, newDesc) => {
+    setSections(sections.map(section => {
+      if (section.id !== sectionId) return section;
+      return {
+        ...section,
+        subsections: (section.subsections || []).map(sub =>
+          sub.id === subId ? { ...sub, description: newDesc } : sub
+        )
+      };
+    }));
+  };
+
+  const removeSubsection = (sectionId, subId) => {
+    setSections(sections.map(section => {
+      if (section.id !== sectionId) return section;
+      return {
+        ...section,
+        subsections: (section.subsections || []).filter(s => s.id !== subId)
+      };
+    }));
+  };
+
+  const toggleSection = (sectionId) => {
+    setCollapsedSections(prev => ({ ...prev, [sectionId]: !prev[sectionId] }));
+  };
+
+  // ─── Topic Details Modal ──────────────────────────────────────────────
+  const handleTopicClick = (sub) => {
+    setSelectedTopic(sub);
     setIsModalOpen(true);
   };
 
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
-    setSelectedTopic(null);
-  };
-
-  const handleDragStart = (e, topic) => {
-    e.dataTransfer.setData('topic', JSON.stringify(topic));
-  };
-
-  const handleDrop = (e, sectionId) => {
-    e.preventDefault();
-    const topic = JSON.parse(e.dataTransfer.getData('topic'));
-    
-    setSections(sections.map(section => {
-      if (section.id === sectionId) {
-        // Check if topic already exists in this section
-        if (section.topics.find(t => t.id === topic.id)) {
-          return section;
-        }
-        return {
-          ...section,
-          topics: [...section.topics, topic]
-        };
+  // ─── Video Generation ─────────────────────────────────────────────────
+  const generateVideosFromBackend = async (subsection) => {
+    try {
+      console.log('🎬 Generating videos for:', subsection.title);
+      const response = await fetch('http://localhost:8000/api/generate-videos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topicId: subsection.id,
+          topicTitle: subsection.title,
+          topicData: {
+            title: subsection.title,
+            duration: `${subsection.duration_minutes} min`,
+            description: subsection.description,
+            learningObjectives: subsection.learning_objectives || [],
+            subtopics: subsection.content_keywords || [],
+            subject: formData.subject,
+            courseName: formData.courseName,
+            courseTopic: formData.topic
+          },
+          sectionId: subsection.id,
+          gradeLevel: formData.class,
+          courseId: curriculumId || 'new-course'
+        })
+      });
+      const result = await response.json();
+      if (result.success) {
+        setVideosByTopic(prev => ({ ...prev, [subsection.id]: result.videos }));
+        console.log('✅ Videos received:', result.videos.length);
+      } else {
+        alert('Failed to generate videos');
       }
-      return section;
-    }));
-  };
-
-  const handleDragOver = (e) => {
-    e.preventDefault();
-  };
-
-  const removeTopicFromSection = (sectionId, topicId) => {
-    setSections(sections.map(section => {
-      if (section.id === sectionId) {
-        return {
-          ...section,
-          topics: section.topics.filter(t => t.id !== topicId)
-        };
-      }
-      return section;
-    }));
-  };
-
-  const generateResource = async (topicId, resourceType) => {
-    // Find the topic to get its details
-    const topic = topicsInSections.find(t => t.id === topicId);
-    if (!topic) {
-      console.error('Topic not found:', topicId);
-      return;
+    } catch (error) {
+      console.error('❌ Error:', error);
+      alert('Error generating videos');
     }
+  };
+
+  // ─── Hands-On Resource Generation ─────────────────────────────────────
+  const generateResource = async (subsectionId, resourceType) => {
+    const allSubs = sections.flatMap(s => s.subsections || []);
+    const sub = allSubs.find(s => s.id === subsectionId);
+    if (!sub) return;
 
     try {
-      console.log(`🔨 Generating ${resourceType} for topic:`, topic.title);
-      
+      console.log(`🔨 Generating ${resourceType} for:`, sub.title);
       const response = await fetch('http://localhost:8000/api/generate-resource', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          topicId: topicId,
-          resourceType: resourceType, // 'worksheet' or 'activity'
+          topicId: subsectionId,
+          resourceType,
           gradeLevel: formData.class,
-          topicTitle: topic.title,
-          topicDescription: topic.description || '',
-          learningObjectives: topic.learningObjectives || []
+          topicTitle: sub.title,
+          topicDescription: sub.description || '',
+          learningObjectives: sub.learning_objectives || []
         })
       });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const resource = await response.json();
       console.log(`✅ ${resourceType} generated:`, resource);
-      
       setHandsOnResources(prev => ({
         ...prev,
-        [topicId]: [...(prev[topicId] || []), resource]
+        [subsectionId]: [...(prev[subsectionId] || []), resource]
       }));
-      
-      alert(`${resourceType.charAt(0).toUpperCase() + resourceType.slice(1)} generated successfully!`);
+      alert(`${resourceType.charAt(0).toUpperCase() + resourceType.slice(1)} generated!`);
     } catch (error) {
       console.error(`Error generating ${resourceType}:`, error);
       alert(`Failed to generate ${resourceType}`);
     }
   };
 
-  const generateVideosFromBackend = async (topicId, topic, sectionId) => {
-    try {
-      console.log('🎬 Calling backend to generate videos...');
-      
-      const response = await fetch('http://localhost:8000/api/generate-videos', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          topicId: topicId,
-          topicTitle: topic.title,
-          topicData: {
-            title: topic.title,
-            duration: topic.duration,
-            plaType: topic.plaType,
-            learningObjectives: topic.learningObjectives,
-            subtopics: topic.subtopics,
-            subject: formData.subject,
-            courseName: formData.courseName,
-            courseTopic: formData.topic
-          },
-          sectionId: sectionId,
-          gradeLevel: formData.class,
-          courseId: curriculumId || 'new-course'
-        })
-      });
-
-      const result = await response.json();
-
-      if (result.success) {
-        setVideosByTopic(prev => ({
-          ...prev,
-          [topicId]: result.videos
-        }));
-        console.log('✅ Videos received from backend:', result.videos.length);
-      } else {
-        console.error('❌ Failed to generate videos');
-        alert('Failed to generate videos');
-      }
-    } catch (error) {
-      console.error('❌ Error calling backend:', error);
-      alert('Error generating videos');
-    }
-  };
-
+  // ─── Save Course ──────────────────────────────────────────────────────
   const saveCourse = async () => {
     try {
       const idToken = await currentUser.getIdToken();
-      
-      // Prepare sections with video_resources
-      const sectionsWithVideos = sections.map(section => {
-        const sectionData = {
-          ...section,
-          topics: section.topics || []
-        };
-        
-        // Add video_resources to each topic that has generated videos
-        if (section.topics) {
-          sectionData.topics = section.topics.map(topic => ({
-            ...topic,
-            video_resources: videosByTopic[topic.id] || [],
-            worksheets: handsOnResources[topic.id]?.filter(r => r.type === 'worksheet') || [],
-            activities: handsOnResources[topic.id]?.filter(r => r.type === 'activity') || []
-          }));
-        }
-        
-        return sectionData;
-      });
-      
-      // Prepare course data
+
+      const sectionsForSave = sections.map(section => ({
+        ...section,
+        subsections: (section.subsections || []).map(sub => ({
+          ...sub,
+          video_resources: videosByTopic[sub.id] || sub.video_resources || [],
+          worksheets: handsOnResources[sub.id]?.filter(r => r.type === 'worksheet') || sub.worksheets || [],
+          activities: handsOnResources[sub.id]?.filter(r => r.type === 'activity') || sub.activities || []
+        }))
+      }));
+
       const courseData = {
         courseName,
         class: formData.class,
@@ -348,31 +307,17 @@ const CourseWorkspace = () => {
         topic: formData.topic,
         timeDuration: formData.timeDuration,
         objectives: formData.objectives || '',
-        sections: sectionsWithVideos,
-        handsOnResources,
-        generatedTopics: topics,
+        sections: sectionsForSave,
+        outline: { sections: sectionsForSave }
       };
-      
-      console.log('💾 Saving course:', {
-        isEditing,
-        curriculumId,
-        sectionsCount: sectionsWithVideos.length,
-        videosCount: Object.keys(videosByTopic).length
-      });
-      
-      // ALWAYS use update-course if we have a curriculumId
+
       const hasExistingId = curriculumId && curriculumId !== 'new-course';
-      
-      if (hasExistingId) {
-        courseData.courseId = curriculumId;
-      }
-      
+      if (hasExistingId) courseData.courseId = curriculumId;
+
       const endpoint = hasExistingId
         ? `http://localhost:8000/api/update-course?teacherUid=${currentUser.uid}`
         : `http://localhost:8000/api/save-course?teacherUid=${currentUser.uid}`;
-      
-      console.log('📡 Using endpoint:', endpoint, 'with courseId:', courseData.courseId);
-      
+
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
@@ -381,14 +326,11 @@ const CourseWorkspace = () => {
         },
         body: JSON.stringify(courseData)
       });
-      
+
       const result = await response.json();
-      
       if (result.success) {
-        console.log('✅ Course saved successfully!');
         alert(hasExistingId ? 'Course updated!' : 'Course saved!');
       } else {
-        console.error('❌ Save failed:', result);
         alert('Failed to save: ' + (result.error || 'Unknown error'));
       }
     } catch (error) {
@@ -397,588 +339,484 @@ const CourseWorkspace = () => {
     }
   };
 
-  // Get all topics that have been added to sections
-  const topicsInSections = sections
-    .filter(s => s.type === 'section')
-    .flatMap(s => s.topics || []);
+  // ─── Shared inline styles ─────────────────────────────────────────────
+  const colors = {
+    bg: '#f5f3ff',
+    card: '#ffffff',
+    sectionBorder: '#c4b5fd',
+    sectionBg: '#ede9fe',
+    subBorder: '#a78bfa',
+    accent: '#7c3aed',
+    accentLight: '#ddd6fe',
+    textPrimary: '#1e1b4b',
+    textSecondary: '#6b7280',
+    pillBg: '#ede9fe',
+    pillText: '#7c3aed',
+    videoBtn: '#dc2626',
+    worksheetBtn: '#2563eb',
+    activityBtn: '#16a34a',
+    dangerBtn: '#ef4444'
+  };
 
-  return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
-      {/* Top Bar */}
-      <div style={{ 
-        padding: '15px 30px', 
-        borderBottom: '1px solid #ddd',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        backgroundColor: 'white'
+  // ─── SUB-COMPONENTS (inline, scoped) ──────────────────────────────────
+
+  // Pill tag
+  const Pill = ({ label, color }) => (
+    <span style={{
+      display: 'inline-block',
+      padding: '2px 10px',
+      borderRadius: '12px',
+      fontSize: '11px',
+      fontWeight: '600',
+      backgroundColor: color?.bg || colors.pillBg,
+      color: color?.text || colors.pillText
+    }}>
+      {label}
+    </span>
+  );
+
+  // Small icon button (trash / collapse)
+  const IconBtn = ({ onClick, children, color = colors.dangerBtn, title }) => (
+    <button
+      onClick={onClick}
+      title={title}
+      style={{
+        background: 'none', border: 'none', cursor: 'pointer',
+        color, fontSize: '16px', padding: '2px 6px', borderRadius: '4px',
+        lineHeight: 1
+      }}
+    >
+      {children}
+    </button>
+  );
+
+  // Descriptor box (editable description area)
+  const DescriptorBox = ({ value, onChange, placeholder }) => (
+    <div style={{
+      border: '2px dashed #c4b5fd',
+      borderRadius: '8px',
+      padding: '10px 14px',
+      marginBottom: '12px',
+      backgroundColor: '#faf5ff'
+    }}>
+      <input
+        type="text"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder || 'Add a description…'}
+        style={{
+          width: '100%',
+          border: 'none',
+          background: 'transparent',
+          fontSize: '13px',
+          color: colors.textSecondary,
+          outline: 'none',
+          fontStyle: value ? 'normal' : 'italic'
+        }}
+      />
+    </div>
+  );
+
+  // ─── 3-col row for one subsection ─────────────────────────────────────
+  const SubsectionRow = ({ sub, sectionId }) => {
+    const videos = videosByTopic[sub.id] || [];
+    const worksheets = (handsOnResources[sub.id] || []).filter(r => r.type === 'worksheet');
+    const activities = (handsOnResources[sub.id] || []).filter(r => r.type === 'activity');
+
+    return (
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr 1fr',
+        gap: '12px',
+        border: '1px solid #e5e7eb',
+        borderRadius: '10px',
+        overflow: 'hidden',
+        backgroundColor: colors.card,
+        boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-          <h2 style={{ margin: 0 }}>🎓 EdCube</h2>
-          <input
-            type="text"
-            value={courseName}
-            onChange={(e) => setCourseName(e.target.value)}
-            style={{
-              fontSize: '18px',
-              padding: '8px 12px',
-              border: '1px solid #ddd',
-              borderRadius: '4px',
-              minWidth: '300px'
-            }}
-          />
-        </div>
-        
-        <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-          <button
-            onClick={undo}
-            disabled={historyIndex <= 0}
-            style={{
-              padding: '8px 16px',
-              backgroundColor: historyIndex <= 0 ? '#ccc' : '#6c757d',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: historyIndex <= 0 ? 'not-allowed' : 'pointer'
-            }}
-          >
-            ↶ Undo
-          </button>
-          
-          <button
-            onClick={saveCourse}
-            style={{
-              padding: '10px 20px',
-              backgroundColor: '#28a745',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontWeight: '600'
-            }}
-          >
-            💾 Save Course
-          </button>
-          
-          <span style={{ color: '#666' }}>
-            {currentUser?.displayName}
-          </span>
-          
-          <button
-            onClick={() => navigate('/my-courses')}
-            style={{
-              padding: '8px 16px',
-              backgroundColor: '#6c757d',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer'
-            }}
-          >
-            Sign Out
-          </button>
-        </div>
-      </div>
-
-      {/* 4-Column Layout */}
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        
-        {/* FIRST COLUMN - Generated Topics */}
-        <div style={{ 
-          width: '20%', 
-          borderRight: '1px solid #ddd', 
-          padding: '20px',
-          overflowY: 'auto',
-          backgroundColor: '#fafafa'
-        }}>
-          <h3>📚 Generated Topics</h3>
-          <p style={{ fontSize: '14px', color: '#666', marginBottom: '20px' }}>
-            Click to view details • Drag to add to course
-          </p>
-          
-          {topics.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px 20px', color: '#999' }}>
-              <p>No topics generated yet</p>
-            </div>
-          ) : (
-            topics.map(topic => (
-              <TopicBox
-                key={topic.id}
-                topic={topic}
-                onClick={handleTopicClick}
-                onDragStart={handleDragStart}
-              />
-            ))
-          )}
-        </div>
-
-        {/* SECOND COLUMN - Course Outline */}
-        <div style={{ 
-          width: '30%', 
-          borderRight: '1px solid #ddd', 
-          padding: '20px',
-          overflowY: 'auto',
-          backgroundColor: 'white'
-        }}>
-          <h3>Course Outline</h3>
-          
-          <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
-            <button
-              onClick={addSection}
-              style={{
-                flex: 1,
-                padding: '10px',
-                backgroundColor: '#007bff',
-                color: 'white',
-                border: '1px dashed #007bff',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontWeight: '500'
-              }}
+        {/* ── Col 1: Topic Name ── */}
+        <div style={{ padding: '14px', borderRight: '1px solid #f3f4f6' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '6px' }}>
+            <p style={{ margin: 0, fontWeight: '600', fontSize: '14px', color: colors.textPrimary, cursor: 'pointer', flex: 1 }}
+              onClick={() => handleTopicClick(sub)}
             >
-              ➕ Section
-            </button>
-            
-            <button
-              onClick={addBreak}
-              style={{
-                flex: 1,
-                padding: '10px',
-                backgroundColor: 'white',
-                color: '#007bff',
-                border: '1px dashed #007bff',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontWeight: '500'
-              }}
-            >
-              ⏸️ Break
-            </button>
+              {sub.title}
+            </p>
+            <IconBtn onClick={() => removeSubsection(sectionId, sub.id)} color={colors.dangerBtn} title="Remove subsection">×</IconBtn>
           </div>
 
-          {/* Sections List */}
-          {sections.length === 0 ? (
-            <div style={{ 
-              textAlign: 'center', 
-              padding: '40px 20px', 
-              color: '#999',
-              border: '2px dashed #ddd',
-              borderRadius: '8px'
-            }}>
-              <p>No sections yet</p>
-              <p style={{ fontSize: '14px' }}>Click "+ Section" to add your first section</p>
-            </div>
-          ) : (
-            sections.map(section => (
-              <Section
-                key={section.id}
-                section={section}
-                onDrop={handleDrop}
-                onDragOver={handleDragOver}
-                onUpdateName={updateSectionName}
-                onRemove={removeSection}
-                onRemoveTopic={removeTopicFromSection}
-              />
-            ))
+          {(sub.learning_objectives || []).length > 0 && (
+            <ul style={{ margin: '8px 0 8px', paddingLeft: '16px', fontSize: '12px', color: colors.textSecondary }}>
+              {sub.learning_objectives.map((obj, i) => (
+                <li key={i} style={{ marginBottom: '2px' }}>{obj}</li>
+              ))}
+            </ul>
           )}
+
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '8px' }}>
+            <Pill label={`${sub.duration_minutes || 0} min`} color={{ bg: '#f3e8ff', text: '#7c3aed' }} />
+            <Pill label={(sub.pla_pillars || [])[0] || 'Knowledge'} />
+          </div>
+
+          {/* + button to add more subsections — rendered only on last sub */}
         </div>
 
-        {/* THIRD COLUMN - Video Resources (renamed from Hands-On Resources) */}
-        <div style={{ 
-          width: '25%', 
-          borderRight: '1px solid #ddd',
-          padding: '20px',
-          overflowY: 'auto',
-          backgroundColor: '#fafafa'
-        }}>
-          <h3>🎥 Video Resources</h3>
-          
-          {topicsInSections.length === 0 ? (
-            <div style={{ 
-              textAlign: 'center', 
-              padding: '40px 20px', 
-              color: '#999',
-              backgroundColor: '#f5f5f5',
-              borderRadius: '8px',
-              marginTop: '20px'
+        {/* ── Col 2: Video Resources ── */}
+        <div style={{ padding: '14px', borderRight: '1px solid #f3f4f6' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+            <p style={{ margin: 0, fontSize: '12px', fontWeight: '600', color: colors.textSecondary }}>📹 Resources</p>
+            {videos.length > 0 && (
+              <button onClick={() => generateVideosFromBackend(sub)} style={{
+                padding: '3px 8px', backgroundColor: 'transparent', color: colors.videoBtn,
+                border: `1px solid ${colors.videoBtn}`, borderRadius: '4px',
+                cursor: 'pointer', fontSize: '11px', fontWeight: '600'
+              }}>↻ Redo</button>
+            )}
+          </div>
+
+          {videos.length === 0 ? (
+            <button onClick={() => generateVideosFromBackend(sub)} style={{
+              width: '100%', padding: '8px', backgroundColor: colors.videoBtn,
+              color: 'white', border: 'none', borderRadius: '6px',
+              cursor: 'pointer', fontSize: '13px', fontWeight: '600'
             }}>
-              <p style={{ fontSize: '18px', marginBottom: '10px' }}>📹</p>
-              <p>Add topics to your course outline to generate videos here.</p>
-            </div>
+              🎬 Generate Videos
+            </button>
           ) : (
-            topicsInSections.map(topic => (
-            <div 
-              key={topic.id}
-              style={{
-                border: '1px solid #ddd',
-                borderRadius: '8px',
-                padding: '15px',
-                marginBottom: '20px',
-                backgroundColor: '#f9f9f9'
-              }}
-            >
-              <h4 style={{ margin: '0 0 10px 0' }}>{topic.title}</h4>
-              <p style={{ fontSize: '14px', color: '#666', margin: '0 0 15px 0' }}>
-                {topic.duration} • {topic.plaType}
-              </p>
-              
-              {!videosByTopic[topic.id] ? (
-                <button
-                  onClick={() => {
-                    const section = sections.find(s => 
-                      s.topics && s.topics.some(t => t.id === topic.id)
-                    );
-                    generateVideosFromBackend(topic.id, topic, section?.id || 'unknown');
-                  }}
+            <div>
+              {videos.map((video, idx) => (
+                <a key={idx}
+                  href={`https://www.youtube.com/watch?v=${video.videoId}`}
+                  target="_blank" rel="noopener noreferrer"
                   style={{
-                    width: '100%',
-                    padding: '10px',
-                    backgroundColor: '#dc3545',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    fontWeight: '600',
-                    marginBottom: videosByTopic[topic.id] ? '10px' : '0'
+                    display: 'flex', gap: '8px', padding: '6px',
+                    marginBottom: '6px', backgroundColor: '#fafafa',
+                    border: '1px solid #eee', borderRadius: '6px',
+                    textDecoration: 'none', color: 'inherit', cursor: 'pointer'
                   }}
                 >
-                  {videosByTopic[topic.id] ? '🔄 Regenerate Videos' : '🎬 Generate Videos'}
-                </button>
-              ) : (
-                <div>
-                  <p style={{ fontSize: '12px', fontWeight: '600', color: '#666', marginBottom: '10px' }}>
-                    📹 Videos ({videosByTopic[topic.id].length})
-                  </p>
-                  {videosByTopic[topic.id].map((video, idx) => (
-                    <a
-                      key={idx}
-                      href={`https://www.youtube.com/watch?v=${video.videoId}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{
-                        display: 'flex',
-                        gap: '10px',
-                        padding: '10px',
-                        marginBottom: '8px',
-                        backgroundColor: 'white',
-                        border: '1px solid #e0e0e0',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s',
-                        textDecoration: 'none',
-                        color: 'inherit'
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0f0f0'}
-                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
-                    >
-                      <img 
-                        src={video.thumbnailUrl} 
-                        alt={video.title}
-                        style={{
-                          width: '80px',
-                          height: '60px',
-                          objectFit: 'cover',
-                          borderRadius: '4px'
-                        }}
-                      />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ 
-                          fontSize: '13px', 
-                          fontWeight: '500', 
-                          margin: '0 0 4px 0',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap'
-                        }}>
-                          {video.title}
-                        </p>
-                        <p style={{ fontSize: '11px', color: '#666', margin: '0' }}>
-                          {video.channelName} • {video.duration}
-                        </p>
-                      </div>
-                    </a>
-                  ))}
-                </div>
-              )}
+                  <img src={video.thumbnailUrl} alt={video.title}
+                    style={{ width: '56px', height: '42px', objectFit: 'cover', borderRadius: '3px', flexShrink: 0 }}
+                  />
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ fontSize: '12px', fontWeight: '500', margin: '0 0 2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: colors.textPrimary }}>
+                      {video.title}
+                    </p>
+                    <p style={{ fontSize: '10px', color: colors.textSecondary, margin: 0 }}>
+                      {video.channelName} • {video.duration}
+                    </p>
+                  </div>
+                </a>
+              ))}
+              <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
+                <Pill label={`${videos.length} video${videos.length > 1 ? 's' : ''}`} color={{ bg: '#fef2f2', text: '#dc2626' }} />
+              </div>
             </div>
-          ))
           )}
+
+          <div style={{ marginTop: '10px' }}>
+            <Pill label={`${sub.duration_minutes || 0} min`} color={{ bg: '#f3e8ff', text: '#7c3aed' }} />
+            {(sub.pla_pillars || [])[0] && <Pill label={(sub.pla_pillars || [])[0]} />}
+          </div>
         </div>
 
-        {/* FOURTH COLUMN - Worksheets & Activities */}
-        <div style={{ 
-          width: '25%', 
-          padding: '20px',
-          overflowY: 'auto',
-          backgroundColor: 'white'
-        }}>
-          <h3>📝 Hands-On Resources</h3>
-          
-          {topicsInSections.length === 0 ? (
-            <div style={{ 
-              textAlign: 'center', 
-              padding: '40px 20px', 
-              color: '#999',
-              backgroundColor: '#f5f5f5',
-              borderRadius: '8px',
-              marginTop: '20px'
-            }}>
-              <p style={{ fontSize: '18px', marginBottom: '10px' }}>📚</p>
-              <p>Add topics to your course outline to generate resources here.</p>
+        {/* ── Col 3: Hands-On Resources ── */}
+        <div style={{ padding: '14px' }}>
+          <p style={{ margin: '0 0 10px', fontSize: '12px', fontWeight: '600', color: colors.textSecondary }}>📝 Hands-On resources</p>
+
+          {/* Worksheets */}
+          <div style={{ marginBottom: '10px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+              <p style={{ margin: 0, fontSize: '11px', color: colors.textSecondary }}>📄 Worksheets</p>
+              <button onClick={() => generateResource(sub.id, 'worksheet')} style={{
+                padding: '2px 8px', backgroundColor: colors.worksheetBtn,
+                color: 'white', border: 'none', borderRadius: '4px',
+                cursor: 'pointer', fontSize: '11px', fontWeight: '600'
+              }}>+ Add</button>
             </div>
-          ) : (
-            topicsInSections.map(topic => (
-              <div 
-                key={`handson-${topic.id}`}
-                style={{
-                  border: '1px solid #ddd',
-                  borderRadius: '8px',
-                  padding: '15px',
-                  marginBottom: '20px',
-                  backgroundColor: '#f9f9f9'
-                }}
-              >
-                <h4 style={{ margin: '0 0 10px 0', fontSize: '16px' }}>{topic.title}</h4>
-                
-                {/* Worksheets Section */}
-                <div style={{ marginBottom: '15px' }}>
-                  <div style={{ 
-                    display: 'flex', 
-                    justifyContent: 'space-between', 
-                    alignItems: 'center',
-                    marginBottom: '10px'
-                  }}>
-                    <p style={{ fontSize: '13px', fontWeight: '600', color: '#666', margin: 0 }}>
-                      📄 Worksheets
-                    </p>
-                    <button
-                      onClick={() => generateResource(topic.id, 'worksheet')}
-                      style={{
-                        padding: '5px 10px',
-                        backgroundColor: '#007bff',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '12px',
-                        fontWeight: '600'
-                      }}
-                    >
-                      + Add
-                    </button>
-                  </div>
-                  
-                  {!handsOnResources[topic.id]?.filter(r => r.type === 'worksheet').length ? (
-                    <p style={{ fontSize: '12px', color: '#999', fontStyle: 'italic' }}>
-                      No worksheets yet
-                    </p>
-                  ) : (
-                    handsOnResources[topic.id]
-                      .filter(r => r.type === 'worksheet')
-                      .map((worksheet, idx) => (
-                        <div 
-                          key={idx}
-                          style={{
-                            padding: '8px',
-                            marginBottom: '6px',
-                            backgroundColor: 'white',
-                            border: '1px solid #e0e0e0',
-                            borderRadius: '4px',
-                            fontSize: '12px'
-                          }}
-                        >
-                          <p style={{ margin: 0, fontWeight: '500' }}>{worksheet.title}</p>
-                          {worksheet.sourceUrl && (
-                            <a 
-                              href={worksheet.sourceUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              style={{ fontSize: '11px', color: '#007bff' }}
-                            >
-                              View Source
-                            </a>
-                          )}
-                        </div>
-                      ))
-                  )}
+            {worksheets.length === 0 ? (
+              <p style={{ fontSize: '11px', color: '#9ca3af', fontStyle: 'italic', margin: '4px 0' }}>None yet</p>
+            ) : worksheets.map((ws, i) => (
+              <div key={i} style={{ padding: '5px 8px', marginBottom: '4px', backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '4px' }}>
+                <p style={{ margin: 0, fontSize: '12px', fontWeight: '500', color: colors.textPrimary }}>{ws.title}</p>
+                {ws.sourceUrl && <a href={ws.sourceUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '11px', color: colors.worksheetBtn }}>View Source</a>}
+              </div>
+            ))}
+          </div>
+
+          {/* Activities */}
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+              <p style={{ margin: 0, fontSize: '11px', color: colors.textSecondary }}>🎯 Activities</p>
+              <button onClick={() => generateResource(sub.id, 'activity')} style={{
+                padding: '2px 8px', backgroundColor: colors.activityBtn,
+                color: 'white', border: 'none', borderRadius: '4px',
+                cursor: 'pointer', fontSize: '11px', fontWeight: '600'
+              }}>+ Add</button>
+            </div>
+            {activities.length === 0 ? (
+              <p style={{ fontSize: '11px', color: '#9ca3af', fontStyle: 'italic', margin: '4px 0' }}>None yet</p>
+            ) : activities.map((act, i) => (
+              <div key={i} style={{ padding: '5px 8px', marginBottom: '4px', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '4px' }}>
+                <p style={{ margin: '0 0 2px', fontSize: '12px', fontWeight: '500', color: colors.textPrimary }}>{act.title}</p>
+                <p style={{ margin: 0, fontSize: '11px', color: colors.textSecondary }}>{act.description}</p>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ marginTop: '10px' }}>
+            <Pill label={`${sub.duration_minutes || 0} min`} color={{ bg: '#f3e8ff', text: '#7c3aed' }} />
+            {(sub.pla_pillars || [])[0] && <Pill label={(sub.pla_pillars || [])[0]} />}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ─── Full Section block ───────────────────────────────────────────────
+  const SectionBlock = ({ section, index }) => {
+    if (section.type === 'break') {
+      return (
+        <div style={{
+          padding: '12px 16px', marginBottom: '16px',
+          backgroundColor: '#fff3cd', border: '1px dashed #ffc107',
+          borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+        }}>
+          <span style={{ fontWeight: '500', fontSize: '14px' }}>⏸️ Break — {section.duration}</span>
+          <IconBtn onClick={() => removeSection(section.id)} color={colors.dangerBtn} title="Remove break">🗑️</IconBtn>
+        </div>
+      );
+    }
+
+    const isCollapsed = collapsedSections[section.id];
+
+    return (
+      <div style={{
+        border: `2px solid ${colors.sectionBorder}`,
+        borderRadius: '12px',
+        marginBottom: '20px',
+        backgroundColor: colors.card,
+        overflow: 'hidden'
+      }}>
+        {/* Section header row */}
+        <div style={{
+          backgroundColor: colors.sectionBg,
+          padding: '10px 16px',
+          display: 'flex', alignItems: 'center', gap: '10px'
+        }}>
+          <button onClick={() => toggleSection(section.id)} style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            fontSize: '14px', color: colors.accent, padding: 0
+          }}>
+            {isCollapsed ? '▶' : '▼'}
+          </button>
+
+          <span style={{ fontSize: '12px', fontWeight: '700', color: colors.accent }}>
+            Section {index + 1}
+          </span>
+
+          <input
+            type="text"
+            value={section.title}
+            onChange={e => updateSectionTitle(section.id, e.target.value)}
+            style={{
+              flex: 1, border: 'none', background: 'transparent',
+              fontSize: '15px', fontWeight: '600', color: colors.textPrimary, outline: 'none'
+            }}
+          />
+
+          <IconBtn onClick={() => removeSection(section.id)} color={colors.dangerBtn} title="Remove section">🗑️</IconBtn>
+        </div>
+
+        {!isCollapsed && (
+          <div style={{ padding: '14px 16px' }}>
+            {/* Section descriptor box */}
+            <DescriptorBox
+              value={section.description}
+              onChange={val => updateSectionDescription(section.id, val)}
+              placeholder="Section description…"
+            />
+
+            {/* Each subsection */}
+            {(section.subsections || []).map((sub, subIdx) => (
+              <div key={sub.id} style={{ marginBottom: '16px' }}>
+                {/* Subsection label + editable title */}
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: '8px',
+                  marginBottom: '6px'
+                }}>
+                  <span style={{ fontSize: '11px', fontWeight: '700', color: colors.accent }}>
+                    Subsection {index + 1}.{subIdx + 1}
+                  </span>
+                  <input
+                    type="text"
+                    value={sub.title}
+                    onChange={e => updateSubsectionTitle(section.id, sub.id, e.target.value)}
+                    style={{
+                      flex: 1, border: 'none', background: 'transparent',
+                      fontSize: '13px', fontWeight: '600', color: colors.textPrimary, outline: 'none',
+                      borderBottom: '1px solid transparent'
+                    }}
+                    onFocus={e => e.target.style.borderBottomColor = colors.subBorder}
+                    onBlur={e => e.target.style.borderBottomColor = 'transparent'}
+                  />
                 </div>
 
-                {/* Activities Section */}
-                <div>
-                  <div style={{ 
-                    display: 'flex', 
-                    justifyContent: 'space-between', 
-                    alignments: 'center',
-                    marginBottom: '10px'
-                  }}>
-                    <p style={{ fontSize: '13px', fontWeight: '600', color: '#666', margin: 0 }}>
-                      🎯 Activities
-                    </p>
-                    <button
-                      onClick={() => generateResource(topic.id, 'activity')}
-                      style={{
-                        padding: '5px 10px',
-                        backgroundColor: '#28a745',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '12px',
-                        fontWeight: '600'
-                      }}
-                    >
-                      + Add
-                    </button>
-                  </div>
-                  
-                  {!handsOnResources[topic.id]?.filter(r => r.type === 'activity').length ? (
-                    <p style={{ fontSize: '12px', color: '#999', fontStyle: 'italic' }}>
-                      No activities yet
-                    </p>
-                  ) : (
-                    handsOnResources[topic.id]
-                      .filter(r => r.type === 'activity')
-                      .map((activity, idx) => (
-                        <div 
-                          key={idx}
-                          style={{
-                            padding: '8px',
-                            marginBottom: '6px',
-                            backgroundColor: 'white',
-                            border: '1px solid #e0e0e0',
-                            borderRadius: '4px',
-                            fontSize: '12px'
-                          }}
-                        >
-                          <p style={{ margin: '0 0 4px 0', fontWeight: '500' }}>{activity.title}</p>
-                          <p style={{ margin: 0, fontSize: '11px', color: '#666' }}>
-                            {activity.description}
-                          </p>
-                        </div>
-                      ))
-                  )}
-                </div>
+                {/* Subsection descriptor box */}
+                <DescriptorBox
+                  value={sub.description}
+                  onChange={val => updateSubsectionDescription(section.id, sub.id, val)}
+                  placeholder="Subsection description…"
+                />
+
+                {/* 3-column topic row */}
+                <SubsectionRow sub={sub} sectionId={section.id} />
               </div>
-            ))
-          )}
+            ))}
+
+            {/* + Add Subsection button */}
+            <button onClick={() => addSubsection(section.id)} style={{
+              width: '100%', padding: '8px', marginTop: '4px',
+              backgroundColor: 'transparent', color: colors.accent,
+              border: `1px dashed ${colors.sectionBorder}`, borderRadius: '6px',
+              cursor: 'pointer', fontSize: '13px', fontWeight: '600'
+            }}>
+              ⊕ Add Subsection
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // ─── RENDER ───────────────────────────────────────────────────────────
+  return (
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: colors.bg }}>
+
+      {/* ── Top Bar ── */}
+      <div style={{
+        padding: '12px 28px', borderBottom: '1px solid #e5e7eb',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        backgroundColor: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <h2 style={{ margin: 0, fontSize: '20px', color: colors.textPrimary }}>🎓 EdCube</h2>
+          <input
+            type="text" value={courseName}
+            onChange={e => setCourseName(e.target.value)}
+            style={{
+              fontSize: '17px', padding: '6px 12px',
+              border: '1px solid #ddd', borderRadius: '6px', minWidth: '280px',
+              outline: 'none'
+            }}
+            onFocus={e => e.target.style.borderColor = colors.accent}
+            onBlur={e => e.target.style.borderColor = '#ddd'}
+          />
+        </div>
+
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          <button onClick={undo} disabled={historyIndex <= 0} style={{
+            padding: '7px 14px', backgroundColor: historyIndex <= 0 ? '#e5e7eb' : '#6b7280',
+            color: historyIndex <= 0 ? '#9ca3af' : 'white', border: 'none',
+            borderRadius: '6px', cursor: historyIndex <= 0 ? 'not-allowed' : 'pointer', fontSize: '13px'
+          }}>↶ Undo</button>
+
+          <button onClick={saveCourse} style={{
+            padding: '8px 18px', backgroundColor: '#16a34a', color: 'white',
+            border: 'none', borderRadius: '6px', cursor: 'pointer',
+            fontWeight: '600', fontSize: '14px'
+          }}>💾 Save Course</button>
+
+          <span style={{ color: '#6b7280', fontSize: '13px' }}>{currentUser?.displayName}</span>
+
+          <button onClick={() => navigate('/my-courses')} style={{
+            padding: '7px 14px', backgroundColor: '#6b7280', color: 'white',
+            border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px'
+          }}>← My Courses</button>
         </div>
       </div>
 
-      {/* Topic Details Modal */}
+      {/* ── Action bar: + Section / + Break ── */}
+      <div style={{
+        padding: '10px 28px', backgroundColor: 'white',
+        borderBottom: '1px solid #f3f4f6',
+        display: 'flex', gap: '10px', alignItems: 'center'
+      }}>
+        <button onClick={addSection} style={{
+          padding: '7px 16px', backgroundColor: colors.accent, color: 'white',
+          border: 'none', borderRadius: '6px', cursor: 'pointer',
+          fontWeight: '600', fontSize: '13px'
+        }}>➕ Section</button>
+
+        <button onClick={addBreak} style={{
+          padding: '7px 16px', backgroundColor: 'white', color: colors.accent,
+          border: `1px dashed ${colors.sectionBorder}`, borderRadius: '6px',
+          cursor: 'pointer', fontWeight: '600', fontSize: '13px'
+        }}>⏸️ Break</button>
+
+        <span style={{ fontSize: '12px', color: '#9ca3af', marginLeft: '12px' }}>
+          {sections.filter(s => s.type !== 'break').length} section{sections.filter(s => s.type !== 'break').length !== 1 ? 's' : ''} •{' '}
+          {sections.reduce((acc, s) => acc + (s.subsections?.length || 0), 0)} subsections
+        </span>
+      </div>
+
+      {/* ── Main scrollable content ── */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '24px 28px' }}>
+        {sections.length === 0 ? (
+          <div style={{
+            textAlign: 'center', padding: '80px 20px',
+            border: '2px dashed #c4b5fd', borderRadius: '16px',
+            backgroundColor: 'white'
+          }}>
+            <p style={{ fontSize: '24px', marginBottom: '8px' }}>📚</p>
+            <p style={{ fontSize: '16px', color: colors.textPrimary, fontWeight: '600', margin: '0 0 4px' }}>No sections yet</p>
+            <p style={{ fontSize: '14px', color: colors.textSecondary, margin: 0 }}>Click "+ Section" above to start building your course</p>
+          </div>
+        ) : (
+          sections.map((section, idx) => (
+            <SectionBlock key={section.id} section={section} index={idx} />
+          ))
+        )}
+      </div>
+
+      {/* ── Modals ── */}
       {isModalOpen && selectedTopic && (
-        <TopicDetailsModal
-          topic={selectedTopic}
-          onClose={handleCloseModal}
-        />
+        <TopicDetailsModal topic={selectedTopic} onClose={() => { setIsModalOpen(false); setSelectedTopic(null); }} />
       )}
 
-      {/* Break Modal */}
       {showBreakModal && (
-        <BreakModal
-          onConfirm={handleBreakCreate}
-          onCancel={() => setShowBreakModal(false)}
-        />
+        <BreakModal onConfirm={handleBreakCreate} onCancel={() => setShowBreakModal(false)} />
       )}
-      {/* ── Course Picker Modal ── */}
+
       {showCoursePicker && (
         <div style={{
-          position: 'fixed', inset: 0,
-          backgroundColor: 'rgba(0,0,0,0.45)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          zIndex: 1000
+          position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.45)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
         }}>
           <div style={{
-            backgroundColor: '#fff',
-            borderRadius: '12px',
-            width: '480px',
-            maxHeight: '60vh',
-            overflow: 'hidden',
-            display: 'flex',
-            flexDirection: 'column',
+            backgroundColor: '#fff', borderRadius: '12px', width: '480px',
+            maxHeight: '60vh', overflow: 'hidden', display: 'flex', flexDirection: 'column',
             boxShadow: '0 8px 32px rgba(0,0,0,0.2)'
           }}>
-            {/* Header */}
-            <div style={{
-              padding: '20px 24px',
-              borderBottom: '1px solid #eee',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center'
-            }}>
-              <h3 style={{ margin: 0, fontSize: '18px', color: '#1e1e2e' }}>
-                Open a Course
-              </h3>
-              <button
-                onClick={() => navigate('/my-courses')}
-                style={{
-                  background: 'none', border: 'none',
-                  fontSize: '20px', cursor: 'pointer', color: '#888'
-                }}
-              >
-                ✕
-              </button>
+            <div style={{ padding: '20px 24px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0, fontSize: '18px', color: colors.textPrimary }}>Open a Course</h3>
+              <button onClick={() => navigate('/my-courses')} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#888' }}>✕</button>
             </div>
-
-            {/* Body */}
             <div style={{ padding: '16px 24px 24px', overflowY: 'auto', flex: 1 }}>
-              {pickerLoading && (
-                <p style={{ color: '#888', textAlign: 'center', padding: '24px 0' }}>
-                  Loading courses…
-                </p>
-              )}
-
+              {pickerLoading && <p style={{ color: '#888', textAlign: 'center', padding: '24px 0' }}>Loading…</p>}
               {!pickerLoading && pickerCourses.length === 0 && (
                 <div style={{ textAlign: 'center', padding: '32px 0', color: '#888' }}>
-                  <p style={{ marginBottom: '12px' }}>No courses yet.</p>
-                  <button
-                    onClick={() => navigate('/course-designer')}
-                    style={{
-                      padding: '8px 18px',
-                      backgroundColor: '#cba6f7',
-                      color: '#1e1e2e',
-                      border: 'none',
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                      fontWeight: '600',
-                      fontSize: '14px'
-                    }}
-                  >
-                    Create a New Course
-                  </button>
+                  <p>No courses yet.</p>
+                  <button onClick={() => navigate('/course-designer')} style={{ padding: '8px 18px', backgroundColor: '#c4b5fd', color: colors.textPrimary, border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}>Create a New Course</button>
                 </div>
               )}
-
-              {!pickerLoading && pickerCourses.map((course) => (
-                <button
-                  key={course.courseId || course.id}
-                  onClick={() => handlePickCourse(course)}
-                  style={{
-                    width: '100%',
-                    textAlign: 'left',
-                    padding: '12px 14px',
-                    marginBottom: '8px',
-                    backgroundColor: '#f9f9f9',
-                    border: '1px solid #e8e8e8',
-                    borderRadius: '8px',
-                    cursor: 'pointer',
-                    transition: 'border-color 0.15s, background-color 0.15s'
-                  }}
-                  onMouseEnter={e => {
-                    e.currentTarget.style.borderColor = '#cba6f7';
-                    e.currentTarget.style.backgroundColor = '#faf7fd';
-                  }}
-                  onMouseLeave={e => {
-                    e.currentTarget.style.borderColor = '#e8e8e8';
-                    e.currentTarget.style.backgroundColor = '#f9f9f9';
-                  }}
-                >
-                  <div style={{ fontWeight: '600', fontSize: '15px', color: '#1e1e2e', marginBottom: '2px' }}>
-                    {course.courseName || 'Untitled Course'}
-                  </div>
-                  <div style={{ fontSize: '13px', color: '#888' }}>
-                    {course.class || ''}{course.subject ? ` • ${course.subject}` : ''}
-                  </div>
+              {!pickerLoading && pickerCourses.map(course => (
+                <button key={course.courseId || course.id} onClick={() => handlePickCourse(course)} style={{
+                  width: '100%', textAlign: 'left', padding: '12px 14px', marginBottom: '8px',
+                  backgroundColor: '#fafafa', border: '1px solid #e8e8e8', borderRadius: '8px', cursor: 'pointer'
+                }}>
+                  <div style={{ fontWeight: '600', fontSize: '15px', color: colors.textPrimary }}>{course.courseName || 'Untitled'}</div>
+                  <div style={{ fontSize: '13px', color: '#888' }}>{course.class || ''}{course.subject ? ` • ${course.subject}` : ''}</div>
                 </button>
               ))}
             </div>
