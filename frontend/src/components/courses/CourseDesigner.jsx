@@ -87,47 +87,49 @@ const CourseDesigner = () => {
         }
       }
 
-      // Fetch the generated curriculum to get boxes
-      let generatedBoxes = [];
-      
+      // Fetch the generated curriculum — now sections with subsections
+      let sections = [];
+
       if (curriculumId) {
         console.log('Fetching curriculum:', curriculumId);
-        
+
         const curriculumResponse = await fetch(
           `http://localhost:8000/api/curricula/${curriculumId}?teacherUid=${currentUser.uid}`
         );
         const curriculumData = await curriculumResponse.json();
-        
-        console.log('Curriculum data received:', curriculumData);
-        
-        // Get boxes from the outline.sections
-        const boxes = curriculumData.outline?.sections || curriculumData.generatedTopics || [];
-        
-        console.log('Boxes found:', boxes);
 
-        // Transform boxes to match TopicBox format
-        generatedBoxes = boxes.map((box, index) => ({
-          id: box.id || `box-${index}`,
-          title: box.title,
-          duration: `${box.duration_minutes} min`,
-          plaType: box.pla_pillars?.[0] || 'Knowledge',
-          subtopics: box.subtopics?.flatMap(st => st.topics || []) || [],
-          description: box.description,
-          learningObjectives: box.learning_objectives || []
+        console.log('Curriculum data received:', curriculumData);
+
+        // outline.sections is the new shape: [{ id, title, description, subsections: [...] }]
+        sections = (curriculumData.outline?.sections || []).map(section => ({
+          id: section.id,
+          title: section.title,
+          description: section.description,
+          subsections: (section.subsections || []).map(sub => ({
+            id: sub.id,
+            title: sub.title,
+            description: sub.description,
+            duration_minutes: sub.duration_minutes,
+            pla_pillars: sub.pla_pillars || [],
+            learning_objectives: sub.learning_objectives || [],
+            content_keywords: sub.content_keywords || [],
+            what_must_be_covered: sub.what_must_be_covered || '',
+            video_resources: sub.video_resources || [],
+            worksheets: sub.worksheets || [],
+            activities: sub.activities || []
+          }))
         }));
-        
-        console.log('Transformed boxes:', generatedBoxes);
+
+        console.log('Sections built:', sections);
       }
 
-      console.log('Navigating with topics:', generatedBoxes);
-
-      // Navigate to workspace with generated boxes
+      // Navigate to workspace with the new sections shape
       navigate('/course-workspace', {
         state: {
           formData,
-          generatedTopics: generatedBoxes,
+          sections,
           isEditing: true,
-          curriculumId: curriculumId  // ✅ Pass the ID from backend response
+          curriculumId
         }
       });
 

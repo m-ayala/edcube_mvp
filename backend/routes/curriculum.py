@@ -87,7 +87,7 @@ async def generate_curriculum(request: CourseRequest):
                     'topic': request.topic,
                     'duration': request.time_duration,
                     'outline': outline_data,
-                    'boxes': outline_data.get('sections', [])
+                    'sections': outline_data.get('sections', [])
                 }
             )
             

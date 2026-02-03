@@ -62,18 +62,17 @@ class CurriculumOrchestrator:
                 'requirements': teacher_input.get('objectives', 'None')
             }
             
-            # Generate boxes
-            boxes = generate_boxes(teacher_input_formatted)
+            # Generate outline (sections + subsections)
+            outline_data = generate_boxes(teacher_input_formatted)
             
-            if not boxes:
-                logger.error("Phase 1 failed: No boxes generated")
+            if not outline_data:
+                logger.error("Phase 1 failed: No outline generated")
                 return None
             
-            logger.info(f"Phase 1 complete: Generated {len(boxes.get('boxes', []))} boxes")
+            logger.info(f"Phase 1 complete: Generated {len(outline_data.get('sections', []))} sections")
             
-            # Create final outline structure (pass all boxes for now)
-            all_boxes = boxes.get('boxes', [])
-            outline = create_final_outline(all_boxes, boxes)
+            # Build final outline with computed fields
+            outline = create_final_outline(outline_data)
             
             return outline
             

@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 def generate_boxes(teacher_input: Dict) -> Dict:
     """
-    Generate modular teaching boxes using LLM.
+    Generate course outline with sections and subsections using LLM.
     
     Args:
         teacher_input: Teacher's requirements containing:
@@ -28,137 +28,99 @@ def generate_boxes(teacher_input: Dict) -> Dict:
             - requirements (str)
     
     Returns:
-        dict: Boxes data from LLM containing:
-            - topic, grade_level, teacher_time_budget_minutes
-            - total_boxes_generated
-            - boxes (list of box objects)
+        dict: Outline data from LLM containing:
+            - topic, grade_level, subject
+            - sections (list of section objects, each with subsections)
     
     Raises:
-        ValueError: If boxes response is invalid
-    
-    Example:
-        >>> teacher_input = {
-        ...     'grade_level': '5',
-        ...     'subject': 'Social Studies',
-        ...     'topic': 'Civil Rights Movement',
-        ...     'duration': '2 weeks',
-        ...     'total_minutes': 300,
-        ...     'requirements': 'Focus on MLK'
-        ... }
-        >>> boxes = generate_boxes(teacher_input)
-        >>> len(boxes['boxes']) >= 8
-        True
+        ValueError: If response is invalid
     """
     logger.info("="*70)
-    logger.info("Generating course modules (boxes)...")
+    logger.info("Generating course outline (sections + subsections)...")
     logger.info(f"Topic: {teacher_input.get('topic', 'Unknown')}")
     logger.info(f"Grade: {teacher_input.get('grade_level', 'Unknown')}")
     logger.info("="*70)
     
-    # Get the prompt
     prompt = get_box_generation_prompt(teacher_input)
     
-    # Call LLM
     system_message = (
         "You are an expert elementary education curriculum designer. "
-        "You generate well-structured, pedagogically sound course modules in JSON format."
+        "You generate well-structured, pedagogically sound course outlines in JSON format."
     )
     
-    logger.info("Calling LLM to generate boxes (this may take 30-60 seconds)...")
-    boxes_data = call_openai(prompt, system_message)
+    logger.info("Calling LLM to generate outline (this may take 30-60 seconds)...")
+    outline_data = call_openai(prompt, system_message)
     
-    # Validate response
-    _validate_boxes_response(boxes_data)
+    # Validate the new structure
+    _validate_outline_response(outline_data)
     
-    # Calculate total duration if not provided
-    if 'total_duration_all_boxes_minutes' not in boxes_data or boxes_data['total_duration_all_boxes_minutes'] == 0:
-        total = sum(box['duration_minutes'] for box in boxes_data['boxes'])
-        boxes_data['total_duration_all_boxes_minutes'] = total
+    # Calculate total duration across all subsections
+    total = 0
+    for section in outline_data.get('sections', []):
+        for sub in section.get('subsections', []):
+            total += sub.get('duration_minutes', 0)
+    outline_data['total_duration_minutes'] = total
     
-    logger.info(f"Successfully generated {len(boxes_data['boxes'])} boxes")
-    logger.info(f"Total content duration: {boxes_data['total_duration_all_boxes_minutes']} minutes")
+    logger.info(f"Successfully generated {len(outline_data.get('sections', []))} sections")
+    logger.info(f"Total content duration: {total} minutes")
     logger.info("="*70)
     
-    return boxes_data
+    return outline_data
 
 
-def create_final_outline(selected_boxes: List[Dict], boxes_data: Dict) -> Dict:
+def create_final_outline(outline_data: Dict) -> Dict:
     """
-    Convert selected boxes into final course outline format.
-    Marks sections as needing worksheets/activities instead of creating specific ones.
+    Pass through the LLM outline, adding computed fields.
+    The LLM now directly outputs sections with subsections,
+    so no box-to-section conversion needed.
     
     Args:
-        selected_boxes: List of selected box objects
-        boxes_data: Original boxes data with metadata
+        outline_data: Raw LLM output with sections and subsections
     
     Returns:
-        dict: Final course outline with sections
-    
-    Example:
-        >>> selected_boxes = [{'box_id': 1, 'title': 'Introduction', ...}]
-        >>> boxes_data = {'topic': 'Math', 'grade_level': '5'}
-        >>> outline = create_final_outline(selected_boxes, boxes_data)
-        >>> 'sections' in outline
-        True
+        dict: Final course outline ready for Firestore
     """
-    logger.info("Creating final course outline from selected boxes...")
-    
-    total_time = sum(box['duration_minutes'] for box in selected_boxes)
+    logger.info("Building final outline from sections/subsections...")
     
     outline = {
-        "course_title": f"{boxes_data['topic']} - {boxes_data['grade_level']}",
-        "grade_level": boxes_data['grade_level'],
-        "subject": boxes_data.get('subject', ''),
-        "topic": boxes_data['topic'],
-        "total_duration_minutes": total_time,
+        "course_title": f"{outline_data.get('topic', '')} - {outline_data.get('grade_level', '')}",
+        "grade_level": outline_data.get('grade_level', ''),
+        "subject": outline_data.get('subject', ''),
+        "topic": outline_data.get('topic', ''),
+        "total_duration_minutes": outline_data.get('total_duration_minutes', 0),
         "sections": []
     }
     
-    # Convert each box to a section
-    for i, box in enumerate(selected_boxes, 1):
-        section = {
-            "id": f"section_{i}",
-            "title": box['title'],
-            "description": box['description'],
-            "duration_minutes": box['duration_minutes'],
-            "box_id": box['box_id'],
-            "pla_pillars": box.get('pla_pillars', []),
-            "subtopics": [],
-            "needs_worksheets": False,
-            "needs_activities": False,
-            "learning_objectives": box.get('learning_outcomes', []),
-            "content_keywords": []
+    for section in outline_data.get('sections', []):
+        built_section = {
+            "id": section.get('section_id', ''),
+            "title": section.get('title', ''),
+            "description": section.get('description', ''),
+            "subsections": []
         }
         
-        # Add instruction as subtopic and extract keywords
-        if box['components'].get('instruction'):
-            inst = box['components']['instruction']
-            section['subtopics'].append({
-                "name": inst['teaching_method'].replace('_', ' ').title(),
-                "topics": inst['subtopics'],
-                "duration_minutes": inst['duration_minutes']
-            })
-            
-            # Extract detailed learning info for Phase 2 and Phase 3
-            section['content_keywords'] = inst.get('content_keywords', [])
-            if inst.get('learning_objectives'):
-                section['learning_objectives'].extend(inst['learning_objectives'])
-            if inst.get('what_must_be_covered'):
-                section['what_must_be_covered'] = inst['what_must_be_covered']
-            
-            # Store full instruction component for Phase 2
-            section['components'] = {
-                'instruction': inst
+        for sub in section.get('subsections', []):
+            built_subsection = {
+                "id": sub.get('subsection_id', ''),
+                "title": sub.get('title', ''),
+                "description": sub.get('description', ''),
+                "duration_minutes": sub.get('duration_minutes', 0),
+                "pla_pillars": sub.get('pla_pillars', []),
+                "learning_objectives": sub.get('learning_objectives', []),
+                "content_keywords": sub.get('content_keywords', []),
+                "what_must_be_covered": sub.get('what_must_be_covered', ''),
+                # These stay empty — Phase 2 and 3 fill them on-demand
+                "video_resources": [],
+                "worksheets": [],
+                "activities": []
             }
+            built_section['subsections'].append(built_subsection)
         
-        # Mark that this section needs resources (Phase 2 and 3 will handle)
-        section['needs_worksheets'] = True
-        section['needs_activities'] = True
-        
-        outline['sections'].append(section)
+        outline['sections'].append(built_section)
     
-    logger.info(f"Created outline with {len(outline['sections'])} sections")
-    logger.info(f"Total duration: {total_time} minutes")
+    logger.info(f"Final outline: {len(outline['sections'])} sections")
+    for s in outline['sections']:
+        logger.info(f"  - {s['title']}: {len(s['subsections'])} subsections")
     
     return outline
 
@@ -202,40 +164,32 @@ def save_outline(outline: Dict, output_dir: str) -> None:
         f.write(f"Total Duration: {total} minutes ({total//60}h {total%60}m)\n")
         f.write("\n" + "="*70 + "\n\n")
         
-        # Sections
-        f.write("SECTIONS:\n\n")
         for i, section in enumerate(outline['sections'], 1):
-            f.write(f"{i}. {section['title']} ({section['duration_minutes']} min)\n")
-            f.write(f"   {section['description']}\n")
-            if section.get('subtopics'):
-                for subtopic in section['subtopics']:
-                    f.write(f"   - {subtopic['name']}: {', '.join(subtopic['topics'])}\n")
-            f.write(f"   PLA Pillars: {', '.join(section.get('pla_pillars', []))}\n")
+            f.write(f"SECTION {i}: {section['title']}\n")
+            f.write(f"  {section['description']}\n\n")
             
-            # Show what resources this section needs
-            if section.get('needs_worksheets'):
-                f.write(f"   📝 Needs worksheets (Phase 3 will generate options)\n")
-            if section.get('needs_activities'):
-                f.write(f"   🎯 Needs activities (Phase 3 will generate options)\n")
+            for j, sub in enumerate(section['subsections'], 1):
+                f.write(f"  {i}.{j} {sub['title']} ({sub['duration_minutes']} min)\n")
+                f.write(f"      {sub['description']}\n")
+                f.write(f"      PLA: {', '.join(sub.get('pla_pillars', []))}\n")
+                f.write(f"      Keywords: {', '.join(sub.get('content_keywords', []))}\n")
+                f.write(f"\n")
             
             f.write("\n")
         
-        f.write("\n" + "="*70 + "\n")
-        f.write("RESOURCE GENERATION:\n")
-        f.write(f"Phase 2 will add video resources for each section.\n")
-        f.write(f"Phase 3 will generate worksheet and activity options for each section.\n")
-        f.write(f"Teachers can then select from curated options.\n")
+        f.write("="*70 + "\n")
+        f.write("Phase 2 (videos) and Phase 3 (worksheets/activities) run on-demand per subsection.\n")
         f.write("="*70 + "\n")
     
     logger.info(f"✅ Saved TXT: {txt_path}")
 
 
-def _validate_boxes_response(boxes_data: Dict) -> bool:
+def _validate_outline_response(outline_data: Dict) -> bool:
     """
-    Validate that the boxes response has the correct structure.
+    Validate the new sections/subsections structure from LLM.
     
     Args:
-        boxes_data: The parsed JSON from LLM
+        outline_data: Parsed JSON from LLM
     
     Returns:
         bool: True if valid
@@ -243,24 +197,32 @@ def _validate_boxes_response(boxes_data: Dict) -> bool:
     Raises:
         ValueError: If validation fails
     """
-    required_fields = ['topic', 'grade_level', 'teacher_time_budget_minutes', 'boxes']
+    required_top = ['topic', 'grade_level', 'sections']
+    validate_json_response(outline_data, required_top, "outline response")
     
-    # Validate top-level fields
-    validate_json_response(boxes_data, required_fields, "boxes response")
+    if not isinstance(outline_data['sections'], list):
+        raise ValueError("'sections' must be a list")
     
-    if not isinstance(boxes_data['boxes'], list):
-        raise ValueError("'boxes' must be a list")
+    if len(outline_data['sections']) == 0:
+        raise ValueError("No sections generated")
     
-    if len(boxes_data['boxes']) == 0:
-        raise ValueError("No boxes generated")
+    required_section_fields = ['section_id', 'title', 'description', 'subsections']
+    required_sub_fields = ['subsection_id', 'title', 'description', 'duration_minutes']
     
-    # Validate each box has required fields
-    required_box_fields = ['box_id', 'title', 'description', 'duration_minutes', 'components']
-    for i, box in enumerate(boxes_data['boxes']):
+    for i, section in enumerate(outline_data['sections']):
         try:
-            validate_json_response(box, required_box_fields, f"box {i+1}")
+            validate_json_response(section, required_section_fields, f"section {i+1}")
         except ValueError as e:
-            raise ValueError(f"Box {i+1} validation failed: {e}")
+            raise ValueError(f"Section {i+1} validation failed: {e}")
+        
+        if not isinstance(section['subsections'], list) or len(section['subsections']) == 0:
+            raise ValueError(f"Section {i+1} '{section['title']}' has no subsections")
+        
+        for j, sub in enumerate(section['subsections']):
+            try:
+                validate_json_response(sub, required_sub_fields, f"section {i+1} subsection {j+1}")
+            except ValueError as e:
+                raise ValueError(f"Section {i+1}, Subsection {j+1} validation failed: {e}")
     
-    logger.info(f"✅ Validated: {len(boxes_data['boxes'])} boxes")
+    logger.info(f"✅ Validated: {len(outline_data['sections'])} sections")
     return True
