@@ -32,6 +32,53 @@ const CourseWorkspace = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [videosByTopic, setVideosByTopic] = useState({}); // Add this line
 
+  // ── course-picker state (shown when user lands here with no state) ──
+  const [showCoursePicker, setShowCoursePicker] = useState(false);
+  const [pickerCourses, setPickerCourses] = useState([]);
+  const [pickerLoading, setPickerLoading] = useState(false);
+
+  // If the user navigated here directly (no location.state), open the picker
+  useEffect(() => {
+    if (!formData && !generatedTopics) {
+      setShowCoursePicker(true);
+      setPickerLoading(true);
+      import('../../firebase/dbService').then(({ getTeacherCurricula }) => {
+        getTeacherCurricula(currentUser.uid).then(result => {
+          setPickerCourses(result.curricula || []);
+        }).catch(() => {
+          setPickerCourses([]);
+        }).finally(() => {
+          setPickerLoading(false);
+        });
+      });
+    }
+  }, []);                                  // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Reuses the same transform logic that MyCourses already has
+  const handlePickCourse = (curriculum) => {
+    const transformedSections = (curriculum.sections || []).map(section => ({
+      id: section.id || `section-${Date.now()}-${Math.random()}`,
+      name: section.name || section.title || 'Unnamed Section',
+      type: section.type || 'section',
+      topics: Array.isArray(section.topics) ? section.topics : []
+    }));
+
+    const transformedTopics = (curriculum.generatedTopics || []).map((topic, index) => ({
+      id: topic.id || topic.box_id || `topic-${index}`,
+      title: topic.title,
+      duration: topic.duration || `${topic.duration_minutes || 0} min`,
+      plaType: topic.pla_pillars?.[0] || topic.plaType || 'Knowledge',
+      subtopics: topic.subtopics || [],
+      description: topic.description || '',
+      learningObjectives: topic.learning_objectives || topic.learningObjectives || []
+    }));
+
+    setCourseName(curriculum.courseName || '');
+    setTopics(transformedTopics);
+    setSections(transformedSections);
+    setShowCoursePicker(false);
+  };
+
   // Load videos from sections when component mounts
   useEffect(() => {
     console.log('📦 CourseWorkspace loaded with:', {
@@ -832,6 +879,111 @@ const CourseWorkspace = () => {
           onConfirm={handleBreakCreate}
           onCancel={() => setShowBreakModal(false)}
         />
+      )}
+      {/* ── Course Picker Modal ── */}
+      {showCoursePicker && (
+        <div style={{
+          position: 'fixed', inset: 0,
+          backgroundColor: 'rgba(0,0,0,0.45)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: '#fff',
+            borderRadius: '12px',
+            width: '480px',
+            maxHeight: '60vh',
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.2)'
+          }}>
+            {/* Header */}
+            <div style={{
+              padding: '20px 24px',
+              borderBottom: '1px solid #eee',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <h3 style={{ margin: 0, fontSize: '18px', color: '#1e1e2e' }}>
+                Open a Course
+              </h3>
+              <button
+                onClick={() => navigate('/my-courses')}
+                style={{
+                  background: 'none', border: 'none',
+                  fontSize: '20px', cursor: 'pointer', color: '#888'
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: '16px 24px 24px', overflowY: 'auto', flex: 1 }}>
+              {pickerLoading && (
+                <p style={{ color: '#888', textAlign: 'center', padding: '24px 0' }}>
+                  Loading courses…
+                </p>
+              )}
+
+              {!pickerLoading && pickerCourses.length === 0 && (
+                <div style={{ textAlign: 'center', padding: '32px 0', color: '#888' }}>
+                  <p style={{ marginBottom: '12px' }}>No courses yet.</p>
+                  <button
+                    onClick={() => navigate('/course-designer')}
+                    style={{
+                      padding: '8px 18px',
+                      backgroundColor: '#cba6f7',
+                      color: '#1e1e2e',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontWeight: '600',
+                      fontSize: '14px'
+                    }}
+                  >
+                    Create a New Course
+                  </button>
+                </div>
+              )}
+
+              {!pickerLoading && pickerCourses.map((course) => (
+                <button
+                  key={course.courseId || course.id}
+                  onClick={() => handlePickCourse(course)}
+                  style={{
+                    width: '100%',
+                    textAlign: 'left',
+                    padding: '12px 14px',
+                    marginBottom: '8px',
+                    backgroundColor: '#f9f9f9',
+                    border: '1px solid #e8e8e8',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    transition: 'border-color 0.15s, background-color 0.15s'
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.borderColor = '#cba6f7';
+                    e.currentTarget.style.backgroundColor = '#faf7fd';
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.borderColor = '#e8e8e8';
+                    e.currentTarget.style.backgroundColor = '#f9f9f9';
+                  }}
+                >
+                  <div style={{ fontWeight: '600', fontSize: '15px', color: '#1e1e2e', marginBottom: '2px' }}>
+                    {course.courseName || 'Untitled Course'}
+                  </div>
+                  <div style={{ fontSize: '13px', color: '#888' }}>
+                    {course.class || ''}{course.subject ? ` • ${course.subject}` : ''}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

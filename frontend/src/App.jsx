@@ -2,10 +2,12 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider } from './contexts/AuthContext';
 import Login from './components/auth/Login';
 import Signup from './components/auth/Signup';
+import ProtectedRoute from './components/auth/ProtectedRoute';
+import Layout from './components/layout/Layout';
+import Home from './components/pages/Home';
 import MyCourses from './components/courses/MyCourses';
 import CourseDesigner from './components/courses/CourseDesigner';
 import CourseWorkspace from './components/courses/CourseWorkspace';
-import ProtectedRoute from './components/auth/ProtectedRoute';
 
 function App() {
   return (
@@ -13,39 +15,24 @@ function App() {
       <AuthProvider>
         <Routes>
           {/* Public Routes */}
-          <Route path="/login" element={<Login />} />
+          <Route path="/login"  element={<Login />} />
           <Route path="/signup" element={<Signup />} />
 
-          {/* Protected Routes */}
+          {/* Protected Routes — all share the Sidebar via Layout */}
           <Route
-            path="/my-courses"
+            path="/"
             element={
               <ProtectedRoute>
-                <MyCourses />
+                <Layout />
               </ProtectedRoute>
             }
-          />
-
-          <Route
-            path="/course-designer"
-            element={
-              <ProtectedRoute>
-                <CourseDesigner />
-              </ProtectedRoute>
-            }
-          />
-
-          <Route
-            path="/course-workspace"
-            element={
-              <ProtectedRoute>
-                <CourseWorkspace />
-              </ProtectedRoute>
-            }
-          />
-
-          {/* Default redirect */}
-          <Route path="/" element={<Navigate to="/my-courses" replace />} />
+          >
+            <Route index element={<Navigate to="/home" replace />} />
+            <Route path="home"              element={<Home />} />
+            <Route path="my-courses"        element={<MyCourses />} />
+            <Route path="course-designer"   element={<CourseDesigner />} />
+            <Route path="course-workspace"  element={<CourseWorkspace />} />
+          </Route>
         </Routes>
       </AuthProvider>
     </Router>
