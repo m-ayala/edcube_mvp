@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { ArrowLeft } from 'lucide-react';
 
 const CourseDesigner = () => {
   const { currentUser } = useAuth();
@@ -160,6 +161,36 @@ const CourseDesigner = () => {
 
   return (
     <div style={{ maxWidth: '800px', margin: '0 auto', padding: '40px 20px' }}>
+    <button
+        onClick={() => navigate('/course-designer')}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          background: 'transparent',
+          border: '1px solid #ddd',
+          color: '#555',
+          padding: '8px 16px',
+          borderRadius: '8px',
+          cursor: 'pointer',
+          fontSize: '14px',
+          marginBottom: '20px',
+          transition: 'all 0.2s'
+        }}
+        onMouseEnter={(e) => {
+          e.target.style.background = '#f5f5f5';
+          e.target.style.borderColor = '#667eea';
+          e.target.style.color = '#667eea';
+        }}
+        onMouseLeave={(e) => {
+          e.target.style.background = 'transparent';
+          e.target.style.borderColor = '#ddd';
+          e.target.style.color = '#555';
+        }}
+      >
+        <ArrowLeft size={16} />
+        <span>Back</span>
+      </button>
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: '30px' }}>
         <button
           onClick={() => navigate('/my-courses')}

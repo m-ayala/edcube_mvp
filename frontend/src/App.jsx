@@ -8,6 +8,8 @@ import Home from './components/pages/Home';
 import MyCourses from './components/courses/MyCourses';
 import CourseDesigner from './components/courses/CourseDesigner';
 import CourseWorkspace from './components/courses/CourseWorkspace';
+import CourseDesignerLanding from './components/pages/CourseDesignerLanding';
+import CourseUpload from './components/pages/CourseUpload';
 
 function App() {
   return (
@@ -30,7 +32,9 @@ function App() {
             <Route index element={<Navigate to="/home" replace />} />
             <Route path="home"              element={<Home />} />
             <Route path="my-courses"        element={<MyCourses />} />
-            <Route path="course-designer"   element={<CourseDesigner />} />
+            <Route path="/course-designer" element={<CourseDesignerLanding />} />
+            <Route path="/course-designer/create" element={<CourseDesigner />} />
+            <Route path="/course-designer/upload" element={<CourseUpload />} />
             <Route path="course-workspace"  element={<CourseWorkspace />} />
           </Route>
         </Routes>
