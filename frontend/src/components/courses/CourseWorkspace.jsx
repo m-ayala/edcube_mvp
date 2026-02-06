@@ -459,15 +459,15 @@ const CourseWorkspace = () => {
       }));
 
       const courseData = {
-        courseName,
-        class: formData.class,
-        subject: formData.subject,
-        topic: formData.topic,
-        timeDuration: formData.timeDuration,
-        objectives: formData.objectives || '',
-        sections: sectionsForSave,
-        outline: { sections: sectionsForSave }
-      };
+          courseName,
+          class: formData?.class || '',
+          subject: formData?.subject || '',
+          topic: formData?.topic || '',
+          timeDuration: formData?.timeDuration || '',
+          objectives: formData?.objectives || '',
+          sections: sectionsForSave,
+          outline: { sections: sectionsForSave }
+        };
 
       const hasExistingId = curriculumId && curriculumId !== 'new-course';
       if (hasExistingId) courseData.courseId = curriculumId;
