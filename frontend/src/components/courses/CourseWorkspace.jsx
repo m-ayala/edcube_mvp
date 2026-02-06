@@ -1040,41 +1040,58 @@ const CourseWorkspace = () => {
                               }}
                             >
                               {/* Subsection header with collapse button */}
-                              <div style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '8px',
-                                padding: '8px 12px',
-                                backgroundColor: '#f9fafb',
-                                borderBottom: isSubCollapsed ? 'none' : '1px solid #e5e7eb'
-                              }}>
-                                <div {...provided.dragHandleProps} style={{ cursor: 'grab', display: 'flex', alignItems: 'center' }}>
-                                  <GripVertical size={16} style={{ color: '#9ca3af' }} />
-                                </div>
-            
-                                <button onClick={() => toggleSubsection(sub.id)} style={{
-                                  background: 'none', border: 'none', cursor: 'pointer',
-                                  fontSize: '12px', color: colors.accent, padding: 0
+                                <div style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '8px',
+                                  padding: '8px 12px',
+                                  backgroundColor: '#f9fafb',
+                                  borderBottom: isSubCollapsed ? 'none' : '1px solid #e5e7eb'
                                 }}>
-                                  {isSubCollapsed ? '▶' : '▼'}
-                                </button>
-            
-                                <span style={{ fontSize: '11px', fontWeight: '700', color: colors.accent }}>
-                                  Subsection {index + 1}.{subIdx + 1}
-                                </span>
-            
-                                <EditableField
-                                  value={sub.title}
-                                  onChange={val => updateSubsectionTitle(section.id, sub.id, val)}
-                                  fieldKey={`subsection-title-${sub.id}`}
-                                  placeholder="Subsection title"
-                                  inputStyle={{
-                                    fontSize: '13px',
-                                    fontWeight: '600',
-                                    color: colors.textPrimary
-                                  }}
-                                />
-                              </div>
+                                  <div {...provided.dragHandleProps} style={{ cursor: 'grab', display: 'flex', alignItems: 'center' }}>
+                                    <GripVertical size={16} style={{ color: '#9ca3af' }} />
+                                  </div>
+  
+                                  <button onClick={() => toggleSubsection(sub.id)} style={{
+                                    background: 'none', border: 'none', cursor: 'pointer',
+                                    fontSize: '12px', color: colors.accent, padding: 0
+                                  }}>
+                                    {isSubCollapsed ? '▶' : '▼'}
+                                  </button>
+  
+                                  <span style={{ fontSize: '11px', fontWeight: '700', color: colors.accent }}>
+                                    Subsection {index + 1}.{subIdx + 1}
+                                  </span>
+  
+                                  <EditableField
+                                    value={sub.title}
+                                    onChange={val => updateSubsectionTitle(section.id, sub.id, val)}
+                                    fieldKey={`subsection-title-${sub.id}`}
+                                    placeholder="Subsection title"
+                                    inputStyle={{
+                                      fontSize: '13px',
+                                      fontWeight: '600',
+                                      color: colors.textPrimary
+                                    }}
+                                  />
+
+                                  <button
+                                    onClick={() => confirmDeleteSubsection(section.id, sub.id)}
+                                    style={{
+                                      background: 'none',
+                                      border: 'none',
+                                      cursor: 'pointer',
+                                      padding: '4px',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      color: colors.dangerBtn,
+                                      marginLeft: 'auto'
+                                    }}
+                                    title="Delete subsection"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
 
                               {/* Collapsible content */}
                               {!isSubCollapsed && (
