@@ -1,6 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
+from routes.file_upload import router as file_upload_router
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 # Import route modules
 from routes import curriculum, resources, topics
@@ -20,6 +25,7 @@ app.add_middleware(
 app.include_router(curriculum.router, prefix="/api", tags=["curriculum"])
 app.include_router(resources.router, prefix="/api", tags=["resources"])
 app.include_router(topics.router, prefix="/api", tags=["topics"])
+app.include_router(file_upload_router, prefix="/api", tags=["file_upload"])
 
 @app.get("/")
 async def root():

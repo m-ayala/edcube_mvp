@@ -7,6 +7,7 @@ const CourseUpload = () => {
   const { currentUser } = useAuth();
   const [selectedFile, setSelectedFile] = useState(null);
   const [dragActive, setDragActive] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   const handleDrag = (e) => {
     e.preventDefault();
@@ -34,10 +35,58 @@ const CourseUpload = () => {
     }
   };
 
-  const handleUpload = () => {
-    // We'll implement this later
-    alert('Upload functionality coming soon!');
-  };
+const handleUpload = async () => {
+  if (!selectedFile) return;
+  
+  setUploading(true);
+  
+  try {
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+    
+    const response = await fetch(
+      `http://localhost:8000/api/upload-course-file?teacherUid=${currentUser.uid}`,
+      {
+        method: 'POST',
+        body: formData
+      }
+    );
+    
+    const result = await response.json();
+
+    if (!response.ok) {
+      console.error('Backend error:', result);
+      throw new Error(result.detail || 'Upload failed');
+    }
+    
+    // Navigate to course workspace with parsed data
+    // Navigate to course workspace with parsed data
+    navigate('/course-workspace', {
+      state: {
+        formData: {
+          courseName: result.course_data.course_name,
+          class: result.course_data.class || '',
+          subject: result.course_data.subject || '',
+          topic: result.course_data.topic || '',
+          timeDuration: '',
+          timeUnit: 'hours',
+          numWorksheets: 0,
+          numActivities: 0,
+          objectives: ''
+        },
+        sections: result.course_data.sections,
+        isEditing: false,
+        source: 'upload'
+      }
+    });
+    
+  } catch (error) {
+    console.error('Upload error:', error);
+    alert('Failed to upload file. Please try again.');
+  } finally {
+    setUploading(false);
+  }
+};
 
   return (
     <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', padding: '2rem' }}>
@@ -148,7 +197,7 @@ const CourseUpload = () => {
 
           <button
             onClick={handleUpload}
-            disabled={!selectedFile}
+            disabled={!selectedFile || uploading}
             style={{
               width: '100%',
               padding: '15px',
@@ -162,7 +211,7 @@ const CourseUpload = () => {
               transition: 'background 0.3s'
             }}
           >
-            {selectedFile ? 'Upload & Create Course Workspace' : 'Select a file to continue'}
+            {uploading ? '⏳ Processing...' : selectedFile ? 'Upload & Create Course Workspace' : 'Select a file to continue'}
           </button>
 
           <div style={{ marginTop: '2rem', textAlign: 'center', color: '#999', fontSize: '0.85rem' }}>
