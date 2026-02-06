@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import TopicDetailsModal from '../modals/TopicDetailsModal';
 import BreakModal from '../modals/BreakModal';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { GripVertical } from 'lucide-react';
+import { GripVertical, Edit2, Check } from 'lucide-react';
 
 const CourseWorkspace = () => {
   const { currentUser } = useAuth();
@@ -30,6 +30,8 @@ const CourseWorkspace = () => {
   const [handsOnResources, setHandsOnResources] = useState({});
   // Track which sections/subsections are collapsed
   const [collapsedSections, setCollapsedSections] = useState({});
+  // Track which fields are being edited
+  const [editingField, setEditingField] = useState(null);
 
   // ── course-picker state ──
   const [showCoursePicker, setShowCoursePicker] = useState(false);
@@ -436,32 +438,106 @@ const handleDragEnd = (result) => {
     </button>
   );
 
-  // Descriptor box (editable description area)
-  const DescriptorBox = ({ value, onChange, placeholder }) => (
-    <div style={{
-      border: '2px dashed #c4b5fd',
-      borderRadius: '8px',
-      padding: '10px 14px',
-      marginBottom: '12px',
-      backgroundColor: '#faf5ff'
+  // Editable field with click-to-edit functionality
+  const EditableField = ({ 
+  value, 
+  onChange, 
+  fieldKey, 
+  placeholder = 'Click to edit',
+  style = {},
+  inputStyle = {}
+}) => {
+  const isEditing = editingField?.key === fieldKey;
+  
+  const handleEdit = () => {
+    setEditingField({ key: fieldKey, value });
+  };
+  
+  const handleSave = () => {
+    if (editingField?.value !== undefined) {
+      onChange(editingField.value);
+    }
+    setEditingField(null);
+  };
+  
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      handleSave();
+    } else if (e.key === 'Escape') {
+      setEditingField(null);
+    }
+  };
+  
+  return (
+    <div style={{ 
+      display: 'flex', 
+      alignItems: 'center', 
+      gap: '6px', 
+      position: 'relative',
+      flex: 1,
+      ...style 
     }}>
       <input
         type="text"
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        placeholder={placeholder || 'Add a description…'}
+        value={isEditing ? (editingField.value || '') : value}
+        onChange={e => isEditing && setEditingField({ ...editingField, value: e.target.value })}
+        onKeyDown={handleKeyDown}
+        disabled={!isEditing}
+        placeholder={placeholder}
         style={{
-          width: '100%',
+          flex: 1,
           border: 'none',
           background: 'transparent',
-          fontSize: '13px',
-          color: colors.textSecondary,
           outline: 'none',
-          fontStyle: value ? 'normal' : 'italic'
+          cursor: isEditing ? 'text' : 'default',
+          paddingRight: '28px',
+          ...inputStyle
         }}
       />
+      <button
+        onClick={isEditing ? handleSave : handleEdit}
+        style={{
+          position: 'absolute',
+          right: '4px',
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+          padding: '2px',
+          display: 'flex',
+          alignItems: 'center',
+          color: isEditing ? colors.accent : '#9ca3af'
+        }}
+        title={isEditing ? 'Save' : 'Edit'}
+      >
+        {isEditing ? <Check size={14} /> : <Edit2 size={14} />}
+      </button>
     </div>
   );
+};
+
+  // Descriptor box (editable description area)
+  const DescriptorBox = ({ value, onChange, placeholder, fieldKey }) => (
+  <div style={{
+    border: '2px dashed #c4b5fd',
+    borderRadius: '8px',
+    padding: '10px 14px',
+    marginBottom: '12px',
+    backgroundColor: '#faf5ff',
+    position: 'relative'
+  }}>
+    <EditableField
+      value={value}
+      onChange={onChange}
+      fieldKey={fieldKey}
+      placeholder={placeholder || 'Add a description…'}
+      inputStyle={{
+        fontSize: '13px',
+        color: colors.textSecondary,
+        fontStyle: value ? 'normal' : 'italic'
+      }}
+    />
+  </div>
+);
 
   // ─── 3-col row for one subsection ─────────────────────────────────────
   const SubsectionRow = ({ sub, sectionId }) => {
@@ -670,13 +746,15 @@ const SectionBlock = ({ section, index, dragHandleProps }) => {
           Section {index + 1}
         </span>
 
-        <input
-          type="text"
+        <EditableField
           value={section.title}
-          onChange={e => updateSectionTitle(section.id, e.target.value)}
-          style={{
-            flex: 1, border: 'none', background: 'transparent',
-            fontSize: '15px', fontWeight: '600', color: colors.textPrimary, outline: 'none'
+          onChange={val => updateSectionTitle(section.id, val)}
+          fieldKey={`section-title-${section.id}`}
+          placeholder="Section title"
+          inputStyle={{
+            fontSize: '15px',
+            fontWeight: '600',
+            color: colors.textPrimary
           }}
         />
 
@@ -687,10 +765,11 @@ const SectionBlock = ({ section, index, dragHandleProps }) => {
         <div style={{ padding: '14px 16px' }}>
           {/* Section descriptor box */}
           <DescriptorBox
-            value={section.description}
-            onChange={val => updateSectionDescription(section.id, val)}
-            placeholder="Section description…"
-          />
+              value={section.description}
+              onChange={val => updateSectionDescription(section.id, val)}
+              placeholder="Section description…"
+              fieldKey={`section-desc-${section.id}`}
+            />
 
           {/* Subsections droppable area */}
           <Droppable droppableId={`subsections-${section.id}`} type="SUBSECTION">
@@ -726,18 +805,17 @@ const SectionBlock = ({ section, index, dragHandleProps }) => {
                           <span style={{ fontSize: '11px', fontWeight: '700', color: colors.accent }}>
                             Subsection {index + 1}.{subIdx + 1}
                           </span>
-                          <input
-                            type="text"
-                            value={sub.title}
-                            onChange={e => updateSubsectionTitle(section.id, sub.id, e.target.value)}
-                            style={{
-                              flex: 1, border: 'none', background: 'transparent',
-                              fontSize: '13px', fontWeight: '600', color: colors.textPrimary, outline: 'none',
-                              borderBottom: '1px solid transparent'
-                            }}
-                            onFocus={e => e.target.style.borderBottomColor = colors.subBorder}
-                            onBlur={e => e.target.style.borderBottomColor = 'transparent'}
-                          />
+                          <EditableField
+                              value={sub.title}
+                              onChange={val => updateSubsectionTitle(section.id, sub.id, val)}
+                              fieldKey={`subsection-title-${sub.id}`}
+                              placeholder="Subsection title"
+                              inputStyle={{
+                                fontSize: '13px',
+                                fontWeight: '600',
+                                color: colors.textPrimary
+                              }}
+                            />
                         </div>
 
                         {/* Subsection descriptor box */}
@@ -745,6 +823,7 @@ const SectionBlock = ({ section, index, dragHandleProps }) => {
                           value={sub.description}
                           onChange={val => updateSubsectionDescription(section.id, sub.id, val)}
                           placeholder="Subsection description…"
+                          fieldKey={`subsection-desc-${sub.id}`}
                         />
 
                         {/* 3-column topic row */}
