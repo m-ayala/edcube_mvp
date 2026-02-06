@@ -6,6 +6,8 @@ import TopicDetailsModal from '../modals/TopicDetailsModal';
 import BreakModal from '../modals/BreakModal';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { GripVertical, Edit2, Check, Trash2 } from 'lucide-react';
+import AIGenerateButton from '../AIGenerateButton';
+import { generateCurriculumContent } from '../../utils/curriculumApi';
 
 const CourseWorkspace = () => {
   const { currentUser } = useAuth();
@@ -41,30 +43,82 @@ const CourseWorkspace = () => {
   const [pickerCourses, setPickerCourses] = useState([]);
   const [pickerLoading, setPickerLoading] = useState(false);
 
-  // ─── Mount: hydrate video + hands-on caches from saved subsections ───
+  // ─── Mount: Transform old data structure to new + hydrate caches ─────
   useEffect(() => {
-    console.log('📦 CourseWorkspace loaded with:', {
-      courseName,
-      sectionsCount: sections.length,
-      isEditing,
-      curriculumId
+    console.log('📦 CourseWorkspace loaded');
+
+    // Transform old structure (subsection with resources) to new structure (subsection with topicBoxes)
+    const transformedSections = sections.map(section => {
+      if (section.type === 'break') return section;
+
+      return {
+        ...section,
+        subsections: (section.subsections || []).map(sub => {
+          // If already has topicBoxes, leave as-is
+          if (sub.topicBoxes && Array.isArray(sub.topicBoxes)) {
+            return sub;
+          }
+
+          // OLD STRUCTURE: subsection has resources directly
+          // Transform to NEW STRUCTURE: subsection has topicBoxes array
+          const hasResources = 
+            (sub.video_resources && sub.video_resources.length > 0) ||
+            (sub.worksheets && sub.worksheets.length > 0) ||
+            (sub.activities && sub.activities.length > 0) ||
+            (sub.learning_objectives && sub.learning_objectives.length > 0);
+
+          if (hasResources) {
+            // Migrate old structure: create one topic box with existing resources
+            return {
+              id: sub.id,
+              title: sub.title,
+              description: sub.description,
+              topicBoxes: [{
+                id: `topic-${sub.id}-migrated`,
+                title: sub.title, // Use subsection title
+                description: sub.description || '',
+                duration_minutes: sub.duration_minutes || 20,
+                pla_pillars: sub.pla_pillars || [],
+                learning_objectives: sub.learning_objectives || [],
+                content_keywords: sub.content_keywords || [],
+                video_resources: sub.video_resources || [],
+                worksheets: sub.worksheets || [],
+                activities: sub.activities || []
+              }]
+            };
+          } else {
+            // New empty subsection
+            return {
+              id: sub.id,
+              title: sub.title,
+              description: sub.description,
+              topicBoxes: []
+            };
+          }
+        })
+      };
     });
 
+    setSections(transformedSections);
+
+    // Hydrate video + hands-on caches from topic boxes
     const loadedVideos = {};
     const loadedHandsOn = {};
 
-    sections.forEach(section => {
+    transformedSections.forEach(section => {
       (section.subsections || []).forEach(sub => {
-        if (sub.video_resources && sub.video_resources.length > 0) {
-          loadedVideos[sub.id] = sub.video_resources;
-        }
-        const resources = [
-          ...(sub.worksheets || []),
-          ...(sub.activities || [])
-        ];
-        if (resources.length > 0) {
-          loadedHandsOn[sub.id] = resources;
-        }
+        (sub.topicBoxes || []).forEach(topic => {
+          if (topic.video_resources && topic.video_resources.length > 0) {
+            loadedVideos[topic.id] = topic.video_resources;
+          }
+          const resources = [
+            ...(topic.worksheets || []),
+            ...(topic.activities || [])
+          ];
+          if (resources.length > 0) {
+            loadedHandsOn[topic.id] = resources;
+          }
+        });
       });
     });
 
@@ -84,7 +138,6 @@ const CourseWorkspace = () => {
 
     if (!destination) return;
 
-    // If dropped in the same position, do nothing
     if (
       source.droppableId === destination.droppableId &&
       source.index === destination.index
@@ -92,7 +145,7 @@ const CourseWorkspace = () => {
       return;
     }
 
-    // Handle SECTION reordering (including breaks)
+    // Handle SECTION reordering
     if (type === 'SECTION') {
       const reorderedSections = Array.from(sections);
       const [movedSection] = reorderedSections.splice(source.index, 1);
@@ -121,95 +174,132 @@ const CourseWorkspace = () => {
       return;
     }
 
-    // Handle TOPIC BOX reordering (topic boxes include resources and hands-on as one unit)
+    // Handle TOPICBOX reordering within a subsection
     if (type === 'TOPICBOX') {
-      const sourceSubId = source.droppableId.replace('topicbox-', '');
-      const destSubId = destination.droppableId.replace('topicbox-', '');
+      const sourceSubId = source.droppableId.replace('topicboxes-', '');
+      const destSubId = destination.droppableId.replace('topicboxes-', '');
 
-      // Since each subsection is essentially one topic box, we're moving the entire subsection
-      // This allows topic boxes to move across subsections and sections
-      
-      // Find source section and subsection
+      // Find source subsection and topic box
       let sourceSection = null;
       let sourceSub = null;
-      let sourceSubIndex = -1;
+      let sourceTopicBox = null;
       
       for (const section of sections) {
-        const subIndex = (section.subsections || []).findIndex(sub => sub.id === sourceSubId);
-        if (subIndex !== -1) {
+        const sub = (section.subsections || []).find(s => s.id === sourceSubId);
+        if (sub) {
           sourceSection = section;
-          sourceSub = section.subsections[subIndex];
-          sourceSubIndex = subIndex;
+          sourceSub = sub;
+          sourceTopicBox = sub.topicBoxes[source.index];
           break;
         }
       }
 
-      // Find destination section and subsection
+      // Find destination subsection
       let destSection = null;
-      let destSubIndex = -1;
+      let destSub = null;
       
       for (const section of sections) {
-        const subIndex = (section.subsections || []).findIndex(sub => sub.id === destSubId);
-        if (subIndex !== -1) {
+        const sub = (section.subsections || []).find(s => s.id === destSubId);
+        if (sub) {
           destSection = section;
-          destSubIndex = subIndex;
+          destSub = sub;
           break;
         }
       }
 
-      if (!sourceSection || !sourceSub || !destSection) return;
+      if (!sourceSection || !sourceSub || !sourceTopicBox || !destSection || !destSub) return;
 
-      // If moving within the same subsection area (same destination), do nothing
-      if (sourceSubId === destSubId) return;
-
-      // Remove from source
-      const updatedSections = sections.map(section => {
-        if (section.id === sourceSection.id) {
+      // Same subsection - just reorder
+      if (sourceSubId === destSubId) {
+        const updatedSections = sections.map(section => {
+          if (section.id !== sourceSection.id) return section;
+          
           return {
             ...section,
-            subsections: section.subsections.filter(sub => sub.id !== sourceSubId)
+            subsections: section.subsections.map(sub => {
+              if (sub.id !== sourceSubId) return sub;
+              
+              const reorderedTopicBoxes = Array.from(sub.topicBoxes);
+              const [moved] = reorderedTopicBoxes.splice(source.index, 1);
+              reorderedTopicBoxes.splice(destination.index, 0, moved);
+              
+              return { ...sub, topicBoxes: reorderedTopicBoxes };
+            })
           };
-        }
-        return section;
-      });
-
-      // Add to destination - insert after the destination subsection
-      const finalSections = updatedSections.map(section => {
-        if (section.id === destSection.id) {
-          const newSubsections = [...section.subsections];
-          newSubsections.splice(destSubIndex + 1, 0, sourceSub);
-          return {
-            ...section,
-            subsections: newSubsections
-          };
-        }
-        return section;
-      });
-
-      setSections(finalSections);
+        });
+        setSections(updatedSections);
+      } else {
+        // Different subsections - move topic box
+        const updatedSections = sections.map(section => {
+          // Remove from source
+          if (section.id === sourceSection.id) {
+            return {
+              ...section,
+              subsections: section.subsections.map(sub => {
+                if (sub.id === sourceSubId) {
+                  return {
+                    ...sub,
+                    topicBoxes: sub.topicBoxes.filter((_, idx) => idx !== source.index)
+                  };
+                }
+                return sub;
+              })
+            };
+          }
+          // Add to destination
+          if (section.id === destSection.id) {
+            return {
+              ...section,
+              subsections: section.subsections.map(sub => {
+                if (sub.id === destSubId) {
+                  const newTopicBoxes = [...sub.topicBoxes];
+                  newTopicBoxes.splice(destination.index, 0, sourceTopicBox);
+                  return { ...sub, topicBoxes: newTopicBoxes };
+                }
+                return sub;
+              })
+            };
+          }
+          return section;
+        });
+        setSections(updatedSections);
+      }
       return;
     }
   };
 
   // ─── Course Picker ────────────────────────────────────────────────────
   const handlePickCourse = (curriculum) => {
+    // Transform curriculum data
     const transformed = (curriculum.outline?.sections || curriculum.sections || []).map(section => ({
       id: section.id,
       title: section.title,
       description: section.description || '',
-      subsections: (section.subsections || []).map(sub => ({
-        id: sub.id,
-        title: sub.title,
-        description: sub.description || '',
-        duration_minutes: sub.duration_minutes || 0,
-        pla_pillars: sub.pla_pillars || [],
-        learning_objectives: sub.learning_objectives || [],
-        content_keywords: sub.content_keywords || [],
-        what_must_be_covered: sub.what_must_be_covered || '',
-        video_resources: sub.video_resources || [],
-        worksheets: sub.worksheets || [],
-        activities: sub.activities || []
-      }))
+      subsections: (section.subsections || []).map(sub => {
+        // Check if already has topicBoxes structure
+        if (sub.topicBoxes && Array.isArray(sub.topicBoxes)) {
+          return sub;
+        }
+        
+        // Old structure - migrate to topicBoxes
+        return {
+          id: sub.id,
+          title: sub.title,
+          description: sub.description || '',
+          topicBoxes: [{
+            id: `topic-${sub.id}-loaded`,
+            title: sub.title,
+            description: sub.description || '',
+            duration_minutes: sub.duration_minutes || 0,
+            pla_pillars: sub.pla_pillars || [],
+            learning_objectives: sub.learning_objectives || [],
+            content_keywords: sub.content_keywords || [],
+            video_resources: sub.video_resources || [],
+            worksheets: sub.worksheets || [],
+            activities: sub.activities || []
+          }]
+        };
+      })
     }));
     setCourseName(curriculum.courseName || '');
     setSections(transformed);
@@ -233,7 +323,7 @@ const CourseWorkspace = () => {
     }
   };
 
-  // ─── Section / Subsection CRUD ────────────────────────────────────────
+  // ─── Section CRUD ─────────────────────────────────────────────────────
   const addSection = () => {
     setSections([...sections, {
       id: `section-${Date.now()}`,
@@ -266,6 +356,7 @@ const CourseWorkspace = () => {
     setSections(sections.filter(s => s.id !== sectionId));
   };
 
+  // ─── Subsection CRUD ──────────────────────────────────────────────────
   const addSubsection = (sectionId) => {
     setSections(sections.map(section => {
       if (section.id !== sectionId) return section;
@@ -276,14 +367,7 @@ const CourseWorkspace = () => {
           id: `sub-${Date.now()}-${idx}`,
           title: `Subsection ${idx}`,
           description: '',
-          duration_minutes: 15,
-          pla_pillars: [],
-          learning_objectives: [],
-          content_keywords: [],
-          what_must_be_covered: '',
-          video_resources: [],
-          worksheets: [],
-          activities: []
+          topicBoxes: []  // NEW: Empty array for topic boxes
         }]
       };
     }));
@@ -323,21 +407,91 @@ const CourseWorkspace = () => {
     }));
   };
 
+  // ─── Topic Box CRUD ───────────────────────────────────────────────────
+  const addTopicBox = (sectionId, subsectionId) => {
+    setSections(sections.map(section => {
+      if (section.id !== sectionId) return section;
+      
+      return {
+        ...section,
+        subsections: (section.subsections || []).map(sub => {
+          if (sub.id !== subsectionId) return sub;
+          
+          const idx = (sub.topicBoxes || []).length + 1;
+          return {
+            ...sub,
+            topicBoxes: [...(sub.topicBoxes || []), {
+              id: `topic-${Date.now()}-${idx}`,
+              title: `Topic ${idx}`,
+              description: '',
+              duration_minutes: 20,
+              pla_pillars: [],
+              learning_objectives: [],
+              content_keywords: [],
+              video_resources: [],
+              worksheets: [],
+              activities: []
+            }]
+          };
+        })
+      };
+    }));
+  };
+
+  const updateTopicBoxTitle = (sectionId, subsectionId, topicBoxId, newTitle) => {
+    setSections(sections.map(section => {
+      if (section.id !== sectionId) return section;
+      
+      return {
+        ...section,
+        subsections: (section.subsections || []).map(sub => {
+          if (sub.id !== subsectionId) return sub;
+          
+          return {
+            ...sub,
+            topicBoxes: (sub.topicBoxes || []).map(topic =>
+              topic.id === topicBoxId ? { ...topic, title: newTitle } : topic
+            )
+          };
+        })
+      };
+    }));
+  };
+
+  const removeTopicBox = (sectionId, subsectionId, topicBoxId) => {
+    setSections(sections.map(section => {
+      if (section.id !== sectionId) return section;
+      
+      return {
+        ...section,
+        subsections: (section.subsections || []).map(sub => {
+          if (sub.id !== subsectionId) return sub;
+          
+          return {
+            ...sub,
+            topicBoxes: (sub.topicBoxes || []).filter(t => t.id !== topicBoxId)
+          };
+        })
+      };
+    }));
+  };
+
   const toggleSection = (sectionId) => {
     setCollapsedSections(prev => ({ ...prev, [sectionId]: !prev[sectionId] }));
   };
+  
   const toggleSubsection = (subId) => {
-      setCollapsedSubsections(prev => ({ ...prev, [subId]: !prev[subId] }));
-    };
+    setCollapsedSubsections(prev => ({ ...prev, [subId]: !prev[subId] }));
+  };
 
-  // Delete handlers with confirmation
+  // ─── Delete Confirmation ──────────────────────────────────────────────
   const confirmDeleteSection = (sectionId) => {
     const section = sections.find(s => s.id === sectionId);
     setDeleteConfirm({
       type: 'section',
       id: sectionId,
       title: 'Delete Section?',
-      message: `Are you sure you want to delete "${section?.title || 'this section'}"? This will also delete all subsections and resources within it.`
+      message: `Are you sure you want to delete "${section?.title || 'this section'}"? This will also delete all subsections and topic boxes within it.`
     });
   };
 
@@ -349,7 +503,18 @@ const CourseWorkspace = () => {
       id: subId,
       sectionId: sectionId,
       title: 'Delete Subsection?',
-      message: `Are you sure you want to delete "${subsection?.title || 'this subsection'}"? This will also delete all resources within it.`
+      message: `Are you sure you want to delete "${subsection?.title || 'this subsection'}"? This will also delete all topic boxes within it.`
+    });
+  };
+
+  const confirmDeleteTopicBox = (sectionId, subsectionId, topicBoxId) => {
+    setDeleteConfirm({
+      type: 'topicBox',
+      id: topicBoxId,
+      sectionId: sectionId,
+      subsectionId: subsectionId,
+      title: 'Delete Topic Box?',
+      message: `Are you sure you want to delete this topic box? This will also delete all resources within it.`
     });
   };
 
@@ -360,45 +525,158 @@ const CourseWorkspace = () => {
       removeSection(deleteConfirm.id);
     } else if (deleteConfirm.type === 'subsection') {
       removeSubsection(deleteConfirm.sectionId, deleteConfirm.id);
+    } else if (deleteConfirm.type === 'topicBox') {
+      removeTopicBox(deleteConfirm.sectionId, deleteConfirm.subsectionId, deleteConfirm.id);
     }
     
     setDeleteConfirm(null);
   };
 
+  // ─── AI Generation Handlers ───────────────────────────────────────────
+  const handleGenerateSections = async ({ level, context, userGuidance, count }) => {
+    try {
+      const result = await generateCurriculumContent({
+        level,
+        context,
+        userGuidance,
+        count,
+        teacherUid: currentUser.uid
+      });
+
+      if (result.success && result.items) {
+        const newSections = result.items.map(item => ({
+          id: item.id,
+          title: item.title,
+          description: item.description,
+          subsections: []
+        }));
+        
+        setSections([...sections, ...newSections]);
+        console.log(`✅ Generated ${result.items.length} sections`);
+      }
+    } catch (error) {
+      console.error('Failed to generate sections:', error);
+      alert('Failed to generate sections. Please try again.');
+    }
+  };
+
+  const handleGenerateSubsections = async (sectionId, { level, context, userGuidance, count }) => {
+    try {
+      const result = await generateCurriculumContent({
+        level,
+        context,
+        userGuidance,
+        count,
+        teacherUid: currentUser.uid
+      });
+
+      if (result.success && result.items) {
+        setSections(sections.map(section => {
+          if (section.id !== sectionId) return section;
+          
+          const newSubsections = result.items.map(item => ({
+            id: item.id,
+            title: item.title,
+            description: item.description,
+            topicBoxes: []  // NEW: Start with empty topic boxes
+          }));
+          
+          return {
+            ...section,
+            subsections: [...(section.subsections || []), ...newSubsections]
+          };
+        }));
+        
+        console.log(`✅ Generated ${result.items.length} subsections for section ${sectionId}`);
+      }
+    } catch (error) {
+      console.error('Failed to generate subsections:', error);
+      alert('Failed to generate subsections. Please try again.');
+    }
+  };
+
+  const handleGenerateTopicBoxes = async (sectionId, subsectionId, { level, context, userGuidance, count }) => {
+    try {
+      const result = await generateCurriculumContent({
+        level,
+        context,
+        userGuidance,
+        count,
+        teacherUid: currentUser.uid
+      });
+
+      if (result.success && result.items) {
+        setSections(sections.map(section => {
+          if (section.id !== sectionId) return section;
+          
+          return {
+            ...section,
+            subsections: (section.subsections || []).map(sub => {
+              if (sub.id !== subsectionId) return sub;
+              
+              const newTopicBoxes = result.items.map(item => ({
+                id: item.id,
+                title: item.title,
+                description: item.description,
+                duration_minutes: item.duration_minutes || 20,
+                pla_pillars: item.pla_pillars || [],
+                learning_objectives: item.learning_objectives || [],
+                content_keywords: item.content_keywords || [],
+                video_resources: [],
+                worksheets: [],
+                activities: []
+              }));
+              
+              return {
+                ...sub,
+                topicBoxes: [...(sub.topicBoxes || []), ...newTopicBoxes]
+              };
+            })
+          };
+        }));
+        
+        console.log(`✅ Generated ${result.items.length} topic boxes for subsection ${subsectionId}`);
+      }
+    } catch (error) {
+      console.error('Failed to generate topic boxes:', error);
+      alert('Failed to generate topic boxes. Please try again.');
+    }
+  };
+
   // ─── Topic Details Modal ──────────────────────────────────────────────
-  const handleTopicClick = (sub) => {
-    setSelectedTopic(sub);
+  const handleTopicClick = (topic) => {
+    setSelectedTopic(topic);
     setIsModalOpen(true);
   };
 
   // ─── Video Generation ─────────────────────────────────────────────────
-  const generateVideosFromBackend = async (subsection) => {
+  const generateVideosFromBackend = async (topicBox) => {
     try {
-      console.log('🎬 Generating videos for:', subsection.title);
+      console.log('🎬 Generating videos for:', topicBox.title);
       const response = await fetch('http://localhost:8000/api/generate-videos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          topicId: subsection.id,
-          topicTitle: subsection.title,
+          topicId: topicBox.id,
+          topicTitle: topicBox.title,
           topicData: {
-            title: subsection.title,
-            duration: `${subsection.duration_minutes} min`,
-            description: subsection.description,
-            learningObjectives: subsection.learning_objectives || [],
-            subtopics: subsection.content_keywords || [],
+            title: topicBox.title,
+            duration: `${topicBox.duration_minutes} min`,
+            description: topicBox.description,
+            learningObjectives: topicBox.learning_objectives || [],
+            subtopics: topicBox.content_keywords || [],
             subject: formData.subject,
             courseName: formData.courseName,
             courseTopic: formData.topic
           },
-          sectionId: subsection.id,
+          sectionId: topicBox.id,
           gradeLevel: formData.class,
           courseId: curriculumId || 'new-course'
         })
       });
       const result = await response.json();
       if (result.success) {
-        setVideosByTopic(prev => ({ ...prev, [subsection.id]: result.videos }));
+        setVideosByTopic(prev => ({ ...prev, [topicBox.id]: result.videos }));
         console.log('✅ Videos received:', result.videos.length);
       } else {
         alert('Failed to generate videos');
@@ -410,23 +688,31 @@ const CourseWorkspace = () => {
   };
 
   // ─── Hands-On Resource Generation ─────────────────────────────────────
-  const generateResource = async (subsectionId, resourceType) => {
-    const allSubs = sections.flatMap(s => s.subsections || []);
-    const sub = allSubs.find(s => s.id === subsectionId);
-    if (!sub) return;
+  const generateResource = async (topicBoxId, resourceType) => {
+    // Find the topic box
+    let topicBox = null;
+    for (const section of sections) {
+      for (const sub of section.subsections || []) {
+        topicBox = (sub.topicBoxes || []).find(t => t.id === topicBoxId);
+        if (topicBox) break;
+      }
+      if (topicBox) break;
+    }
+    
+    if (!topicBox) return;
 
     try {
-      console.log(`🔨 Generating ${resourceType} for:`, sub.title);
+      console.log(`🔨 Generating ${resourceType} for:`, topicBox.title);
       const response = await fetch('http://localhost:8000/api/generate-resource', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          topicId: subsectionId,
+          topicId: topicBoxId,
           resourceType,
           gradeLevel: formData.class,
-          topicTitle: sub.title,
-          topicDescription: sub.description || '',
-          learningObjectives: sub.learning_objectives || []
+          topicTitle: topicBox.title,
+          topicDescription: topicBox.description || '',
+          learningObjectives: topicBox.learning_objectives || []
         })
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -434,7 +720,7 @@ const CourseWorkspace = () => {
       console.log(`✅ ${resourceType} generated:`, resource);
       setHandsOnResources(prev => ({
         ...prev,
-        [subsectionId]: [...(prev[subsectionId] || []), resource]
+        [topicBoxId]: [...(prev[topicBoxId] || []), resource]
       }));
       alert(`${resourceType.charAt(0).toUpperCase() + resourceType.slice(1)} generated!`);
     } catch (error) {
@@ -452,22 +738,25 @@ const CourseWorkspace = () => {
         ...section,
         subsections: (section.subsections || []).map(sub => ({
           ...sub,
-          video_resources: videosByTopic[sub.id] || sub.video_resources || [],
-          worksheets: handsOnResources[sub.id]?.filter(r => r.type === 'worksheet') || sub.worksheets || [],
-          activities: handsOnResources[sub.id]?.filter(r => r.type === 'activity') || sub.activities || []
+          topicBoxes: (sub.topicBoxes || []).map(topic => ({
+            ...topic,
+            video_resources: videosByTopic[topic.id] || topic.video_resources || [],
+            worksheets: handsOnResources[topic.id]?.filter(r => r.type === 'worksheet') || topic.worksheets || [],
+            activities: handsOnResources[topic.id]?.filter(r => r.type === 'activity') || topic.activities || []
+          }))
         }))
       }));
 
       const courseData = {
-          courseName,
-          class: formData?.class || '',
-          subject: formData?.subject || '',
-          topic: formData?.topic || '',
-          timeDuration: formData?.timeDuration || '',
-          objectives: formData?.objectives || '',
-          sections: sectionsForSave,
-          outline: { sections: sectionsForSave }
-        };
+        courseName,
+        class: formData?.class || '',
+        subject: formData?.subject || '',
+        topic: formData?.topic || '',
+        timeDuration: formData?.timeDuration || '',
+        objectives: formData?.objectives || '',
+        sections: sectionsForSave,
+        outline: { sections: sectionsForSave }
+      };
 
       const hasExistingId = curriculumId && curriculumId !== 'new-course';
       if (hasExistingId) courseData.courseId = curriculumId;
@@ -518,7 +807,6 @@ const CourseWorkspace = () => {
 
   // ─── SUB-COMPONENTS (inline, scoped) ──────────────────────────────────
 
-  // Pill tag
   const Pill = ({ label, color }) => (
     <span style={{
       display: 'inline-block',
@@ -533,7 +821,6 @@ const CourseWorkspace = () => {
     </span>
   );
 
-  // Small icon button (trash / collapse)
   const IconBtn = ({ onClick, children, color = colors.dangerBtn, title }) => (
     <button
       onClick={onClick}
@@ -548,7 +835,6 @@ const CourseWorkspace = () => {
     </button>
   );
 
-  // Editable field with click-to-edit functionality
   const EditableField = ({ 
     value, 
     onChange, 
@@ -625,7 +911,6 @@ const CourseWorkspace = () => {
     );
   };
 
-  // Descriptor box (editable description area)
   const DescriptorBox = ({ value, onChange, placeholder, fieldKey }) => (
     <div style={{
       border: '2px dashed #c4b5fd',
@@ -649,7 +934,6 @@ const CourseWorkspace = () => {
     </div>
   );
 
-  // Confirmation dialog for deletions
   const ConfirmDialog = ({ isOpen, onConfirm, onCancel, title, message }) => {
     if (!isOpen) return null;
     
@@ -713,11 +997,11 @@ const CourseWorkspace = () => {
     );
   };
 
-  // ─── 3-col row for one subsection (TOPIC BOX) ─────────────────────────
-  const SubsectionRow = ({ sub, sectionId, dragHandleProps }) => {
-    const videos = videosByTopic[sub.id] || [];
-    const worksheets = (handsOnResources[sub.id] || []).filter(r => r.type === 'worksheet');
-    const activities = (handsOnResources[sub.id] || []).filter(r => r.type === 'activity');
+  // ─── Topic Box Row Component ──────────────────────────────────────────
+  const TopicBoxRow = ({ topicBox, sectionId, subsectionId, dragHandleProps }) => {
+    const videos = videosByTopic[topicBox.id] || [];
+    const worksheets = (handsOnResources[topicBox.id] || []).filter(r => r.type === 'worksheet');
+    const activities = (handsOnResources[topicBox.id] || []).filter(r => r.type === 'activity');
 
     return (
       <div style={{
@@ -729,9 +1013,10 @@ const CourseWorkspace = () => {
         overflow: 'hidden',
         backgroundColor: colors.card,
         boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-        position: 'relative'
+        position: 'relative',
+        marginBottom: '12px'
       }}>
-        {/* Drag handle for entire topic box */}
+        {/* Drag handle */}
         <div
           {...dragHandleProps}
           style={{
@@ -750,16 +1035,23 @@ const CourseWorkspace = () => {
           <GripVertical size={16} style={{ color: '#9ca3af' }} />
         </div>
 
-        {/* ── Col 1: Topic Name ── */}
+        {/* Col 1: Topic Info */}
         <div style={{ padding: '14px', borderRight: '1px solid #f3f4f6' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '6px' }}>
-            <p style={{ margin: 0, fontWeight: '600', fontSize: '14px', color: colors.textPrimary, cursor: 'pointer', flex: 1, paddingLeft: '24px' }}
-              onClick={() => handleTopicClick(sub)}
-            >
-              {sub.title}
-            </p>
+            <EditableField
+              value={topicBox.title}
+              onChange={val => updateTopicBoxTitle(sectionId, subsectionId, topicBox.id, val)}
+              fieldKey={`topic-title-${topicBox.id}`}
+              placeholder="Topic title"
+              style={{ flex: 1, paddingLeft: '24px' }}
+              inputStyle={{
+                fontSize: '14px',
+                fontWeight: '600',
+                color: colors.textPrimary
+              }}
+            />
             <button
-              onClick={() => confirmDeleteSubsection(sectionId, sub.id)}
+              onClick={() => confirmDeleteTopicBox(sectionId, subsectionId, topicBox.id)}
               style={{
                 background: 'none',
                 border: 'none',
@@ -769,32 +1061,32 @@ const CourseWorkspace = () => {
                 alignItems: 'center',
                 color: colors.dangerBtn
               }}
-              title="Delete subsection"
+              title="Delete topic box"
             >
               <Trash2 size={14} />
             </button>
           </div>
 
-          {(sub.learning_objectives || []).length > 0 && (
+          {(topicBox.learning_objectives || []).length > 0 && (
             <ul style={{ margin: '8px 0 8px 24px', paddingLeft: '16px', fontSize: '12px', color: colors.textSecondary }}>
-              {sub.learning_objectives.map((obj, i) => (
+              {topicBox.learning_objectives.map((obj, i) => (
                 <li key={i} style={{ marginBottom: '2px' }}>{obj}</li>
               ))}
             </ul>
           )}
 
           <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '8px', paddingLeft: '24px' }}>
-            <Pill label={`${sub.duration_minutes || 0} min`} color={{ bg: '#f3e8ff', text: '#7c3aed' }} />
-            <Pill label={(sub.pla_pillars || [])[0] || 'Knowledge'} />
+            <Pill label={`${topicBox.duration_minutes || 0} min`} color={{ bg: '#f3e8ff', text: '#7c3aed' }} />
+            <Pill label={(topicBox.pla_pillars || [])[0] || 'Knowledge'} />
           </div>
         </div>
 
-        {/* ── Col 2: Video Resources ── */}
+        {/* Col 2: Videos */}
         <div style={{ padding: '14px', borderRight: '1px solid #f3f4f6' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
             <p style={{ margin: 0, fontSize: '12px', fontWeight: '600', color: colors.textSecondary }}>📹 Resources</p>
             {videos.length > 0 && (
-              <button onClick={() => generateVideosFromBackend(sub)} style={{
+              <button onClick={() => generateVideosFromBackend(topicBox)} style={{
                 padding: '3px 8px', backgroundColor: 'transparent', color: colors.videoBtn,
                 border: `1px solid ${colors.videoBtn}`, borderRadius: '4px',
                 cursor: 'pointer', fontSize: '11px', fontWeight: '600'
@@ -803,7 +1095,7 @@ const CourseWorkspace = () => {
           </div>
 
           {videos.length === 0 ? (
-            <button onClick={() => generateVideosFromBackend(sub)} style={{
+            <button onClick={() => generateVideosFromBackend(topicBox)} style={{
               width: '100%', padding: '8px', backgroundColor: colors.videoBtn,
               color: 'white', border: 'none', borderRadius: '6px',
               cursor: 'pointer', fontSize: '13px', fontWeight: '600'
@@ -841,22 +1133,16 @@ const CourseWorkspace = () => {
               </div>
             </div>
           )}
-
-          <div style={{ marginTop: '10px' }}>
-            <Pill label={`${sub.duration_minutes || 0} min`} color={{ bg: '#f3e8ff', text: '#7c3aed' }} />
-            {(sub.pla_pillars || [])[0] && <Pill label={(sub.pla_pillars || [])[0]} />}
-          </div>
         </div>
 
-        {/* ── Col 3: Hands-On Resources ── */}
+        {/* Col 3: Hands-On */}
         <div style={{ padding: '14px' }}>
           <p style={{ margin: '0 0 10px', fontSize: '12px', fontWeight: '600', color: colors.textSecondary }}>📝 Hands-On resources</p>
 
-          {/* Worksheets */}
           <div style={{ marginBottom: '10px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
               <p style={{ margin: 0, fontSize: '11px', color: colors.textSecondary }}>📄 Worksheets</p>
-              <button onClick={() => generateResource(sub.id, 'worksheet')} style={{
+              <button onClick={() => generateResource(topicBox.id, 'worksheet')} style={{
                 padding: '2px 8px', backgroundColor: colors.worksheetBtn,
                 color: 'white', border: 'none', borderRadius: '4px',
                 cursor: 'pointer', fontSize: '11px', fontWeight: '600'
@@ -872,11 +1158,10 @@ const CourseWorkspace = () => {
             ))}
           </div>
 
-          {/* Activities */}
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
               <p style={{ margin: 0, fontSize: '11px', color: colors.textSecondary }}>🎯 Activities</p>
-              <button onClick={() => generateResource(sub.id, 'activity')} style={{
+              <button onClick={() => generateResource(topicBox.id, 'activity')} style={{
                 padding: '2px 8px', backgroundColor: colors.activityBtn,
                 color: 'white', border: 'none', borderRadius: '4px',
                 cursor: 'pointer', fontSize: '11px', fontWeight: '600'
@@ -891,17 +1176,12 @@ const CourseWorkspace = () => {
               </div>
             ))}
           </div>
-
-          <div style={{ marginTop: '10px' }}>
-            <Pill label={`${sub.duration_minutes || 0} min`} color={{ bg: '#f3e8ff', text: '#7c3aed' }} />
-            {(sub.pla_pillars || [])[0] && <Pill label={(sub.pla_pillars || [])[0]} />}
-          </div>
         </div>
       </div>
     );
   };
 
-  // ─── Full Section block ───────────────────────────────────────────────
+  // ─── Section Block Component ──────────────────────────────────────────
   const SectionBlock = ({ section, index, dragHandleProps }) => {
     if (section.type === 'break') {
       return (
@@ -945,7 +1225,7 @@ const CourseWorkspace = () => {
         backgroundColor: colors.card,
         overflow: 'hidden'
       }}>
-        {/* Section header row */}
+        {/* Section header */}
         <div style={{
           backgroundColor: colors.sectionBg,
           padding: '10px 16px',
@@ -1001,7 +1281,6 @@ const CourseWorkspace = () => {
 
         {!isCollapsed && (
           <div style={{ padding: '14px 16px' }}>
-            {/* Section descriptor box */}
             <DescriptorBox
               value={section.description}
               onChange={val => updateSectionDescription(section.id, val)}
@@ -1009,7 +1288,7 @@ const CourseWorkspace = () => {
               fieldKey={`section-desc-${section.id}`}
             />
 
-            {/* Subsections droppable area */}
+            {/* Subsections */}
             <Droppable droppableId={`subsections-${section.id}`} type="SUBSECTION">
               {(provided) => (
                 <div
@@ -1017,147 +1296,233 @@ const CourseWorkspace = () => {
                   {...provided.droppableProps}
                 >
                   {(section.subsections || []).map((sub, subIdx) => (
-                      <Draggable
-                        key={sub.id}
-                        draggableId={sub.id}
-                        index={subIdx}
-                      >
-                        {(provided, snapshot) => {
-                          const isSubCollapsed = collapsedSubsections[sub.id];
-      
-                          return (
-                            <div
-                              ref={provided.innerRef}
-                              {...provided.draggableProps}
-                              style={{
-                                ...provided.draggableProps.style,
-                                marginBottom: '16px',
-                                opacity: snapshot.isDragging ? 0.8 : 1,
-                                border: '1px solid #e5e7eb',
-                                borderRadius: '8px',
-                                backgroundColor: '#fafafa',
-                                overflow: 'hidden'
-                              }}
-                            >
-                              {/* Subsection header with collapse button */}
-                                <div style={{
+                    <Draggable
+                      key={sub.id}
+                      draggableId={sub.id}
+                      index={subIdx}
+                    >
+                      {(provided, snapshot) => {
+                        const isSubCollapsed = collapsedSubsections[sub.id];
+    
+                        return (
+                          <div
+                            ref={provided.innerRef}
+                            {...provided.draggableProps}
+                            style={{
+                              ...provided.draggableProps.style,
+                              marginBottom: '16px',
+                              opacity: snapshot.isDragging ? 0.8 : 1,
+                              border: '1px solid #e5e7eb',
+                              borderRadius: '8px',
+                              backgroundColor: '#fafafa',
+                              overflow: 'hidden'
+                            }}
+                          >
+                            {/* Subsection header */}
+                            <div style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              padding: '8px 12px',
+                              backgroundColor: '#f9fafb',
+                              borderBottom: isSubCollapsed ? 'none' : '1px solid #e5e7eb'
+                            }}>
+                              <div {...provided.dragHandleProps} style={{ cursor: 'grab', display: 'flex', alignItems: 'center' }}>
+                                <GripVertical size={16} style={{ color: '#9ca3af' }} />
+                              </div>
+
+                              <button onClick={() => toggleSubsection(sub.id)} style={{
+                                background: 'none', border: 'none', cursor: 'pointer',
+                                fontSize: '12px', color: colors.accent, padding: 0
+                              }}>
+                                {isSubCollapsed ? '▶' : '▼'}
+                              </button>
+
+                              <span style={{ fontSize: '11px', fontWeight: '700', color: colors.accent }}>
+                                Subsection {index + 1}.{subIdx + 1}
+                              </span>
+
+                              <EditableField
+                                value={sub.title}
+                                onChange={val => updateSubsectionTitle(section.id, sub.id, val)}
+                                fieldKey={`subsection-title-${sub.id}`}
+                                placeholder="Subsection title"
+                                inputStyle={{
+                                  fontSize: '13px',
+                                  fontWeight: '600',
+                                  color: colors.textPrimary
+                                }}
+                              />
+
+                              <button
+                                onClick={() => confirmDeleteSubsection(section.id, sub.id)}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  padding: '4px',
                                   display: 'flex',
                                   alignItems: 'center',
-                                  gap: '8px',
-                                  padding: '8px 12px',
-                                  backgroundColor: '#f9fafb',
-                                  borderBottom: isSubCollapsed ? 'none' : '1px solid #e5e7eb'
-                                }}>
-                                  <div {...provided.dragHandleProps} style={{ cursor: 'grab', display: 'flex', alignItems: 'center' }}>
-                                    <GripVertical size={16} style={{ color: '#9ca3af' }} />
-                                  </div>
-  
-                                  <button onClick={() => toggleSubsection(sub.id)} style={{
-                                    background: 'none', border: 'none', cursor: 'pointer',
-                                    fontSize: '12px', color: colors.accent, padding: 0
-                                  }}>
-                                    {isSubCollapsed ? '▶' : '▼'}
-                                  </button>
-  
-                                  <span style={{ fontSize: '11px', fontWeight: '700', color: colors.accent }}>
-                                    Subsection {index + 1}.{subIdx + 1}
-                                  </span>
-  
-                                  <EditableField
-                                    value={sub.title}
-                                    onChange={val => updateSubsectionTitle(section.id, sub.id, val)}
-                                    fieldKey={`subsection-title-${sub.id}`}
-                                    placeholder="Subsection title"
-                                    inputStyle={{
-                                      fontSize: '13px',
-                                      fontWeight: '600',
-                                      color: colors.textPrimary
-                                    }}
-                                  />
-
-                                  <button
-                                    onClick={() => confirmDeleteSubsection(section.id, sub.id)}
-                                    style={{
-                                      background: 'none',
-                                      border: 'none',
-                                      cursor: 'pointer',
-                                      padding: '4px',
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      color: colors.dangerBtn,
-                                      marginLeft: 'auto'
-                                    }}
-                                    title="Delete subsection"
-                                  >
-                                    <Trash2 size={14} />
-                                  </button>
-                                </div>
-
-                              {/* Collapsible content */}
-                              {!isSubCollapsed && (
-                                <div style={{ padding: '12px' }}>
-                                  {/* Subsection descriptor box */}
-                                  <DescriptorBox
-                                    value={sub.description}
-                                    onChange={val => updateSubsectionDescription(section.id, sub.id, val)}
-                                    placeholder="Subsection description…"
-                                    fieldKey={`subsection-desc-${sub.id}`}
-                                  />
-
-                                  {/* Droppable area for topic box */}
-                                  <Droppable droppableId={`topicbox-${sub.id}`} type="TOPICBOX">
-                                    {(provided) => (
-                                      <div
-                                        ref={provided.innerRef}
-                                        {...provided.droppableProps}
-                                      >
-                                        <Draggable
-                                          draggableId={`topicbox-${sub.id}`}
-                                          index={0}
-                                        >
-                                          {(provided, snapshot) => (
-                                            <div
-                                              ref={provided.innerRef}
-                                              {...provided.draggableProps}
-                                              style={{
-                                                ...provided.draggableProps.style,
-                                                opacity: snapshot.isDragging ? 0.9 : 1
-                                              }}
-                                            >
-                                              {/* 3-column topic row */}
-                                              <SubsectionRow 
-                                                sub={sub} 
-                                                sectionId={section.id}
-                                                dragHandleProps={provided.dragHandleProps}
-                                              />
-                                            </div>
-                                          )}
-                                        </Draggable>
-                                        {provided.placeholder}
-                                      </div>
-                                    )}
-                                  </Droppable>
-                                </div>
-                              )}
+                                  color: colors.dangerBtn,
+                                  marginLeft: 'auto'
+                                }}
+                                title="Delete subsection"
+                              >
+                                <Trash2 size={14} />
+                              </button>
                             </div>
-                          );
-                        }}
-                      </Draggable>
-                    ))}
+
+                            {/* Subsection content */}
+                            {!isSubCollapsed && (
+                              <div style={{ padding: '12px' }}>
+                                <DescriptorBox
+                                  value={sub.description}
+                                  onChange={val => updateSubsectionDescription(section.id, sub.id, val)}
+                                  placeholder="Subsection description…"
+                                  fieldKey={`subsection-desc-${sub.id}`}
+                                />
+
+                                {/* Topic Boxes Droppable */}
+                                <Droppable droppableId={`topicboxes-${sub.id}`} type="TOPICBOX">
+                                  {(provided) => (
+                                    <div
+                                      ref={provided.innerRef}
+                                      {...provided.droppableProps}
+                                      style={{ minHeight: '20px' }}
+                                    >
+                                      {(sub.topicBoxes || []).length === 0 ? (
+                                        <div style={{
+                                          textAlign: 'center',
+                                          padding: '20px',
+                                          border: '2px dashed #e5e7eb',
+                                          borderRadius: '8px',
+                                          backgroundColor: '#fafafa',
+                                          color: colors.textSecondary,
+                                          fontSize: '13px',
+                                          marginBottom: '12px'
+                                        }}>
+                                          No topic boxes yet. Click "+ Add Topic Box" or use AI to generate.
+                                        </div>
+                                      ) : (
+                                        (sub.topicBoxes || []).map((topic, topicIdx) => (
+                                          <Draggable
+                                            key={topic.id}
+                                            draggableId={topic.id}
+                                            index={topicIdx}
+                                          >
+                                            {(provided, snapshot) => (
+                                              <div
+                                                ref={provided.innerRef}
+                                                {...provided.draggableProps}
+                                                style={{
+                                                  ...provided.draggableProps.style,
+                                                  opacity: snapshot.isDragging ? 0.9 : 1
+                                                }}
+                                              >
+                                                <TopicBoxRow
+                                                  topicBox={topic}
+                                                  sectionId={section.id}
+                                                  subsectionId={sub.id}
+                                                  dragHandleProps={provided.dragHandleProps}
+                                                />
+                                              </div>
+                                            )}
+                                          </Draggable>
+                                        ))
+                                      )}
+                                      {provided.placeholder}
+                                    </div>
+                                  )}
+                                </Droppable>
+
+                                {/* Add Topic Box Buttons */}
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                  <button onClick={() => addTopicBox(section.id, sub.id)} style={{
+                                    flex: 1, padding: '8px',
+                                    backgroundColor: 'transparent', color: colors.accent,
+                                    border: `1px dashed ${colors.sectionBorder}`, borderRadius: '6px',
+                                    cursor: 'pointer', fontSize: '13px', fontWeight: '600'
+                                  }}>
+                                    ⊕ Add Topic Box
+                                  </button>
+                                  
+                                  <div style={{ flex: 1 }}>
+                                    <AIGenerateButton
+                                      level="topics"
+                                      context={{
+                                        course: {
+                                          title: courseName,
+                                          grade: formData?.class || ''
+                                        },
+                                        current_section: {
+                                          title: section.title,
+                                          description: section.description
+                                        },
+                                        subsection: {
+                                          title: sub.title,
+                                          description: sub.description,
+                                          existingTopics: (sub.topicBoxes || []).map(t => ({
+                                            title: t.title,
+                                            description: t.description
+                                          }))
+                                        }
+                                      }}
+                                      onGenerate={(params) => handleGenerateTopicBoxes(section.id, sub.id, params)}
+                                      count={1}
+                                      buttonText="✨ Generate Topic Box"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }}
+                    </Draggable>
+                  ))}
                   {provided.placeholder}
                 </div>
               )}
             </Droppable>
 
-            {/* + Add Subsection button */}
-            <button onClick={() => addSubsection(section.id)} style={{
-              width: '100%', padding: '8px', marginTop: '4px',
-              backgroundColor: 'transparent', color: colors.accent,
-              border: `1px dashed ${colors.sectionBorder}`, borderRadius: '6px',
-              cursor: 'pointer', fontSize: '13px', fontWeight: '600'
-            }}>
-              ⊕ Add Subsection
-            </button>
+            {/* Add Subsection Buttons */}
+            <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+              <button onClick={() => addSubsection(section.id)} style={{
+                flex: 1, padding: '8px',
+                backgroundColor: 'transparent', color: colors.accent,
+                border: `1px dashed ${colors.sectionBorder}`, borderRadius: '6px',
+                cursor: 'pointer', fontSize: '13px', fontWeight: '600'
+              }}>
+                ⊕ Add Subsection
+              </button>
+              
+              <div style={{ flex: 1 }}>
+                <AIGenerateButton
+                  level="subsections"
+                  context={{
+                    course: {
+                      title: courseName,
+                      description: formData?.objectives || '',
+                      grade: formData?.class || ''
+                    },
+                    all_section_names: sections
+                      .filter(s => s.type !== 'break')
+                      .map(s => s.title),
+                    current_section: {
+                      title: section.title,
+                      description: section.description,
+                      existingSubsections: (section.subsections || []).map(sub => ({
+                        title: sub.title,
+                        description: sub.description
+                      }))
+                    }
+                  }}
+                  onGenerate={(params) => handleGenerateSubsections(section.id, params)}
+                  count={1}
+                  buttonText="✨ Generate Subsection"
+                />
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -1168,7 +1533,7 @@ const CourseWorkspace = () => {
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: colors.bg }}>
 
-      {/* ── Top Bar ── */}
+      {/* Top Bar */}
       <div style={{
         padding: '12px 28px', borderBottom: '1px solid #e5e7eb',
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -1211,7 +1576,7 @@ const CourseWorkspace = () => {
         </div>
       </div>
 
-      {/* ── Action bar: + Section / + Break ── */}
+      {/* Action bar */}
       <div style={{
         padding: '10px 28px', backgroundColor: 'white',
         borderBottom: '1px solid #f3f4f6',
@@ -1231,11 +1596,12 @@ const CourseWorkspace = () => {
 
         <span style={{ fontSize: '12px', color: '#9ca3af', marginLeft: '12px' }}>
           {sections.filter(s => s.type !== 'break').length} section{sections.filter(s => s.type !== 'break').length !== 1 ? 's' : ''} •{' '}
-          {sections.reduce((acc, s) => acc + (s.subsections?.length || 0), 0)} subsections
+          {sections.reduce((acc, s) => acc + (s.subsections?.length || 0), 0)} subsections •{' '}
+          {sections.reduce((acc, s) => acc + (s.subsections?.reduce((total, sub) => total + (sub.topicBoxes?.length || 0), 0) || 0), 0)} topic boxes
         </span>
       </div>
 
-      {/* ── Main scrollable content ── */}
+      {/* Main content */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '24px 28px' }}>
         {sections.length === 0 ? (
           <div style={{
@@ -1285,9 +1651,34 @@ const CourseWorkspace = () => {
             </Droppable>
           </DragDropContext>
         )}
-      </div>  
 
-      {/* ── Modals ── */}
+        {/* Generate More Sections */}
+        {sections.length > 0 && (
+          <div style={{ marginTop: '20px' }}>
+            <AIGenerateButton
+              level="sections"
+              context={{
+                course: {
+                  title: courseName,
+                  description: formData?.objectives || '',
+                  grade: formData?.class || '',
+                  subject: formData?.subject || '',
+                  duration: formData?.timeDuration ? `${formData.timeDuration} ${formData.timeUnit}` : ''
+                },
+                existing_sections: sections.filter(s => s.type !== 'break').map(s => ({
+                  title: s.title,
+                  description: s.description
+                }))
+              }}
+              onGenerate={handleGenerateSections}
+              count={1}
+              buttonText="✨ Generate More Sections with AI"
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Modals */}
       <ConfirmDialog
         isOpen={deleteConfirm !== null}
         onConfirm={handleConfirmDelete}
