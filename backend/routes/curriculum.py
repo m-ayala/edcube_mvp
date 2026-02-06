@@ -11,12 +11,17 @@ from pydantic import BaseModel
 from typing import Optional
 import json
 import asyncio
+import logging
 from services.orchestrator import CurriculumOrchestrator
 from services.firebase_service import FirebaseService
+from schemas.generation_schema import GenerateRequest, GenerateResponse
+from services.generation_service import GenerationService
 
+generation_service = GenerationService()
 router = APIRouter()
 orchestrator = CurriculumOrchestrator()
 firebase = FirebaseService()
+logger = logging.getLogger(__name__)
 
 
 class CourseRequest(BaseModel):
@@ -275,4 +280,106 @@ async def update_course(course_data: dict, teacherUid: str):
         raise
     except Exception as e:
         logger.error(f"Error updating course: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============================================================================
+# NEW UNIFIED GENERATION ENDPOINT
+# ============================================================================
+
+@router.post("/curriculum/generate", response_model=GenerateResponse)
+async def generate_curriculum_content(request: GenerateRequest):
+    """
+    Unified generation endpoint for sections, subsections, and topic boxes
+    
+    Args:
+        request: GenerateRequest with level, context, user_guidance, count
+        
+    Returns:
+        GenerateResponse with generated items
+        
+    Examples:
+        Generate sections:
+        POST /api/curriculum/generate
+        {
+            "level": "sections",
+            "context": {
+                "course": {"title": "...", "description": "...", "grade": "5"},
+                "existing_sections": [{"title": "...", "description": "..."}]
+            },
+            "user_guidance": "Focus on hands-on activities",
+            "count": 3,
+            "teacher_uid": "user123"
+        }
+        
+        Generate subsections:
+        POST /api/curriculum/generate
+        {
+            "level": "subsections",
+            "context": {
+                "course": {"title": "...", "grade": "5"},
+                "all_section_names": ["Section 1", "Section 2"],
+                "current_section": {
+                    "title": "Section 1",
+                    "description": "...",
+                    "existingSubsections": [{"title": "...", "description": "..."}]
+                }
+            },
+            "count": 3,
+            "teacher_uid": "user123"
+        }
+        
+        Generate topics:
+        POST /api/curriculum/generate
+        {
+            "level": "topics",
+            "context": {
+                "course": {"title": "...", "grade": "5"},
+                "current_section": {"title": "...", "description": "..."},
+                "subsection": {
+                    "title": "...",
+                    "description": "...",
+                    "existingTopics": [{"title": "...", "description": "..."}]
+                }
+            },
+            "count": 3,
+            "teacher_uid": "user123"
+        }
+    """
+    
+    try:
+        logger.info(f"Generation request: level={request.level}, count={request.count}")
+        
+        # Validate teacher_uid
+        if not request.teacher_uid:
+            raise HTTPException(status_code=400, detail="teacher_uid is required")
+        
+        # Convert Pydantic model to dict for service
+        context_dict = request.context.dict()
+        
+        # Call generation service
+        result = await generation_service.generate(
+            level=request.level,
+            context=context_dict,
+            user_guidance=request.user_guidance,
+            count=request.count
+        )
+        
+        if not result.get("success"):
+            error_msg = result.get("error", "Unknown error during generation")
+            logger.error(f"Generation failed: {error_msg}")
+            raise HTTPException(status_code=500, detail=error_msg)
+        
+        # Return response
+        return GenerateResponse(
+            success=True,
+            level=result["level"],
+            items=result["items"],
+            message=f"Successfully generated {len(result['items'])} {request.level}"
+        )
+    
+    except HTTPException:
+        raise
+    
+    except Exception as e:
+        logger.error(f"Unexpected error in generate endpoint: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

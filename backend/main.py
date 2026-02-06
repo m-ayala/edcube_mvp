@@ -1,12 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import uvicorn
-from routes.file_upload import router as file_upload_router
 from dotenv import load_dotenv
-import os
 
 load_dotenv()
 
+import uvicorn
+from routes.file_upload import router as file_upload_router
+import os
 # Import route modules
 from routes import curriculum, resources, topics
 
