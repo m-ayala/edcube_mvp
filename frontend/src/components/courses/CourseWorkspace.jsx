@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import TopicDetailsModal from '../modals/TopicDetailsModal';
 import BreakModal from '../modals/BreakModal';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { GripVertical, Edit2, Check } from 'lucide-react';
+import { GripVertical, Edit2, Check, Trash2 } from 'lucide-react';
 
 const CourseWorkspace = () => {
   const { currentUser } = useAuth();
@@ -30,8 +30,11 @@ const CourseWorkspace = () => {
   const [handsOnResources, setHandsOnResources] = useState({});
   // Track which sections/subsections are collapsed
   const [collapsedSections, setCollapsedSections] = useState({});
+  const [collapsedSubsections, setCollapsedSubsections] = useState({});
   // Track which fields are being edited
   const [editingField, setEditingField] = useState(null);
+  // Track delete confirmation dialog
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
 
   // ── course-picker state ──
   const [showCoursePicker, setShowCoursePicker] = useState(false);
@@ -76,48 +79,117 @@ const CourseWorkspace = () => {
   }, []);
 
   // ─── Drag and Drop Handler ────────────────────────────────────────────
-const handleDragEnd = (result) => {
-  const { source, destination, type } = result;
+  const handleDragEnd = (result) => {
+    const { source, destination, type } = result;
 
-  if (!destination) return;
+    if (!destination) return;
 
-  // If dropped in the same position, do nothing
-  if (
-    source.droppableId === destination.droppableId &&
-    source.index === destination.index
-  ) {
-    return;
-  }
-
-  // Handle SECTION reordering (including breaks)
-  if (type === 'SECTION') {
-    const reorderedSections = Array.from(sections);
-    const [movedSection] = reorderedSections.splice(source.index, 1);
-    reorderedSections.splice(destination.index, 0, movedSection);
-    setSections(reorderedSections);
-    return;
-  }
-
-  // Handle SUBSECTION reordering within a section
-  if (type === 'SUBSECTION') {
-    const sectionId = source.droppableId.replace('subsections-', '');
-    const section = sections.find(s => s.id === sectionId);
-    
-    if (section && section.subsections) {
-      const reorderedSubsections = Array.from(section.subsections);
-      const [movedSubsection] = reorderedSubsections.splice(source.index, 1);
-      reorderedSubsections.splice(destination.index, 0, movedSubsection);
-      
-      const updatedSections = sections.map(s =>
-        s.id === sectionId
-          ? { ...s, subsections: reorderedSubsections }
-          : s
-      );
-      setSections(updatedSections);
+    // If dropped in the same position, do nothing
+    if (
+      source.droppableId === destination.droppableId &&
+      source.index === destination.index
+    ) {
+      return;
     }
-    return;
-  }
-};  
+
+    // Handle SECTION reordering (including breaks)
+    if (type === 'SECTION') {
+      const reorderedSections = Array.from(sections);
+      const [movedSection] = reorderedSections.splice(source.index, 1);
+      reorderedSections.splice(destination.index, 0, movedSection);
+      setSections(reorderedSections);
+      return;
+    }
+
+    // Handle SUBSECTION reordering within a section
+    if (type === 'SUBSECTION') {
+      const sectionId = source.droppableId.replace('subsections-', '');
+      const section = sections.find(s => s.id === sectionId);
+      
+      if (section && section.subsections) {
+        const reorderedSubsections = Array.from(section.subsections);
+        const [movedSubsection] = reorderedSubsections.splice(source.index, 1);
+        reorderedSubsections.splice(destination.index, 0, movedSubsection);
+        
+        const updatedSections = sections.map(s =>
+          s.id === sectionId
+            ? { ...s, subsections: reorderedSubsections }
+            : s
+        );
+        setSections(updatedSections);
+      }
+      return;
+    }
+
+    // Handle TOPIC BOX reordering (topic boxes include resources and hands-on as one unit)
+    if (type === 'TOPICBOX') {
+      const sourceSubId = source.droppableId.replace('topicbox-', '');
+      const destSubId = destination.droppableId.replace('topicbox-', '');
+
+      // Since each subsection is essentially one topic box, we're moving the entire subsection
+      // This allows topic boxes to move across subsections and sections
+      
+      // Find source section and subsection
+      let sourceSection = null;
+      let sourceSub = null;
+      let sourceSubIndex = -1;
+      
+      for (const section of sections) {
+        const subIndex = (section.subsections || []).findIndex(sub => sub.id === sourceSubId);
+        if (subIndex !== -1) {
+          sourceSection = section;
+          sourceSub = section.subsections[subIndex];
+          sourceSubIndex = subIndex;
+          break;
+        }
+      }
+
+      // Find destination section and subsection
+      let destSection = null;
+      let destSubIndex = -1;
+      
+      for (const section of sections) {
+        const subIndex = (section.subsections || []).findIndex(sub => sub.id === destSubId);
+        if (subIndex !== -1) {
+          destSection = section;
+          destSubIndex = subIndex;
+          break;
+        }
+      }
+
+      if (!sourceSection || !sourceSub || !destSection) return;
+
+      // If moving within the same subsection area (same destination), do nothing
+      if (sourceSubId === destSubId) return;
+
+      // Remove from source
+      const updatedSections = sections.map(section => {
+        if (section.id === sourceSection.id) {
+          return {
+            ...section,
+            subsections: section.subsections.filter(sub => sub.id !== sourceSubId)
+          };
+        }
+        return section;
+      });
+
+      // Add to destination - insert after the destination subsection
+      const finalSections = updatedSections.map(section => {
+        if (section.id === destSection.id) {
+          const newSubsections = [...section.subsections];
+          newSubsections.splice(destSubIndex + 1, 0, sourceSub);
+          return {
+            ...section,
+            subsections: newSubsections
+          };
+        }
+        return section;
+      });
+
+      setSections(finalSections);
+      return;
+    }
+  };
 
   // ─── Course Picker ────────────────────────────────────────────────────
   const handlePickCourse = (curriculum) => {
@@ -253,6 +325,44 @@ const handleDragEnd = (result) => {
 
   const toggleSection = (sectionId) => {
     setCollapsedSections(prev => ({ ...prev, [sectionId]: !prev[sectionId] }));
+  };
+  const toggleSubsection = (subId) => {
+      setCollapsedSubsections(prev => ({ ...prev, [subId]: !prev[subId] }));
+    };
+
+  // Delete handlers with confirmation
+  const confirmDeleteSection = (sectionId) => {
+    const section = sections.find(s => s.id === sectionId);
+    setDeleteConfirm({
+      type: 'section',
+      id: sectionId,
+      title: 'Delete Section?',
+      message: `Are you sure you want to delete "${section?.title || 'this section'}"? This will also delete all subsections and resources within it.`
+    });
+  };
+
+  const confirmDeleteSubsection = (sectionId, subId) => {
+    const section = sections.find(s => s.id === sectionId);
+    const subsection = section?.subsections?.find(s => s.id === subId);
+    setDeleteConfirm({
+      type: 'subsection',
+      id: subId,
+      sectionId: sectionId,
+      title: 'Delete Subsection?',
+      message: `Are you sure you want to delete "${subsection?.title || 'this subsection'}"? This will also delete all resources within it.`
+    });
+  };
+
+  const handleConfirmDelete = () => {
+    if (!deleteConfirm) return;
+    
+    if (deleteConfirm.type === 'section') {
+      removeSection(deleteConfirm.id);
+    } else if (deleteConfirm.type === 'subsection') {
+      removeSubsection(deleteConfirm.sectionId, deleteConfirm.id);
+    }
+    
+    setDeleteConfirm(null);
   };
 
   // ─── Topic Details Modal ──────────────────────────────────────────────
@@ -440,107 +550,171 @@ const handleDragEnd = (result) => {
 
   // Editable field with click-to-edit functionality
   const EditableField = ({ 
-  value, 
-  onChange, 
-  fieldKey, 
-  placeholder = 'Click to edit',
-  style = {},
-  inputStyle = {}
-}) => {
-  const isEditing = editingField?.key === fieldKey;
-  
-  const handleEdit = () => {
-    setEditingField({ key: fieldKey, value });
-  };
-  
-  const handleSave = () => {
-    if (editingField?.value !== undefined) {
-      onChange(editingField.value);
-    }
-    setEditingField(null);
-  };
-  
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter') {
-      handleSave();
-    } else if (e.key === 'Escape') {
+    value, 
+    onChange, 
+    fieldKey, 
+    placeholder = 'Click to edit',
+    style = {},
+    inputStyle = {}
+  }) => {
+    const isEditing = editingField?.key === fieldKey;
+    
+    const handleEdit = () => {
+      setEditingField({ key: fieldKey, value });
+    };
+    
+    const handleSave = () => {
+      if (editingField?.value !== undefined) {
+        onChange(editingField.value);
+      }
       setEditingField(null);
-    }
+    };
+    
+    const handleKeyDown = (e) => {
+      if (e.key === 'Enter') {
+        handleSave();
+      } else if (e.key === 'Escape') {
+        setEditingField(null);
+      }
+    };
+    
+    return (
+      <div style={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        gap: '6px', 
+        position: 'relative',
+        flex: 1,
+        ...style 
+      }}>
+        <input
+          type="text"
+          value={isEditing ? (editingField.value || '') : value}
+          onChange={e => isEditing && setEditingField({ ...editingField, value: e.target.value })}
+          onKeyDown={handleKeyDown}
+          disabled={!isEditing}
+          placeholder={placeholder}
+          style={{
+            flex: 1,
+            border: 'none',
+            background: 'transparent',
+            outline: 'none',
+            cursor: isEditing ? 'text' : 'default',
+            paddingRight: '28px',
+            ...inputStyle
+          }}
+        />
+        <button
+          onClick={isEditing ? handleSave : handleEdit}
+          style={{
+            position: 'absolute',
+            right: '4px',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            padding: '2px',
+            display: 'flex',
+            alignItems: 'center',
+            color: isEditing ? colors.accent : '#9ca3af'
+          }}
+          title={isEditing ? 'Save' : 'Edit'}
+        >
+          {isEditing ? <Check size={14} /> : <Edit2 size={14} />}
+        </button>
+      </div>
+    );
   };
-  
-  return (
-    <div style={{ 
-      display: 'flex', 
-      alignItems: 'center', 
-      gap: '6px', 
-      position: 'relative',
-      flex: 1,
-      ...style 
-    }}>
-      <input
-        type="text"
-        value={isEditing ? (editingField.value || '') : value}
-        onChange={e => isEditing && setEditingField({ ...editingField, value: e.target.value })}
-        onKeyDown={handleKeyDown}
-        disabled={!isEditing}
-        placeholder={placeholder}
-        style={{
-          flex: 1,
-          border: 'none',
-          background: 'transparent',
-          outline: 'none',
-          cursor: isEditing ? 'text' : 'default',
-          paddingRight: '28px',
-          ...inputStyle
-        }}
-      />
-      <button
-        onClick={isEditing ? handleSave : handleEdit}
-        style={{
-          position: 'absolute',
-          right: '4px',
-          background: 'none',
-          border: 'none',
-          cursor: 'pointer',
-          padding: '2px',
-          display: 'flex',
-          alignItems: 'center',
-          color: isEditing ? colors.accent : '#9ca3af'
-        }}
-        title={isEditing ? 'Save' : 'Edit'}
-      >
-        {isEditing ? <Check size={14} /> : <Edit2 size={14} />}
-      </button>
-    </div>
-  );
-};
 
   // Descriptor box (editable description area)
   const DescriptorBox = ({ value, onChange, placeholder, fieldKey }) => (
-  <div style={{
-    border: '2px dashed #c4b5fd',
-    borderRadius: '8px',
-    padding: '10px 14px',
-    marginBottom: '12px',
-    backgroundColor: '#faf5ff',
-    position: 'relative'
-  }}>
-    <EditableField
-      value={value}
-      onChange={onChange}
-      fieldKey={fieldKey}
-      placeholder={placeholder || 'Add a description…'}
-      inputStyle={{
-        fontSize: '13px',
-        color: colors.textSecondary,
-        fontStyle: value ? 'normal' : 'italic'
-      }}
-    />
-  </div>
-);
+    <div style={{
+      border: '2px dashed #c4b5fd',
+      borderRadius: '8px',
+      padding: '10px 14px',
+      marginBottom: '12px',
+      backgroundColor: '#faf5ff',
+      position: 'relative'
+    }}>
+      <EditableField
+        value={value}
+        onChange={onChange}
+        fieldKey={fieldKey}
+        placeholder={placeholder || 'Add a description…'}
+        inputStyle={{
+          fontSize: '13px',
+          color: colors.textSecondary,
+          fontStyle: value ? 'normal' : 'italic'
+        }}
+      />
+    </div>
+  );
 
-  // ─── 3-col row for one subsection ─────────────────────────────────────
-  const SubsectionRow = ({ sub, sectionId }) => {
+  // Confirmation dialog for deletions
+  const ConfirmDialog = ({ isOpen, onConfirm, onCancel, title, message }) => {
+    if (!isOpen) return null;
+    
+    return (
+      <div style={{
+        position: 'fixed',
+        inset: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000
+      }}>
+        <div style={{
+          backgroundColor: 'white',
+          borderRadius: '12px',
+          padding: '24px',
+          maxWidth: '400px',
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)'
+        }}>
+          <h3 style={{ margin: '0 0 12px', fontSize: '18px', color: colors.textPrimary }}>
+            {title}
+          </h3>
+          <p style={{ margin: '0 0 20px', fontSize: '14px', color: colors.textSecondary }}>
+            {message}
+          </p>
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+            <button
+              onClick={onCancel}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: '#f3f4f6',
+                color: colors.textPrimary,
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: '600'
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={onConfirm}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: colors.dangerBtn,
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: '600'
+              }}
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ─── 3-col row for one subsection (TOPIC BOX) ─────────────────────────
+  const SubsectionRow = ({ sub, sectionId, dragHandleProps }) => {
     const videos = videosByTopic[sub.id] || [];
     const worksheets = (handsOnResources[sub.id] || []).filter(r => r.type === 'worksheet');
     const activities = (handsOnResources[sub.id] || []).filter(r => r.type === 'activity');
@@ -554,33 +728,65 @@ const handleDragEnd = (result) => {
         borderRadius: '10px',
         overflow: 'hidden',
         backgroundColor: colors.card,
-        boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
+        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+        position: 'relative'
       }}>
+        {/* Drag handle for entire topic box */}
+        <div
+          {...dragHandleProps}
+          style={{
+            position: 'absolute',
+            top: '8px',
+            left: '8px',
+            cursor: 'grab',
+            zIndex: 10,
+            padding: '4px',
+            background: 'rgba(255, 255, 255, 0.9)',
+            borderRadius: '4px',
+            display: 'flex',
+            alignItems: 'center'
+          }}
+        >
+          <GripVertical size={16} style={{ color: '#9ca3af' }} />
+        </div>
+
         {/* ── Col 1: Topic Name ── */}
         <div style={{ padding: '14px', borderRight: '1px solid #f3f4f6' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '6px' }}>
-            <p style={{ margin: 0, fontWeight: '600', fontSize: '14px', color: colors.textPrimary, cursor: 'pointer', flex: 1 }}
+            <p style={{ margin: 0, fontWeight: '600', fontSize: '14px', color: colors.textPrimary, cursor: 'pointer', flex: 1, paddingLeft: '24px' }}
               onClick={() => handleTopicClick(sub)}
             >
               {sub.title}
             </p>
-            <IconBtn onClick={() => removeSubsection(sectionId, sub.id)} color={colors.dangerBtn} title="Remove subsection">×</IconBtn>
+            <button
+              onClick={() => confirmDeleteSubsection(sectionId, sub.id)}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '2px',
+                display: 'flex',
+                alignItems: 'center',
+                color: colors.dangerBtn
+              }}
+              title="Delete subsection"
+            >
+              <Trash2 size={14} />
+            </button>
           </div>
 
           {(sub.learning_objectives || []).length > 0 && (
-            <ul style={{ margin: '8px 0 8px', paddingLeft: '16px', fontSize: '12px', color: colors.textSecondary }}>
+            <ul style={{ margin: '8px 0 8px 24px', paddingLeft: '16px', fontSize: '12px', color: colors.textSecondary }}>
               {sub.learning_objectives.map((obj, i) => (
                 <li key={i} style={{ marginBottom: '2px' }}>{obj}</li>
               ))}
             </ul>
           )}
 
-          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '8px' }}>
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '8px', paddingLeft: '24px' }}>
             <Pill label={`${sub.duration_minutes || 0} min`} color={{ bg: '#f3e8ff', text: '#7c3aed' }} />
             <Pill label={(sub.pla_pillars || [])[0] || 'Knowledge'} />
           </div>
-
-          {/* + button to add more subsections — rendered only on last sub */}
         </div>
 
         {/* ── Col 2: Video Resources ── */}
@@ -696,161 +902,250 @@ const handleDragEnd = (result) => {
   };
 
   // ─── Full Section block ───────────────────────────────────────────────
-const SectionBlock = ({ section, index, dragHandleProps }) => {
-  if (section.type === 'break') {
+  const SectionBlock = ({ section, index, dragHandleProps }) => {
+    if (section.type === 'break') {
+      return (
+        <div style={{
+          padding: '12px 16px', marginBottom: '16px',
+          backgroundColor: '#fff3cd', border: '1px dashed #ffc107',
+          borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div {...dragHandleProps} style={{ cursor: 'grab', display: 'flex', alignItems: 'center' }}>
+              <GripVertical size={18} style={{ color: '#9ca3af' }} />
+            </div>
+            <span style={{ fontWeight: '500', fontSize: '14px' }}>⏸️ Break — {section.duration}</span>
+          </div>
+          <button
+            onClick={() => confirmDeleteSection(section.id)}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: '4px',
+              display: 'flex',
+              alignItems: 'center',
+              color: colors.dangerBtn
+            }}
+            title="Delete break"
+          >
+            <Trash2 size={16} />
+          </button>
+        </div>
+      );
+    }
+
+    const isCollapsed = collapsedSections[section.id];
+
     return (
       <div style={{
-        padding: '12px 16px', marginBottom: '16px',
-        backgroundColor: '#fff3cd', border: '1px dashed #ffc107',
-        borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+        border: `2px solid ${colors.sectionBorder}`,
+        borderRadius: '12px',
+        marginBottom: '20px',
+        backgroundColor: colors.card,
+        overflow: 'hidden'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div {...dragHandleProps} style={{ cursor: 'grab', display: 'flex', alignItems: 'center' }}>
-            <GripVertical size={18} style={{ color: '#9ca3af' }} />
-          </div>
-          <span style={{ fontWeight: '500', fontSize: '14px' }}>⏸️ Break — {section.duration}</span>
-        </div>
-        <IconBtn onClick={() => removeSection(section.id)} color={colors.dangerBtn} title="Remove break">🗑️</IconBtn>
-      </div>
-    );
-  }
-
-  const isCollapsed = collapsedSections[section.id];
-
-  return (
-    <div style={{
-      border: `2px solid ${colors.sectionBorder}`,
-      borderRadius: '12px',
-      marginBottom: '20px',
-      backgroundColor: colors.card,
-      overflow: 'hidden'
-    }}>
-      {/* Section header row */}
-      <div style={{
-        backgroundColor: colors.sectionBg,
-        padding: '10px 16px',
-        display: 'flex', alignItems: 'center', gap: '10px'
-      }}>
-        <div {...dragHandleProps} style={{ cursor: 'grab', display: 'flex', alignItems: 'center' }}>
-          <GripVertical size={18} style={{ color: colors.accent }} />
-        </div>
-
-        <button onClick={() => toggleSection(section.id)} style={{
-          background: 'none', border: 'none', cursor: 'pointer',
-          fontSize: '14px', color: colors.accent, padding: 0
+        {/* Section header row */}
+        <div style={{
+          backgroundColor: colors.sectionBg,
+          padding: '10px 16px',
+          display: 'flex', alignItems: 'center', gap: '10px'
         }}>
-          {isCollapsed ? '▶' : '▼'}
-        </button>
+          <div {...dragHandleProps} style={{ cursor: 'grab', display: 'flex', alignItems: 'center' }}>
+            <GripVertical size={18} style={{ color: colors.accent }} />
+          </div>
 
-        <span style={{ fontSize: '12px', fontWeight: '700', color: colors.accent }}>
-          Section {index + 1}
-        </span>
+          <button onClick={() => toggleSection(section.id)} style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            fontSize: '14px', color: colors.accent, padding: 0
+          }}>
+            {isCollapsed ? '▶' : '▼'}
+          </button>
 
-        <EditableField
-          value={section.title}
-          onChange={val => updateSectionTitle(section.id, val)}
-          fieldKey={`section-title-${section.id}`}
-          placeholder="Section title"
-          inputStyle={{
-            fontSize: '15px',
-            fontWeight: '600',
-            color: colors.textPrimary
-          }}
-        />
+          <span style={{ fontSize: '12px', fontWeight: '700', color: colors.accent }}>
+            Section {index + 1}
+          </span>
 
-        <IconBtn onClick={() => removeSection(section.id)} color={colors.dangerBtn} title="Remove section">🗑️</IconBtn>
-      </div>
+          <EditableField
+            value={section.title}
+            onChange={val => updateSectionTitle(section.id, val)}
+            fieldKey={`section-title-${section.id}`}
+            placeholder="Section title"
+            inputStyle={{
+              fontSize: '15px',
+              fontWeight: '600',
+              color: colors.textPrimary
+            }}
+          />
 
-      {!isCollapsed && (
-        <div style={{ padding: '14px 16px' }}>
-          {/* Section descriptor box */}
-          <DescriptorBox
+          <button
+            onClick={() => confirmDeleteSection(section.id)}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: '4px 8px',
+              borderRadius: '4px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              color: colors.dangerBtn,
+              fontSize: '13px',
+              fontWeight: '600'
+            }}
+            title="Delete section"
+          >
+            <Trash2 size={16} />
+          </button>
+        </div>
+
+        {!isCollapsed && (
+          <div style={{ padding: '14px 16px' }}>
+            {/* Section descriptor box */}
+            <DescriptorBox
               value={section.description}
               onChange={val => updateSectionDescription(section.id, val)}
               placeholder="Section description…"
               fieldKey={`section-desc-${section.id}`}
             />
 
-          {/* Subsections droppable area */}
-          <Droppable droppableId={`subsections-${section.id}`} type="SUBSECTION">
-            {(provided) => (
-              <div
-                ref={provided.innerRef}
-                {...provided.droppableProps}
-              >
-                {(section.subsections || []).map((sub, subIdx) => (
-                  <Draggable
-                    key={sub.id}
-                    draggableId={sub.id}
-                    index={subIdx}
-                  >
-                    {(provided, snapshot) => (
-                      <div
-                        ref={provided.innerRef}
-                        {...provided.draggableProps}
-                        style={{
-                          ...provided.draggableProps.style,
-                          marginBottom: '16px',
-                          opacity: snapshot.isDragging ? 0.8 : 1
-                        }}
+            {/* Subsections droppable area */}
+            <Droppable droppableId={`subsections-${section.id}`} type="SUBSECTION">
+              {(provided) => (
+                <div
+                  ref={provided.innerRef}
+                  {...provided.droppableProps}
+                >
+                  {(section.subsections || []).map((sub, subIdx) => (
+                      <Draggable
+                        key={sub.id}
+                        draggableId={sub.id}
+                        index={subIdx}
                       >
-                        {/* Subsection label + drag handle + editable title */}
-                        <div style={{
-                          display: 'flex', alignItems: 'center', gap: '8px',
-                          marginBottom: '6px'
-                        }}>
-                          <div {...provided.dragHandleProps} style={{ cursor: 'grab', display: 'flex', alignItems: 'center' }}>
-                            <GripVertical size={16} style={{ color: '#9ca3af' }} />
-                          </div>
-                          <span style={{ fontSize: '11px', fontWeight: '700', color: colors.accent }}>
-                            Subsection {index + 1}.{subIdx + 1}
-                          </span>
-                          <EditableField
-                              value={sub.title}
-                              onChange={val => updateSubsectionTitle(section.id, sub.id, val)}
-                              fieldKey={`subsection-title-${sub.id}`}
-                              placeholder="Subsection title"
-                              inputStyle={{
-                                fontSize: '13px',
-                                fontWeight: '600',
-                                color: colors.textPrimary
+                        {(provided, snapshot) => {
+                          const isSubCollapsed = collapsedSubsections[sub.id];
+      
+                          return (
+                            <div
+                              ref={provided.innerRef}
+                              {...provided.draggableProps}
+                              style={{
+                                ...provided.draggableProps.style,
+                                marginBottom: '16px',
+                                opacity: snapshot.isDragging ? 0.8 : 1,
+                                border: '1px solid #e5e7eb',
+                                borderRadius: '8px',
+                                backgroundColor: '#fafafa',
+                                overflow: 'hidden'
                               }}
-                            />
-                        </div>
+                            >
+                              {/* Subsection header with collapse button */}
+                              <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                padding: '8px 12px',
+                                backgroundColor: '#f9fafb',
+                                borderBottom: isSubCollapsed ? 'none' : '1px solid #e5e7eb'
+                              }}>
+                                <div {...provided.dragHandleProps} style={{ cursor: 'grab', display: 'flex', alignItems: 'center' }}>
+                                  <GripVertical size={16} style={{ color: '#9ca3af' }} />
+                                </div>
+            
+                                <button onClick={() => toggleSubsection(sub.id)} style={{
+                                  background: 'none', border: 'none', cursor: 'pointer',
+                                  fontSize: '12px', color: colors.accent, padding: 0
+                                }}>
+                                  {isSubCollapsed ? '▶' : '▼'}
+                                </button>
+            
+                                <span style={{ fontSize: '11px', fontWeight: '700', color: colors.accent }}>
+                                  Subsection {index + 1}.{subIdx + 1}
+                                </span>
+            
+                                <EditableField
+                                  value={sub.title}
+                                  onChange={val => updateSubsectionTitle(section.id, sub.id, val)}
+                                  fieldKey={`subsection-title-${sub.id}`}
+                                  placeholder="Subsection title"
+                                  inputStyle={{
+                                    fontSize: '13px',
+                                    fontWeight: '600',
+                                    color: colors.textPrimary
+                                  }}
+                                />
+                              </div>
 
-                        {/* Subsection descriptor box */}
-                        <DescriptorBox
-                          value={sub.description}
-                          onChange={val => updateSubsectionDescription(section.id, sub.id, val)}
-                          placeholder="Subsection description…"
-                          fieldKey={`subsection-desc-${sub.id}`}
-                        />
+                              {/* Collapsible content */}
+                              {!isSubCollapsed && (
+                                <div style={{ padding: '12px' }}>
+                                  {/* Subsection descriptor box */}
+                                  <DescriptorBox
+                                    value={sub.description}
+                                    onChange={val => updateSubsectionDescription(section.id, sub.id, val)}
+                                    placeholder="Subsection description…"
+                                    fieldKey={`subsection-desc-${sub.id}`}
+                                  />
 
-                        {/* 3-column topic row */}
-                        <SubsectionRow sub={sub} sectionId={section.id} />
-                      </div>
-                    )}
-                  </Draggable>
-                ))}
-                {provided.placeholder}
-              </div>
-            )}
-          </Droppable>
+                                  {/* Droppable area for topic box */}
+                                  <Droppable droppableId={`topicbox-${sub.id}`} type="TOPICBOX">
+                                    {(provided) => (
+                                      <div
+                                        ref={provided.innerRef}
+                                        {...provided.droppableProps}
+                                      >
+                                        <Draggable
+                                          draggableId={`topicbox-${sub.id}`}
+                                          index={0}
+                                        >
+                                          {(provided, snapshot) => (
+                                            <div
+                                              ref={provided.innerRef}
+                                              {...provided.draggableProps}
+                                              style={{
+                                                ...provided.draggableProps.style,
+                                                opacity: snapshot.isDragging ? 0.9 : 1
+                                              }}
+                                            >
+                                              {/* 3-column topic row */}
+                                              <SubsectionRow 
+                                                sub={sub} 
+                                                sectionId={section.id}
+                                                dragHandleProps={provided.dragHandleProps}
+                                              />
+                                            </div>
+                                          )}
+                                        </Draggable>
+                                        {provided.placeholder}
+                                      </div>
+                                    )}
+                                  </Droppable>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        }}
+                      </Draggable>
+                    ))}
+                  {provided.placeholder}
+                </div>
+              )}
+            </Droppable>
 
-          {/* + Add Subsection button */}
-          <button onClick={() => addSubsection(section.id)} style={{
-            width: '100%', padding: '8px', marginTop: '4px',
-            backgroundColor: 'transparent', color: colors.accent,
-            border: `1px dashed ${colors.sectionBorder}`, borderRadius: '6px',
-            cursor: 'pointer', fontSize: '13px', fontWeight: '600'
-          }}>
-            ⊕ Add Subsection
-          </button>
-        </div>
-      )}
-    </div>
-  );
-};
+            {/* + Add Subsection button */}
+            <button onClick={() => addSubsection(section.id)} style={{
+              width: '100%', padding: '8px', marginTop: '4px',
+              backgroundColor: 'transparent', color: colors.accent,
+              border: `1px dashed ${colors.sectionBorder}`, borderRadius: '6px',
+              cursor: 'pointer', fontSize: '13px', fontWeight: '600'
+            }}>
+              ⊕ Add Subsection
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   // ─── RENDER ───────────────────────────────────────────────────────────
   return (
@@ -925,57 +1220,65 @@ const SectionBlock = ({ section, index, dragHandleProps }) => {
 
       {/* ── Main scrollable content ── */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '24px 28px' }}>
-          {sections.length === 0 ? (
-            <div style={{
-              textAlign: 'center', padding: '80px 20px',
-              border: '2px dashed #c4b5fd', borderRadius: '16px',
-              backgroundColor: 'white'
-            }}>
-              <p style={{ fontSize: '24px', marginBottom: '8px' }}>📚</p>
-              <p style={{ fontSize: '16px', color: colors.textPrimary, fontWeight: '600', margin: '0 0 4px' }}>No sections yet</p>
-              <p style={{ fontSize: '14px', color: colors.textSecondary, margin: 0 }}>Click "+ Section" above to start building your course</p>
-            </div>
-          ) : (
-            <DragDropContext onDragEnd={handleDragEnd}>
-              <Droppable droppableId="all-sections" type="SECTION">
-                {(provided) => (
-                  <div
-                    ref={provided.innerRef}
-                    {...provided.droppableProps}
-                  >
-                    {sections.map((section, idx) => (
-                      <Draggable
-                        key={section.id}
-                        draggableId={section.id}
-                        index={idx}
-                      >
-                        {(provided, snapshot) => (
-                          <div
-                            ref={provided.innerRef}
-                            {...provided.draggableProps}
-                            style={{
-                              ...provided.draggableProps.style,
-                              opacity: snapshot.isDragging ? 0.8 : 1
-                            }}
-                          >
-                            <SectionBlock 
-                              section={section} 
-                              index={idx}
-                              dragHandleProps={provided.dragHandleProps}
-                            />
-                          </div>
-                        )}
-                      </Draggable>
-                    ))}
-                    {provided.placeholder}
-                  </div>
-                )}
-              </Droppable>
-            </DragDropContext>
-          )}
-        </div>  
+        {sections.length === 0 ? (
+          <div style={{
+            textAlign: 'center', padding: '80px 20px',
+            border: '2px dashed #c4b5fd', borderRadius: '16px',
+            backgroundColor: 'white'
+          }}>
+            <p style={{ fontSize: '24px', marginBottom: '8px' }}>📚</p>
+            <p style={{ fontSize: '16px', color: colors.textPrimary, fontWeight: '600', margin: '0 0 4px' }}>No sections yet</p>
+            <p style={{ fontSize: '14px', color: colors.textSecondary, margin: 0 }}>Click "+ Section" above to start building your course</p>
+          </div>
+        ) : (
+          <DragDropContext onDragEnd={handleDragEnd}>
+            <Droppable droppableId="all-sections" type="SECTION">
+              {(provided) => (
+                <div
+                  ref={provided.innerRef}
+                  {...provided.droppableProps}
+                >
+                  {sections.map((section, idx) => (
+                    <Draggable
+                      key={section.id}
+                      draggableId={section.id}
+                      index={idx}
+                    >
+                      {(provided, snapshot) => (
+                        <div
+                          ref={provided.innerRef}
+                          {...provided.draggableProps}
+                          style={{
+                            ...provided.draggableProps.style,
+                            opacity: snapshot.isDragging ? 0.8 : 1
+                          }}
+                        >
+                          <SectionBlock 
+                            section={section} 
+                            index={idx}
+                            dragHandleProps={provided.dragHandleProps}
+                          />
+                        </div>
+                      )}
+                    </Draggable>
+                  ))}
+                  {provided.placeholder}
+                </div>
+              )}
+            </Droppable>
+          </DragDropContext>
+        )}
+      </div>  
 
       {/* ── Modals ── */}
+      <ConfirmDialog
+        isOpen={deleteConfirm !== null}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteConfirm(null)}
+        title={deleteConfirm?.title || ''}
+        message={deleteConfirm?.message || ''}
+      />
+
       {isModalOpen && selectedTopic && (
         <TopicDetailsModal topic={selectedTopic} onClose={() => { setIsModalOpen(false); setSelectedTopic(null); }} />
       )}
