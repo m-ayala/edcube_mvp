@@ -4,6 +4,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import TopicDetailsModal from '../modals/TopicDetailsModal';
 import BreakModal from '../modals/BreakModal';
+import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
+import { GripVertical } from 'lucide-react';
 
 const CourseWorkspace = () => {
   const { currentUser } = useAuth();
@@ -70,6 +72,50 @@ const CourseWorkspace = () => {
       setHandsOnResources(loadedHandsOn);
     }
   }, []);
+
+  // ─── Drag and Drop Handler ────────────────────────────────────────────
+const handleDragEnd = (result) => {
+  const { source, destination, type } = result;
+
+  if (!destination) return;
+
+  // If dropped in the same position, do nothing
+  if (
+    source.droppableId === destination.droppableId &&
+    source.index === destination.index
+  ) {
+    return;
+  }
+
+  // Handle SECTION reordering (including breaks)
+  if (type === 'SECTION') {
+    const reorderedSections = Array.from(sections);
+    const [movedSection] = reorderedSections.splice(source.index, 1);
+    reorderedSections.splice(destination.index, 0, movedSection);
+    setSections(reorderedSections);
+    return;
+  }
+
+  // Handle SUBSECTION reordering within a section
+  if (type === 'SUBSECTION') {
+    const sectionId = source.droppableId.replace('subsections-', '');
+    const section = sections.find(s => s.id === sectionId);
+    
+    if (section && section.subsections) {
+      const reorderedSubsections = Array.from(section.subsections);
+      const [movedSubsection] = reorderedSubsections.splice(source.index, 1);
+      reorderedSubsections.splice(destination.index, 0, movedSubsection);
+      
+      const updatedSections = sections.map(s =>
+        s.id === sectionId
+          ? { ...s, subsections: reorderedSubsections }
+          : s
+      );
+      setSections(updatedSections);
+    }
+    return;
+  }
+};  
 
   // ─── Course Picker ────────────────────────────────────────────────────
   const handlePickCourse = (curriculum) => {
@@ -574,120 +620,158 @@ const CourseWorkspace = () => {
   };
 
   // ─── Full Section block ───────────────────────────────────────────────
-  const SectionBlock = ({ section, index }) => {
-    if (section.type === 'break') {
-      return (
-        <div style={{
-          padding: '12px 16px', marginBottom: '16px',
-          backgroundColor: '#fff3cd', border: '1px dashed #ffc107',
-          borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-        }}>
-          <span style={{ fontWeight: '500', fontSize: '14px' }}>⏸️ Break — {section.duration}</span>
-          <IconBtn onClick={() => removeSection(section.id)} color={colors.dangerBtn} title="Remove break">🗑️</IconBtn>
-        </div>
-      );
-    }
-
-    const isCollapsed = collapsedSections[section.id];
-
+const SectionBlock = ({ section, index, dragHandleProps }) => {
+  if (section.type === 'break') {
     return (
       <div style={{
-        border: `2px solid ${colors.sectionBorder}`,
-        borderRadius: '12px',
-        marginBottom: '20px',
-        backgroundColor: colors.card,
-        overflow: 'hidden'
+        padding: '12px 16px', marginBottom: '16px',
+        backgroundColor: '#fff3cd', border: '1px dashed #ffc107',
+        borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center'
       }}>
-        {/* Section header row */}
-        <div style={{
-          backgroundColor: colors.sectionBg,
-          padding: '10px 16px',
-          display: 'flex', alignItems: 'center', gap: '10px'
-        }}>
-          <button onClick={() => toggleSection(section.id)} style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            fontSize: '14px', color: colors.accent, padding: 0
-          }}>
-            {isCollapsed ? '▶' : '▼'}
-          </button>
-
-          <span style={{ fontSize: '12px', fontWeight: '700', color: colors.accent }}>
-            Section {index + 1}
-          </span>
-
-          <input
-            type="text"
-            value={section.title}
-            onChange={e => updateSectionTitle(section.id, e.target.value)}
-            style={{
-              flex: 1, border: 'none', background: 'transparent',
-              fontSize: '15px', fontWeight: '600', color: colors.textPrimary, outline: 'none'
-            }}
-          />
-
-          <IconBtn onClick={() => removeSection(section.id)} color={colors.dangerBtn} title="Remove section">🗑️</IconBtn>
-        </div>
-
-        {!isCollapsed && (
-          <div style={{ padding: '14px 16px' }}>
-            {/* Section descriptor box */}
-            <DescriptorBox
-              value={section.description}
-              onChange={val => updateSectionDescription(section.id, val)}
-              placeholder="Section description…"
-            />
-
-            {/* Each subsection */}
-            {(section.subsections || []).map((sub, subIdx) => (
-              <div key={sub.id} style={{ marginBottom: '16px' }}>
-                {/* Subsection label + editable title */}
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: '8px',
-                  marginBottom: '6px'
-                }}>
-                  <span style={{ fontSize: '11px', fontWeight: '700', color: colors.accent }}>
-                    Subsection {index + 1}.{subIdx + 1}
-                  </span>
-                  <input
-                    type="text"
-                    value={sub.title}
-                    onChange={e => updateSubsectionTitle(section.id, sub.id, e.target.value)}
-                    style={{
-                      flex: 1, border: 'none', background: 'transparent',
-                      fontSize: '13px', fontWeight: '600', color: colors.textPrimary, outline: 'none',
-                      borderBottom: '1px solid transparent'
-                    }}
-                    onFocus={e => e.target.style.borderBottomColor = colors.subBorder}
-                    onBlur={e => e.target.style.borderBottomColor = 'transparent'}
-                  />
-                </div>
-
-                {/* Subsection descriptor box */}
-                <DescriptorBox
-                  value={sub.description}
-                  onChange={val => updateSubsectionDescription(section.id, sub.id, val)}
-                  placeholder="Subsection description…"
-                />
-
-                {/* 3-column topic row */}
-                <SubsectionRow sub={sub} sectionId={section.id} />
-              </div>
-            ))}
-
-            {/* + Add Subsection button */}
-            <button onClick={() => addSubsection(section.id)} style={{
-              width: '100%', padding: '8px', marginTop: '4px',
-              backgroundColor: 'transparent', color: colors.accent,
-              border: `1px dashed ${colors.sectionBorder}`, borderRadius: '6px',
-              cursor: 'pointer', fontSize: '13px', fontWeight: '600'
-            }}>
-              ⊕ Add Subsection
-            </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div {...dragHandleProps} style={{ cursor: 'grab', display: 'flex', alignItems: 'center' }}>
+            <GripVertical size={18} style={{ color: '#9ca3af' }} />
           </div>
-        )}
+          <span style={{ fontWeight: '500', fontSize: '14px' }}>⏸️ Break — {section.duration}</span>
+        </div>
+        <IconBtn onClick={() => removeSection(section.id)} color={colors.dangerBtn} title="Remove break">🗑️</IconBtn>
       </div>
     );
-  };
+  }
+
+  const isCollapsed = collapsedSections[section.id];
+
+  return (
+    <div style={{
+      border: `2px solid ${colors.sectionBorder}`,
+      borderRadius: '12px',
+      marginBottom: '20px',
+      backgroundColor: colors.card,
+      overflow: 'hidden'
+    }}>
+      {/* Section header row */}
+      <div style={{
+        backgroundColor: colors.sectionBg,
+        padding: '10px 16px',
+        display: 'flex', alignItems: 'center', gap: '10px'
+      }}>
+        <div {...dragHandleProps} style={{ cursor: 'grab', display: 'flex', alignItems: 'center' }}>
+          <GripVertical size={18} style={{ color: colors.accent }} />
+        </div>
+
+        <button onClick={() => toggleSection(section.id)} style={{
+          background: 'none', border: 'none', cursor: 'pointer',
+          fontSize: '14px', color: colors.accent, padding: 0
+        }}>
+          {isCollapsed ? '▶' : '▼'}
+        </button>
+
+        <span style={{ fontSize: '12px', fontWeight: '700', color: colors.accent }}>
+          Section {index + 1}
+        </span>
+
+        <input
+          type="text"
+          value={section.title}
+          onChange={e => updateSectionTitle(section.id, e.target.value)}
+          style={{
+            flex: 1, border: 'none', background: 'transparent',
+            fontSize: '15px', fontWeight: '600', color: colors.textPrimary, outline: 'none'
+          }}
+        />
+
+        <IconBtn onClick={() => removeSection(section.id)} color={colors.dangerBtn} title="Remove section">🗑️</IconBtn>
+      </div>
+
+      {!isCollapsed && (
+        <div style={{ padding: '14px 16px' }}>
+          {/* Section descriptor box */}
+          <DescriptorBox
+            value={section.description}
+            onChange={val => updateSectionDescription(section.id, val)}
+            placeholder="Section description…"
+          />
+
+          {/* Subsections droppable area */}
+          <Droppable droppableId={`subsections-${section.id}`} type="SUBSECTION">
+            {(provided) => (
+              <div
+                ref={provided.innerRef}
+                {...provided.droppableProps}
+              >
+                {(section.subsections || []).map((sub, subIdx) => (
+                  <Draggable
+                    key={sub.id}
+                    draggableId={sub.id}
+                    index={subIdx}
+                  >
+                    {(provided, snapshot) => (
+                      <div
+                        ref={provided.innerRef}
+                        {...provided.draggableProps}
+                        style={{
+                          ...provided.draggableProps.style,
+                          marginBottom: '16px',
+                          opacity: snapshot.isDragging ? 0.8 : 1
+                        }}
+                      >
+                        {/* Subsection label + drag handle + editable title */}
+                        <div style={{
+                          display: 'flex', alignItems: 'center', gap: '8px',
+                          marginBottom: '6px'
+                        }}>
+                          <div {...provided.dragHandleProps} style={{ cursor: 'grab', display: 'flex', alignItems: 'center' }}>
+                            <GripVertical size={16} style={{ color: '#9ca3af' }} />
+                          </div>
+                          <span style={{ fontSize: '11px', fontWeight: '700', color: colors.accent }}>
+                            Subsection {index + 1}.{subIdx + 1}
+                          </span>
+                          <input
+                            type="text"
+                            value={sub.title}
+                            onChange={e => updateSubsectionTitle(section.id, sub.id, e.target.value)}
+                            style={{
+                              flex: 1, border: 'none', background: 'transparent',
+                              fontSize: '13px', fontWeight: '600', color: colors.textPrimary, outline: 'none',
+                              borderBottom: '1px solid transparent'
+                            }}
+                            onFocus={e => e.target.style.borderBottomColor = colors.subBorder}
+                            onBlur={e => e.target.style.borderBottomColor = 'transparent'}
+                          />
+                        </div>
+
+                        {/* Subsection descriptor box */}
+                        <DescriptorBox
+                          value={sub.description}
+                          onChange={val => updateSubsectionDescription(section.id, sub.id, val)}
+                          placeholder="Subsection description…"
+                        />
+
+                        {/* 3-column topic row */}
+                        <SubsectionRow sub={sub} sectionId={section.id} />
+                      </div>
+                    )}
+                  </Draggable>
+                ))}
+                {provided.placeholder}
+              </div>
+            )}
+          </Droppable>
+
+          {/* + Add Subsection button */}
+          <button onClick={() => addSubsection(section.id)} style={{
+            width: '100%', padding: '8px', marginTop: '4px',
+            backgroundColor: 'transparent', color: colors.accent,
+            border: `1px dashed ${colors.sectionBorder}`, borderRadius: '6px',
+            cursor: 'pointer', fontSize: '13px', fontWeight: '600'
+          }}>
+            ⊕ Add Subsection
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
 
   // ─── RENDER ───────────────────────────────────────────────────────────
   return (
@@ -762,22 +846,55 @@ const CourseWorkspace = () => {
 
       {/* ── Main scrollable content ── */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '24px 28px' }}>
-        {sections.length === 0 ? (
-          <div style={{
-            textAlign: 'center', padding: '80px 20px',
-            border: '2px dashed #c4b5fd', borderRadius: '16px',
-            backgroundColor: 'white'
-          }}>
-            <p style={{ fontSize: '24px', marginBottom: '8px' }}>📚</p>
-            <p style={{ fontSize: '16px', color: colors.textPrimary, fontWeight: '600', margin: '0 0 4px' }}>No sections yet</p>
-            <p style={{ fontSize: '14px', color: colors.textSecondary, margin: 0 }}>Click "+ Section" above to start building your course</p>
-          </div>
-        ) : (
-          sections.map((section, idx) => (
-            <SectionBlock key={section.id} section={section} index={idx} />
-          ))
-        )}
-      </div>
+          {sections.length === 0 ? (
+            <div style={{
+              textAlign: 'center', padding: '80px 20px',
+              border: '2px dashed #c4b5fd', borderRadius: '16px',
+              backgroundColor: 'white'
+            }}>
+              <p style={{ fontSize: '24px', marginBottom: '8px' }}>📚</p>
+              <p style={{ fontSize: '16px', color: colors.textPrimary, fontWeight: '600', margin: '0 0 4px' }}>No sections yet</p>
+              <p style={{ fontSize: '14px', color: colors.textSecondary, margin: 0 }}>Click "+ Section" above to start building your course</p>
+            </div>
+          ) : (
+            <DragDropContext onDragEnd={handleDragEnd}>
+              <Droppable droppableId="all-sections" type="SECTION">
+                {(provided) => (
+                  <div
+                    ref={provided.innerRef}
+                    {...provided.droppableProps}
+                  >
+                    {sections.map((section, idx) => (
+                      <Draggable
+                        key={section.id}
+                        draggableId={section.id}
+                        index={idx}
+                      >
+                        {(provided, snapshot) => (
+                          <div
+                            ref={provided.innerRef}
+                            {...provided.draggableProps}
+                            style={{
+                              ...provided.draggableProps.style,
+                              opacity: snapshot.isDragging ? 0.8 : 1
+                            }}
+                          >
+                            <SectionBlock 
+                              section={section} 
+                              index={idx}
+                              dragHandleProps={provided.dragHandleProps}
+                            />
+                          </div>
+                        )}
+                      </Draggable>
+                    ))}
+                    {provided.placeholder}
+                  </div>
+                )}
+              </Droppable>
+            </DragDropContext>
+          )}
+        </div>  
 
       {/* ── Modals ── */}
       {isModalOpen && selectedTopic && (
