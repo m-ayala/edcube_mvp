@@ -788,21 +788,29 @@ const CourseWorkspace = () => {
 
   // ─── Shared inline styles ─────────────────────────────────────────────
   const colors = {
-    bg: '#f5f3ff',
-    card: '#ffffff',
-    sectionBorder: '#c4b5fd',
-    sectionBg: '#ede9fe',
-    subBorder: '#a78bfa',
-    accent: '#7c3aed',
-    accentLight: '#ddd6fe',
-    textPrimary: '#1e1b4b',
-    textSecondary: '#6b7280',
-    pillBg: '#ede9fe',
-    pillText: '#7c3aed',
-    videoBtn: '#dc2626',
-    worksheetBtn: '#2563eb',
-    activityBtn: '#16a34a',
-    dangerBtn: '#ef4444'
+    bg: '#FAF9F6',              // Warm off-white
+    card: '#FFFFFF',            // Pure white
+    sectionBorder: '#E8E6E1',   // Subtle beige border
+    sectionBg: '#F5F3EE',       // Light beige background
+    subBorder: '#D4D0C8',       // Medium beige
+    accent: '#D4C4A8',          // Main beige accent
+    accentLight: '#F5F3EE',     // Light beige
+    textPrimary: '#2C2A26',     // Dark brown-gray
+    textSecondary: '#6B6760',   // Medium gray
+    pillBg: '#F5F3EE',          // Light beige
+    pillText: '#6B6760',        // Medium gray
+    videoBtn: '#D4C4A8',        // Beige (was red)
+    worksheetBtn: '#D4C4A8',    // Beige (was blue)
+    activityBtn: '#D4C4A8',     // Beige (was green)
+    dangerBtn: '#E57373',       // Soft red
+    
+    // PLA Pillars - ONLY colorful elements
+    pla: {
+      'Personal Growth': '#E8A5A5',
+      'Core Learning': '#A5C9E8',
+      'Critical Thinking': '#B8E8A5',
+      'Application & Impact': '#E8D5A5'
+    }
   };
 
   // ─── SUB-COMPONENTS (inline, scoped) ──────────────────────────────────
@@ -810,10 +818,10 @@ const CourseWorkspace = () => {
   const Pill = ({ label, color }) => (
     <span style={{
       display: 'inline-block',
-      padding: '2px 10px',
+      padding: '4px 10px',
       borderRadius: '12px',
       fontSize: '11px',
-      fontWeight: '600',
+      fontWeight: '500',
       backgroundColor: color?.bg || colors.pillBg,
       color: color?.text || colors.pillText
     }}>
@@ -913,11 +921,11 @@ const CourseWorkspace = () => {
 
   const DescriptorBox = ({ value, onChange, placeholder, fieldKey }) => (
     <div style={{
-      border: '2px dashed #c4b5fd',
+      border: '1px solid #E8E6E1',
       borderRadius: '8px',
       padding: '10px 14px',
       marginBottom: '12px',
-      backgroundColor: '#faf5ff',
+      backgroundColor: '#F5F3EE',
       position: 'relative'
     }}>
       <EditableField
@@ -1076,31 +1084,62 @@ const CourseWorkspace = () => {
           )}
 
           <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '8px', paddingLeft: '24px' }}>
-            <Pill label={`${topicBox.duration_minutes || 0} min`} color={{ bg: '#f3e8ff', text: '#7c3aed' }} />
-            <Pill label={(topicBox.pla_pillars || [])[0] || 'Knowledge'} />
+            <Pill label={`${topicBox.duration_minutes || 0} min`} color={{ bg: '#F5F3EE', text: colors.textSecondary }} />
+            {(topicBox.pla_pillars || []).map((pillar, idx) => (
+              <Pill 
+                key={idx}
+                label={pillar} 
+                color={{ 
+                  bg: colors.pla[pillar] || colors.pillBg, 
+                  text: colors.textPrimary 
+                }} 
+              />
+            ))}
           </div>
         </div>
 
         {/* Col 2: Videos */}
         <div style={{ padding: '14px', borderRight: '1px solid #f3f4f6' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-            <p style={{ margin: 0, fontSize: '12px', fontWeight: '600', color: colors.textSecondary }}>📹 Resources</p>
+            <p style={{ margin: 0, fontSize: '11px', fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Videos</p>
             {videos.length > 0 && (
               <button onClick={() => generateVideosFromBackend(topicBox)} style={{
-                padding: '3px 8px', backgroundColor: 'transparent', color: colors.videoBtn,
-                border: `1px solid ${colors.videoBtn}`, borderRadius: '4px',
-                cursor: 'pointer', fontSize: '11px', fontWeight: '600'
-              }}>↻ Redo</button>
+                width: '28px',
+                height: '28px',
+                borderRadius: '50%',
+                backgroundColor: 'transparent',
+                color: colors.videoBtn,
+                border: `1px solid ${colors.videoBtn}`,
+                cursor: 'pointer',
+                fontSize: '14px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 0
+              }}>↻</button>
             )}
           </div>
 
           {videos.length === 0 ? (
             <button onClick={() => generateVideosFromBackend(topicBox)} style={{
-              width: '100%', padding: '8px', backgroundColor: colors.videoBtn,
-              color: 'white', border: 'none', borderRadius: '6px',
-              cursor: 'pointer', fontSize: '13px', fontWeight: '600'
-            }}>
-              🎬 Generate Videos
+              width: '32px',
+              height: '32px',
+              borderRadius: '50%',
+              backgroundColor: colors.videoBtn,
+              color: '#2C2A26',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'background-color 0.2s',
+              padding: 0
+            }}
+            onMouseEnter={(e) => e.target.style.backgroundColor = '#B8A888'}
+            onMouseLeave={(e) => e.target.style.backgroundColor = colors.videoBtn}
+            >
+              ✨
             </button>
           ) : (
             <div>
@@ -1129,7 +1168,7 @@ const CourseWorkspace = () => {
                 </a>
               ))}
               <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
-                <Pill label={`${videos.length} video${videos.length > 1 ? 's' : ''}`} color={{ bg: '#fef2f2', text: '#dc2626' }} />
+                <Pill label={`${videos.length} video${videos.length > 1 ? 's' : ''}`} color={{ bg: '#F5F3EE', text: colors.textSecondary }} />
               </div>
             </div>
           )}
@@ -1137,40 +1176,58 @@ const CourseWorkspace = () => {
 
         {/* Col 3: Hands-On */}
         <div style={{ padding: '14px' }}>
-          <p style={{ margin: '0 0 10px', fontSize: '12px', fontWeight: '600', color: colors.textSecondary }}>📝 Hands-On resources</p>
+          <p style={{ margin: '0 0 10px', fontSize: '11px', fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Hands-On</p>
 
           <div style={{ marginBottom: '10px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-              <p style={{ margin: 0, fontSize: '11px', color: colors.textSecondary }}>📄 Worksheets</p>
+              <p style={{ margin: 0, fontSize: '11px', color: colors.textSecondary }}>Worksheets</p>
               <button onClick={() => generateResource(topicBox.id, 'worksheet')} style={{
-                padding: '2px 8px', backgroundColor: colors.worksheetBtn,
-                color: 'white', border: 'none', borderRadius: '4px',
-                cursor: 'pointer', fontSize: '11px', fontWeight: '600'
-              }}>+ Add</button>
+                width: '28px',
+                height: '28px',
+                borderRadius: '50%',
+                backgroundColor: colors.worksheetBtn,
+                color: '#2C2A26',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 0
+              }}>✨</button>
             </div>
             {worksheets.length === 0 ? (
               <p style={{ fontSize: '11px', color: '#9ca3af', fontStyle: 'italic', margin: '4px 0' }}>None yet</p>
             ) : worksheets.map((ws, i) => (
-              <div key={i} style={{ padding: '5px 8px', marginBottom: '4px', backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '4px' }}>
+              <div key={i} style={{ padding: '5px 8px', marginBottom: '4px', backgroundColor: '#F5F3EE', border: '1px solid #E8E6E1', borderRadius: '4px' }}>
                 <p style={{ margin: 0, fontSize: '12px', fontWeight: '500', color: colors.textPrimary }}>{ws.title}</p>
-                {ws.sourceUrl && <a href={ws.sourceUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '11px', color: colors.worksheetBtn }}>View Source</a>}
+                {ws.sourceUrl && <a href={ws.sourceUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '11px', color: colors.accent }}>View Source</a>}
               </div>
             ))}
           </div>
 
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-              <p style={{ margin: 0, fontSize: '11px', color: colors.textSecondary }}>🎯 Activities</p>
+              <p style={{ margin: 0, fontSize: '11px', color: colors.textSecondary }}>Activities</p>
               <button onClick={() => generateResource(topicBox.id, 'activity')} style={{
-                padding: '2px 8px', backgroundColor: colors.activityBtn,
-                color: 'white', border: 'none', borderRadius: '4px',
-                cursor: 'pointer', fontSize: '11px', fontWeight: '600'
-              }}>+ Add</button>
+                width: '28px',
+                height: '28px',
+                borderRadius: '50%',
+                backgroundColor: colors.activityBtn,
+                color: '#2C2A26',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 0
+              }}>✨</button>
             </div>
             {activities.length === 0 ? (
               <p style={{ fontSize: '11px', color: '#9ca3af', fontStyle: 'italic', margin: '4px 0' }}>None yet</p>
             ) : activities.map((act, i) => (
-              <div key={i} style={{ padding: '5px 8px', marginBottom: '4px', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '4px' }}>
+              <div key={i} style={{ padding: '5px 8px', marginBottom: '4px', backgroundColor: '#F5F3EE', border: '1px solid #E8E6E1', borderRadius: '4px' }}>
                 <p style={{ margin: '0 0 2px', fontSize: '12px', fontWeight: '500', color: colors.textPrimary }}>{act.title}</p>
                 <p style={{ margin: 0, fontSize: '11px', color: colors.textSecondary }}>{act.description}</p>
               </div>
@@ -1187,7 +1244,7 @@ const CourseWorkspace = () => {
       return (
         <div style={{
           padding: '12px 16px', marginBottom: '16px',
-          backgroundColor: '#fff3cd', border: '1px dashed #ffc107',
+          backgroundColor: '#FFF9E6', border: '1px solid #E8E6E1',
           borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1219,7 +1276,7 @@ const CourseWorkspace = () => {
 
     return (
       <div style={{
-        border: `2px solid ${colors.sectionBorder}`,
+        border: `1px solid ${colors.sectionBorder}`,
         borderRadius: '12px',
         marginBottom: '20px',
         backgroundColor: colors.card,
@@ -1394,7 +1451,7 @@ const CourseWorkspace = () => {
                                         <div style={{
                                           textAlign: 'center',
                                           padding: '20px',
-                                          border: '2px dashed #e5e7eb',
+                                          border: '1px solid #e5e7eb',
                                           borderRadius: '8px',
                                           backgroundColor: '#fafafa',
                                           color: colors.textSecondary,
@@ -1440,7 +1497,7 @@ const CourseWorkspace = () => {
                                   <button onClick={() => addTopicBox(section.id, sub.id)} style={{
                                     flex: 1, padding: '8px',
                                     backgroundColor: 'transparent', color: colors.accent,
-                                    border: `1px dashed ${colors.sectionBorder}`, borderRadius: '6px',
+                                    border: `1px solid ${colors.sectionBorder}`, borderRadius: '6px',
                                     cursor: 'pointer', fontSize: '13px', fontWeight: '600'
                                   }}>
                                     ⊕ Add Topic Box
@@ -1490,7 +1547,7 @@ const CourseWorkspace = () => {
               <button onClick={() => addSubsection(section.id)} style={{
                 flex: 1, padding: '8px',
                 backgroundColor: 'transparent', color: colors.accent,
-                border: `1px dashed ${colors.sectionBorder}`, borderRadius: '6px',
+                border: `1px solid ${colors.sectionBorder}`, borderRadius: '6px',
                 cursor: 'pointer', fontSize: '13px', fontWeight: '600'
               }}>
                 ⊕ Add Subsection
@@ -1590,7 +1647,7 @@ const CourseWorkspace = () => {
 
         <button onClick={addBreak} style={{
           padding: '7px 16px', backgroundColor: 'white', color: colors.accent,
-          border: `1px dashed ${colors.sectionBorder}`, borderRadius: '6px',
+          border: `1px solid ${colors.sectionBorder}`, borderRadius: '6px',
           cursor: 'pointer', fontWeight: '600', fontSize: '13px'
         }}>⏸️ Break</button>
 
@@ -1606,7 +1663,7 @@ const CourseWorkspace = () => {
         {sections.length === 0 ? (
           <div style={{
             textAlign: 'center', padding: '80px 20px',
-            border: '2px dashed #c4b5fd', borderRadius: '16px',
+            border: `1px solid ${colors.sectionBorder}`, borderRadius: '16px',
             backgroundColor: 'white'
           }}>
             <p style={{ fontSize: '24px', marginBottom: '8px' }}>📚</p>
@@ -1714,7 +1771,7 @@ const CourseWorkspace = () => {
               {!pickerLoading && pickerCourses.length === 0 && (
                 <div style={{ textAlign: 'center', padding: '32px 0', color: '#888' }}>
                   <p>No courses yet.</p>
-                  <button onClick={() => navigate('/course-designer')} style={{ padding: '8px 18px', backgroundColor: '#c4b5fd', color: colors.textPrimary, border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}>Create a New Course</button>
+                  <button onClick={() => navigate('/course-designer')} style={{ padding: '8px 18px', backgroundColor: colors.accent, color: colors.textPrimary, border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}>Create a New Course</button>
                 </div>
               )}
               {!pickerLoading && pickerCourses.map(course => (
