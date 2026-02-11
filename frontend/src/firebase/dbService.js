@@ -15,13 +15,14 @@ import { db } from './config';
 /**
  * Save a new curriculum or update existing one
  */
-export const saveCurriculum = async (teacherUid, curriculumData) => {
+export const saveCurriculum = async (teacherUid, curriculumData, organizationId) => {
   try {
     // Generate curriculum ID (use existing ID if updating, otherwise create new)
     const curriculumId = curriculumData.id || doc(collection(db, 'curricula')).id;
     
     const curriculumDoc = {
       teacherUid: teacherUid,
+      organizationId: organizationId,
       courseName: curriculumData.courseName,
       subject: curriculumData.subject,
       class: curriculumData.class,

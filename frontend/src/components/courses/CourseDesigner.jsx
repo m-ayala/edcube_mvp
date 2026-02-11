@@ -1,13 +1,15 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { ArrowLeft } from 'lucide-react';
+import { getOwnProfile } from '../../services/teacherService';
 
 const CourseDesigner = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState({ message: '', progress: 0 });
+  const [organizationId, setOrganizationId] = useState(null);
   const [formData, setFormData] = useState({
     courseName: '',
     class: '',
@@ -20,6 +22,22 @@ const CourseDesigner = () => {
     objectives: ''
   });
 
+  // Fetch teacher profile to get organizationId
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (currentUser) {
+        try {
+          const profile = await getOwnProfile(currentUser);
+          setOrganizationId(profile.org_id);
+        } catch (error) {
+          console.error('Error fetching teacher profile:', error);
+          alert('Failed to load your profile. Please refresh the page.');
+        }
+      }
+    };
+    fetchProfile();
+  }, [currentUser]);
+
   const handleChange = (e) => {
     setFormData({
       ...formData,
@@ -29,6 +47,13 @@ const CourseDesigner = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Validate organizationId is available
+    if (!organizationId) {
+      alert('Unable to generate course: Organization ID not found. Please refresh the page and try again.');
+      return;
+    }
+
     setLoading(true);
     setProgress({ message: 'Starting...', progress: 0 });
 
@@ -45,7 +70,8 @@ const CourseDesigner = () => {
           num_worksheets: parseInt(formData.numWorksheets),
           num_activities: parseInt(formData.numActivities),
           objectives: formData.objectives,
-          teacherUid: currentUser.uid
+          teacherUid: currentUser.uid,
+          organizationId: organizationId
         })
       });
 

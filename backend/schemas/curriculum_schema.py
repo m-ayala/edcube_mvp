@@ -13,6 +13,7 @@ class CurriculumFields:
     COURSE_ID = 'courseId'
     TEACHER_UID = 'teacherUid'
     TEACHER_EMAIL = 'teacherEmail'
+    ORGANIZATION_ID = 'organizationId'
     
     # Course metadata
     COURSE_NAME = 'courseName'
@@ -102,6 +103,7 @@ def format_curriculum_for_api(firestore_doc):
         F.COURSE_ID: firestore_doc.get(F.COURSE_ID),
         F.TEACHER_UID: firestore_doc.get(F.TEACHER_UID),
         F.TEACHER_EMAIL: firestore_doc.get(F.TEACHER_EMAIL),
+        F.ORGANIZATION_ID: firestore_doc.get(F.ORGANIZATION_ID),
         F.COURSE_NAME: firestore_doc.get(F.COURSE_NAME),
         F.CLASS: firestore_doc.get(F.CLASS),
         F.SUBJECT: firestore_doc.get(F.SUBJECT),

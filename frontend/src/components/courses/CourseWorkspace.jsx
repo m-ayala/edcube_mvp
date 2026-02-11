@@ -6,6 +6,7 @@ import CourseEditor from './CourseEditor';
 import useCourseActions from './useCourseActions';
 import BreakModal from '../modals/BreakModal';
 import TopicDetailsModal from '../modals/TopicDetailsModal';
+import { getOwnProfile } from '../../services/teacherService';
 
 const CourseWorkspace = () => {
   const { currentUser } = useAuth();
@@ -29,6 +30,7 @@ const CourseWorkspace = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [videosByTopic, setVideosByTopic] = useState({});
   const [handsOnResources, setHandsOnResources] = useState({});
+  const [organizationId, setOrganizationId] = useState(null);
 
   // ── Initialize Actions Hook ───────────────────────────────────────────
   const actions = useCourseActions({
@@ -42,6 +44,21 @@ const CourseWorkspace = () => {
     currentUser,
     curriculumId
   });
+
+  // ── Fetch teacher profile to get organizationId ──────────────────────
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (currentUser) {
+        try {
+          const profile = await getOwnProfile(currentUser);
+          setOrganizationId(profile.org_id);
+        } catch (error) {
+          console.error('Error fetching teacher profile:', error);
+        }
+      }
+    };
+    fetchProfile();
+  }, [currentUser]);
 
   // ── Mount: Transform data + hydrate caches ────────────────────────────
   useEffect(() => {
@@ -192,9 +209,15 @@ const CourseWorkspace = () => {
       const hasExistingId = curriculumId && curriculumId !== 'new-course';
       if (hasExistingId) courseData.courseId = curriculumId;
 
+      // Ensure organizationId is available before saving
+      if (!organizationId) {
+        alert('Unable to save: Organization ID not found. Please try refreshing the page.');
+        return;
+      }
+
       const endpoint = hasExistingId
         ? `http://localhost:8000/api/update-course?teacherUid=${currentUser.uid}`
-        : `http://localhost:8000/api/save-course?teacherUid=${currentUser.uid}`;
+        : `http://localhost:8000/api/save-course?teacherUid=${currentUser.uid}&organizationId=${organizationId}`;
 
       const response = await fetch(endpoint, {
         method: 'POST',

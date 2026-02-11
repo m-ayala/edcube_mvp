@@ -35,6 +35,7 @@ class CourseRequest(BaseModel):
     num_activities: int
     objectives: Optional[str] = ""
     teacherUid: str
+    organizationId: str
 
 
 @router.post("/generate-curriculum")
@@ -93,7 +94,8 @@ async def generate_curriculum(request: CourseRequest):
                     'duration': request.time_duration,
                     'outline': outline_data,
                     'sections': outline_data.get('sections', [])
-                }
+                },
+                organizationId=request.organizationId
             )
             
             # Complete
@@ -180,11 +182,14 @@ async def delete_curriculum(curriculum_id: str, teacherUid: str):
     
 # In backend/routes/curriculum.py
 @router.post("/save-course")
-async def save_course(course_data: dict, teacherUid: str):
+async def save_course(course_data: dict, teacherUid: str, organizationId: str):
     """Save course from CourseWorkspace"""
     try:
         if not teacherUid:
             raise HTTPException(status_code=400, detail="teacherUid is required")
+
+        if not organizationId:
+            raise HTTPException(status_code=400, detail="organizationId is required")
         
         # FIX: Ensure course_data has the right structure
         curriculum_data = {
@@ -202,7 +207,8 @@ async def save_course(course_data: dict, teacherUid: str):
         
         course_id = await firebase.save_curriculum(
             teacherUid=teacherUid,
-            curriculum_data=curriculum_data
+            curriculum_data=curriculum_data,
+            organizationId=organizationId
         )
         
         return {

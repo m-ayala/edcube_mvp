@@ -26,7 +26,7 @@ class FirebaseService:
         self.curricula_collection = self.db.collection('curricula')
     
     # In firebase_service.py - save_curriculum method
-    async def save_curriculum(self, teacherUid: str, curriculum_data: Dict) -> str:
+    async def save_curriculum(self, teacherUid: str, curriculum_data: Dict, organizationId: str) -> str:
         """Save a new curriculum to Firestore (FLAT STRUCTURE)"""
         try:
             import uuid
@@ -37,6 +37,8 @@ class FirebaseService:
             doc_data = {
                 'courseId': course_id,
                 'teacherUid': teacherUid,
+                'teacherEmail': curriculum_data.get('teacherEmail', ''),
+                'organizationId': organizationId,
                 'courseName': curriculum_data.get('course_name', ''),  # ← Check this
                 'class': curriculum_data.get('grade_level', ''),  # ← Check this
                 'subject': curriculum_data.get('subject', ''),
@@ -92,7 +94,7 @@ class FirebaseService:
             print(f"❌ Error fetching curriculum: {str(e)}")
             raise
     
-    async def list_teacher_curricula(self, teacherUid: str) -> List[Dict]:
+    async def list_teacher_curricula(self, teacherUid: str, organizationId: str = None) -> List[Dict]:
         """
         List all curricula for a teacher (FLAT STRUCTURE)
         
@@ -103,10 +105,15 @@ class FirebaseService:
             List of curriculum summaries
         """
         try:
-            docs = self.curricula_collection\
-                .where('teacherUid', '==', teacherUid)\
-                .order_by('createdAt', direction=firestore.Query.DESCENDING)\
-                .stream()
+            # Build query step by step
+            query = self.curricula_collection.where('teacherUid', '==', teacherUid)
+            
+            # Add org filter if specified
+            if organizationId:
+                query = query.where('organizationId', '==', organizationId)
+            
+            # Apply ordering and execute
+            docs = query.order_by('createdAt', direction=firestore.Query.DESCENDING).stream()
             
             curricula = []
             for doc in docs:
@@ -364,4 +371,24 @@ class FirebaseService:
             
         except Exception as e:
             print(f"❌ Error updating curriculum: {e}")
+            raise
+
+    async def get_public_courses(self, organizationId: str, limit: int = 20) -> List[Dict]:
+        """Get public courses for an organization"""
+        try:
+            query = (self.curricula_collection
+                    .where(F.ORGANIZATION_ID, '==', organizationId)
+                    .where(F.IS_PUBLIC, '==', True)
+                    .order_by(F.LAST_MODIFIED, direction=firestore.Query.DESCENDING)
+                    .limit(limit))
+            
+            docs = query.stream()
+            courses = []
+            for doc in docs:
+                course = doc.to_dict()
+                course['id'] = doc.id
+                courses.append(course)
+            return courses
+        except Exception as e:
+            print(f"❌ Error fetching public courses: {str(e)}")
             raise

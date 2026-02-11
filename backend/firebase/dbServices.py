@@ -7,18 +7,19 @@ db = firestore.client()
 def save_curriculum(curriculum_data):
     """
     Save curriculum to Firestore with flat structure.
-    
+
     Args:
         curriculum_data (dict): Contains:
             - teacherUid (str)
             - teacherEmail (str)
+            - organizationId (str)
             - courseName (str)
             - class (str)
             - subject (str)
             - sections (list)
             - handsOnResources (dict)
             - generatedTopics (list)
-    
+
     Returns:
         dict: Success response with course_id
     """
@@ -31,6 +32,7 @@ def save_curriculum(curriculum_data):
             'courseId': course_id,
             'teacherUid': curriculum_data.get('teacherUid'),
             'teacherEmail': curriculum_data.get('teacherEmail'),
+            'organizationId': curriculum_data.get('organizationId'),
             'courseName': curriculum_data.get('courseName'),
             'class': curriculum_data.get('class'),
             'subject': curriculum_data.get('subject'),

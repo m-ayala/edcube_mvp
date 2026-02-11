@@ -10,6 +10,7 @@ export const CurriculumFields = {
   COURSE_ID: 'courseId',
   TEACHER_UID: 'teacherUid',
   TEACHER_EMAIL: 'teacherEmail',
+  ORGANIZATION_ID: 'organizationId',
   
   // Course metadata
   COURSE_NAME: 'courseName',
