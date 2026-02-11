@@ -1,7 +1,8 @@
 // src/components/courses/CourseEditor.jsx
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { GripVertical, Edit2, Check, Trash2 } from 'lucide-react';
-import AIGenerateButton from '../AIGenerateButton';
+import { GripVertical, Edit2, Check, Trash2, Plus, Sparkles } from 'lucide-react';
+import { useState } from 'react';
+import TopicDetailsModal from '../modals/TopicDetailsModal';
 
 const CourseEditor = ({
   courseName,
@@ -17,25 +18,26 @@ const CourseEditor = ({
   onUndo,
   canUndo,
   onAddBreak,
-  onTopicClick,
   navigate
 }) => {
+  const [selectedTopicForDetail, setSelectedTopicForDetail] = useState(null);
+  const [hoveredTopic, setHoveredTopic] = useState(null);
+  const [hoveredSubsection, setHoveredSubsection] = useState(null);
+  const [hoveredSection, setHoveredSection] = useState(null);
+
   // ── Colors ────────────────────────────────────────────────────────────
   const colors = {
     bg: '#FAF9F6',
     card: '#FFFFFF',
     sectionBorder: '#E8E6E1',
-    sectionBg: '#F5F3EE',
-    subBorder: '#D4D0C8',
+    sectionBg: '#E8E0D5',
+    subsectionBg: '#F0EBE3',
     accent: '#D4C4A8',
     accentLight: '#F5F3EE',
     textPrimary: '#2C2A26',
     textSecondary: '#6B6760',
     pillBg: '#F5F3EE',
     pillText: '#6B6760',
-    videoBtn: '#D4C4A8',
-    worksheetBtn: '#D4C4A8',
-    activityBtn: '#D4C4A8',
     dangerBtn: '#E57373',
     pla: {
       'Personal Growth': '#E8A5A5',
@@ -58,7 +60,6 @@ const CourseEditor = ({
       return;
     }
 
-    // Handle SECTION reordering
     if (type === 'SECTION') {
       const reorderedSections = Array.from(sections);
       const [movedSection] = reorderedSections.splice(source.index, 1);
@@ -67,7 +68,6 @@ const CourseEditor = ({
       return;
     }
 
-    // Handle SUBSECTION reordering within a section
     if (type === 'SUBSECTION') {
       const sectionId = source.droppableId.replace('subsections-', '');
       const section = sections.find(s => s.id === sectionId);
@@ -87,12 +87,10 @@ const CourseEditor = ({
       return;
     }
 
-    // Handle TOPICBOX reordering within a subsection
     if (type === 'TOPICBOX') {
       const sourceSubId = source.droppableId.replace('topicboxes-', '');
       const destSubId = destination.droppableId.replace('topicboxes-', '');
 
-      // Find source subsection and topic box
       let sourceSection = null;
       let sourceSub = null;
       let sourceTopicBox = null;
@@ -107,7 +105,6 @@ const CourseEditor = ({
         }
       }
 
-      // Find destination subsection
       let destSection = null;
       let destSub = null;
       
@@ -122,7 +119,6 @@ const CourseEditor = ({
 
       if (!sourceSection || !sourceSub || !sourceTopicBox || !destSection || !destSub) return;
 
-      // Same subsection - just reorder
       if (sourceSubId === destSubId) {
         const updatedSections = sections.map(section => {
           if (section.id !== sourceSection.id) return section;
@@ -142,9 +138,7 @@ const CourseEditor = ({
         });
         setSections(updatedSections);
       } else {
-        // Different subsections - move topic box
         const updatedSections = sections.map(section => {
-          // Remove from source
           if (section.id === sourceSection.id) {
             return {
               ...section,
@@ -159,7 +153,6 @@ const CourseEditor = ({
               })
             };
           }
-          // Add to destination
           if (section.id === destSection.id) {
             return {
               ...section,
@@ -179,6 +172,16 @@ const CourseEditor = ({
       }
       return;
     }
+  };
+
+  // ── Topic Detail Modal Handler ────────────────────────────────────────
+  const handleTopicBoxClick = (topicBox, sectionId, subsectionId) => {
+    setSelectedTopicForDetail({ topicBox, sectionId, subsectionId });
+  };
+
+  const handleSaveTopicDetail = (updateData) => {
+    actions.updateTopicBoxFull(updateData);
+    setSelectedTopicForDetail(null);
   };
 
   // ── Inline Components ─────────────────────────────────────────────────
@@ -240,61 +243,41 @@ const CourseEditor = ({
           value={isEditing ? (actions.editingField.value || '') : value}
           onChange={e => isEditing && actions.setEditingField({ ...actions.editingField, value: e.target.value })}
           onKeyDown={handleKeyDown}
+          onBlur={handleSave}
           disabled={!isEditing}
           placeholder={placeholder}
           style={{
             flex: 1,
-            border: 'none',
-            background: 'transparent',
+            border: isEditing ? '2px solid #000' : 'none',
+            background: isEditing ? '#fff' : 'transparent',
             outline: 'none',
-            cursor: isEditing ? 'text' : 'default',
-            paddingRight: '28px',
+            cursor: isEditing ? 'text' : 'pointer',
+            padding: isEditing ? '6px 10px' : '0',
+            borderRadius: isEditing ? '4px' : '0',
+            transition: 'all 0.15s ease',
             ...inputStyle
           }}
+          onClick={!isEditing ? handleEdit : undefined}
         />
         <button
           onClick={isEditing ? handleSave : handleEdit}
           style={{
-            position: 'absolute',
-            right: '4px',
             background: 'none',
             border: 'none',
             cursor: 'pointer',
             padding: '2px',
             display: 'flex',
             alignItems: 'center',
-            color: isEditing ? colors.accent : '#9ca3af'
+            color: isEditing ? colors.accent : '#9ca3af',
+            flexShrink: 0
           }}
           title={isEditing ? 'Save' : 'Edit'}
         >
-          {isEditing ? <Check size={14} /> : <Edit2 size={14} />}
+          {isEditing ? <Check size={14} /> : <Edit2 size={12} />}
         </button>
       </div>
     );
   };
-
-  const DescriptorBox = ({ value, onChange, placeholder, fieldKey }) => (
-    <div style={{
-      border: '1px solid #E8E6E1',
-      borderRadius: '8px',
-      padding: '10px 14px',
-      marginBottom: '12px',
-      backgroundColor: '#F5F3EE',
-      position: 'relative'
-    }}>
-      <EditableField
-        value={value}
-        onChange={onChange}
-        fieldKey={fieldKey}
-        placeholder={placeholder || 'Add a description…'}
-        inputStyle={{
-          fontSize: '13px',
-          color: colors.textSecondary,
-          fontStyle: value ? 'normal' : 'italic'
-        }}
-      />
-    </div>
-  );
 
   const ConfirmDialog = ({ isOpen, onConfirm, onCancel, title, message }) => {
     if (!isOpen) return null;
@@ -359,235 +342,240 @@ const CourseEditor = ({
     );
   };
 
-  // ── Topic Box Row Component ───────────────────────────────────────────
+  // ── Topic Box Row Component (OPTION A - Single Summary) ──────────────
   const TopicBoxRow = ({ topicBox, sectionId, subsectionId, dragHandleProps }) => {
     const videos = videosByTopic[topicBox.id] || [];
-    const worksheets = (handsOnResources[topicBox.id] || []).filter(r => r.type === 'worksheet');
-    const activities = (handsOnResources[topicBox.id] || []).filter(r => r.type === 'activity');
+    const allResources = handsOnResources[topicBox.id] || [];
+    const worksheets = allResources.filter(r => r.type === 'worksheet');
+    const activities = allResources.filter(r => r.type === 'activity');
+
+    const totalResources = videos.length + worksheets.length + activities.length;
+
+    const resourceSummary = [
+      videos.length > 0 && `${videos.length} video${videos.length > 1 ? 's' : ''}`,
+      worksheets.length > 0 && `${worksheets.length} worksheet${worksheets.length > 1 ? 's' : ''}`,
+      activities.length > 0 && `${activities.length} activit${activities.length > 1 ? 'ies' : 'y'}`
+    ].filter(Boolean).join(' • ');
 
     return (
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: '1fr 1fr 1fr',
-        gap: '12px',
-        border: '1px solid #e5e7eb',
-        borderRadius: '10px',
-        overflow: 'hidden',
-        backgroundColor: colors.card,
-        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-        position: 'relative',
-        marginBottom: '12px'
-      }}>
-        {/* Drag handle */}
-        <div
-          {...dragHandleProps}
+      <div style={{ marginBottom: '12px' }}>
+        <div 
+          onMouseEnter={() => setHoveredTopic(topicBox.id)}
+          onMouseLeave={() => setHoveredTopic(null)}
+          onClick={() => handleTopicBoxClick(topicBox, sectionId, subsectionId)}
           style={{
-            position: 'absolute',
-            top: '8px',
-            left: '8px',
-            cursor: 'grab',
-            zIndex: 10,
-            padding: '4px',
-            background: 'rgba(255, 255, 255, 0.9)',
-            borderRadius: '4px',
-            display: 'flex',
-            alignItems: 'center'
+            border: '1px solid #e5e7eb',
+            borderRadius: '10px',
+            backgroundColor: colors.card,
+            boxShadow: hoveredTopic === topicBox.id ? '0 4px 12px rgba(0,0,0,0.12)' : '0 1px 3px rgba(0,0,0,0.06)',
+            position: 'relative',
+            padding: '16px',
+            cursor: 'pointer',
+            transition: 'all 0.2s'
           }}
         >
-          <GripVertical size={16} style={{ color: '#9ca3af' }} />
-        </div>
-
-        {/* Col 1: Topic Info */}
-        <div style={{ padding: '14px', borderRight: '1px solid #f3f4f6' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '6px' }}>
-            <EditableField
-              value={topicBox.title}
-              onChange={val => actions.updateTopicBoxTitle(sectionId, subsectionId, topicBox.id, val)}
-              fieldKey={`topic-title-${topicBox.id}`}
-              placeholder="Topic title"
-              style={{ flex: 1, paddingLeft: '24px' }}
-              inputStyle={{
-                fontSize: '14px',
-                fontWeight: '600',
-                color: colors.textPrimary
-              }}
-            />
-            <button
-              onClick={() => actions.confirmDeleteTopicBox(sectionId, subsectionId, topicBox.id)}
-              style={{
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                padding: '2px',
-                display: 'flex',
-                alignItems: 'center',
-                color: colors.dangerBtn
-              }}
-              title="Delete topic box"
-            >
-              <Trash2 size={14} />
-            </button>
+          {/* Drag handle */}
+          <div
+            {...dragHandleProps}
+            onClick={e => e.stopPropagation()}
+            style={{
+              position: 'absolute',
+              top: '12px',
+              left: '12px',
+              cursor: 'grab',
+              zIndex: 10,
+              padding: '4px',
+              background: 'rgba(255, 255, 255, 0.9)',
+              borderRadius: '4px',
+              display: 'flex',
+              alignItems: 'center'
+            }}
+          >
+            <GripVertical size={16} style={{ color: '#9ca3af' }} />
           </div>
 
-          {(topicBox.learning_objectives || []).length > 0 && (
-            <ul style={{ margin: '8px 0 8px 24px', paddingLeft: '16px', fontSize: '12px', color: colors.textSecondary }}>
-              {topicBox.learning_objectives.map((obj, i) => (
-                <li key={i} style={{ marginBottom: '2px' }}>{obj}</li>
-              ))}
-            </ul>
-          )}
-
-          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '8px', paddingLeft: '24px' }}>
-            <Pill label={`${topicBox.duration_minutes || 0} min`} color={{ bg: '#F5F3EE', text: colors.textSecondary }} />
-            {(topicBox.pla_pillars || []).map((pillar, idx) => (
-              <Pill 
-                key={idx}
-                label={pillar} 
-                color={{ 
-                  bg: colors.pla[pillar] || colors.pillBg, 
-                  text: colors.textPrimary 
-                }} 
-              />
-            ))}
-          </div>
-        </div>
-
-        {/* Col 2: Videos */}
-        <div style={{ padding: '14px', borderRight: '1px solid #f3f4f6' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-            <p style={{ margin: 0, fontSize: '11px', fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Videos</p>
-            {videos.length > 0 && (
-              <button onClick={() => actions.generateVideosFromBackend(topicBox)} style={{
-                width: '28px',
-                height: '28px',
-                borderRadius: '50%',
-                backgroundColor: 'transparent',
-                color: colors.videoBtn,
-                border: `1px solid ${colors.videoBtn}`,
-                cursor: 'pointer',
-                fontSize: '14px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: 0
-              }}>↻</button>
-            )}
-          </div>
-
-          {videos.length === 0 ? (
-            <button onClick={() => actions.generateVideosFromBackend(topicBox)} style={{
-              width: '32px',
-              height: '32px',
-              borderRadius: '50%',
-              backgroundColor: colors.videoBtn,
-              color: '#2C2A26',
+          {/* Delete button */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              actions.confirmDeleteTopicBox(sectionId, subsectionId, topicBox.id);
+            }}
+            style={{
+              position: 'absolute',
+              top: '12px',
+              right: '12px',
+              background: 'none',
               border: 'none',
               cursor: 'pointer',
-              fontSize: '16px',
+              padding: '4px',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              transition: 'background-color 0.2s',
-              padding: 0
+              color: colors.dangerBtn,
+              zIndex: 10
             }}
-            onMouseEnter={(e) => e.target.style.backgroundColor = '#B8A888'}
-            onMouseLeave={(e) => e.target.style.backgroundColor = colors.videoBtn}
-            >
-              ✨
-            </button>
-          ) : (
-            <div>
-              {videos.map((video, idx) => (
-                <a key={idx}
-                  href={`https://www.youtube.com/watch?v=${video.videoId}`}
-                  target="_blank" rel="noopener noreferrer"
-                  style={{
-                    display: 'flex', gap: '8px', padding: '6px',
-                    marginBottom: '6px', backgroundColor: '#fafafa',
-                    border: '1px solid #eee', borderRadius: '6px',
-                    textDecoration: 'none', color: 'inherit', cursor: 'pointer'
-                  }}
-                >
-                  <img src={video.thumbnailUrl} alt={video.title}
-                    style={{ width: '56px', height: '42px', objectFit: 'cover', borderRadius: '3px', flexShrink: 0 }}
-                  />
-                  <div style={{ minWidth: 0 }}>
-                    <p style={{ fontSize: '12px', fontWeight: '500', margin: '0 0 2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: colors.textPrimary }}>
-                      {video.title}
-                    </p>
-                    <p style={{ fontSize: '10px', color: colors.textSecondary, margin: 0 }}>
-                      {video.channelName} • {video.duration}
-                    </p>
-                  </div>
-                </a>
+            title="Delete topic box"
+          >
+            <Trash2 size={16} />
+          </button>
+
+          {/* Content */}
+          <div style={{ paddingLeft: '28px', paddingRight: '28px' }}>
+            {/* Title */}
+            <h4 style={{ 
+              margin: '0 0 10px', 
+              fontSize: '15px', 
+              fontWeight: '600', 
+              color: colors.textPrimary 
+            }}>
+              {topicBox.title}
+            </h4>
+
+            {/* Learning Objectives */}
+            {(topicBox.learning_objectives || []).length > 0 && (
+              <ul style={{ 
+                margin: '0 0 12px', 
+                paddingLeft: '20px', 
+                fontSize: '13px', 
+                color: colors.textSecondary,
+                lineHeight: '1.6'
+              }}>
+                {topicBox.learning_objectives.slice(0, 3).map((obj, i) => (
+                  <li key={i} style={{ marginBottom: '4px' }}>{obj}</li>
+                ))}
+                {topicBox.learning_objectives.length > 3 && (
+                  <li style={{ color: '#9ca3af', fontStyle: 'italic' }}>
+                    +{topicBox.learning_objectives.length - 3} more...
+                  </li>
+                )}
+              </ul>
+            )}
+
+            {/* Pills Row */}
+            <div style={{ 
+              display: 'flex', 
+              gap: '6px', 
+              flexWrap: 'wrap', 
+              marginBottom: totalResources > 0 ? '12px' : '0'
+            }}>
+              <Pill 
+                label={`${topicBox.duration_minutes || 0} min`} 
+                color={{ bg: '#F5F3EE', text: colors.textSecondary }} 
+              />
+              {(topicBox.pla_pillars || []).map((pillar, idx) => (
+                <Pill 
+                  key={idx}
+                  label={pillar} 
+                  color={{ 
+                    bg: colors.pla[pillar] || colors.pillBg, 
+                    text: colors.textPrimary 
+                  }} 
+                />
               ))}
-              <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
-                <Pill label={`${videos.length} video${videos.length > 1 ? 's' : ''}`} color={{ bg: '#F5F3EE', text: colors.textSecondary }} />
-              </div>
             </div>
-          )}
-        </div>
 
-        {/* Col 3: Hands-On */}
-        <div style={{ padding: '14px' }}>
-          <p style={{ margin: '0 0 10px', fontSize: '11px', fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Hands-On</p>
-
-          <div style={{ marginBottom: '10px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-              <p style={{ margin: 0, fontSize: '11px', color: colors.textSecondary }}>Worksheets</p>
-              <button onClick={() => actions.generateResource(topicBox.id, 'worksheet')} style={{
-                width: '28px',
-                height: '28px',
-                borderRadius: '50%',
-                backgroundColor: colors.worksheetBtn,
-                color: '#2C2A26',
-                border: 'none',
-                cursor: 'pointer',
-                fontSize: '16px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: 0
-              }}>✨</button>
-            </div>
-            {worksheets.length === 0 ? (
-              <p style={{ fontSize: '11px', color: '#9ca3af', fontStyle: 'italic', margin: '4px 0' }}>None yet</p>
-            ) : worksheets.map((ws, i) => (
-              <div key={i} style={{ padding: '5px 8px', marginBottom: '4px', backgroundColor: '#F5F3EE', border: '1px solid #E8E6E1', borderRadius: '4px' }}>
-                <p style={{ margin: 0, fontSize: '12px', fontWeight: '500', color: colors.textPrimary }}>{ws.title}</p>
-                {ws.sourceUrl && <a href={ws.sourceUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '11px', color: colors.accent }}>View Source</a>}
+            {/* Resource Summary */}
+            {totalResources > 0 && (
+              <div style={{
+                padding: '10px 14px',
+                backgroundColor: '#F9FAFB',
+                borderRadius: '6px',
+                border: '1px solid #E5E7EB',
+                fontSize: '12px',
+                color: colors.textSecondary
+              }}>
+                <span style={{ fontWeight: '600', color: colors.textPrimary }}>📦 Resources:</span>{' '}
+                {resourceSummary}
+                <span style={{ 
+                  marginLeft: '8px', 
+                  fontStyle: 'italic', 
+                  color: '#9ca3af',
+                  fontSize: '11px'
+                }}>
+                  (click to view/edit)
+                </span>
               </div>
-            ))}
-          </div>
+            )}
 
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-              <p style={{ margin: 0, fontSize: '11px', color: colors.textSecondary }}>Activities</p>
-              <button onClick={() => actions.generateResource(topicBox.id, 'activity')} style={{
-                width: '28px',
-                height: '28px',
-                borderRadius: '50%',
-                backgroundColor: colors.activityBtn,
-                color: '#2C2A26',
-                border: 'none',
-                cursor: 'pointer',
-                fontSize: '16px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: 0
-              }}>✨</button>
-            </div>
-            {activities.length === 0 ? (
-              <p style={{ fontSize: '11px', color: '#9ca3af', fontStyle: 'italic', margin: '4px 0' }}>None yet</p>
-            ) : activities.map((act, i) => (
-              <div key={i} style={{ padding: '5px 8px', marginBottom: '4px', backgroundColor: '#F5F3EE', border: '1px solid #E8E6E1', borderRadius: '4px' }}>
-                <p style={{ margin: '0 0 2px', fontSize: '12px', fontWeight: '500', color: colors.textPrimary }}>{act.title}</p>
-                <p style={{ margin: 0, fontSize: '11px', color: colors.textSecondary }}>{act.description}</p>
+            {totalResources === 0 && (
+              <div style={{
+                padding: '10px 14px',
+                backgroundColor: '#FFFBEB',
+                borderRadius: '6px',
+                border: '1px dashed #FCD34D',
+                fontSize: '12px',
+                color: '#92400E',
+                fontStyle: 'italic'
+              }}>
+                No resources yet — click to add videos, worksheets, or activities
               </div>
-            ))}
+            )}
           </div>
         </div>
+
+        {/* Add buttons below topic box - show on hover */}
+        {hoveredTopic === topicBox.id && (
+          <div style={{ 
+            display: 'flex', 
+            gap: '6px', 
+            marginTop: '8px',
+            paddingLeft: '16px',
+            paddingBottom: '4px'
+          }}>
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                actions.addTopicBox(sectionId, subsectionId);
+              }} 
+              style={{
+                padding: '4px 10px',
+                backgroundColor: 'transparent',
+                color: colors.accent,
+                border: `1px solid ${colors.sectionBorder}`,
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '12px',
+                fontWeight: '600',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px'
+              }}
+            >
+              <Plus size={14} /> Add Topic
+            </button>
+            
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                actions.handleGenerateTopicBoxes(sectionId, subsectionId, {
+                  level: 'topics',
+                  context: {
+                    course: {
+                      title: courseName,
+                      grade: formData?.class || ''
+                    }
+                  },
+                  userGuidance: null,
+                  count: 1
+                });
+              }}
+              style={{
+                padding: '6px 14px',
+                backgroundColor: colors.accent,
+                color: '#fff',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '12px',
+                fontWeight: '600',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px'
+              }}
+            >
+              <Sparkles size={14} /> AI
+            </button>
+          </div>
+        )}
       </div>
     );
   };
@@ -629,76 +617,99 @@ const CourseEditor = ({
     const isCollapsed = actions.collapsedSections[section.id];
 
     return (
-      <div style={{
-        border: `1px solid ${colors.sectionBorder}`,
-        borderRadius: '12px',
-        marginBottom: '20px',
-        backgroundColor: colors.card,
-        overflow: 'hidden'
-      }}>
-        {/* Section header */}
-        <div style={{
-          backgroundColor: colors.sectionBg,
-          padding: '10px 16px',
-          display: 'flex', alignItems: 'center', gap: '10px'
-        }}>
-          <div {...dragHandleProps} style={{ cursor: 'grab', display: 'flex', alignItems: 'center' }}>
-            <GripVertical size={18} style={{ color: colors.accent }} />
+      <div 
+        onMouseEnter={() => setHoveredSection(section.id)}
+        onMouseLeave={() => setHoveredSection(null)}
+        style={{
+          border: `1px solid ${colors.sectionBorder}`,
+          borderRadius: '12px',
+          marginBottom: '20px',
+          backgroundColor: colors.card,
+          overflow: 'hidden'
+        }}
+      >
+        {/* Section header with attached description */}
+        <div>
+          {/* Header bar */}
+          <div style={{
+            backgroundColor: colors.sectionBg,
+            padding: '10px 16px',
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '10px'
+          }}>
+            <div {...dragHandleProps} style={{ cursor: 'grab', display: 'flex', alignItems: 'center' }}>
+              <GripVertical size={18} style={{ color: colors.accent }} />
+            </div>
+
+            <button onClick={() => actions.toggleSection(section.id)} style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              fontSize: '14px', color: colors.accent, padding: 0
+            }}>
+              {isCollapsed ? '▶' : '▼'}
+            </button>
+
+            <span style={{ fontSize: '12px', fontWeight: '700', color: colors.accent }}>
+              Section {index + 1}
+            </span>
+
+            <EditableField
+              value={section.title}
+              onChange={val => actions.updateSectionTitle(section.id, val)}
+              fieldKey={`section-title-${section.id}`}
+              placeholder="Section title"
+              inputStyle={{
+                fontSize: '15px',
+                fontWeight: '600',
+                color: colors.textPrimary
+              }}
+            />
+
+            <button
+              onClick={() => actions.confirmDeleteSection(section.id)}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '4px 8px',
+                borderRadius: '4px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                color: colors.dangerBtn,
+                fontSize: '13px',
+                fontWeight: '600'
+              }}
+              title="Delete section"
+            >
+              <Trash2 size={16} />
+            </button>
           </div>
 
-          <button onClick={() => actions.toggleSection(section.id)} style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            fontSize: '14px', color: colors.accent, padding: 0
-          }}>
-            {isCollapsed ? '▶' : '▼'}
-          </button>
-
-          <span style={{ fontSize: '12px', fontWeight: '700', color: colors.accent }}>
-            Section {index + 1}
-          </span>
-
-          <EditableField
-            value={section.title}
-            onChange={val => actions.updateSectionTitle(section.id, val)}
-            fieldKey={`section-title-${section.id}`}
-            placeholder="Section title"
-            inputStyle={{
-              fontSize: '15px',
-              fontWeight: '600',
-              color: colors.textPrimary
-            }}
-          />
-
-          <button
-            onClick={() => actions.confirmDeleteSection(section.id)}
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              padding: '4px 8px',
-              borderRadius: '4px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              color: colors.dangerBtn,
-              fontSize: '13px',
-              fontWeight: '600'
-            }}
-            title="Delete section"
-          >
-            <Trash2 size={16} />
-          </button>
+          {/* Description attached directly below */}
+          {!isCollapsed && (
+            <div style={{
+              backgroundColor: '#FAFAFA',
+              padding: '10px 16px',
+              borderBottom: '1px solid #E8E6E1'
+            }}>
+              <EditableField
+                value={section.description}
+                onChange={val => actions.updateSectionDescription(section.id, val)}
+                fieldKey={`section-desc-${section.id}`}
+                placeholder="Add a description…"
+                inputStyle={{
+                  fontSize: '12px',
+                  color: colors.textSecondary,
+                  fontStyle: section.description ? 'normal' : 'italic'
+                }}
+              />
+            </div>
+          )}
         </div>
 
         {!isCollapsed && (
           <div style={{ padding: '14px 16px' }}>
-            <DescriptorBox
-              value={section.description}
-              onChange={val => actions.updateSectionDescription(section.id, val)}
-              placeholder="Section description…"
-              fieldKey={`section-desc-${section.id}`}
-            />
-
             {/* Subsections */}
             <Droppable droppableId={`subsections-${section.id}`} type="SUBSECTION">
               {(provided) => (
@@ -706,234 +717,291 @@ const CourseEditor = ({
                   ref={provided.innerRef}
                   {...provided.droppableProps}
                 >
-                  {(section.subsections || []).map((sub, subIdx) => (
-                    <Draggable
-                      key={sub.id}
-                      draggableId={sub.id}
-                      index={subIdx}
-                    >
-                      {(provided, snapshot) => {
-                        const isSubCollapsed = actions.collapsedSubsections[sub.id];
-    
-                        return (
-                          <div
-                            ref={provided.innerRef}
-                            {...provided.draggableProps}
-                            style={{
-                              ...provided.draggableProps.style,
-                              marginBottom: '16px',
-                              opacity: snapshot.isDragging ? 0.8 : 1,
-                              border: '1px solid #e5e7eb',
-                              borderRadius: '8px',
-                              backgroundColor: '#fafafa',
-                              overflow: 'hidden'
-                            }}
-                          >
-                            {/* Subsection header */}
-                            <div style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '8px',
-                              padding: '8px 12px',
-                              backgroundColor: '#f9fafb',
-                              borderBottom: isSubCollapsed ? 'none' : '1px solid #e5e7eb'
-                            }}>
-                              <div {...provided.dragHandleProps} style={{ cursor: 'grab', display: 'flex', alignItems: 'center' }}>
-                                <GripVertical size={16} style={{ color: '#9ca3af' }} />
-                              </div>
+                  {(section.subsections || []).map((sub, subIdx) => {
+                    const isSubCollapsed = actions.collapsedSubsections[sub.id];
 
-                              <button onClick={() => actions.toggleSubsection(sub.id)} style={{
-                                background: 'none', border: 'none', cursor: 'pointer',
-                                fontSize: '12px', color: colors.accent, padding: 0
-                              }}>
-                                {isSubCollapsed ? '▶' : '▼'}
-                              </button>
-
-                              <span style={{ fontSize: '11px', fontWeight: '700', color: colors.accent }}>
-                                Subsection {index + 1}.{subIdx + 1}
-                              </span>
-
-                              <EditableField
-                                value={sub.title}
-                                onChange={val => actions.updateSubsectionTitle(section.id, sub.id, val)}
-                                fieldKey={`subsection-title-${sub.id}`}
-                                placeholder="Subsection title"
-                                inputStyle={{
-                                  fontSize: '13px',
-                                  fontWeight: '600',
-                                  color: colors.textPrimary
-                                }}
-                              />
-
-                              <button
-                                onClick={() => actions.confirmDeleteSubsection(section.id, sub.id)}
-                                style={{
-                                  background: 'none',
-                                  border: 'none',
-                                  cursor: 'pointer',
-                                  padding: '4px',
+                    return (
+                      <Draggable
+                        key={sub.id}
+                        draggableId={sub.id}
+                        index={subIdx}
+                      >
+                        {(provided, snapshot) => (
+                          <div style={{ marginBottom: '16px' }}>
+                            <div
+                              ref={provided.innerRef}
+                              {...provided.draggableProps}
+                              onMouseEnter={() => setHoveredSubsection(sub.id)}
+                              onMouseLeave={() => setHoveredSubsection(null)}
+                              style={{
+                                ...provided.draggableProps.style,
+                                opacity: snapshot.isDragging ? 0.8 : 1,
+                                border: '1px solid #e5e7eb',
+                                borderRadius: '8px',
+                                backgroundColor: '#fafafa',
+                                overflow: 'hidden'
+                              }}
+                            >
+                              {/* Subsection header */}
+                              <div>
+                                <div style={{
                                   display: 'flex',
                                   alignItems: 'center',
-                                  color: colors.dangerBtn,
-                                  marginLeft: 'auto'
-                                }}
-                                title="Delete subsection"
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            </div>
+                                  gap: '8px',
+                                  padding: '8px 12px',
+                                  backgroundColor: colors.subsectionBg
+                                }}>
+                                  <div {...provided.dragHandleProps} style={{ cursor: 'grab', display: 'flex', alignItems: 'center' }}>
+                                    <GripVertical size={16} style={{ color: '#9ca3af' }} />
+                                  </div>
 
-                            {/* Subsection content */}
-                            {!isSubCollapsed && (
-                              <div style={{ padding: '12px' }}>
-                                <DescriptorBox
-                                  value={sub.description}
-                                  onChange={val => actions.updateSubsectionDescription(section.id, sub.id, val)}
-                                  placeholder="Subsection description…"
-                                  fieldKey={`subsection-desc-${sub.id}`}
-                                />
-
-                                {/* Topic Boxes Droppable */}
-                                <Droppable droppableId={`topicboxes-${sub.id}`} type="TOPICBOX">
-                                  {(provided) => (
-                                    <div
-                                      ref={provided.innerRef}
-                                      {...provided.droppableProps}
-                                      style={{ minHeight: '20px' }}
-                                    >
-                                      {(sub.topicBoxes || []).length === 0 ? (
-                                        <div style={{
-                                          textAlign: 'center',
-                                          padding: '20px',
-                                          border: '1px solid #e5e7eb',
-                                          borderRadius: '8px',
-                                          backgroundColor: '#fafafa',
-                                          color: colors.textSecondary,
-                                          fontSize: '13px',
-                                          marginBottom: '12px'
-                                        }}>
-                                          No topic boxes yet. Click "+ Add Topic Box" or use AI to generate.
-                                        </div>
-                                      ) : (
-                                        (sub.topicBoxes || []).map((topic, topicIdx) => (
-                                          <Draggable
-                                            key={topic.id}
-                                            draggableId={topic.id}
-                                            index={topicIdx}
-                                          >
-                                            {(provided, snapshot) => (
-                                              <div
-                                                ref={provided.innerRef}
-                                                {...provided.draggableProps}
-                                                style={{
-                                                  ...provided.draggableProps.style,
-                                                  opacity: snapshot.isDragging ? 0.9 : 1
-                                                }}
-                                              >
-                                                <TopicBoxRow
-                                                  topicBox={topic}
-                                                  sectionId={section.id}
-                                                  subsectionId={sub.id}
-                                                  dragHandleProps={provided.dragHandleProps}
-                                                />
-                                              </div>
-                                            )}
-                                          </Draggable>
-                                        ))
-                                      )}
-                                      {provided.placeholder}
-                                    </div>
-                                  )}
-                                </Droppable>
-
-                                {/* Add Topic Box Buttons */}
-                                <div style={{ display: 'flex', gap: '8px' }}>
-                                  <button onClick={() => actions.addTopicBox(section.id, sub.id)} style={{
-                                    flex: 1, padding: '8px',
-                                    backgroundColor: 'transparent', color: colors.accent,
-                                    border: `1px solid ${colors.sectionBorder}`, borderRadius: '6px',
-                                    cursor: 'pointer', fontSize: '13px', fontWeight: '600'
+                                  <button onClick={() => actions.toggleSubsection(sub.id)} style={{
+                                    background: 'none', border: 'none', cursor: 'pointer',
+                                    fontSize: '12px', color: colors.accent, padding: 0
                                   }}>
-                                    ⊕ Add Topic Box
+                                    {isSubCollapsed ? '▶' : '▼'}
                                   </button>
-                                  
-                                  <div style={{ flex: 1 }}>
-                                    <AIGenerateButton
-                                      level="topics"
-                                      context={{
-                                        course: {
-                                          title: courseName,
-                                          grade: formData?.class || ''
-                                        },
-                                        current_section: {
-                                          title: section.title,
-                                          description: section.description
-                                        },
-                                        subsection: {
-                                          title: sub.title,
-                                          description: sub.description,
-                                          existingTopics: (sub.topicBoxes || []).map(t => ({
-                                            title: t.title,
-                                            description: t.description
-                                          }))
-                                        }
+
+                                  <span style={{ fontSize: '11px', fontWeight: '700', color: colors.accent }}>
+                                    Subsection {index + 1}.{subIdx + 1}
+                                  </span>
+
+                                  <EditableField
+                                    value={sub.title}
+                                    onChange={val => actions.updateSubsectionTitle(section.id, sub.id, val)}
+                                    fieldKey={`subsection-title-${sub.id}`}
+                                    placeholder="Subsection title"
+                                    inputStyle={{
+                                      fontSize: '13px',
+                                      fontWeight: '600',
+                                      color: colors.textPrimary
+                                    }}
+                                  />
+
+                                  <button
+                                    onClick={() => actions.confirmDeleteSubsection(section.id, sub.id)}
+                                    style={{
+                                      background: 'none',
+                                      border: 'none',
+                                      cursor: 'pointer',
+                                      padding: '4px',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      color: colors.dangerBtn,
+                                      marginLeft: 'auto'
+                                    }}
+                                    title="Delete subsection"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
+
+                                {/* Description attached */}
+                                {!isSubCollapsed && (
+                                  <div style={{
+                                    backgroundColor: '#FAFAFA',
+                                    padding: '8px 12px',
+                                    borderBottom: '1px solid #e5e7eb'
+                                  }}>
+                                    <EditableField
+                                      value={sub.description}
+                                      onChange={val => actions.updateSubsectionDescription(section.id, sub.id, val)}
+                                      fieldKey={`subsection-desc-${sub.id}`}
+                                      placeholder="Add a description…"
+                                      inputStyle={{
+                                        fontSize: '12px',
+                                        color: colors.textSecondary,
+                                        fontStyle: sub.description ? 'normal' : 'italic'
                                       }}
-                                      onGenerate={(params) => actions.handleGenerateTopicBoxes(section.id, sub.id, params)}
-                                      count={1}
-                                      buttonText="✨ Generate Topic Box"
                                     />
                                   </div>
+                                )}
+                              </div>
+
+                              {/* Subsection content */}
+                              {!isSubCollapsed && (
+                                <div style={{ padding: '12px' }}>
+                                  {/* Topic Boxes Droppable */}
+                                  <Droppable droppableId={`topicboxes-${sub.id}`} type="TOPICBOX">
+                                    {(provided) => (
+                                      <div
+                                        ref={provided.innerRef}
+                                        {...provided.droppableProps}
+                                        style={{ minHeight: '20px' }}
+                                      >
+                                        {(sub.topicBoxes || []).length === 0 ? (
+                                          <div style={{
+                                            textAlign: 'center',
+                                            padding: '20px',
+                                            border: '1px dashed #e5e7eb',
+                                            borderRadius: '8px',
+                                            backgroundColor: '#fafafa',
+                                            color: colors.textSecondary,
+                                            fontSize: '13px',
+                                            marginBottom: '12px'
+                                          }}>
+                                            No topic boxes yet. Hover below to add.
+                                          </div>
+                                        ) : (
+                                          (sub.topicBoxes || []).map((topic, topicIdx) => (
+                                            <Draggable
+                                              key={topic.id}
+                                              draggableId={topic.id}
+                                              index={topicIdx}
+                                            >
+                                              {(provided, snapshot) => (
+                                                <div
+                                                  ref={provided.innerRef}
+                                                  {...provided.draggableProps}
+                                                  style={{
+                                                    ...provided.draggableProps.style,
+                                                    opacity: snapshot.isDragging ? 0.9 : 1
+                                                  }}
+                                                >
+                                                  <TopicBoxRow
+                                                    topicBox={topic}
+                                                    sectionId={section.id}
+                                                    subsectionId={sub.id}
+                                                    dragHandleProps={provided.dragHandleProps}
+                                                  />
+                                                </div>
+                                              )}
+                                            </Draggable>
+                                          ))
+                                        )}
+                                        {provided.placeholder}
+                                      </div>
+                                    )}
+                                  </Droppable>
                                 </div>
+                              )}
+                            </div>
+
+                            {/* Add Subsection Buttons - show on hover */}
+                            {hoveredSubsection === sub.id && !isSubCollapsed && (
+                              <div style={{ 
+                                display: 'flex', 
+                                gap: '8px',
+                                marginTop: '8px',
+                                paddingLeft: '12px'
+                              }}>
+                                <button onClick={() => actions.addSubsection(section.id)} style={{
+                                  padding: '4px 10px',
+                                  backgroundColor: 'transparent',
+                                  color: colors.accent,
+                                  border: `1px solid ${colors.sectionBorder}`,
+                                  borderRadius: '6px',
+                                  cursor: 'pointer',
+                                  fontSize: '12px',
+                                  fontWeight: '600',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '5px'
+                                }}>
+                                  <Plus size={14} /> Add Subsection
+                                </button>
+                                
+                                <button
+                                  onClick={() => {
+                                    actions.handleGenerateSubsections(section.id, {
+                                      level: 'subsections',
+                                      context: {
+                                        course: {
+                                          title: courseName,
+                                          description: formData?.objectives || '',
+                                          grade: formData?.class || ''
+                                        }
+                                      },
+                                      userGuidance: null,
+                                      count: 1
+                                    });
+                                  }}
+                                  style={{
+                                    padding: '6px 14px',
+                                    backgroundColor: colors.accent,
+                                    color: '#fff',
+                                    border: 'none',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                    fontSize: '12px',
+                                    fontWeight: '600',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '5px'
+                                  }}
+                                >
+                                  <Sparkles size={14} /> AI
+                                </button>
                               </div>
                             )}
                           </div>
-                        );
-                      }}
-                    </Draggable>
-                  ))}
+                        )}
+                      </Draggable>
+                    );
+                  })}
                   {provided.placeholder}
                 </div>
               )}
             </Droppable>
 
-            {/* Add Subsection Buttons */}
-            <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-              <button onClick={() => actions.addSubsection(section.id)} style={{
-                flex: 1, padding: '8px',
-                backgroundColor: 'transparent', color: colors.accent,
-                border: `1px solid ${colors.sectionBorder}`, borderRadius: '6px',
-                cursor: 'pointer', fontSize: '13px', fontWeight: '600'
+            {/* Add Section Buttons - show on hover */}
+            {hoveredSection === section.id && !isCollapsed && (
+              <div style={{ 
+                display: 'flex', 
+                gap: '8px',
+                marginTop: '12px',
+                paddingLeft: '16px',
+                paddingBottom: '8px'
               }}>
-                ⊕ Add Subsection
-              </button>
-              
-              <div style={{ flex: 1 }}>
-                <AIGenerateButton
-                  level="subsections"
-                  context={{
-                    course: {
-                      title: courseName,
-                      description: formData?.objectives || '',
-                      grade: formData?.class || ''
-                    },
-                    all_section_names: sections
-                      .filter(s => s.type !== 'break')
-                      .map(s => s.title),
-                    current_section: {
-                      title: section.title,
-                      description: section.description,
-                      existingSubsections: (section.subsections || []).map(sub => ({
-                        title: sub.title,
-                        description: sub.description
-                      }))
-                    }
+                <button onClick={actions.addSection} style={{
+                  padding: '4px 10px',
+                  backgroundColor: 'transparent',
+                  color: colors.accent,
+                  border: `1px solid ${colors.sectionBorder}`,
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px'
+                }}>
+                  <Plus size={14} /> Add Section
+                </button>
+                
+                <button
+                  onClick={() => {
+                    actions.handleGenerateSections({
+                      level: 'sections',
+                      context: {
+                        course: {
+                          title: courseName,
+                          description: formData?.objectives || '',
+                          grade: formData?.class || ''
+                        }
+                      },
+                      userGuidance: null,
+                      count: 1
+                    });
                   }}
-                  onGenerate={(params) => actions.handleGenerateSubsections(section.id, params)}
-                  count={1}
-                  buttonText="✨ Generate Subsection"
-                />
+                  style={{
+                    padding: '6px 14px',
+                    backgroundColor: colors.accent,
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px'
+                  }}
+                >
+                  <Sparkles size={14} /> AI
+                </button>
               </div>
-            </div>
+            )}
           </div>
         )}
       </div>
@@ -990,18 +1058,33 @@ const CourseEditor = ({
       <div style={{
         padding: '10px 28px', backgroundColor: 'white',
         borderBottom: '1px solid #f3f4f6',
-        display: 'flex', gap: '10px', alignItems: 'center'
+        display: 'flex', gap: '10px', alignItems: 'center', justifyContent: 'center'
       }}>
         <button onClick={actions.addSection} style={{
-          padding: '7px 16px', backgroundColor: colors.accent, color: 'white',
-          border: 'none', borderRadius: '6px', cursor: 'pointer',
-          fontWeight: '600', fontSize: '13px'
-        }}>➕ Section</button>
+          padding: '6px 14px',
+          backgroundColor: 'transparent',
+          color: colors.accent,
+          border: `1px solid ${colors.sectionBorder}`,
+          borderRadius: '6px',
+          cursor: 'pointer',
+          fontSize: '12px',
+          fontWeight: '600',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '5px'
+        }}>
+          <Plus size={14} /> Section
+        </button>
 
         <button onClick={onAddBreak} style={{
-          padding: '7px 16px', backgroundColor: 'white', color: colors.accent,
-          border: `1px solid ${colors.sectionBorder}`, borderRadius: '6px',
-          cursor: 'pointer', fontWeight: '600', fontSize: '13px'
+          padding: '6px 14px',
+          backgroundColor: 'transparent',
+          color: colors.accent,
+          border: `1px solid ${colors.sectionBorder}`,
+          borderRadius: '6px',
+          cursor: 'pointer',
+          fontSize: '12px',
+          fontWeight: '600'
         }}>⏸️ Break</button>
 
         <span style={{ fontSize: '12px', color: '#9ca3af', marginLeft: '12px' }}>
@@ -1061,34 +1144,9 @@ const CourseEditor = ({
             </Droppable>
           </DragDropContext>
         )}
-
-        {/* Generate More Sections */}
-        {sections.length > 0 && (
-          <div style={{ marginTop: '20px' }}>
-            <AIGenerateButton
-              level="sections"
-              context={{
-                course: {
-                  title: courseName,
-                  description: formData?.objectives || '',
-                  grade: formData?.class || '',
-                  subject: formData?.subject || '',
-                  duration: formData?.timeDuration ? `${formData.timeDuration} ${formData.timeUnit}` : ''
-                },
-                existing_sections: sections.filter(s => s.type !== 'break').map(s => ({
-                  title: s.title,
-                  description: s.description
-                }))
-              }}
-              onGenerate={actions.handleGenerateSections}
-              count={1}
-              buttonText="✨ Generate More Sections with AI"
-            />
-          </div>
-        )}
       </div>
 
-      {/* Delete Confirmation Modal */}
+      {/* Modals */}
       <ConfirmDialog
         isOpen={actions.deleteConfirm !== null}
         onConfirm={actions.handleConfirmDelete}
@@ -1096,6 +1154,19 @@ const CourseEditor = ({
         title={actions.deleteConfirm?.title || ''}
         message={actions.deleteConfirm?.message || ''}
       />
+
+      {selectedTopicForDetail && (
+        <TopicDetailsModal
+          topic={selectedTopicForDetail.topicBox}
+          sectionId={selectedTopicForDetail.sectionId}
+          subsectionId={selectedTopicForDetail.subsectionId}
+          onClose={() => setSelectedTopicForDetail(null)}
+          onSave={handleSaveTopicDetail}
+          actions={actions}
+          videosByTopic={videosByTopic}
+          handsOnResources={handsOnResources}
+        />
+      )}
     </>
   );
 };

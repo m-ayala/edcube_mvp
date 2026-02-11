@@ -409,6 +409,87 @@ const useCourseActions = ({
     }
   };
 
+  // ── Manual Resource Management ───────────────────────────────────────
+  const addManualResource = (topicId, resourceType, resourceData) => {
+    console.log(`➕ Adding manual ${resourceType} to topic ${topicId}:`, resourceData);
+    
+    if (resourceType === 'video') {
+      // Add to videos
+      const currentVideos = videosByTopic[topicId] || [];
+      setVideosByTopic(prev => ({
+        ...prev,
+        [topicId]: [...currentVideos, {
+          videoId: `manual-${Date.now()}`,
+          title: resourceData.title,
+          url: resourceData.url,
+          thumbnailUrl: 'https://via.placeholder.com/120x90?text=Video',
+          channelName: 'Manual',
+          duration: 'N/A',
+          source: 'manual'
+        }]
+      }));
+    } else {
+      // Add to hands-on resources (worksheet or activity)
+      const currentResources = handsOnResources[topicId] || [];
+      setHandsOnResources(prev => ({
+        ...prev,
+        [topicId]: [...currentResources, {
+          type: resourceType,
+          title: resourceData.title,
+          url: resourceData.url,
+          description: resourceData.description || '',
+          source: 'manual'
+        }]
+      }));
+    }
+  };
+
+  const removeResource = (topicId, resourceType, resourceIndex) => {
+    if (resourceType === 'video') {
+      const currentVideos = videosByTopic[topicId] || [];
+      setVideosByTopic(prev => ({
+        ...prev,
+        [topicId]: currentVideos.filter((_, idx) => idx !== resourceIndex)
+      }));
+    } else {
+      const currentResources = handsOnResources[topicId] || [];
+      setHandsOnResources(prev => ({
+        ...prev,
+        [topicId]: currentResources.filter((_, idx) => idx !== resourceIndex)
+      }));
+    }
+  };
+
+  const updateTopicBoxFull = ({ sectionId, subsectionId, topicId, updatedData }) => {
+    console.log('📝 Updating full topic box:', topicId, updatedData);
+    
+    setSections(sections.map(section => {
+      if (section.id !== sectionId) return section;
+      
+      return {
+        ...section,
+        subsections: (section.subsections || []).map(sub => {
+          if (sub.id !== subsectionId) return sub;
+          
+          return {
+            ...sub,
+            topicBoxes: (sub.topicBoxes || []).map(topic =>
+              topic.id === topicId ? { 
+                ...topic,
+                title: updatedData.title,
+                description: updatedData.description,
+                duration_minutes: updatedData.duration_minutes,
+                learning_objectives: updatedData.learning_objectives,
+                content_keywords: updatedData.content_keywords,
+                pla_pillars: updatedData.pla_pillars
+              } : topic
+            )
+          };
+        })
+      };
+    }));
+  };
+
   // ── Return All Actions ────────────────────────────────────────────────
   return {
     // Section
@@ -427,6 +508,7 @@ const useCourseActions = ({
     addTopicBox,
     updateTopicBoxTitle,
     removeTopicBox,
+    updateTopicBoxFull,
     
     // Toggles
     toggleSection,
@@ -450,6 +532,12 @@ const useCourseActions = ({
     // Resources
     generateVideosFromBackend,
     generateResource,
+    addManualResource,
+    removeResource,
+    
+    // State setters (for modals)
+    setVideosByTopic,
+    setHandsOnResources,
     
     // Editing
     editingField,
