@@ -1,3 +1,6 @@
+// frontend/src/components/layout/Sidebar.jsx
+// BEAUTIFUL BEIGE MINIMALIST SIDEBAR 🎨
+
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { logoutTeacher } from '../../firebase/authService';
@@ -16,10 +19,10 @@ const Sidebar = () => {
   };
 
   const navItems = [
-    { to: '/home',              label: 'Home',            icon: 'H' },
-    { to: '/my-courses',        label: 'My Courses',      icon: 'M' },
-    { to: '/course-designer',   label: 'Course Designer', icon: 'D' },
-    { to: '/course-workspace',  label: 'Workspace',       icon: 'W' },
+    { to: '/profile',           label: 'My Profile',      icon: '👤' },
+    { to: '/my-courses',        label: 'My Courses',      icon: '📚' },
+    { to: '/course-designer',   label: 'Course Designer', icon: '✨' },
+    { to: '/course-workspace',  label: 'Workspace',       icon: '⚙️' },
   ];
 
   return (
@@ -27,19 +30,24 @@ const Sidebar = () => {
       width: '220px',
       minWidth: '220px',
       height: '100vh',
-      backgroundColor: '#1e1e2e',
-      color: '#cdd6f4',
+      backgroundColor: '#f5f5dc',  // Warm beige
+      color: '#5a5a5a',            // Soft gray text
       display: 'flex',
       flexDirection: 'column',
-      userSelect: 'none'
+      userSelect: 'none',
+      borderRight: '1px solid #d4c4a8'  // Subtle border
     }}>
 
       {/* Logo / Brand */}
       <div style={{
         padding: '24px 20px 20px',
-        borderBottom: '1px solid #313244'
+        borderBottom: '1px solid #d4c4a8'
       }}>
-        <span style={{ fontSize: '22px', fontWeight: '700', color: '#cba6f7' }}>
+        <span style={{ 
+          fontSize: '22px', 
+          fontWeight: '700', 
+          color: '#8b7355'  // Warm brown
+        }}>
           EdCube
         </span>
       </div>
@@ -56,13 +64,13 @@ const Sidebar = () => {
               gap: '10px',
               padding: '10px 12px',
               marginBottom: '4px',
-              borderRadius: '6px',
+              borderRadius: '8px',
               textDecoration: 'none',
-              color: isActive ? '#1e1e2e' : '#cdd6f4',
-              backgroundColor: isActive ? '#cba6f7' : 'transparent',
+              color: isActive ? '#ffffff' : '#5a5a5a',
+              backgroundColor: isActive ? '#8b7355' : 'transparent',  // Warm brown when active
               fontWeight: isActive ? '600' : '400',
               fontSize: '14px',
-              transition: 'background-color 0.15s, color 0.15s'
+              transition: 'all 0.15s ease'
             })}
           >
             <span style={{ fontSize: '16px' }}>{item.icon}</span>
@@ -73,17 +81,18 @@ const Sidebar = () => {
 
       {/* Bottom: user info + logout */}
       <div style={{
-        borderTop: '1px solid #313244',
+        borderTop: '1px solid #d4c4a8',
         padding: '16px 12px'
       }}>
         <div style={{
           fontSize: '13px',
-          color: '#a6adc8',
+          color: '#8b7355',
           marginBottom: '12px',
           paddingLeft: '12px',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap'
+          whiteSpace: 'nowrap',
+          fontWeight: '500'
         }}>
           {currentUser?.displayName || currentUser?.email || 'Teacher'}
         </div>
@@ -93,15 +102,22 @@ const Sidebar = () => {
             width: '100%',
             padding: '8px 12px',
             backgroundColor: 'transparent',
-            color: '#f38ba8',
-            border: '1px solid #45475a',
-            borderRadius: '6px',
+            color: '#d32f2f',
+            border: '1px solid #d4c4a8',
+            borderRadius: '8px',
             cursor: 'pointer',
             fontSize: '13px',
-            textAlign: 'left'
+            textAlign: 'left',
+            transition: 'all 0.15s ease'
+          }}
+          onMouseEnter={(e) => {
+            e.target.style.backgroundColor = '#fff5f0';
+          }}
+          onMouseLeave={(e) => {
+            e.target.style.backgroundColor = 'transparent';
           }}
         >
-          Sign Out
+          🚪 Sign Out
         </button>
       </div>
     </aside>

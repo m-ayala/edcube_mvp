@@ -3,7 +3,10 @@ import {
   signInWithEmailAndPassword,
   signOut,
   sendEmailVerification,
-  updateProfile
+  updateProfile,
+  updatePassword,
+  reauthenticateWithCredential,
+  EmailAuthProvider
 } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from './config';
@@ -110,5 +113,46 @@ export const resendVerificationEmail = async () => {
   } catch (error) {
     console.error('Resend verification error:', error);
     throw error;
+  }
+};
+
+/**
+ * Change user password
+ * Requires current password for security
+ */
+export const changePassword = async (currentPassword, newPassword) => {
+  try {
+    const user = auth.currentUser;
+    
+    if (!user || !user.email) {
+      throw new Error('No user is currently logged in');
+    }
+
+    // Step 1: Re-authenticate user with current password
+    const credential = EmailAuthProvider.credential(
+      user.email,
+      currentPassword
+    );
+    
+    await reauthenticateWithCredential(user, credential);
+
+    // Step 2: Update to new password
+    await updatePassword(user, newPassword);
+
+    return {
+      success: true,
+      message: 'Password changed successfully!'
+    };
+  } catch (error) {
+    console.error('Change password error:', error);
+    
+    // Handle specific error cases
+    if (error.code === 'auth/wrong-password') {
+      throw new Error('Current password is incorrect');
+    } else if (error.code === 'auth/weak-password') {
+      throw new Error('New password is too weak. Must be at least 6 characters.');
+    } else {
+      throw new Error(error.message || 'Failed to change password');
+    }
   }
 };

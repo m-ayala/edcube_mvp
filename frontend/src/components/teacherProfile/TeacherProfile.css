@@ -1,0 +1,254 @@
+/* frontend/src/components/teacherProfile/TeacherProfile.css */
+
+/* ============================================================================
+   PROFILE HEADER
+   ============================================================================ */
+
+.profile-header {
+  background: linear-gradient(135deg, #f5f5dc 0%, #e8dcc4 100%);
+  border-radius: 12px;
+  padding: 32px;
+  margin-bottom: 32px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.profile-header-content {
+  display: flex;
+  gap: 32px;
+  align-items: flex-start;
+}
+
+/* Profile Picture */
+.profile-picture-section {
+  flex-shrink: 0;
+}
+
+.profile-picture {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 4px solid #fff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Profile Info */
+.profile-info-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.profile-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.profile-name {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.edit-profile-btn {
+  padding: 10px 20px;
+  background-color: #8b7355;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.edit-profile-btn:hover {
+  background-color: #6d5a44;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Meta Information (Subjects, Grades, Course Count) */
+.profile-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  margin-top: 8px;
+}
+
+.profile-meta-item {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.meta-label {
+  font-weight: 600;
+  color: #5a5a5a;
+  font-size: 14px;
+}
+
+.meta-value {
+  color: #2c3e50;
+  font-size: 15px;
+}
+
+/* Bio */
+.profile-bio {
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.profile-bio p {
+  margin: 0;
+  line-height: 1.6;
+  color: #4a4a4a;
+  font-size: 15px;
+  white-space: pre-wrap; /* Preserve line breaks */
+}
+
+/* Empty State Messages */
+.profile-empty-state {
+  color: #8b7355;
+  font-style: italic;
+  font-size: 14px;
+  margin: 8px 0 0 0;
+}
+
+/* ============================================================================
+   RESPONSIVE DESIGN
+   ============================================================================ */
+
+@media (max-width: 768px) {
+  .profile-header {
+    padding: 24px;
+  }
+
+  .profile-header-content {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  .profile-picture {
+    width: 100px;
+    height: 100px;
+  }
+
+  .profile-name {
+    font-size: 28px;
+  }
+
+  .profile-header-row {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .profile-meta {
+    justify-content: center;
+  }
+}
+
+/* ============================================================================
+   PUBLIC COURSES SECTION (for later)
+   ============================================================================ */
+
+.profile-courses-section {
+  margin-top: 24px;
+}
+
+.profile-courses-header {
+  font-size: 24px;
+  font-weight: 600;
+  color: #2c3e50;
+  margin-bottom: 16px;
+}
+
+.profile-courses-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.profile-courses-empty {
+  text-align: center;
+  padding: 48px 24px;
+  color: #8b7355;
+  font-style: italic;
+}
+
+/* Add to the end of TeacherProfile.css */
+
+/* ============================================================================
+   MAIN CONTAINER
+   ============================================================================ */
+
+.teacher-profile-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+/* Loading State */
+.profile-loading {
+  text-align: center;
+  padding: 80px 24px;
+}
+
+.loading-spinner {
+  border: 4px solid #f5f5dc;
+  border-top: 4px solid #8b7355;
+  border-radius: 50%;
+  width: 50px;
+  height: 50px;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 16px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.profile-loading p {
+  color: #8b7355;
+  font-size: 16px;
+}
+
+/* Error State */
+.profile-error {
+  text-align: center;
+  padding: 80px 24px;
+}
+
+.profile-error h2 {
+  color: #d32f2f;
+  margin-bottom: 16px;
+}
+
+.profile-error p {
+  color: #5a5a5a;
+  margin-bottom: 24px;
+}
+
+.retry-btn {
+  padding: 12px 24px;
+  background-color: #8b7355;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.retry-btn:hover {
+  background-color: #6d5a44;
+  transform: translateY(-1px);
+}

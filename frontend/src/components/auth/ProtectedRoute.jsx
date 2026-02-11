@@ -1,3 +1,5 @@
+// frontend/src/components/auth/ProtectedRoute.jsx
+
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -9,12 +11,9 @@ const ProtectedRoute = ({ children }) => {
     return <Navigate to="/login" replace />;
   }
 
-  if (!currentUser.emailVerified) {
-    // Email not verified, redirect to verification page
-    return <Navigate to="/verify-email" replace />;
-  }
+  // REMOVED email verification check since VerifyEmail component doesn't exist
 
-  // User is authenticated and verified, show the protected content
+  // User is authenticated, show the protected content
   return children;
 };
 
