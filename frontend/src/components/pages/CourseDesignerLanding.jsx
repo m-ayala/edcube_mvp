@@ -8,11 +8,6 @@ const CourseDesignerLanding = () => {
 
   return (
     <div className="course-designer-landing">
-      <button className="back-button" onClick={() => navigate('/dashboard')}>
-        <ArrowLeft size={20} />
-        <span>Back</span>
-      </button>
-
       <div className="landing-content">
         <h1>How would you like to design your course?</h1>
         <p className="subtitle">Choose an option to get started</p>
