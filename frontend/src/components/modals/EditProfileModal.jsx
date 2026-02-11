@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { updateOwnProfile } from '../../utils/teacherService';
-import ChangePasswordModal from './ChangePasswordModal';  // ADD THIS IMPORT
+import ChangePasswordModal from './ChangePasswordModal';
+import MultiSelectDropdown from './MultiSelectDropdown';
 import './EditProfileModal.css';
 
 const EditProfileModal = ({ isOpen, onClose, currentProfile, onProfileUpdated }) => {
@@ -20,7 +21,7 @@ const EditProfileModal = ({ isOpen, onClose, currentProfile, onProfileUpdated })
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);  // ADD THIS
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
 
   // Predefined options
   const subjectOptions = [
@@ -56,11 +57,18 @@ const EditProfileModal = ({ isOpen, onClose, currentProfile, onProfileUpdated })
     }));
   };
 
-  const handleMultiSelectChange = (e, fieldName) => {
-    const selectedOptions = Array.from(e.target.selectedOptions, option => option.value);
+  // NEW: Handlers for multi-select dropdowns
+  const handleSubjectsChange = (selectedSubjects) => {
     setFormData(prev => ({
       ...prev,
-      [fieldName]: selectedOptions
+      subjects_taught: selectedSubjects
+    }));
+  };
+
+  const handleGradesChange = (selectedGrades) => {
+    setFormData(prev => ({
+      ...prev,
+      grades_taught: selectedGrades
     }));
   };
 
@@ -70,7 +78,6 @@ const EditProfileModal = ({ isOpen, onClose, currentProfile, onProfileUpdated })
     setError('');
 
     try {
-      // Prepare update payload (only send fields that changed)
       const updatePayload = {};
       
       if (formData.display_name !== currentProfile?.display_name) {
@@ -89,13 +96,8 @@ const EditProfileModal = ({ isOpen, onClose, currentProfile, onProfileUpdated })
         updatePayload.profile_picture_url = formData.profile_picture_url;
       }
 
-      // Call API to update profile
       const updatedProfile = await updateOwnProfile(currentUser, updatePayload);
-
-      // Notify parent component
       onProfileUpdated(updatedProfile);
-      
-      // Close modal
       onClose();
     } catch (err) {
       console.error('Error updating profile:', err);
@@ -111,13 +113,11 @@ const EditProfileModal = ({ isOpen, onClose, currentProfile, onProfileUpdated })
     <>
       <div className="modal-overlay" onClick={onClose}>
         <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-          {/* Header */}
           <div className="modal-header">
             <h2>Edit Profile</h2>
             <button className="modal-close-btn" onClick={onClose}>×</button>
           </div>
 
-          {/* Form */}
           <form onSubmit={handleSave} className="edit-profile-form">
             {/* Display Name */}
             <div className="form-group">
@@ -153,7 +153,7 @@ const EditProfileModal = ({ isOpen, onClose, currentProfile, onProfileUpdated })
               <button
                 type="button"
                 className="change-password-btn"
-                onClick={() => setIsPasswordModalOpen(true)}  // CHANGED THIS
+                onClick={() => setIsPasswordModalOpen(true)}
               >
                 🔒 Change Password
               </button>
@@ -176,46 +176,26 @@ const EditProfileModal = ({ isOpen, onClose, currentProfile, onProfileUpdated })
               <small className="field-hint">Paste a link to your profile picture</small>
             </div>
 
-            {/* Subjects Taught (Multi-select dropdown) */}
+            {/* Subjects Taught - NEW COMPONENT */}
             <div className="form-group">
-              <label htmlFor="subjects_taught">Subjects Taught</label>
-              <select
-                id="subjects_taught"
-                name="subjects_taught"
-                multiple
-                value={formData.subjects_taught}
-                onChange={(e) => handleMultiSelectChange(e, 'subjects_taught')}
-                className="multi-select"
-                size={5}
-              >
-                {subjectOptions.map(subject => (
-                  <option key={subject} value={subject}>
-                    {subject}
-                  </option>
-                ))}
-              </select>
-              <small className="field-hint">Hold Ctrl/Cmd to select multiple subjects</small>
+              <MultiSelectDropdown
+                label="Subjects Taught"
+                options={subjectOptions}
+                selectedValues={formData.subjects_taught}
+                onChange={handleSubjectsChange}
+                placeholder="Select subjects..."
+              />
             </div>
 
-            {/* Grades Taught (Multi-select dropdown) */}
+            {/* Grades Taught - NEW COMPONENT */}
             <div className="form-group">
-              <label htmlFor="grades_taught">Grades/Classes Taught</label>
-              <select
-                id="grades_taught"
-                name="grades_taught"
-                multiple
-                value={formData.grades_taught}
-                onChange={(e) => handleMultiSelectChange(e, 'grades_taught')}
-                className="multi-select"
-                size={5}
-              >
-                {gradeOptions.map(grade => (
-                  <option key={grade} value={grade}>
-                    {grade}
-                  </option>
-                ))}
-              </select>
-              <small className="field-hint">Hold Ctrl/Cmd to select multiple grades</small>
+              <MultiSelectDropdown
+                label="Grades/Classes Taught"
+                options={gradeOptions}
+                selectedValues={formData.grades_taught}
+                onChange={handleGradesChange}
+                placeholder="Select grades..."
+              />
             </div>
 
             {/* Bio */}
@@ -264,7 +244,6 @@ const EditProfileModal = ({ isOpen, onClose, currentProfile, onProfileUpdated })
         </div>
       </div>
 
-      {/* Password Change Modal */}
       <ChangePasswordModal 
         isOpen={isPasswordModalOpen}
         onClose={() => setIsPasswordModalOpen(false)}

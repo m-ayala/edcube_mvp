@@ -1,0 +1,122 @@
+/* frontend/src/components/common/MultiSelectDropdown.css */
+
+.multi-select-dropdown {
+  position: relative;
+  width: 100%;
+}
+
+.multi-select-label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #2c3e50;
+  font-size: 14px;
+}
+
+.multi-select-button {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d4c4a8;
+  border-radius: 8px;
+  background-color: white;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.multi-select-button:hover {
+  border-color: #8b7355;
+}
+
+.multi-select-text {
+  font-size: 15px;
+  color: #2c3e50;
+  flex: 1;
+  text-align: left;
+}
+
+.multi-select-arrow {
+  font-size: 12px;
+  color: #8b7355;
+  transition: transform 0.2s;
+}
+
+.multi-select-arrow.open {
+  transform: rotate(180deg);
+}
+
+.multi-select-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #d4c4a8;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  max-height: 300px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.multi-select-actions {
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  border-bottom: 1px solid #e0e0e0;
+  background-color: #f9f9f9;
+}
+
+.multi-select-action-btn {
+  flex: 1;
+  padding: 6px 12px;
+  background-color: transparent;
+  border: 1px solid #d4c4a8;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #8b7355;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.multi-select-action-btn:hover {
+  background-color: #8b7355;
+  color: white;
+}
+
+.multi-select-options {
+  overflow-y: auto;
+  max-height: 240px;
+}
+
+.multi-select-option {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  user-select: none;
+}
+
+.multi-select-option:hover {
+  background-color: #f5f5dc;
+}
+
+.multi-select-option input[type="checkbox"] {
+  display: none;
+}
+
+.multi-select-checkbox {
+  font-size: 18px;
+  margin-right: 10px;
+  color: #8b7355;
+}
+
+.multi-select-option-text {
+  font-size: 15px;
+  color: #2c3e50;
+}
