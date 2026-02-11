@@ -32,6 +32,7 @@ const CourseEditor = ({
     sectionBorder: '#E8E6E1',
     sectionBg: '#E8E0D5',
     subsectionBg: '#F0EBE3',
+    topicBg: '#F7F9FC',  // Light blue-gray for topic boxes
     accent: '#D4C4A8',
     accentLight: '#F5F3EE',
     textPrimary: '#2C2A26',
@@ -359,14 +360,14 @@ const CourseEditor = ({
 
     return (
       <div style={{ marginBottom: '12px' }}>
-        <div 
+        <div
           onMouseEnter={() => setHoveredTopic(topicBox.id)}
           onMouseLeave={() => setHoveredTopic(null)}
           onClick={() => handleTopicBoxClick(topicBox, sectionId, subsectionId)}
           style={{
             border: '1px solid #e5e7eb',
             borderRadius: '10px',
-            backgroundColor: colors.card,
+            backgroundColor: colors.topicBg,
             boxShadow: hoveredTopic === topicBox.id ? '0 4px 12px rgba(0,0,0,0.12)' : '0 1px 3px rgba(0,0,0,0.06)',
             position: 'relative',
             padding: '16px',
@@ -417,6 +418,74 @@ const CourseEditor = ({
           >
             <Trash2 size={16} />
           </button>
+
+          {/* Action buttons - permanent in bottom-right corner */}
+          <div style={{
+            position: 'absolute',
+            bottom: '8px',
+            right: '8px',
+            display: 'flex',
+            gap: '4px',
+            zIndex: 10
+          }}>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                actions.addTopicBox(sectionId, subsectionId);
+              }}
+              style={{
+                padding: '3px 8px',
+                backgroundColor: '#fff',
+                color: '#6B6760',
+                border: `1px solid ${colors.sectionBorder}`,
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '10px',
+                fontWeight: '600',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '3px',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+              }}
+              title="Add new topic"
+            >
+              <Plus size={10} /> Topic
+            </button>
+
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                actions.handleGenerateTopicBoxes(sectionId, subsectionId, {
+                  level: 'topics',
+                  context: {
+                    course: {
+                      title: courseName,
+                      grade: formData?.class || ''
+                    }
+                  },
+                  userGuidance: null,
+                  count: 1
+                });
+              }}
+              style={{
+                padding: '3px 8px',
+                backgroundColor: colors.accent,
+                color: '#fff',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '10px',
+                fontWeight: '600',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '3px',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+              }}
+              title="AI generate topic"
+            >
+              <Sparkles size={10} /> AI
+            </button>
+          </div>
 
           {/* Content */}
           <div style={{ paddingLeft: '28px', paddingRight: '28px' }}>
@@ -511,71 +580,6 @@ const CourseEditor = ({
             )}
           </div>
         </div>
-
-        {/* Add buttons below topic box - show on hover */}
-        {hoveredTopic === topicBox.id && (
-          <div style={{ 
-            display: 'flex', 
-            gap: '6px', 
-            marginTop: '8px',
-            paddingLeft: '16px',
-            paddingBottom: '4px'
-          }}>
-            <button 
-              onClick={(e) => {
-                e.stopPropagation();
-                actions.addTopicBox(sectionId, subsectionId);
-              }} 
-              style={{
-                padding: '4px 10px',
-                backgroundColor: 'transparent',
-                color: colors.accent,
-                border: `1px solid ${colors.sectionBorder}`,
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontSize: '12px',
-                fontWeight: '600',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '5px'
-              }}
-            >
-              <Plus size={14} /> Add Topic
-            </button>
-            
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                actions.handleGenerateTopicBoxes(sectionId, subsectionId, {
-                  level: 'topics',
-                  context: {
-                    course: {
-                      title: courseName,
-                      grade: formData?.class || ''
-                    }
-                  },
-                  userGuidance: null,
-                  count: 1
-                });
-              }}
-              style={{
-                padding: '6px 14px',
-                backgroundColor: colors.accent,
-                color: '#fff',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontSize: '12px',
-                fontWeight: '600',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '5px'
-              }}
-            >
-              <Sparkles size={14} /> AI
-            </button>
-          </div>
-        )}
       </div>
     );
   };
@@ -665,6 +669,68 @@ const CourseEditor = ({
               }}
             />
 
+            {/* Action buttons - permanent in header */}
+            <div style={{ display: 'flex', gap: '4px', marginLeft: '8px' }}>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  actions.addSection();
+                }}
+                style={{
+                  padding: '3px 8px',
+                  backgroundColor: '#fff',
+                  color: '#6B6760',
+                  border: `1px solid ${colors.sectionBorder}`,
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '10px',
+                  fontWeight: '600',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '3px',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                }}
+                title="Add new section"
+              >
+                <Plus size={10} /> Sec
+              </button>
+
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  actions.handleGenerateSections({
+                    level: 'sections',
+                    context: {
+                      course: {
+                        title: courseName,
+                        description: formData?.objectives || '',
+                        grade: formData?.class || ''
+                      }
+                    },
+                    userGuidance: null,
+                    count: 1
+                  });
+                }}
+                style={{
+                  padding: '3px 8px',
+                  backgroundColor: colors.accent,
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '10px',
+                  fontWeight: '600',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '3px',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                }}
+                title="AI generate section"
+              >
+                <Sparkles size={10} /> AI
+              </button>
+            </div>
+
             <button
               onClick={() => actions.confirmDeleteSection(section.id)}
               style={{
@@ -743,7 +809,7 @@ const CourseEditor = ({
                               }}
                             >
                               {/* Subsection header */}
-                              <div>
+                              <div style={{ position: 'relative' }}>
                                 <div style={{
                                   display: 'flex',
                                   alignItems: 'center',
@@ -777,6 +843,68 @@ const CourseEditor = ({
                                       color: colors.textPrimary
                                     }}
                                   />
+
+                                  {/* Action buttons - permanent in header */}
+                                  <div style={{ display: 'flex', gap: '4px', marginLeft: '8px' }}>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        actions.addSubsection(section.id);
+                                      }}
+                                      style={{
+                                        padding: '3px 8px',
+                                        backgroundColor: '#fff',
+                                        color: '#6B6760',
+                                        border: `1px solid ${colors.sectionBorder}`,
+                                        borderRadius: '4px',
+                                        cursor: 'pointer',
+                                        fontSize: '10px',
+                                        fontWeight: '600',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '3px',
+                                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                      }}
+                                      title="Add new subsection"
+                                    >
+                                      <Plus size={10} /> Sub
+                                    </button>
+
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        actions.handleGenerateSubsections(section.id, {
+                                          level: 'subsections',
+                                          context: {
+                                            course: {
+                                              title: courseName,
+                                              description: formData?.objectives || '',
+                                              grade: formData?.class || ''
+                                            }
+                                          },
+                                          userGuidance: null,
+                                          count: 1
+                                        });
+                                      }}
+                                      style={{
+                                        padding: '3px 8px',
+                                        backgroundColor: colors.accent,
+                                        color: '#fff',
+                                        border: 'none',
+                                        borderRadius: '4px',
+                                        cursor: 'pointer',
+                                        fontSize: '10px',
+                                        fontWeight: '600',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '3px',
+                                        boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                                      }}
+                                      title="AI generate subsection"
+                                    >
+                                      <Sparkles size={10} /> AI
+                                    </button>
+                                  </div>
 
                                   <button
                                     onClick={() => actions.confirmDeleteSubsection(section.id, sub.id)}
@@ -876,64 +1004,6 @@ const CourseEditor = ({
                                 </div>
                               )}
                             </div>
-
-                            {/* Add Subsection Buttons - show on hover */}
-                            {hoveredSubsection === sub.id && !isSubCollapsed && (
-                              <div style={{ 
-                                display: 'flex', 
-                                gap: '8px',
-                                marginTop: '8px',
-                                paddingLeft: '12px'
-                              }}>
-                                <button onClick={() => actions.addSubsection(section.id)} style={{
-                                  padding: '4px 10px',
-                                  backgroundColor: 'transparent',
-                                  color: colors.accent,
-                                  border: `1px solid ${colors.sectionBorder}`,
-                                  borderRadius: '6px',
-                                  cursor: 'pointer',
-                                  fontSize: '12px',
-                                  fontWeight: '600',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '5px'
-                                }}>
-                                  <Plus size={14} /> Add Subsection
-                                </button>
-                                
-                                <button
-                                  onClick={() => {
-                                    actions.handleGenerateSubsections(section.id, {
-                                      level: 'subsections',
-                                      context: {
-                                        course: {
-                                          title: courseName,
-                                          description: formData?.objectives || '',
-                                          grade: formData?.class || ''
-                                        }
-                                      },
-                                      userGuidance: null,
-                                      count: 1
-                                    });
-                                  }}
-                                  style={{
-                                    padding: '6px 14px',
-                                    backgroundColor: colors.accent,
-                                    color: '#fff',
-                                    border: 'none',
-                                    borderRadius: '6px',
-                                    cursor: 'pointer',
-                                    fontSize: '12px',
-                                    fontWeight: '600',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '5px'
-                                  }}
-                                >
-                                  <Sparkles size={14} /> AI
-                                </button>
-                              </div>
-                            )}
                           </div>
                         )}
                       </Draggable>
@@ -943,65 +1013,6 @@ const CourseEditor = ({
                 </div>
               )}
             </Droppable>
-
-            {/* Add Section Buttons - show on hover */}
-            {hoveredSection === section.id && !isCollapsed && (
-              <div style={{ 
-                display: 'flex', 
-                gap: '8px',
-                marginTop: '12px',
-                paddingLeft: '16px',
-                paddingBottom: '8px'
-              }}>
-                <button onClick={actions.addSection} style={{
-                  padding: '4px 10px',
-                  backgroundColor: 'transparent',
-                  color: colors.accent,
-                  border: `1px solid ${colors.sectionBorder}`,
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                  fontWeight: '600',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '5px'
-                }}>
-                  <Plus size={14} /> Add Section
-                </button>
-                
-                <button
-                  onClick={() => {
-                    actions.handleGenerateSections({
-                      level: 'sections',
-                      context: {
-                        course: {
-                          title: courseName,
-                          description: formData?.objectives || '',
-                          grade: formData?.class || ''
-                        }
-                      },
-                      userGuidance: null,
-                      count: 1
-                    });
-                  }}
-                  style={{
-                    padding: '6px 14px',
-                    backgroundColor: colors.accent,
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    fontWeight: '600',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '5px'
-                  }}
-                >
-                  <Sparkles size={14} /> AI
-                </button>
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -1125,12 +1136,12 @@ const CourseEditor = ({
                           ref={provided.innerRef}
                           {...provided.draggableProps}
                           style={{
-                            ...provided.draggableProps.style,
+            ...provided.draggableProps.style,
                             opacity: snapshot.isDragging ? 0.8 : 1
                           }}
                         >
-                          <SectionBlock 
-                            section={section} 
+                          <SectionBlock
+                            section={section}
                             index={idx}
                             dragHandleProps={provided.dragHandleProps}
                           />
