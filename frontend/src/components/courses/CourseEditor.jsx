@@ -24,6 +24,26 @@ const CourseEditor = ({
   const [hoveredTopic, setHoveredTopic] = useState(null);
   const [hoveredSubsection, setHoveredSubsection] = useState(null);
   const [hoveredSection, setHoveredSection] = useState(null);
+  const [activeBubble, setActiveBubble] = useState(null);
+  const [aiPromptText, setAiPromptText] = useState('');
+
+  const openBubble = (e, id, onGenerate) => {
+    e.stopPropagation();
+    if (activeBubble?.id === id) {
+      onGenerate(null);
+      setActiveBubble(null);
+      setAiPromptText('');
+    } else {
+      const rect = e.currentTarget.getBoundingClientRect();
+      setActiveBubble({ id, rect, onGenerate });
+      setAiPromptText('');
+    }
+  };
+
+  const closeBubble = () => {
+    setActiveBubble(null);
+    setAiPromptText('');
+  };
 
   // ── Colors ────────────────────────────────────────────────────────────
   const colors = {
@@ -454,17 +474,42 @@ const CourseEditor = ({
 
             <button
               onClick={(e) => {
-                e.stopPropagation();
-                actions.handleGenerateTopicBoxes(sectionId, subsectionId, {
-                  level: 'topics',
-                  context: {
-                    course: {
-                      title: courseName,
-                      grade: formData?.class || ''
-                    }
-                  },
-                  userGuidance: null,
-                  count: 1
+                const section = sections.find(s => s.id === sectionId);
+                const subsection = section?.subsections?.find(sub => sub.id === subsectionId);
+                openBubble(e, `topic-${topicBox.id}`, (guidance) => {
+                  actions.handleGenerateTopicBoxes(sectionId, subsectionId, {
+                    level: 'topics',
+                    context: {
+                      course: {
+                        title: courseName,
+                        grade: formData?.class || '',
+                        description: formData?.objectives || ''
+                      },
+                      current_section: {
+                        title: section?.title || 'Unknown',
+                        description: section?.description || ''
+                      },
+                      subsection: {
+                        title: subsection?.title || 'Unknown',
+                        description: subsection?.description || '',
+                        existingTopics: (subsection?.topicBoxes || []).map(t => ({
+                          title: t.title,
+                          description: t.description
+                        }))
+                      },
+                      other_sections: sections.filter(s => s.type !== 'break' && s.id !== sectionId).map(s => ({
+                        title: s.title,
+                        description: s.description,
+                        subsections: (s.subsections || []).map(sub => sub.title)
+                      })),
+                      sibling_subsections: (section?.subsections || []).filter(sub => sub.id !== subsectionId).map(sub => ({
+                        title: sub.title,
+                        description: sub.description
+                      }))
+                    },
+                    userGuidance: guidance,
+                    count: 1
+                  });
                 });
               }}
               style={{
@@ -697,18 +742,19 @@ const CourseEditor = ({
 
               <button
                 onClick={(e) => {
-                  e.stopPropagation();
-                  actions.handleGenerateSections({
-                    level: 'sections',
-                    context: {
-                      course: {
-                        title: courseName,
-                        description: formData?.objectives || '',
-                        grade: formData?.class || ''
-                      }
-                    },
-                    userGuidance: null,
-                    count: 1
+                  openBubble(e, `section-${section.id}`, (guidance) => {
+                    actions.handleGenerateSections({
+                      level: 'sections',
+                      context: {
+                        course: {
+                          title: courseName,
+                          description: formData?.objectives || '',
+                          grade: formData?.class || ''
+                        }
+                      },
+                      userGuidance: guidance,
+                      count: 1
+                    });
                   });
                 }}
                 style={{
@@ -783,6 +829,86 @@ const CourseEditor = ({
                   ref={provided.innerRef}
                   {...provided.droppableProps}
                 >
+                  {(section.subsections || []).length === 0 && (
+                    <div style={{
+                      textAlign: 'center',
+                      padding: '24px 20px',
+                      border: '1px dashed #e5e7eb',
+                      borderRadius: '8px',
+                      backgroundColor: '#fafafa',
+                      color: colors.textSecondary,
+                      fontSize: '13px',
+                      marginBottom: '12px'
+                    }}>
+                      <p style={{ margin: '0 0 12px' }}>No subsections yet</p>
+                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                        <button
+                          onClick={() => actions.addSubsection(section.id)}
+                          style={{
+                            padding: '6px 14px',
+                            backgroundColor: '#fff',
+                            color: '#6B6760',
+                            border: `1px solid ${colors.sectionBorder}`,
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            fontSize: '12px',
+                            fontWeight: '600',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '5px',
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                          }}
+                        >
+                          <Plus size={14} /> Add Subsection
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            openBubble(e, `subsection-empty-${section.id}`, (guidance) => {
+                              actions.handleGenerateSubsections(section.id, {
+                                level: 'subsections',
+                                context: {
+                                  course: {
+                                    title: courseName,
+                                    description: formData?.objectives || '',
+                                    grade: formData?.class || ''
+                                  },
+                                  current_section: {
+                                    title: section?.title || 'Unknown',
+                                    description: section?.description || '',
+                                    existingSubsections: []
+                                  },
+                                  all_section_names: sections.filter(s => s.type !== 'break').map(s => s.title),
+                                  other_sections: sections.filter(s => s.type !== 'break' && s.id !== section.id).map(s => ({
+                                    title: s.title,
+                                    description: s.description,
+                                    subsections: (s.subsections || []).map(sub => sub.title)
+                                  }))
+                                },
+                                userGuidance: guidance,
+                                count: 1
+                              });
+                            });
+                          }}
+                          style={{
+                            padding: '6px 14px',
+                            backgroundColor: colors.accent,
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            fontSize: '12px',
+                            fontWeight: '600',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '5px',
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                          }}
+                        >
+                          <Sparkles size={14} /> AI Generate
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   {(section.subsections || []).map((sub, subIdx) => {
                     const isSubCollapsed = actions.collapsedSubsections[sub.id];
 
@@ -872,18 +998,33 @@ const CourseEditor = ({
 
                                     <button
                                       onClick={(e) => {
-                                        e.stopPropagation();
-                                        actions.handleGenerateSubsections(section.id, {
-                                          level: 'subsections',
-                                          context: {
-                                            course: {
-                                              title: courseName,
-                                              description: formData?.objectives || '',
-                                              grade: formData?.class || ''
-                                            }
-                                          },
-                                          userGuidance: null,
-                                          count: 1
+                                        openBubble(e, `subsection-${section.id}-${sub.id}`, (guidance) => {
+                                          actions.handleGenerateSubsections(section.id, {
+                                            level: 'subsections',
+                                            context: {
+                                              course: {
+                                                title: courseName,
+                                                description: formData?.objectives || '',
+                                                grade: formData?.class || ''
+                                              },
+                                              current_section: {
+                                                title: section?.title || 'Unknown',
+                                                description: section?.description || '',
+                                                existingSubsections: (section?.subsections || []).map(sub => ({
+                                                  title: sub.title,
+                                                  description: sub.description
+                                                }))
+                                              },
+                                              all_section_names: sections.filter(s => s.type !== 'break').map(s => s.title),
+                                              other_sections: sections.filter(s => s.type !== 'break' && s.id !== section.id).map(s => ({
+                                                title: s.title,
+                                                description: s.description,
+                                                subsections: (s.subsections || []).map(sub => sub.title)
+                                              }))
+                                            },
+                                            userGuidance: guidance,
+                                            count: 1
+                                          });
                                         });
                                       }}
                                       style={{
@@ -960,7 +1101,7 @@ const CourseEditor = ({
                                         {(sub.topicBoxes || []).length === 0 ? (
                                           <div style={{
                                             textAlign: 'center',
-                                            padding: '20px',
+                                            padding: '24px 20px',
                                             border: '1px dashed #e5e7eb',
                                             borderRadius: '8px',
                                             backgroundColor: '#fafafa',
@@ -968,7 +1109,82 @@ const CourseEditor = ({
                                             fontSize: '13px',
                                             marginBottom: '12px'
                                           }}>
-                                            No topic boxes yet. Hover below to add.
+                                            <p style={{ margin: '0 0 12px' }}>No topic boxes yet</p>
+                                            <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                                              <button
+                                                onClick={() => actions.addTopicBox(section.id, sub.id)}
+                                                style={{
+                                                  padding: '6px 14px',
+                                                  backgroundColor: '#fff',
+                                                  color: '#6B6760',
+                                                  border: `1px solid ${colors.sectionBorder}`,
+                                                  borderRadius: '6px',
+                                                  cursor: 'pointer',
+                                                  fontSize: '12px',
+                                                  fontWeight: '600',
+                                                  display: 'flex',
+                                                  alignItems: 'center',
+                                                  gap: '5px',
+                                                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                                }}
+                                              >
+                                                <Plus size={14} /> Add Topic
+                                              </button>
+                                              <button
+                                                onClick={(e) => {
+                                                  const currentSection = sections.find(s => s.id === section.id);
+                                                  const currentSub = currentSection?.subsections?.find(s => s.id === sub.id);
+                                                  openBubble(e, `topic-empty-${section.id}-${sub.id}`, (guidance) => {
+                                                    actions.handleGenerateTopicBoxes(section.id, sub.id, {
+                                                      level: 'topics',
+                                                      context: {
+                                                        course: {
+                                                          title: courseName,
+                                                          grade: formData?.class || '',
+                                                          description: formData?.objectives || ''
+                                                        },
+                                                        current_section: {
+                                                          title: currentSection?.title || 'Unknown',
+                                                          description: currentSection?.description || ''
+                                                        },
+                                                        subsection: {
+                                                          title: currentSub?.title || 'Unknown',
+                                                          description: currentSub?.description || '',
+                                                          existingTopics: []
+                                                        },
+                                                        other_sections: sections.filter(s => s.type !== 'break' && s.id !== section.id).map(s => ({
+                                                          title: s.title,
+                                                          description: s.description,
+                                                          subsections: (s.subsections || []).map(sub => sub.title)
+                                                        })),
+                                                        sibling_subsections: (currentSection?.subsections || []).filter(s => s.id !== sub.id).map(s => ({
+                                                          title: s.title,
+                                                          description: s.description
+                                                        }))
+                                                      },
+                                                      userGuidance: guidance,
+                                                      count: 1
+                                                    });
+                                                  });
+                                                }}
+                                                style={{
+                                                  padding: '6px 14px',
+                                                  backgroundColor: colors.accent,
+                                                  color: '#fff',
+                                                  border: 'none',
+                                                  borderRadius: '6px',
+                                                  cursor: 'pointer',
+                                                  fontSize: '12px',
+                                                  fontWeight: '600',
+                                                  display: 'flex',
+                                                  alignItems: 'center',
+                                                  gap: '5px',
+                                                  boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                                                }}
+                                              >
+                                                <Sparkles size={14} /> AI Generate
+                                              </button>
+                                            </div>
                                           </div>
                                         ) : (
                                           (sub.topicBoxes || []).map((topic, topicIdx) => (
@@ -1165,6 +1381,96 @@ const CourseEditor = ({
         title={actions.deleteConfirm?.title || ''}
         message={actions.deleteConfirm?.message || ''}
       />
+
+      {/* AI Prompt Bubble */}
+      {activeBubble && (
+        <>
+          <div
+            onClick={(e) => { e.stopPropagation(); closeBubble(); }}
+            style={{ position: 'fixed', inset: 0, zIndex: 999 }}
+          />
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: 'fixed',
+              left: Math.max(10, activeBubble.rect.right - 220),
+              top: activeBubble.rect.top - 8,
+              transform: 'translateY(-100%)',
+              backgroundColor: 'white',
+              borderRadius: '10px',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+              border: '1px solid #e5e7eb',
+              padding: '12px',
+              width: '220px',
+              zIndex: 1000,
+            }}
+          >
+            <div style={{
+              position: 'absolute',
+              bottom: '-6px',
+              right: '14px',
+              width: '12px',
+              height: '12px',
+              backgroundColor: 'white',
+              transform: 'rotate(45deg)',
+              borderRight: '1px solid #e5e7eb',
+              borderBottom: '1px solid #e5e7eb',
+            }} />
+            <div style={{ fontSize: '11px', fontWeight: '600', color: '#6B6760', marginBottom: '6px' }}>
+              Prompt (optional):
+            </div>
+            <input
+              type="text"
+              value={aiPromptText}
+              onChange={(e) => setAiPromptText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  activeBubble.onGenerate(aiPromptText.trim() || null);
+                  closeBubble();
+                }
+                if (e.key === 'Escape') closeBubble();
+              }}
+              onClick={(e) => e.stopPropagation()}
+              placeholder="e.g., Focus on hands-on..."
+              autoFocus
+              style={{
+                width: '100%',
+                padding: '6px 8px',
+                border: '1px solid #e5e7eb',
+                borderRadius: '6px',
+                fontSize: '11px',
+                outline: 'none',
+                marginBottom: '8px',
+                boxSizing: 'border-box',
+              }}
+            />
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                activeBubble.onGenerate(aiPromptText.trim() || null);
+                closeBubble();
+              }}
+              style={{
+                width: '100%',
+                padding: '5px 10px',
+                backgroundColor: colors.accent,
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '11px',
+                fontWeight: '600',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '4px',
+              }}
+            >
+              <Sparkles size={12} /> Generate
+            </button>
+          </div>
+        </>
+      )}
 
       {selectedTopicForDetail && (
         <TopicDetailsModal
