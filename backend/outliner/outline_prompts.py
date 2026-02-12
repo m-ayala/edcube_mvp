@@ -47,31 +47,36 @@ WHAT SECTIONS AND SUBSECTIONS MEAN:
 CRITICAL SPECIFICITY RULES:
 - ALL titles and descriptions must be SPECIFIC to "{topic}" for Grade {grade_level} — never use generic filler
 - Section titles must name the specific aspect of "{topic}" being explored, NOT generic labels like "Introduction", "Core Concepts", "Advanced Topics", or "Review and Assessment"
-- Subsection titles must name the EXACT concept, event, skill, or activity students will learn
-- Descriptions must mention CONCRETE facts, concepts, or activities — not vague summaries
+- Subsection titles must describe the EXACT learning activity or concept — start with an activity type when possible: "Watch:", "Experiment:", "Visual Models:", "Discussion:", "Practice:", "Read:", "Draw:", "Sort:", "Compare:", etc.
+- The subsection title should tell a teacher EXACTLY what happens during this learning block
+- Subsection descriptions must be 2-3 sentences with CONCRETE details about what students will do and learn — not vague summaries
 - Learning objectives must use measurable action verbs (identify, explain, compare, demonstrate, calculate, describe, list, classify) and reference specific content from "{topic}"
 - Content keywords must be precise enough that searching YouTube for "Grade {grade_level} [keyword]" would find relevant educational videos
 - what_must_be_covered must detail the SPECIFIC facts, concepts, or skills — as if briefing a substitute teacher
 
 BAD EXAMPLES (too generic — DO NOT do this):
 - Section: "Introduction to the Topic" / "Foundational Concepts" / "Exploring Key Ideas"
-- Subsection: "Key Vocabulary" / "Main Ideas" / "Practice and Review"
+- Subsection: "Key Vocabulary" / "Main Ideas" / "Practice and Review" / "Introduction" / "Key Facts" / "Wrap Up"
 - Learning objective: "Students will understand the topic" / "Students will learn key concepts"
 - Content keyword: "introduction" / "basics" / "review"
 
 GOOD EXAMPLES (for topic "The Water Cycle", Grade 3):
 - Section: "Where Does Rain Come From? — Understanding Evaporation and Condensation"
-- Subsection: "How the Sun Heats Lakes and Oceans to Make Water Vapor" (20 min)
+- Subsection: "Watch: How the Sun Turns Puddles Into Water Vapor" (10 min)
+  Description: "Students watch a short video showing how heat from the sun causes water to change from liquid to invisible gas. Real-life examples include puddles drying up on a sunny day and wet clothes drying on a clothesline. Introduces vocabulary: evaporation, water vapor, heat energy."
+- Subsection: "Experiment: Measuring Evaporation with Two Cups of Water" (15 min)
+  Description: "Students place two cups of water — one in direct sunlight and one in the shade — and predict which will lose more water. They measure and record water levels over time to observe evaporation in action."
 - Learning objective: "Students will explain how heat from the sun causes water to evaporate from lakes, rivers, and oceans"
 - Content keywords: ["water cycle evaporation", "sun heats water", "water vapor for kids", "evaporation experiment grade 3"]
-- what_must_be_covered: "Explain that the sun heats bodies of water causing liquid water to turn into invisible water vapor (gas). Use examples: puddles drying up, wet clothes drying. Introduce vocabulary: evaporation, water vapor, heat energy."
 
 GOOD EXAMPLES (for topic "Fractions", Grade 5):
 - Section: "What Are Fractions? — Dividing Wholes into Equal Parts"
-- Subsection: "Cutting Pizzas and Pies: Naming Fractions Like 1/2, 1/3, and 1/4" (25 min)
+- Subsection: "Visual Models: Using Fraction Bars to Show 1/2, 1/3, and 1/4" (10 min)
+  Description: "Students use fraction bar manipulatives to see how wholes divide into equal parts, comparing the size of 1/2, 1/3, and 1/4 pieces side by side. Teaches numerator (parts taken) and denominator (total equal parts)."
+- Subsection: "Word Problems: Sharing Pizza Slices with Friends" (15 min)
+  Description: "Students solve real-world fraction problems about dividing pizza equally among friends, writing fractions with correct numerator and denominator. Practice naming fractions from pictures: 1/2, 1/3, 1/4, 2/3, 3/4."
 - Learning objective: "Students will identify and name fractions using real-world examples of dividing food into equal parts"
 - Content keywords: ["fractions for kids grade 5", "naming fractions pizza", "numerator denominator", "equal parts fractions"]
-- what_must_be_covered: "Define fraction as equal parts of a whole. Teach numerator (parts taken) and denominator (total equal parts). Use pizza/pie visual models. Practice naming fractions from pictures: 1/2, 1/3, 1/4, 2/3, 3/4."
 
 DESIGN RULES:
 1. Generate 3-5 sections total
@@ -97,8 +102,8 @@ OUTPUT FORMAT (strict JSON, no other text):
     "subsections": [
     {{
         "subsection_id": "section_1_sub_1",
-        "title": "string (specific lesson name describing the exact concept or activity)",
-        "description": "string (what students will learn and do in this lesson with concrete details, 2-3 sentences)",
+        "title": "string (activity-specific title, e.g. 'Watch: How Volcanoes Erupt' or 'Experiment: Building a Baking Soda Volcano')",
+        "description": "string (2-3 sentences with concrete details about what students will DO and LEARN — name specific activities, materials, examples, and vocabulary)",
         "duration_minutes": 0,
         "pla_pillars": ["Self-Knowledge", "Knowledge", "Wisdom", "Application"],
         "learning_objectives": ["string - specific, measurable goals using action verbs and referencing actual content"],

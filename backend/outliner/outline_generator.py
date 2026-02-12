@@ -104,7 +104,11 @@ def create_final_outline(outline_data: Dict) -> Dict:
                 "id": sub.get('subsection_id', ''),
                 "title": sub.get('title', ''),
                 "description": sub.get('description', ''),
-                "topicBoxes": []  # NEW: Start with empty topic boxes array
+                "duration_minutes": sub.get('duration_minutes', 0),
+                "pla_pillars": sub.get('pla_pillars', []),
+                "learning_objectives": sub.get('learning_objectives', []),
+                "content_keywords": sub.get('content_keywords', []),
+                "topicBoxes": []
             }
             built_section['subsections'].append(built_subsection)
         
