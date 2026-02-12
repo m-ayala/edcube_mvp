@@ -41,30 +41,47 @@ PLA FRAMEWORK (every subsection must map to one or more of these pillars):
 {OutlinerConfig.PLA_FRAMEWORK}
 
 WHAT SECTIONS AND SUBSECTIONS MEAN:
-- A SECTION is a logical chapter or grouping. Example: "Introduction to MLK" or "The Civil Rights Movement in the 1960s". It groups related lessons together.
-- A SUBSECTION is one individual lesson inside that chapter. Example: under "Introduction to MLK", the subsections might be "What is Segregation", "MLK's Early Life", "Growing Up in the South". Each subsection is one teachable unit with its own topic box, resources, and hands-on activities.
+- A SECTION is a logical chapter or grouping. It groups related lessons together.
+- A SUBSECTION is one individual lesson inside that chapter. Each subsection is one teachable unit with its own topic box, resources, and hands-on activities.
+
+CRITICAL SPECIFICITY RULES:
+- ALL titles and descriptions must be SPECIFIC to "{topic}" for Grade {grade_level} — never use generic filler
+- Section titles must name the specific aspect of "{topic}" being explored, NOT generic labels like "Introduction", "Core Concepts", "Advanced Topics", or "Review and Assessment"
+- Subsection titles must name the EXACT concept, event, skill, or activity students will learn
+- Descriptions must mention CONCRETE facts, concepts, or activities — not vague summaries
+- Learning objectives must use measurable action verbs (identify, explain, compare, demonstrate, calculate, describe, list, classify) and reference specific content from "{topic}"
+- Content keywords must be precise enough that searching YouTube for "Grade {grade_level} [keyword]" would find relevant educational videos
+- what_must_be_covered must detail the SPECIFIC facts, concepts, or skills — as if briefing a substitute teacher
+
+BAD EXAMPLES (too generic — DO NOT do this):
+- Section: "Introduction to the Topic" / "Foundational Concepts" / "Exploring Key Ideas"
+- Subsection: "Key Vocabulary" / "Main Ideas" / "Practice and Review"
+- Learning objective: "Students will understand the topic" / "Students will learn key concepts"
+- Content keyword: "introduction" / "basics" / "review"
+
+GOOD EXAMPLES (for topic "The Water Cycle", Grade 3):
+- Section: "Where Does Rain Come From? — Understanding Evaporation and Condensation"
+- Subsection: "How the Sun Heats Lakes and Oceans to Make Water Vapor" (20 min)
+- Learning objective: "Students will explain how heat from the sun causes water to evaporate from lakes, rivers, and oceans"
+- Content keywords: ["water cycle evaporation", "sun heats water", "water vapor for kids", "evaporation experiment grade 3"]
+- what_must_be_covered: "Explain that the sun heats bodies of water causing liquid water to turn into invisible water vapor (gas). Use examples: puddles drying up, wet clothes drying. Introduce vocabulary: evaporation, water vapor, heat energy."
+
+GOOD EXAMPLES (for topic "Fractions", Grade 5):
+- Section: "What Are Fractions? — Dividing Wholes into Equal Parts"
+- Subsection: "Cutting Pizzas and Pies: Naming Fractions Like 1/2, 1/3, and 1/4" (25 min)
+- Learning objective: "Students will identify and name fractions using real-world examples of dividing food into equal parts"
+- Content keywords: ["fractions for kids grade 5", "naming fractions pizza", "numerator denominator", "equal parts fractions"]
+- what_must_be_covered: "Define fraction as equal parts of a whole. Teach numerator (parts taken) and denominator (total equal parts). Use pizza/pie visual models. Practice naming fractions from pictures: 1/2, 1/3, 1/4, 2/3, 3/4."
 
 DESIGN RULES:
 1. Generate 3-5 sections total
 2. Each section must have 2-4 subsections
 3. Each subsection is one lesson: 15-30 minutes, independently teachable
 4. Target ~{target_total_minutes} total minutes across ALL subsections (2x teacher time for flexibility)
-5. Topics must be BROAD and well-known — easy to find YouTube videos, worksheets, and activities for
-6. Every subsection needs specific learning objectives and content keywords (these are used later to find real resources)
+5. Topics must be specific yet well-known enough to find YouTube videos, worksheets, and activities for
+6. Every subsection needs specific learning objectives and content keywords (these are used later by an automated system to find real resources — vague keywords will find bad or irrelevant resources)
 7. Section and subsection descriptions should be clear enough for a teacher to understand the lesson at a glance
-8. Sections should flow in a logical teaching order (e.g. foundational knowledge first, then deeper dives, then application)
-
-EXAMPLE OF GOOD STRUCTURE (for MLK topic):
-Section 1: "Introduction to MLK"
-- Subsection 1.1: "What is Segregation" (20 min)
-- Subsection 1.2: "MLK's Early Life" (18 min)
-- Subsection 1.3: "Growing Up in the South" (22 min)
-Section 2: "The Civil Rights Movement"
-- Subsection 2.1: "The Montgomery Bus Boycott" (25 min)
-- Subsection 2.2: "Sit-Ins and Protests" (20 min)
-Section 3: "MLK's Legacy"
-- Subsection 3.1: "The 'I Have a Dream' Speech" (22 min)
-- Subsection 3.2: "MLK's Impact Today" (18 min)
+8. Sections should flow in a logical teaching order (foundational knowledge first, then deeper dives, then application/synthesis)
 
 OUTPUT FORMAT (strict JSON, no other text):
 {{
@@ -75,18 +92,18 @@ OUTPUT FORMAT (strict JSON, no other text):
 "sections": [
 {{
     "section_id": "section_1",
-    "title": "string (chapter name)",
-    "description": "string (what this chapter covers, 1-2 sentences)",
+    "title": "string (specific chapter name tied to {topic})",
+    "description": "string (what this chapter covers with specific subtopics mentioned, 2-3 sentences)",
     "subsections": [
     {{
         "subsection_id": "section_1_sub_1",
-        "title": "string (lesson name, broad and resource-friendly)",
-        "description": "string (what students will learn in this lesson, 1-2 sentences)",
+        "title": "string (specific lesson name describing the exact concept or activity)",
+        "description": "string (what students will learn and do in this lesson with concrete details, 2-3 sentences)",
         "duration_minutes": 0,
         "pla_pillars": ["Self-Knowledge", "Knowledge", "Wisdom", "Application"],
-        "learning_objectives": ["string - specific, measurable goals"],
-        "content_keywords": ["string - key concepts for finding resources"],
-        "what_must_be_covered": "string - detailed content description for resource finding"
+        "learning_objectives": ["string - specific, measurable goals using action verbs and referencing actual content"],
+        "content_keywords": ["string - precise terms for finding Grade {grade_level} YouTube videos and worksheets"],
+        "what_must_be_covered": "string - detailed content brief as if instructing a substitute teacher: specific facts, vocabulary, examples, and activities"
     }}
     ]
 }}
@@ -94,7 +111,7 @@ OUTPUT FORMAT (strict JSON, no other text):
 }}
 
 IMPORTANT:
-- Be VERY specific in learning_objectives, content_keywords, and what_must_be_covered. These are used by a second system to find real YouTube videos and worksheets — vague keywords will find bad resources.
+- Be VERY specific in learning_objectives, content_keywords, and what_must_be_covered. These are used by an automated system to find real YouTube videos and worksheets — vague or generic keywords will find irrelevant resources and ruin the course.
 - Use age-appropriate language for grade {grade_level}
 - Worksheets and activities are NOT generated here — leave them out entirely
 - Address teacher's requirements: {requirements}

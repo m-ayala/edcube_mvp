@@ -68,7 +68,7 @@ class GenerationService:
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are an expert curriculum designer. Return only valid JSON, no markdown."
+                        "content": "You are an expert elementary education curriculum designer who creates highly specific, content-rich course materials. Every title, description, and objective you write must reference concrete topics, skills, or activities — never use generic placeholders. Return only valid JSON, no markdown."
                     },
                     {
                         "role": "user",
