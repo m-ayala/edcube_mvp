@@ -24,7 +24,17 @@ class FirebaseService:
         
         self.db = firestore.client()
         self.curricula_collection = self.db.collection('curricula')
-    
+
+    async def _get_user_org(self, uid: str) -> Optional[str]:
+        """Get a user's organization ID from their teacher profile."""
+        try:
+            doc = self.db.collection('teacher_profiles').document(uid).get()
+            if doc.exists:
+                return doc.to_dict().get('org_id')
+            return None
+        except Exception:
+            return None
+
     # In firebase_service.py - save_curriculum method
     async def save_curriculum(self, teacherUid: str, curriculum_data: Dict, organizationId: str) -> str:
         """Save a new curriculum to Firestore (FLAT STRUCTURE)"""
@@ -81,12 +91,21 @@ class FirebaseService:
                 return None
             
             curriculum = doc.to_dict()
-            
-            # Verify ownership
-            if curriculum.get('teacherUid') != teacherUid:
+
+            # Allow access if owner OR if course is public and user is in same org
+            is_owner = curriculum.get('teacherUid') == teacherUid
+            if not is_owner:
+                is_public = curriculum.get('isPublic', False)
+                if is_public:
+                    # Check same org
+                    requester_org = await self._get_user_org(teacherUid)
+                    course_org = curriculum.get('organizationId', '')
+                    if requester_org and requester_org == course_org:
+                        curriculum['id'] = doc.id
+                        return curriculum
                 print(f"⚠️  Authorization failed: User {teacherUid} tried to access curriculum owned by {curriculum.get('teacherUid')}")
                 return None
-            
+
             curriculum['id'] = doc.id
             return curriculum
         

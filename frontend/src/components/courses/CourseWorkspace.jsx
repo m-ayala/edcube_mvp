@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import CourseEditor from './CourseEditor';
+import CourseViewer from './CourseViewer';
 import useCourseActions from './useCourseActions';
 import BreakModal from '../modals/BreakModal';
 import TopicDetailsModal from '../modals/TopicDetailsModal';
@@ -17,7 +18,10 @@ const CourseWorkspace = () => {
     formData,
     sections: incomingSections,
     isEditing,
-    curriculumId
+    curriculumId,
+    isPublic: incomingIsPublic,
+    readOnly: incomingReadOnly,
+    ownerName: incomingOwnerName
   } = location.state || {};
 
   // ── Core State ────────────────────────────────────────────────────────
@@ -31,6 +35,8 @@ const CourseWorkspace = () => {
   const [videosByTopic, setVideosByTopic] = useState({});
   const [handsOnResources, setHandsOnResources] = useState({});
   const [organizationId, setOrganizationId] = useState(null);
+  const [isPublic, setIsPublic] = useState(incomingIsPublic || false);
+  const [readOnly] = useState(incomingReadOnly || false);
 
   // ── Initialize Actions Hook ───────────────────────────────────────────
   const actions = useCourseActions({
@@ -75,7 +81,7 @@ const CourseWorkspace = () => {
             return sub;
           }
 
-          const hasResources = 
+          const hasResources =
             (sub.video_resources && sub.video_resources.length > 0) ||
             (sub.worksheets && sub.worksheets.length > 0) ||
             (sub.activities && sub.activities.length > 0) ||
@@ -177,6 +183,35 @@ const CourseWorkspace = () => {
     setIsModalOpen(true);
   };
 
+  // ── Toggle Visibility ──────────────────────────────────────────────────
+  const handleToggleVisibility = async () => {
+    if (!curriculumId || curriculumId === 'new-course') {
+      alert('Please save the course first before changing visibility.');
+      return;
+    }
+
+    try {
+      const newIsPublic = !isPublic;
+      const response = await fetch(
+        `http://localhost:8000/api/curricula/${curriculumId}/visibility?teacherUid=${currentUser.uid}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ isPublic: newIsPublic })
+        }
+      );
+      const result = await response.json();
+      if (result.success) {
+        setIsPublic(newIsPublic);
+      } else {
+        alert('Failed to update visibility');
+      }
+    } catch (error) {
+      console.error('Error toggling visibility:', error);
+      alert('Failed to update visibility');
+    }
+  };
+
   // ── Save Course ───────────────────────────────────────────────────────
   const saveCourse = async () => {
     try {
@@ -243,31 +278,46 @@ const CourseWorkspace = () => {
   // ── Render ────────────────────────────────────────────────────────────
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#FAF9F6' }}>
-      <CourseEditor
-        courseName={courseName}
-        setCourseName={setCourseName}
-        sections={sections}
-        setSections={setSections}
-        videosByTopic={videosByTopic}
-        handsOnResources={handsOnResources}
-        formData={formData}
-        currentUser={currentUser}
-        actions={actions}
-        onSave={saveCourse}
-        onUndo={undo}
-        canUndo={historyIndex > 0}
-        onAddBreak={() => setShowBreakModal(true)}
-        onTopicClick={handleTopicClick}
-        navigate={navigate}
-      />
+      {readOnly ? (
+        <CourseViewer
+          courseName={courseName}
+          sections={sections}
+          videosByTopic={videosByTopic}
+          handsOnResources={handsOnResources}
+          ownerName={incomingOwnerName}
+          navigate={navigate}
+        />
+      ) : (
+        <>
+          <CourseEditor
+            courseName={courseName}
+            setCourseName={setCourseName}
+            sections={sections}
+            setSections={setSections}
+            videosByTopic={videosByTopic}
+            handsOnResources={handsOnResources}
+            formData={formData}
+            currentUser={currentUser}
+            actions={actions}
+            onSave={saveCourse}
+            onUndo={undo}
+            canUndo={historyIndex > 0}
+            onAddBreak={() => setShowBreakModal(true)}
+            onTopicClick={handleTopicClick}
+            navigate={navigate}
+            isPublic={isPublic}
+            onToggleVisibility={handleToggleVisibility}
+          />
 
-      {/* Modals */}
-      {showBreakModal && (
-        <BreakModal onConfirm={handleBreakCreate} onCancel={() => setShowBreakModal(false)} />
-      )}
+          {/* Modals (only in edit mode) */}
+          {showBreakModal && (
+            <BreakModal onConfirm={handleBreakCreate} onCancel={() => setShowBreakModal(false)} />
+          )}
 
-      {isModalOpen && selectedTopic && (
-        <TopicDetailsModal topic={selectedTopic} onClose={() => { setIsModalOpen(false); setSelectedTopic(null); }} />
+          {isModalOpen && selectedTopic && (
+            <TopicDetailsModal topic={selectedTopic} onClose={() => { setIsModalOpen(false); setSelectedTopic(null); }} />
+          )}
+        </>
       )}
     </div>
   );

@@ -18,7 +18,9 @@ const CourseEditor = ({
   onUndo,
   canUndo,
   onAddBreak,
-  navigate
+  navigate,
+  isPublic,
+  onToggleVisibility
 }) => {
   const [selectedTopicForDetail, setSelectedTopicForDetail] = useState(null);
   const [hoveredTopic, setHoveredTopic] = useState(null);
@@ -1260,6 +1262,34 @@ const CourseEditor = ({
         </div>
 
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          {/* Visibility toggle */}
+          <div
+            onClick={onToggleVisibility}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer',
+              padding: '4px 12px', borderRadius: '20px',
+              backgroundColor: isPublic ? '#ECFDF5' : '#F9FAFB',
+              border: `1px solid ${isPublic ? '#A7F3D0' : '#E5E7EB'}`,
+              transition: 'all 0.2s'
+            }}
+          >
+            <span style={{ fontSize: '12px', color: isPublic ? '#065F46' : '#6B7280', fontWeight: '500' }}>
+              {isPublic ? 'Public' : 'Private'}
+            </span>
+            <div style={{
+              width: '36px', height: '20px', borderRadius: '10px',
+              backgroundColor: isPublic ? '#10B981' : '#D1D5DB',
+              position: 'relative', transition: 'background-color 0.2s'
+            }}>
+              <div style={{
+                width: '16px', height: '16px', borderRadius: '50%',
+                backgroundColor: 'white', position: 'absolute', top: '2px',
+                left: isPublic ? '18px' : '2px',
+                transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+              }} />
+            </div>
+          </div>
+
           <button onClick={onUndo} disabled={!canUndo} style={{
             padding: '7px 14px', backgroundColor: !canUndo ? '#e5e7eb' : '#6b7280',
             color: !canUndo ? '#9ca3af' : 'white', border: 'none',

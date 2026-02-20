@@ -3,15 +3,16 @@ import { useState } from 'react';
 import { X, Edit2, Check, Trash2, Plus, Sparkles, ExternalLink } from 'lucide-react';
 import AddResourceModal from './AddResourceModal';
 
-const TopicDetailsModal = ({ 
-  topic, 
-  sectionId, 
-  subsectionId, 
-  onClose, 
+const TopicDetailsModal = ({
+  topic,
+  sectionId,
+  subsectionId,
+  onClose,
   onSave,
   actions,
   videosByTopic,
-  handsOnResources 
+  handsOnResources,
+  readOnly
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedTopic, setEditedTopic] = useState({
@@ -152,21 +153,23 @@ const TopicDetailsModal = ({
                 <label style={{ fontSize: '11px', color: colors.textSecondary, fontWeight: '700', letterSpacing: '0.5px' }}>
                   TOPIC TITLE
                 </label>
-                <button
-                  onClick={() => setIsEditing(!isEditing)}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    padding: '4px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    color: colors.accent
-                  }}
-                  title={isEditing ? 'Done editing' : 'Edit topic'}
-                >
-                  {isEditing ? <Check size={16} /> : <Edit2 size={16} />}
-                </button>
+                {!readOnly && (
+                  <button
+                    onClick={() => setIsEditing(!isEditing)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: '4px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      color: colors.accent
+                    }}
+                    title={isEditing ? 'Done editing' : 'Edit topic'}
+                  >
+                    {isEditing ? <Check size={16} /> : <Edit2 size={16} />}
+                  </button>
+                )}
               </div>
               
               {isEditing ? (
@@ -394,46 +397,48 @@ const TopicDetailsModal = ({
           <div style={{ marginBottom: '28px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
               <label style={{ fontSize: '11px', color: colors.textSecondary, fontWeight: '700', letterSpacing: '0.5px' }}>
-                🎥 VIDEO RESOURCES
+                VIDEO RESOURCES
               </label>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button
-                  onClick={() => setShowAddResourceModal({ type: 'video' })}
-                  style={{
-                    padding: '6px 12px',
-                    backgroundColor: 'transparent',
-                    color: colors.accent,
-                    border: `1px solid ${colors.border}`,
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    fontWeight: '600',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px'
-                  }}
-                >
-                  <Plus size={14} /> Add
-                </button>
-                <button
-                  onClick={handleGenerateVideos}
-                  style={{
-                    padding: '6px 12px',
-                    backgroundColor: colors.accent,
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    fontWeight: '600',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px'
-                  }}
-                >
-                  <Sparkles size={14} /> AI
-                </button>
-              </div>
+              {!readOnly && (
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={() => setShowAddResourceModal({ type: 'video' })}
+                    style={{
+                      padding: '6px 12px',
+                      backgroundColor: 'transparent',
+                      color: colors.accent,
+                      border: `1px solid ${colors.border}`,
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                  >
+                    <Plus size={14} /> Add
+                  </button>
+                  <button
+                    onClick={handleGenerateVideos}
+                    style={{
+                      padding: '6px 12px',
+                      backgroundColor: colors.accent,
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                  >
+                    <Sparkles size={14} /> AI
+                  </button>
+                </div>
+              )}
             </div>
             
             {videos.length === 0 ? (
@@ -518,46 +523,48 @@ const TopicDetailsModal = ({
           <div style={{ marginBottom: '28px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
               <label style={{ fontSize: '11px', color: colors.textSecondary, fontWeight: '700', letterSpacing: '0.5px' }}>
-                📄 WORKSHEETS
+                WORKSHEETS
               </label>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button
-                  onClick={() => setShowAddResourceModal({ type: 'worksheet' })}
-                  style={{
-                    padding: '6px 12px',
-                    backgroundColor: 'transparent',
-                    color: colors.accent,
-                    border: `1px solid ${colors.border}`,
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    fontWeight: '600',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px'
-                  }}
-                >
-                  <Plus size={14} /> Add
-                </button>
-                <button
-                  onClick={() => handleGenerateResource('worksheet')}
-                  style={{
-                    padding: '6px 12px',
-                    backgroundColor: colors.accent,
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    fontWeight: '600',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px'
-                  }}
-                >
-                  <Sparkles size={14} /> AI
-                </button>
-              </div>
+              {!readOnly && (
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={() => setShowAddResourceModal({ type: 'worksheet' })}
+                    style={{
+                      padding: '6px 12px',
+                      backgroundColor: 'transparent',
+                      color: colors.accent,
+                      border: `1px solid ${colors.border}`,
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                  >
+                    <Plus size={14} /> Add
+                  </button>
+                  <button
+                    onClick={() => handleGenerateResource('worksheet')}
+                    style={{
+                      padding: '6px 12px',
+                      backgroundColor: colors.accent,
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                  >
+                    <Sparkles size={14} /> AI
+                  </button>
+                </div>
+              )}
             </div>
             
             {worksheets.length === 0 ? (
@@ -620,46 +627,48 @@ const TopicDetailsModal = ({
           <div style={{ marginBottom: '32px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
               <label style={{ fontSize: '11px', color: colors.textSecondary, fontWeight: '700', letterSpacing: '0.5px' }}>
-                🎯 ACTIVITIES
+                ACTIVITIES
               </label>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button
-                  onClick={() => setShowAddResourceModal({ type: 'activity' })}
-                  style={{
-                    padding: '6px 12px',
-                    backgroundColor: 'transparent',
-                    color: colors.accent,
-                    border: `1px solid ${colors.border}`,
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    fontWeight: '600',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px'
-                  }}
-                >
-                  <Plus size={14} /> Add
-                </button>
-                <button
-                  onClick={() => handleGenerateResource('activity')}
-                  style={{
-                    padding: '6px 12px',
-                    backgroundColor: colors.accent,
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    fontWeight: '600',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px'
-                  }}
-                >
-                  <Sparkles size={14} /> AI
-                </button>
-              </div>
+              {!readOnly && (
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={() => setShowAddResourceModal({ type: 'activity' })}
+                    style={{
+                      padding: '6px 12px',
+                      backgroundColor: 'transparent',
+                      color: colors.accent,
+                      border: `1px solid ${colors.border}`,
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                  >
+                    <Plus size={14} /> Add
+                  </button>
+                  <button
+                    onClick={() => handleGenerateResource('activity')}
+                    style={{
+                      padding: '6px 12px',
+                      backgroundColor: colors.accent,
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                  >
+                    <Sparkles size={14} /> AI
+                  </button>
+                </div>
+              )}
             </div>
             
             {activities.length === 0 ? (

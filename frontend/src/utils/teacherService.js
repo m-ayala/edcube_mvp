@@ -122,13 +122,12 @@ export const getAllTeachers = async (currentUser) => {
 };
 
 /**
- * Get a teacher's public courses (we'll build this backend endpoint later)
+ * Get a teacher's public courses
  */
 export const getTeacherCourses = async (currentUser, teacherUid) => {
   try {
     const headers = await getAuthHeader(currentUser);
-    
-    // This endpoint doesn't exist yet - we'll create it in Step 6
+
     const response = await fetch(`${API_BASE_URL}/${teacherUid}/courses`, {
       method: 'GET',
       headers

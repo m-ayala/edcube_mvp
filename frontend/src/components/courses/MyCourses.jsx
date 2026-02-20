@@ -14,6 +14,7 @@ const MyCourses = () => {
   const [loading, setLoading] = useState(true);
   const [selectedCurriculum, setSelectedCurriculum] = useState(null);
   const [deleteModalData, setDeleteModalData] = useState(null);
+  const [visibilityModalData, setVisibilityModalData] = useState(null);
 
   useEffect(() => {
     loadCurricula();
@@ -38,6 +39,44 @@ const MyCourses = () => {
 
   const handleDeleteClick = (curriculumId, courseName) => {
     setDeleteModalData({ id: curriculumId, name: courseName });
+  };
+
+  const handleToggleVisibility = (curriculum) => {
+    setVisibilityModalData(curriculum);
+  };
+
+  const confirmToggleVisibility = async () => {
+    const curriculum = visibilityModalData;
+    if (!curriculum) return;
+
+    const courseId = curriculum.courseId || curriculum.id;
+    const newIsPublic = !curriculum.isPublic;
+
+    try {
+      const response = await fetch(
+        `http://localhost:8000/api/curricula/${courseId}/visibility?teacherUid=${currentUser.uid}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ isPublic: newIsPublic })
+        }
+      );
+      const result = await response.json();
+      if (result.success) {
+        setCurricula(prev =>
+          prev.map(c =>
+            (c.courseId || c.id) === courseId ? { ...c, isPublic: newIsPublic } : c
+          )
+        );
+      } else {
+        alert('Failed to update visibility');
+      }
+    } catch (error) {
+      console.error('Error toggling visibility:', error);
+      alert('Failed to update visibility');
+    } finally {
+      setVisibilityModalData(null);
+    }
   };
 
   const handleEditCourse = (curriculum) => {
@@ -77,7 +116,8 @@ const MyCourses = () => {
         },
         sections,
         isEditing: true,
-        curriculumId: curriculum.courseId || curriculum.id
+        curriculumId: curriculum.courseId || curriculum.id,
+        isPublic: curriculum.isPublic || false
       }
     });
   };
@@ -151,6 +191,7 @@ const MyCourses = () => {
               curriculum={curriculum}
               onCardClick={handleCardClick}
               onDelete={handleDeleteClick}
+              onToggleVisibility={handleToggleVisibility}
             />
           ))}
         </div>
@@ -166,6 +207,54 @@ const MyCourses = () => {
             setSelectedCurriculum(null);
           }}
         />
+      )}
+
+      {/* Visibility Confirmation Modal */}
+      {visibilityModalData && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex',
+          justifyContent: 'center', alignItems: 'center', zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: 'white', borderRadius: '12px', padding: '28px',
+            maxWidth: '420px', width: '90%', textAlign: 'center',
+            boxShadow: '0 8px 30px rgba(0,0,0,0.15)'
+          }}>
+            <h3 style={{ margin: '0 0 12px 0', fontSize: '18px' }}>
+              {visibilityModalData.isPublic ? 'Make Course Private?' : 'Make Course Public?'}
+            </h3>
+            <p style={{ color: '#666', marginBottom: '24px', fontSize: '14px', lineHeight: '1.5' }}>
+              {visibilityModalData.isPublic
+                ? `"${visibilityModalData.courseName}" will no longer be visible to other teachers in your organization.`
+                : `"${visibilityModalData.courseName}" will be visible to all teachers in your organization.`
+              }
+            </p>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+              <button
+                onClick={() => setVisibilityModalData(null)}
+                style={{
+                  padding: '8px 20px', backgroundColor: '#f3f4f6', color: '#374151',
+                  border: '1px solid #d1d5db', borderRadius: '6px', cursor: 'pointer',
+                  fontSize: '14px', fontWeight: '500'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmToggleVisibility}
+                style={{
+                  padding: '8px 20px',
+                  backgroundColor: visibilityModalData.isPublic ? '#6b7280' : '#10B981',
+                  color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer',
+                  fontSize: '14px', fontWeight: '600'
+                }}
+              >
+                {visibilityModalData.isPublic ? 'Make Private' : 'Make Public'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Delete Confirmation Modal */}

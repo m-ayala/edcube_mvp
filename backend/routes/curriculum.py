@@ -389,3 +389,29 @@ async def generate_curriculum_content(request: GenerateRequest):
     except Exception as e:
         logger.error(f"Unexpected error in generate endpoint: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# VISIBILITY TOGGLE
+# ============================================================================
+
+class VisibilityUpdate(BaseModel):
+    isPublic: bool
+
+@router.patch("/curricula/{curriculum_id}/visibility")
+async def update_course_visibility(curriculum_id: str, body: VisibilityUpdate, teacherUid: str):
+    """Toggle a course's public/private visibility. Only the owner can change this."""
+    try:
+        # Verify ownership
+        curriculum = await firebase.get_curriculum(curriculum_id, teacherUid)
+        if not curriculum:
+            raise HTTPException(status_code=404, detail="Course not found or unauthorized")
+
+        await firebase.update_curriculum(curriculum_id, {'isPublic': body.isPublic})
+        return {"success": True, "isPublic": body.isPublic}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating visibility: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))

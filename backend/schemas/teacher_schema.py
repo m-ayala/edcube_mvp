@@ -14,7 +14,7 @@ from datetime import datetime
 # ============================================================================
 
 TEACHER_PROFILES_COLLECTION = "teacher_profiles"
-COURSES_COLLECTION = "courses"  # Existing collection (same as curricula)
+COURSES_COLLECTION = "curricula"  # Firestore collection for courses
 COURSE_FOLDERS_COLLECTION = "course_folders"
 
 

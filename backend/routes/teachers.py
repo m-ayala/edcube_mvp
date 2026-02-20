@@ -202,7 +202,7 @@ async def get_teacher_profile(
         courses_query = (
             db.collection(COURSES_COLLECTION)
             .where(CF.TEACHER_UID, "==", teacher_uid)
-            .where(CSF.VISIBILITY, "==", "public")
+            .where(CF.IS_PUBLIC, "==", True)
         )
         public_courses = list(courses_query.stream())
         
@@ -259,7 +259,7 @@ async def list_all_teachers(
             courses_query = (
                 db.collection(COURSES_COLLECTION)
                 .where(CF.TEACHER_UID, "==", teacher_uid)
-                .where(CSF.VISIBILITY, "==", "public")
+                .where(CF.IS_PUBLIC, "==", True)
             )
             public_courses = list(courses_query.stream())
             
@@ -281,4 +281,57 @@ async def list_all_teachers(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to list teachers: {str(e)}"
+        )
+
+
+# ============================================================================
+# PUBLIC COURSES FOR A TEACHER
+# ============================================================================
+
+@router.get("/{teacher_uid}/courses")
+async def get_teacher_public_courses(
+    teacher_uid: str,
+    current_user: dict = Depends(verify_firebase_token),
+    db = Depends(get_firestore_client)
+):
+    """
+    Get a teacher's public courses. Returns summary data for profile display,
+    plus full sections/outline for viewing in the workspace.
+    """
+    try:
+        courses_query = (
+            db.collection(COURSES_COLLECTION)
+            .where(CF.TEACHER_UID, "==", teacher_uid)
+            .where(CF.IS_PUBLIC, "==", True)
+        )
+        docs = courses_query.stream()
+
+        courses = []
+        for doc in docs:
+            data = doc.to_dict()
+            courses.append({
+                "id": doc.id,
+                CF.COURSE_ID: data.get(CF.COURSE_ID),
+                CF.COURSE_NAME: data.get(CF.COURSE_NAME),
+                CF.SUBJECT: data.get(CF.SUBJECT),
+                CF.TOPIC: data.get(CF.TOPIC),
+                CF.CLASS: data.get(CF.CLASS),
+                CF.TIME_DURATION: data.get(CF.TIME_DURATION),
+                CF.OBJECTIVES: data.get(CF.OBJECTIVES, ''),
+                CF.SECTIONS: data.get(CF.SECTIONS, []),
+                CF.OUTLINE: data.get(CF.OUTLINE, {}),
+                CF.CREATED_AT: data.get(CF.CREATED_AT),
+                CF.LAST_MODIFIED: data.get(CF.LAST_MODIFIED),
+            })
+
+        # Sort by lastModified descending (avoids needing a composite index)
+        courses.sort(key=lambda c: c.get(CF.LAST_MODIFIED) or "", reverse=True)
+
+        return {"success": True, "courses": courses}
+
+    except Exception as e:
+        logger.error(f"Error fetching public courses for {teacher_uid}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch public courses: {str(e)}"
         )
