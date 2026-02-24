@@ -59,6 +59,18 @@ const TopicDetailsModal = ({
     setIsEditing(false);
   };
 
+  const handleClose = () => {
+    if (!readOnly) {
+      onSave({
+        sectionId,
+        subsectionId,
+        topicId: topic.id,
+        updatedData: editedTopic
+      });
+    }
+    onClose();
+  };
+
   const handleAddObjective = () => {
     if (newObjective.trim()) {
       setEditedTopic({
@@ -131,7 +143,7 @@ const TopicDetailsModal = ({
           zIndex: 1000,
           padding: '20px'
         }}
-        onClick={onClose}
+        onClick={handleClose}
       >
         <div
           style={{
@@ -197,7 +209,7 @@ const TopicDetailsModal = ({
             </div>
             
             <button
-              onClick={onClose}
+              onClick={handleClose}
               style={{
                 background: 'none',
                 border: 'none',
@@ -736,7 +748,7 @@ const TopicDetailsModal = ({
             borderTop: `1px solid ${colors.border}` 
           }}>
             <button
-              onClick={onClose}
+              onClick={handleClose}
               style={{
                 padding: '10px 24px',
                 backgroundColor: '#f3f4f6',
