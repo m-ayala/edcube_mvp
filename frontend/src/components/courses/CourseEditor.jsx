@@ -154,7 +154,7 @@ const CourseEditor = ({
   formData,
   currentUser,
   actions,
-  onSave,
+  saveStatus,
   onUndo,
   canUndo,
   onAddBreak,
@@ -1299,6 +1299,7 @@ const CourseEditor = ({
   // ── RENDER ────────────────────────────────────────────────────────────
   return (
     <>
+      <style>{`@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }`}</style>
       {/* Top Bar */}
       <div style={{
         padding: '12px 28px', borderBottom: '1px solid #e5e7eb',
@@ -1356,11 +1357,45 @@ const CourseEditor = ({
             borderRadius: '6px', cursor: !canUndo ? 'not-allowed' : 'pointer', fontSize: '13px'
           }}>↶ Undo</button>
 
-          <button onClick={onSave} style={{
-            padding: '8px 18px', backgroundColor: '#16a34a', color: 'white',
-            border: 'none', borderRadius: '6px', cursor: 'pointer',
-            fontWeight: '600', fontSize: '14px'
-          }}>💾 Save Course</button>
+          {/* Autosave status indicator */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '6px',
+            padding: '6px 14px', backgroundColor: 'white',
+            border: '1px solid #e5e7eb', borderRadius: '20px',
+            fontSize: '12px',
+            ...(saveStatus === 'saving' ? { color: '#6b7280' } :
+               saveStatus === 'saved' ? { color: '#16a34a' } :
+               saveStatus === 'error' ? { color: '#dc2626' } :
+               { color: '#9ca3af' })
+          }}>
+            {saveStatus === 'saving' && (
+              <>
+                <span style={{
+                  width: '7px', height: '7px', borderRadius: '50%', backgroundColor: '#9ca3af',
+                  display: 'inline-block', animation: 'pulse 1.5s ease-in-out infinite'
+                }} />
+                Saving...
+              </>
+            )}
+            {saveStatus === 'saved' && (
+              <>
+                <span style={{ fontSize: '13px' }}>&#10003;</span>
+                Saved to My Courses
+              </>
+            )}
+            {saveStatus === 'error' && (
+              <>
+                <span style={{ fontSize: '13px' }}>&#10005;</span>
+                Error saving
+              </>
+            )}
+            {saveStatus === 'idle' && (
+              <>
+                <span style={{ fontSize: '13px' }}>&#9729;</span>
+                Saved to My Courses
+              </>
+            )}
+          </div>
 
           <span style={{ color: '#6b7280', fontSize: '13px' }}>{currentUser?.displayName}</span>
 
@@ -1570,6 +1605,7 @@ const CourseEditor = ({
           handsOnResources={handsOnResources}
         />
       )}
+
     </>
   );
 };

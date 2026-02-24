@@ -1,10 +1,11 @@
 // src/components/courses/CourseWorkspace.jsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import CourseEditor from './CourseEditor';
 import CourseViewer from './CourseViewer';
 import useCourseActions from './useCourseActions';
+import useAutosave from './useAutosave';
 import BreakModal from '../modals/BreakModal';
 import TopicDetailsModal from '../modals/TopicDetailsModal';
 import { getOwnProfile } from '../../services/teacherService';
@@ -18,11 +19,13 @@ const CourseWorkspace = () => {
     formData,
     sections: incomingSections,
     isEditing,
-    curriculumId,
+    curriculumId: initialCurriculumId,
     isPublic: incomingIsPublic,
     readOnly: incomingReadOnly,
     ownerName: incomingOwnerName
   } = location.state || {};
+
+  const [curriculumId, setCurriculumId] = useState(initialCurriculumId);
 
   // ── Core State ────────────────────────────────────────────────────────
   const [courseName, setCourseName] = useState(formData?.courseName || '');
@@ -151,18 +154,38 @@ const CourseWorkspace = () => {
   }, []);
 
   // ── History ───────────────────────────────────────────────────────────
-  const saveToHistory = () => {
-    const newHistory = history.slice(0, historyIndex + 1);
-    newHistory.push({ sections: [...sections], handsOnResources: { ...handsOnResources } });
-    setHistory(newHistory);
-    setHistoryIndex(newHistory.length - 1);
-  };
+  const isUndoingRef = useRef(false);
+  const historyMountedRef = useRef(false);
+
+  // Skip mount hydration, then start tracking history
+  useEffect(() => {
+    const id = setTimeout(() => { historyMountedRef.current = true; }, 1200);
+    return () => clearTimeout(id);
+  }, []);
+
+  // Auto-snapshot on every state change (skips undo-triggered and mount changes)
+  useEffect(() => {
+    if (!historyMountedRef.current) return;
+    if (isUndoingRef.current) {
+      isUndoingRef.current = false;
+      return;
+    }
+
+    setHistory(prev => {
+      const trimmed = prev.slice(0, historyIndex + 1);
+      return [...trimmed, { sections, handsOnResources, videosByTopic }];
+    });
+    setHistoryIndex(prev => prev + 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sections, handsOnResources, videosByTopic]);
 
   const undo = () => {
     if (historyIndex > 0) {
+      isUndoingRef.current = true;
       const prev = history[historyIndex - 1];
       setSections(prev.sections);
       setHandsOnResources(prev.handsOnResources);
+      setVideosByTopic(prev.videosByTopic);
       setHistoryIndex(historyIndex - 1);
     }
   };
@@ -214,66 +237,66 @@ const CourseWorkspace = () => {
 
   // ── Save Course ───────────────────────────────────────────────────────
   const saveCourse = async () => {
-    try {
-      const idToken = await currentUser.getIdToken();
+    const idToken = await currentUser.getIdToken();
 
-      const sectionsForSave = sections.map(section => ({
-        ...section,
-        subsections: (section.subsections || []).map(sub => ({
-          ...sub,
-          topicBoxes: (sub.topicBoxes || []).map(topic => ({
-            ...topic,
-            video_resources: videosByTopic[topic.id] || topic.video_resources || [],
-            worksheets: handsOnResources[topic.id]?.filter(r => r.type === 'worksheet') || topic.worksheets || [],
-            activities: handsOnResources[topic.id]?.filter(r => r.type === 'activity') || topic.activities || []
-          }))
+    const sectionsForSave = sections.map(section => ({
+      ...section,
+      subsections: (section.subsections || []).map(sub => ({
+        ...sub,
+        topicBoxes: (sub.topicBoxes || []).map(topic => ({
+          ...topic,
+          video_resources: videosByTopic[topic.id] || topic.video_resources || [],
+          worksheets: handsOnResources[topic.id]?.filter(r => r.type === 'worksheet') || topic.worksheets || [],
+          activities: handsOnResources[topic.id]?.filter(r => r.type === 'activity') || topic.activities || []
         }))
-      }));
+      }))
+    }));
 
-      const courseData = {
-        courseName,
-        class: formData?.class || '',
-        subject: formData?.subject || '',
-        topic: formData?.topic || '',
-        timeDuration: formData?.timeDuration || '',
-        objectives: formData?.objectives || '',
-        sections: sectionsForSave,
-        outline: { sections: sectionsForSave }
-      };
+    const courseData = {
+      courseName,
+      class: formData?.class || '',
+      subject: formData?.subject || '',
+      topic: formData?.topic || '',
+      timeDuration: formData?.timeDuration || '',
+      objectives: formData?.objectives || '',
+      sections: sectionsForSave,
+      outline: { sections: sectionsForSave }
+    };
 
-      const hasExistingId = curriculumId && curriculumId !== 'new-course';
-      if (hasExistingId) courseData.courseId = curriculumId;
+    const hasExistingId = curriculumId && curriculumId !== 'new-course';
+    if (hasExistingId) courseData.courseId = curriculumId;
 
-      // Ensure organizationId is available before saving
-      if (!organizationId) {
-        alert('Unable to save: Organization ID not found. Please try refreshing the page.');
-        return;
-      }
+    const endpoint = hasExistingId
+      ? `http://localhost:8000/api/update-course?teacherUid=${currentUser.uid}`
+      : `http://localhost:8000/api/save-course?teacherUid=${currentUser.uid}&organizationId=${organizationId}`;
 
-      const endpoint = hasExistingId
-        ? `http://localhost:8000/api/update-course?teacherUid=${currentUser.uid}`
-        : `http://localhost:8000/api/save-course?teacherUid=${currentUser.uid}&organizationId=${organizationId}`;
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${idToken}`
+      },
+      body: JSON.stringify(courseData)
+    });
 
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${idToken}`
-        },
-        body: JSON.stringify(courseData)
-      });
+    const result = await response.json();
+    if (!result.success) {
+      throw new Error(result.error || 'Unknown error');
+    }
 
-      const result = await response.json();
-      if (result.success) {
-        alert(hasExistingId ? 'Course updated!' : 'Course saved!');
-      } else {
-        alert('Failed to save: ' + (result.error || 'Unknown error'));
-      }
-    } catch (error) {
-      console.error('Error saving course:', error);
-      alert('Failed to save course');
+    // Capture the new courseId for subsequent saves
+    if (!hasExistingId && result.courseId) {
+      setCurriculumId(result.courseId);
     }
   };
+
+  // ── Autosave ─────────────────────────────────────────────────────────
+  const saveStatus = useAutosave({
+    performSave: saveCourse,
+    deps: [sections, courseName, videosByTopic, handsOnResources],
+    delay: 2000,
+    enabled: !!organizationId && !!currentUser && !readOnly
+  });
 
   // ── Render ────────────────────────────────────────────────────────────
   return (
@@ -299,7 +322,7 @@ const CourseWorkspace = () => {
             formData={formData}
             currentUser={currentUser}
             actions={actions}
-            onSave={saveCourse}
+            saveStatus={saveStatus}
             onUndo={undo}
             canUndo={historyIndex > 0}
             onAddBreak={() => setShowBreakModal(true)}
