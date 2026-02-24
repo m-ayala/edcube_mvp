@@ -1,8 +1,148 @@
 // src/components/courses/CourseEditor.jsx
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { GripVertical, Edit2, Check, Trash2, Plus, Sparkles } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import TopicDetailsModal from '../modals/TopicDetailsModal';
+
+// Extracted outside CourseEditor so React keeps stable identity across renders
+const EditableField = ({
+  value,
+  onChange,
+  placeholder = 'Click to edit',
+  style = {},
+  inputStyle = {},
+  accentColor = '#8B7355',
+  maxLength = null
+}) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [localValue, setLocalValue] = useState(value);
+  const inputRef = useRef(null);
+
+  // Refs to track current values for unmount cleanup
+  const localValueRef = useRef(localValue);
+  const isEditingRef = useRef(isEditing);
+  const onChangeRef = useRef(onChange);
+
+  useEffect(() => { localValueRef.current = localValue; }, [localValue]);
+  useEffect(() => { isEditingRef.current = isEditing; }, [isEditing]);
+  useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
+
+  // Save on unmount if still editing (prevents data loss from component re-renders)
+  useEffect(() => {
+    return () => {
+      if (isEditingRef.current) {
+        onChangeRef.current(localValueRef.current);
+      }
+    };
+  }, []);
+
+  // Sync from parent when not editing
+  useEffect(() => {
+    if (!isEditing) {
+      setLocalValue(value);
+    }
+  }, [value, isEditing]);
+
+  // Auto-focus when entering edit mode
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [isEditing]);
+
+  const handleEdit = () => {
+    setLocalValue(value);
+    setIsEditing(true);
+  };
+
+  const handleSave = () => {
+    if (isEditing) {
+      onChange(localValue);
+      setIsEditing(false);
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      handleSave();
+    } else if (e.key === 'Escape') {
+      setLocalValue(value);
+      setIsEditing(false);
+    }
+  };
+
+  const handleChange = (e) => {
+    const val = e.target.value;
+    if (maxLength && val.length > maxLength) return;
+    setLocalValue(val);
+  };
+
+  const displayValue = isEditing ? localValue : (value || '');
+  const hasFlex = style.flex !== undefined;
+  const charWidth = Math.max((displayValue || placeholder).length, 6) + 3;
+
+  return (
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      gap: '6px',
+      position: 'relative',
+      ...style
+    }}>
+      <input
+        ref={inputRef}
+        type="text"
+        value={displayValue}
+        onChange={handleChange}
+        onKeyDown={handleKeyDown}
+        onBlur={handleSave}
+        disabled={!isEditing}
+        placeholder={placeholder}
+        style={{
+          width: hasFlex ? undefined : `${charWidth}ch`,
+          flex: hasFlex ? 1 : undefined,
+          minWidth: '60px',
+          maxWidth: '100%',
+          border: isEditing ? '2px solid #000' : 'none',
+          background: isEditing ? '#fff' : 'transparent',
+          outline: 'none',
+          cursor: isEditing ? 'text' : 'pointer',
+          padding: isEditing ? '6px 10px' : '0',
+          borderRadius: isEditing ? '4px' : '0',
+          transition: 'all 0.15s ease',
+          ...inputStyle
+        }}
+        onClick={!isEditing ? handleEdit : undefined}
+      />
+      <button
+        onMouseDown={e => e.preventDefault()}
+        onClick={isEditing ? handleSave : handleEdit}
+        style={{
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+          padding: '2px',
+          display: 'flex',
+          alignItems: 'center',
+          color: isEditing ? accentColor : '#9ca3af',
+          flexShrink: 0
+        }}
+        title={isEditing ? 'Save' : 'Edit'}
+      >
+        {isEditing ? <Check size={14} /> : <Edit2 size={12} />}
+      </button>
+      {isEditing && maxLength && (
+        <span style={{
+          fontSize: '10px',
+          color: localValue.length >= maxLength ? '#ef4444' : '#9ca3af',
+          flexShrink: 0
+        }}>
+          {localValue.length}/{maxLength}
+        </span>
+      )}
+    </div>
+  );
+};
 
 const CourseEditor = ({
   courseName,
@@ -24,8 +164,6 @@ const CourseEditor = ({
 }) => {
   const [selectedTopicForDetail, setSelectedTopicForDetail] = useState(null);
   const [hoveredTopic, setHoveredTopic] = useState(null);
-  const [hoveredSubsection, setHoveredSubsection] = useState(null);
-  const [hoveredSection, setHoveredSection] = useState(null);
   const [activeBubble, setActiveBubble] = useState(null);
   const [aiPromptText, setAiPromptText] = useState('');
 
@@ -223,84 +361,6 @@ const CourseEditor = ({
     </span>
   );
 
-  const EditableField = ({ 
-    value, 
-    onChange, 
-    fieldKey, 
-    placeholder = 'Click to edit',
-    style = {},
-    inputStyle = {}
-  }) => {
-    const isEditing = actions.editingField?.key === fieldKey;
-    
-    const handleEdit = () => {
-      actions.setEditingField({ key: fieldKey, value });
-    };
-    
-    const handleSave = () => {
-      if (actions.editingField?.value !== undefined) {
-        onChange(actions.editingField.value);
-      }
-      actions.setEditingField(null);
-    };
-    
-    const handleKeyDown = (e) => {
-      if (e.key === 'Enter') {
-        handleSave();
-      } else if (e.key === 'Escape') {
-        actions.setEditingField(null);
-      }
-    };
-    
-    return (
-      <div style={{ 
-        display: 'flex', 
-        alignItems: 'center', 
-        gap: '6px', 
-        position: 'relative',
-        flex: 1,
-        ...style 
-      }}>
-        <input
-          type="text"
-          value={isEditing ? (actions.editingField.value || '') : value}
-          onChange={e => isEditing && actions.setEditingField({ ...actions.editingField, value: e.target.value })}
-          onKeyDown={handleKeyDown}
-          onBlur={handleSave}
-          disabled={!isEditing}
-          placeholder={placeholder}
-          style={{
-            flex: 1,
-            border: isEditing ? '2px solid #000' : 'none',
-            background: isEditing ? '#fff' : 'transparent',
-            outline: 'none',
-            cursor: isEditing ? 'text' : 'pointer',
-            padding: isEditing ? '6px 10px' : '0',
-            borderRadius: isEditing ? '4px' : '0',
-            transition: 'all 0.15s ease',
-            ...inputStyle
-          }}
-          onClick={!isEditing ? handleEdit : undefined}
-        />
-        <button
-          onClick={isEditing ? handleSave : handleEdit}
-          style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            padding: '2px',
-            display: 'flex',
-            alignItems: 'center',
-            color: isEditing ? colors.accent : '#9ca3af',
-            flexShrink: 0
-          }}
-          title={isEditing ? 'Save' : 'Edit'}
-        >
-          {isEditing ? <Check size={14} /> : <Edit2 size={12} />}
-        </button>
-      </div>
-    );
-  };
 
   const ConfirmDialog = ({ isOpen, onConfirm, onCancel, title, message }) => {
     if (!isOpen) return null;
@@ -365,8 +425,8 @@ const CourseEditor = ({
     );
   };
 
-  // ── Topic Box Row Component (OPTION A - Single Summary) ──────────────
-  const TopicBoxRow = ({ topicBox, sectionId, subsectionId, dragHandleProps }) => {
+  // ── Topic Box Row (render function, NOT a component — avoids remount on parent re-render) ──
+  const renderTopicBoxRow = (topicBox, sectionId, subsectionId, dragHandleProps) => {
     const videos = videosByTopic[topicBox.id] || [];
     const allResources = handsOnResources[topicBox.id] || [];
     const worksheets = allResources.filter(r => r.type === 'worksheet');
@@ -631,8 +691,8 @@ const CourseEditor = ({
     );
   };
 
-  // ── Section Block Component ───────────────────────────────────────────
-  const SectionBlock = ({ section, index, dragHandleProps }) => {
+  // ── Section Block (render function, NOT a component — avoids remount on parent re-render) ──
+  const renderSectionBlock = (section, index, dragHandleProps) => {
     if (section.type === 'break') {
       return (
         <div style={{
@@ -668,9 +728,7 @@ const CourseEditor = ({
     const isCollapsed = actions.collapsedSections[section.id];
 
     return (
-      <div 
-        onMouseEnter={() => setHoveredSection(section.id)}
-        onMouseLeave={() => setHoveredSection(null)}
+      <div
         style={{
           border: `1px solid ${colors.sectionBorder}`,
           borderRadius: '12px',
@@ -707,8 +765,10 @@ const CourseEditor = ({
             <EditableField
               value={section.title}
               onChange={val => actions.updateSectionTitle(section.id, val)}
-              fieldKey={`section-title-${section.id}`}
               placeholder="Section title"
+              accentColor={colors.accent}
+              maxLength={80}
+              style={{ flex: 1 }}
               inputStyle={{
                 fontSize: '15px',
                 fontWeight: '600',
@@ -810,8 +870,10 @@ const CourseEditor = ({
               <EditableField
                 value={section.description}
                 onChange={val => actions.updateSectionDescription(section.id, val)}
-                fieldKey={`section-desc-${section.id}`}
                 placeholder="Add a description…"
+                accentColor={colors.accent}
+                maxLength={200}
+                style={{ flex: 1 }}
                 inputStyle={{
                   fontSize: '12px',
                   color: colors.textSecondary,
@@ -925,8 +987,6 @@ const CourseEditor = ({
                             <div
                               ref={provided.innerRef}
                               {...provided.draggableProps}
-                              onMouseEnter={() => setHoveredSubsection(sub.id)}
-                              onMouseLeave={() => setHoveredSubsection(null)}
                               style={{
                                 ...provided.draggableProps.style,
                                 opacity: snapshot.isDragging ? 0.8 : 1,
@@ -963,8 +1023,10 @@ const CourseEditor = ({
                                   <EditableField
                                     value={sub.title}
                                     onChange={val => actions.updateSubsectionTitle(section.id, sub.id, val)}
-                                    fieldKey={`subsection-title-${sub.id}`}
                                     placeholder="Subsection title"
+                                    accentColor={colors.accent}
+                                    maxLength={80}
+                                    style={{ flex: 1 }}
                                     inputStyle={{
                                       fontSize: '13px',
                                       fontWeight: '600',
@@ -1077,8 +1139,10 @@ const CourseEditor = ({
                                     <EditableField
                                       value={sub.description}
                                       onChange={val => actions.updateSubsectionDescription(section.id, sub.id, val)}
-                                      fieldKey={`subsection-desc-${sub.id}`}
                                       placeholder="Add a description…"
+                                      accentColor={colors.accent}
+                                      maxLength={200}
+                                      style={{ flex: 1 }}
                                       inputStyle={{
                                         fontSize: '12px',
                                         color: colors.textSecondary,
@@ -1204,12 +1268,7 @@ const CourseEditor = ({
                                                     opacity: snapshot.isDragging ? 0.9 : 1
                                                   }}
                                                 >
-                                                  <TopicBoxRow
-                                                    topicBox={topic}
-                                                    sectionId={section.id}
-                                                    subsectionId={sub.id}
-                                                    dragHandleProps={provided.dragHandleProps}
-                                                  />
+                                                  {renderTopicBoxRow(topic, section.id, sub.id, provided.dragHandleProps)}
                                                 </div>
                                               )}
                                             </Draggable>
@@ -1248,16 +1307,17 @@ const CourseEditor = ({
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <h2 style={{ margin: 0, fontSize: '20px', color: colors.textPrimary }}>🎓 EdCube</h2>
-          <input
-            type="text" value={courseName}
-            onChange={e => setCourseName(e.target.value)}
-            style={{
-              fontSize: '17px', padding: '6px 12px',
-              border: '1px solid #ddd', borderRadius: '6px', minWidth: '280px',
-              outline: 'none'
+          <EditableField
+            value={courseName}
+            onChange={val => setCourseName(val)}
+            placeholder="Course name"
+            accentColor={colors.accent}
+            maxLength={60}
+            inputStyle={{
+              fontSize: '17px',
+              fontWeight: '600',
+              color: colors.textPrimary
             }}
-            onFocus={e => e.target.style.borderColor = colors.accent}
-            onBlur={e => e.target.style.borderColor = '#ddd'}
           />
         </div>
 
@@ -1386,11 +1446,7 @@ const CourseEditor = ({
                             opacity: snapshot.isDragging ? 0.8 : 1
                           }}
                         >
-                          <SectionBlock
-                            section={section}
-                            index={idx}
-                            dragHandleProps={provided.dragHandleProps}
-                          />
+                          {renderSectionBlock(section, idx, provided.dragHandleProps)}
                         </div>
                       )}
                     </Draggable>

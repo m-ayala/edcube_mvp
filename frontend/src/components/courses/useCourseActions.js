@@ -16,34 +16,33 @@ const useCourseActions = ({
   // ── UI State ──────────────────────────────────────────────────────────
   const [collapsedSections, setCollapsedSections] = useState({});
   const [collapsedSubsections, setCollapsedSubsections] = useState({});
-  const [editingField, setEditingField] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
 
   // ── Section CRUD ──────────────────────────────────────────────────────
   const addSection = () => {
-    setSections([...sections, {
+    setSections(prev => [...prev, {
       id: `section-${Date.now()}`,
-      title: `Section ${sections.filter(s => s.type !== 'break').length + 1}`,
+      title: `Section ${prev.filter(s => s.type !== 'break').length + 1}`,
       description: '',
       subsections: []
     }]);
   };
 
   const updateSectionTitle = (sectionId, newTitle) => {
-    setSections(sections.map(s => s.id === sectionId ? { ...s, title: newTitle } : s));
+    setSections(prev => prev.map(s => s.id === sectionId ? { ...s, title: newTitle } : s));
   };
 
   const updateSectionDescription = (sectionId, newDesc) => {
-    setSections(sections.map(s => s.id === sectionId ? { ...s, description: newDesc } : s));
+    setSections(prev => prev.map(s => s.id === sectionId ? { ...s, description: newDesc } : s));
   };
 
   const removeSection = (sectionId) => {
-    setSections(sections.filter(s => s.id !== sectionId));
+    setSections(prev => prev.filter(s => s.id !== sectionId));
   };
 
   // ── Subsection CRUD ───────────────────────────────────────────────────
   const addSubsection = (sectionId) => {
-    setSections(sections.map(section => {
+    setSections(prev => prev.map(section => {
       if (section.id !== sectionId) return section;
       const idx = (section.subsections || []).length + 1;
       return {
@@ -59,7 +58,7 @@ const useCourseActions = ({
   };
 
   const updateSubsectionTitle = (sectionId, subId, newTitle) => {
-    setSections(sections.map(section => {
+    setSections(prev => prev.map(section => {
       if (section.id !== sectionId) return section;
       return {
         ...section,
@@ -71,7 +70,7 @@ const useCourseActions = ({
   };
 
   const updateSubsectionDescription = (sectionId, subId, newDesc) => {
-    setSections(sections.map(section => {
+    setSections(prev => prev.map(section => {
       if (section.id !== sectionId) return section;
       return {
         ...section,
@@ -83,7 +82,7 @@ const useCourseActions = ({
   };
 
   const removeSubsection = (sectionId, subId) => {
-    setSections(sections.map(section => {
+    setSections(prev => prev.map(section => {
       if (section.id !== sectionId) return section;
       return {
         ...section,
@@ -94,14 +93,14 @@ const useCourseActions = ({
 
   // ── Topic Box CRUD ────────────────────────────────────────────────────
   const addTopicBox = (sectionId, subsectionId) => {
-    setSections(sections.map(section => {
+    setSections(prev => prev.map(section => {
       if (section.id !== sectionId) return section;
-      
+
       return {
         ...section,
         subsections: (section.subsections || []).map(sub => {
           if (sub.id !== subsectionId) return sub;
-          
+
           const idx = (sub.topicBoxes || []).length + 1;
           return {
             ...sub,
@@ -124,14 +123,14 @@ const useCourseActions = ({
   };
 
   const updateTopicBoxTitle = (sectionId, subsectionId, topicBoxId, newTitle) => {
-    setSections(sections.map(section => {
+    setSections(prev => prev.map(section => {
       if (section.id !== sectionId) return section;
-      
+
       return {
         ...section,
         subsections: (section.subsections || []).map(sub => {
           if (sub.id !== subsectionId) return sub;
-          
+
           return {
             ...sub,
             topicBoxes: (sub.topicBoxes || []).map(topic =>
@@ -144,14 +143,14 @@ const useCourseActions = ({
   };
 
   const removeTopicBox = (sectionId, subsectionId, topicBoxId) => {
-    setSections(sections.map(section => {
+    setSections(prev => prev.map(section => {
       if (section.id !== sectionId) return section;
-      
+
       return {
         ...section,
         subsections: (section.subsections || []).map(sub => {
           if (sub.id !== subsectionId) return sub;
-          
+
           return {
             ...sub,
             topicBoxes: (sub.topicBoxes || []).filter(t => t.id !== topicBoxId)
@@ -237,7 +236,7 @@ const useCourseActions = ({
           subsections: []
         }));
         
-        setSections([...sections, ...newSections]);
+        setSections(prev => [...prev, ...newSections]);
         console.log(`✅ Generated ${result.items.length} sections`);
       }
     } catch (error) {
@@ -257,22 +256,22 @@ const useCourseActions = ({
       });
 
       if (result.success && result.items) {
-        setSections(sections.map(section => {
+        setSections(prev => prev.map(section => {
           if (section.id !== sectionId) return section;
-          
+
           const newSubsections = result.items.map(item => ({
             id: item.id,
             title: item.title,
             description: item.description,
             topicBoxes: []
           }));
-          
+
           return {
             ...section,
             subsections: [...(section.subsections || []), ...newSubsections]
           };
         }));
-        
+
         console.log(`✅ Generated ${result.items.length} subsections for section ${sectionId}`);
       }
     } catch (error) {
@@ -292,14 +291,14 @@ const useCourseActions = ({
       });
 
       if (result.success && result.items) {
-        setSections(sections.map(section => {
+        setSections(prev => prev.map(section => {
           if (section.id !== sectionId) return section;
-          
+
           return {
             ...section,
             subsections: (section.subsections || []).map(sub => {
               if (sub.id !== subsectionId) return sub;
-              
+
               const newTopicBoxes = result.items.map(item => ({
                 id: item.id,
                 title: item.title,
@@ -312,7 +311,7 @@ const useCourseActions = ({
                 worksheets: [],
                 activities: []
               }));
-              
+
               return {
                 ...sub,
                 topicBoxes: [...(sub.topicBoxes || []), ...newTopicBoxes]
@@ -320,7 +319,7 @@ const useCourseActions = ({
             })
           };
         }));
-        
+
         console.log(`✅ Generated ${result.items.length} topic boxes for subsection ${subsectionId}`);
       }
     } catch (error) {
@@ -463,18 +462,18 @@ const useCourseActions = ({
   const updateTopicBoxFull = ({ sectionId, subsectionId, topicId, updatedData }) => {
     console.log('📝 Updating full topic box:', topicId, updatedData);
     
-    setSections(sections.map(section => {
+    setSections(prev => prev.map(section => {
       if (section.id !== sectionId) return section;
-      
+
       return {
         ...section,
         subsections: (section.subsections || []).map(sub => {
           if (sub.id !== subsectionId) return sub;
-          
+
           return {
             ...sub,
             topicBoxes: (sub.topicBoxes || []).map(topic =>
-              topic.id === topicId ? { 
+              topic.id === topicId ? {
                 ...topic,
                 title: updatedData.title,
                 description: updatedData.description,
@@ -537,11 +536,7 @@ const useCourseActions = ({
     
     // State setters (for modals)
     setVideosByTopic,
-    setHandsOnResources,
-    
-    // Editing
-    editingField,
-    setEditingField
+    setHandsOnResources
   };
 };
 

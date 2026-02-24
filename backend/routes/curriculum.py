@@ -269,6 +269,7 @@ async def update_course(course_data: dict, teacherUid: str):
             'timeDuration': course_data.get('timeDuration'),
             'objectives': course_data.get('objectives', ''),
             'sections': course_data.get('sections', []),
+            'outline': course_data.get('outline', {}),
             'generatedTopics': course_data.get('generatedTopics', []),
             'handsOnResources': course_data.get('handsOnResources', {}),
         }
