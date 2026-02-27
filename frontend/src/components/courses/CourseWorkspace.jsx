@@ -22,7 +22,8 @@ const CourseWorkspace = () => {
     curriculumId: initialCurriculumId,
     isPublic: incomingIsPublic,
     readOnly: incomingReadOnly,
-    ownerName: incomingOwnerName
+    ownerName: incomingOwnerName,
+    forkLineage: incomingForkLineage
   } = location.state || {};
 
   const [curriculumId, setCurriculumId] = useState(initialCurriculumId);
@@ -40,6 +41,8 @@ const CourseWorkspace = () => {
   const [organizationId, setOrganizationId] = useState(null);
   const [isPublic, setIsPublic] = useState(incomingIsPublic || false);
   const [readOnly] = useState(incomingReadOnly || false);
+  const [forkLineage] = useState(incomingForkLineage || []);
+  const [isForkLoading, setIsForkLoading] = useState(false);
 
   // ── Initialize Actions Hook ───────────────────────────────────────────
   const actions = useCourseActions({
@@ -290,6 +293,53 @@ const CourseWorkspace = () => {
     }
   };
 
+  // ── Fork Course ───────────────────────────────────────────────────────
+  const handleFork = async () => {
+    if (!curriculumId || isForkLoading) return;
+    setIsForkLoading(true);
+    try {
+      const idToken = await currentUser.getIdToken();
+      const displayName = currentUser.displayName || currentUser.email?.split('@')[0] || 'Teacher';
+      const orgId = organizationId || 'icc';
+
+      const response = await fetch(
+        `http://localhost:8000/api/curricula/${curriculumId}/fork?teacherUid=${currentUser.uid}&displayName=${encodeURIComponent(displayName)}&organizationId=${orgId}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` }
+        }
+      );
+      const result = await response.json();
+      if (!result.success) throw new Error(result.detail || 'Fork failed');
+
+      // Navigate to the new forked course in edit mode
+      const course = result.course;
+      const newSections = (course.outline?.sections || course.sections || []);
+      navigate('/course-workspace', {
+        state: {
+          formData: {
+            courseName: course.courseName,
+            class: course.class,
+            subject: course.subject,
+            topic: course.topic,
+            timeDuration: course.timeDuration,
+            objectives: course.objectives || ''
+          },
+          sections: newSections,
+          isEditing: true,
+          curriculumId: result.courseId,
+          isPublic: false,
+          forkLineage: course.forkLineage || []
+        }
+      });
+    } catch (error) {
+      console.error('Fork error:', error);
+      alert('Failed to fork course. Please try again.');
+    } finally {
+      setIsForkLoading(false);
+    }
+  };
+
   // ── Autosave ─────────────────────────────────────────────────────────
   const saveStatus = useAutosave({
     performSave: saveCourse,
@@ -308,6 +358,9 @@ const CourseWorkspace = () => {
           videosByTopic={videosByTopic}
           handsOnResources={handsOnResources}
           ownerName={incomingOwnerName}
+          forkLineage={forkLineage}
+          onFork={handleFork}
+          isForkLoading={isForkLoading}
           navigate={navigate}
         />
       ) : (
@@ -330,6 +383,7 @@ const CourseWorkspace = () => {
             navigate={navigate}
             isPublic={isPublic}
             onToggleVisibility={handleToggleVisibility}
+            forkLineage={forkLineage}
           />
 
           {/* Modals (only in edit mode) */}

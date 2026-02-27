@@ -1,4 +1,4 @@
-import { 
+import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
@@ -12,14 +12,34 @@ import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from './config';
 
 /**
- * Sign up a new teacher with email/password
- * Restricted to @indiacc.org emails only
+ * Maps email domains to organization IDs.
+ * Add a new entry here to onboard a new organization.
+ *
+ * 'gmail.com': 'icc'  ← temporary for local testing; remove before production
+ */
+export const DOMAIN_ORG_MAP = {
+  'indiacc.org': 'icc',
+  'gmail.com':   'icc',  // TODO: remove after testing
+};
+
+/**
+ * Returns the org_id for a given email, or null if the domain is not allowed.
+ */
+export const getOrgFromEmail = (email) => {
+  const domain = email.split('@')[1]?.toLowerCase();
+  return DOMAIN_ORG_MAP[domain] ?? null;
+};
+
+/**
+ * Sign up a new teacher with email/password.
+ * Allowed domains are defined in DOMAIN_ORG_MAP above.
  */
 export const signupTeacher = async (email, password, displayName) => {
   try {
-    // Validate ICC email domain
-    if (!email.endsWith('@indiacc.org')) {
-      throw new Error('Only @indiacc.org email addresses are allowed');
+    const orgId = getOrgFromEmail(email);
+    if (!orgId) {
+      const allowed = Object.keys(DOMAIN_ORG_MAP).map(d => `@${d}`).join(', ');
+      throw new Error(`Email domain not allowed. Accepted: ${allowed}`);
     }
 
     // Create user account
@@ -36,7 +56,7 @@ export const signupTeacher = async (email, password, displayName) => {
     await setDoc(doc(db, 'teachers', user.uid), {
       email: user.email,
       displayName: displayName,
-      organization: 'ICC',
+      organization: orgId,
       createdAt: serverTimestamp(),
       lastLogin: serverTimestamp()
     });

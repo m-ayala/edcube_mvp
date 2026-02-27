@@ -32,6 +32,10 @@ class CurriculumFields:
     # Sharing & permissions
     IS_PUBLIC = 'isPublic'
     SHARED_WITH = 'sharedWith'
+
+    # Forking & attribution
+    FORK_LINEAGE   = 'forkLineage'    # List of { teacher_uid, display_name, action }
+    FORKED_FROM_ID = 'forkedFromId'   # courseId of direct parent (absent on originals)
     
     # Timestamps
     CREATED_AT = 'createdAt'
@@ -116,6 +120,8 @@ def format_curriculum_for_api(firestore_doc):
         F.OUTLINE: firestore_doc.get(F.OUTLINE, {}),
         F.IS_PUBLIC: firestore_doc.get(F.IS_PUBLIC, False),
         F.SHARED_WITH: firestore_doc.get(F.SHARED_WITH, []),
+        F.FORK_LINEAGE: firestore_doc.get(F.FORK_LINEAGE, []),
+        F.FORKED_FROM_ID: firestore_doc.get(F.FORKED_FROM_ID),
         F.CREATED_AT: firestore_doc.get(F.CREATED_AT),
         F.LAST_MODIFIED: firestore_doc.get(F.LAST_MODIFIED)
     }

@@ -123,7 +123,8 @@ const MyCourses = () => {
         sections,
         isEditing: true,
         curriculumId: curriculum.courseId || curriculum.id,
-        isPublic: curriculum.isPublic || false
+        isPublic: curriculum.isPublic || false,
+        forkLineage: curriculum.forkLineage || []
       }
     });
   };

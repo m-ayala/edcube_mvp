@@ -10,6 +10,26 @@ from datetime import datetime
 
 
 # ============================================================================
+# DOMAIN → ORG MAPPING
+# Keep in sync with frontend/src/firebase/authService.js DOMAIN_ORG_MAP.
+# Add a new entry here to onboard a new organization.
+#
+# 'gmail.com': 'icc'  ← temporary for local testing; remove before production
+# ============================================================================
+
+DOMAIN_ORG_MAP: dict[str, str] = {
+    'indiacc.org': 'icc',
+    'gmail.com':   'icc',  # TODO: remove after testing
+}
+
+
+def get_org_from_email(email: str) -> str:
+    """Return the org_id for a given email, defaulting to 'icc' if domain unknown."""
+    domain = email.split('@')[-1].lower()
+    return DOMAIN_ORG_MAP.get(domain, 'icc')
+
+
+# ============================================================================
 # FIREBASE COLLECTION NAMES
 # ============================================================================
 
@@ -123,7 +143,7 @@ def create_default_profile(user_data: dict) -> dict:
         TeacherProfileFields.GRADES_TAUGHT: [],
         TeacherProfileFields.BIO: "",
         TeacherProfileFields.PROFILE_PICTURE_URL: user_data.get("picture"),
-        TeacherProfileFields.ORG_ID: "icc",  # Hardcoded for now
+        TeacherProfileFields.ORG_ID: get_org_from_email(user_data["email"]),
         TeacherProfileFields.CREATED_AT: datetime.utcnow(),
         TeacherProfileFields.UPDATED_AT: datetime.utcnow(),
     }

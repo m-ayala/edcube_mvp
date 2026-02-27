@@ -392,6 +392,75 @@ class FirebaseService:
             print(f"❌ Error updating curriculum: {e}")
             raise
 
+    async def fork_curriculum(
+        self,
+        source_id: str,
+        forker_uid: str,
+        forker_display_name: str,
+        org_id: str
+    ) -> tuple:
+        """
+        Fork a public course into a new document owned by forker_uid.
+
+        Returns (new_course_id, new_doc_dict).
+        Raises ValueError if source is not found or not public.
+        """
+        # 1. Fetch source
+        source_doc = self.curricula_collection.document(source_id).get()
+        if not source_doc.exists:
+            raise ValueError(f"Source course {source_id} not found")
+        source = source_doc.to_dict()
+        if not source.get(F.IS_PUBLIC, False):
+            raise ValueError("Source course is not public")
+
+        # 2. Build lineage
+        existing_lineage = source.get(F.FORK_LINEAGE, [])
+        if not existing_lineage:
+            # First fork — need the original creator's display name
+            creator_uid = source.get(F.TEACHER_UID, '')
+            creator_name = creator_uid  # fallback
+            try:
+                profile_doc = self.db.collection('teacher_profiles').document(creator_uid).get()
+                if profile_doc.exists:
+                    creator_name = profile_doc.to_dict().get('display_name', creator_uid)
+            except Exception:
+                pass
+            existing_lineage = [{'teacher_uid': creator_uid, 'display_name': creator_name, 'action': 'created'}]
+
+        new_lineage = existing_lineage + [
+            {'teacher_uid': forker_uid, 'display_name': forker_display_name, 'action': 'forked'}
+        ]
+
+        # 3. Create new document
+        new_id = str(uuid.uuid4())
+        now = datetime.utcnow().isoformat()
+        new_doc = {
+            F.COURSE_ID:        new_id,
+            F.TEACHER_UID:      forker_uid,
+            F.ORGANIZATION_ID:  org_id,
+            F.TEACHER_EMAIL:    source.get(F.TEACHER_EMAIL, ''),
+            F.COURSE_NAME:      source.get(F.COURSE_NAME, ''),
+            F.CLASS:            source.get(F.CLASS, ''),
+            F.SUBJECT:          source.get(F.SUBJECT, ''),
+            F.TOPIC:            source.get(F.TOPIC, ''),
+            F.TIME_DURATION:    source.get(F.TIME_DURATION, ''),
+            F.OBJECTIVES:       source.get(F.OBJECTIVES, ''),
+            F.SECTIONS:         source.get(F.SECTIONS, []),
+            F.GENERATED_TOPICS: source.get(F.GENERATED_TOPICS, []),
+            F.HANDS_ON_RESOURCES: source.get(F.HANDS_ON_RESOURCES, {}),
+            F.OUTLINE:          source.get(F.OUTLINE, {}),
+            F.IS_PUBLIC:        False,
+            F.SHARED_WITH:      [],
+            F.FORK_LINEAGE:     new_lineage,
+            F.FORKED_FROM_ID:   source_id,
+            F.CREATED_AT:       now,
+            F.LAST_MODIFIED:    now,
+        }
+
+        self.curricula_collection.document(new_id).set(new_doc)
+        print(f"✅ Forked course {source_id} → {new_id} for {forker_uid}")
+        return new_id, new_doc
+
     async def get_public_courses(self, organizationId: str, limit: int = 20) -> List[Dict]:
         """Get public courses for an organization"""
         try:

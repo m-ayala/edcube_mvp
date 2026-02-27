@@ -416,3 +416,41 @@ async def update_course_visibility(curriculum_id: str, body: VisibilityUpdate, t
     except Exception as e:
         logger.error(f"Error updating visibility: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# FORK ENDPOINT
+# ============================================================================
+
+@router.post("/curricula/{course_id}/fork")
+async def fork_course(course_id: str, teacherUid: str, displayName: str, organizationId: str):
+    """
+    Fork a public course into the requesting teacher's own library.
+
+    Creates a new curriculum document owned by teacherUid, preserving all
+    content and building a forkLineage chain for attribution.
+
+    Returns the new courseId and the full course document.
+    """
+    try:
+        if not teacherUid or not displayName or not organizationId:
+            raise HTTPException(status_code=400, detail="teacherUid, displayName, and organizationId are required")
+
+        new_course_id, new_doc = await firebase.fork_curriculum(
+            source_id=course_id,
+            forker_uid=teacherUid,
+            forker_display_name=displayName,
+            org_id=organizationId,
+        )
+
+        return {
+            "success": True,
+            "courseId": new_course_id,
+            "course": new_doc,
+        }
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error forking course {course_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))

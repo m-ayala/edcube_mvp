@@ -1,4 +1,4 @@
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, GitFork } from 'lucide-react';
 
 const CourseCard = ({ curriculum, onCardClick, onDelete, onToggleVisibility }) => {
   const handleDelete = (e) => {
@@ -32,9 +32,24 @@ const CourseCard = ({ curriculum, onCardClick, onDelete, onToggleVisibility }) =
         e.currentTarget.style.boxShadow = 'none';
       }}
     >
-      <h3 style={{ marginTop: 0, marginBottom: '10px' }}>
+      <h3 style={{ marginTop: 0, marginBottom: '6px' }}>
         {curriculum.courseName}
       </h3>
+
+      {/* Fork attribution — shown when course was forked from someone else */}
+      {curriculum.forkLineage && curriculum.forkLineage.length > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: '5px',
+          marginBottom: '10px'
+        }}>
+          <GitFork size={11} color="#8b7355" />
+          <span style={{ fontSize: '11px', color: '#8b7355' }}>
+            {curriculum.forkLineage[0]?.display_name
+              ? `Forked from ${curriculum.forkLineage[0].display_name}`
+              : 'Forked'}
+          </span>
+        </div>
+      )}
 
       <p style={{ margin: '5px 0', color: '#666' }}>
         <strong>Subject:</strong> {curriculum.subject}

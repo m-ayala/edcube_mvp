@@ -78,7 +78,8 @@ const TeacherProfile = () => {
         curriculumId: course.courseId || course.id,
         isPublic: true,
         readOnly: !isOwnProfile,
-        ownerName: profile?.display_name || ''
+        ownerName: profile?.display_name || '',
+        forkLineage: course.forkLineage || []
       }
     });
   };

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { signupTeacher } from '../../firebase/authService';
+import { signupTeacher, getOrgFromEmail, DOMAIN_ORG_MAP } from '../../firebase/authService';
 
 const Signup = () => {
   const [formData, setFormData] = useState({
@@ -40,8 +40,9 @@ const Signup = () => {
       return;
     }
 
-    if (!formData.email.endsWith('@indiacc.org')) {
-      setError('Only @indiacc.org email addresses are allowed');
+    if (!getOrgFromEmail(formData.email)) {
+      const allowed = Object.keys(DOMAIN_ORG_MAP).map(d => `@${d}`).join(', ');
+      setError(`Email domain not allowed. Accepted: ${allowed}`);
       setLoading(false);
       return;
     }
@@ -70,7 +71,7 @@ const Signup = () => {
     <div style={{ maxWidth: '400px', margin: '50px auto', padding: '20px' }}>
       <h1>EdCube Signup</h1>
       <p style={{ color: '#666', marginBottom: '20px' }}>
-        For ICC Teachers Only
+        Accepted domains: {Object.keys(DOMAIN_ORG_MAP).map(d => `@${d}`).join(', ')}
       </p>
 
       <form onSubmit={handleSignup}>
@@ -87,7 +88,7 @@ const Signup = () => {
         </div>
 
         <div style={{ marginBottom: '15px' }}>
-          <label>Email (must be @indiacc.org):</label>
+          <label>Email:</label>
           <input
             type="email"
             name="email"
@@ -123,7 +124,8 @@ const Signup = () => {
         </div>
 
         <div style={{ marginBottom: '15px', padding: '10px', backgroundColor: '#f0f0f0' }}>
-          <strong>Organization:</strong> ICC (India Cultural Center)
+          <strong>Organization:</strong>{' '}
+          {getOrgFromEmail(formData.email)?.toUpperCase() || 'Determined by email domain'}
         </div>
 
         {error && (

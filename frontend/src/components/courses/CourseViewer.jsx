@@ -1,8 +1,34 @@
 // src/components/courses/CourseViewer.jsx
 // Read-only viewer for public courses — no editing, no drag-and-drop
 import { useState } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, GitFork } from 'lucide-react';
 import TopicDetailsModal from '../modals/TopicDetailsModal';
+
+// Renders "Alice → Bob → Carol" attribution pills for a forkLineage array
+const LineageDisplay = ({ lineage }) => {
+  if (!lineage || lineage.length === 0) return null;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+      {lineage.map((entry, i) => (
+        <span key={i} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <span style={{
+            fontSize: '12px',
+            color: entry.action === 'created' ? '#8b7355' : '#6b7280',
+            backgroundColor: entry.action === 'created' ? '#f5f0e8' : '#f3f4f6',
+            padding: '3px 8px',
+            borderRadius: '10px',
+            fontWeight: entry.action === 'created' ? '600' : '400',
+          }}>
+            {entry.display_name}
+          </span>
+          {i < lineage.length - 1 && (
+            <span style={{ fontSize: '11px', color: '#9ca3af' }}>→</span>
+          )}
+        </span>
+      ))}
+    </div>
+  );
+};
 
 const CourseViewer = ({
   courseName,
@@ -10,6 +36,9 @@ const CourseViewer = ({
   videosByTopic,
   handsOnResources,
   ownerName,
+  forkLineage,
+  onFork,
+  isForkLoading,
   navigate
 }) => {
   const [selectedTopic, setSelectedTopic] = useState(null);
@@ -283,28 +312,53 @@ const CourseViewer = ({
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         backgroundColor: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
           <h2 style={{ margin: 0, fontSize: '20px', color: colors.textPrimary }}>EdCube</h2>
           <span style={{ fontSize: '17px', fontWeight: '600', color: colors.textPrimary }}>
             {courseName}
           </span>
-          {ownerName && (
-            <span style={{
-              fontSize: '12px', color: '#6b7280', backgroundColor: '#f3f4f6',
-              padding: '4px 10px', borderRadius: '12px', fontWeight: '500'
-            }}>
-              By {ownerName}
-            </span>
-          )}
           <span style={{
             fontSize: '11px', color: '#059669', backgroundColor: '#ECFDF5',
             padding: '3px 8px', borderRadius: '10px', fontWeight: '600'
           }}>
             View Only
           </span>
+          {/* Attribution: lineage chain if forked, plain ownerName otherwise */}
+          {forkLineage && forkLineage.length > 0
+            ? <LineageDisplay lineage={forkLineage} />
+            : ownerName && (
+                <span style={{
+                  fontSize: '12px', color: '#6b7280', backgroundColor: '#f3f4f6',
+                  padding: '4px 10px', borderRadius: '12px', fontWeight: '500'
+                }}>
+                  By {ownerName}
+                </span>
+              )
+          }
         </div>
 
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          {onFork && (
+            <button
+              onClick={onFork}
+              disabled={isForkLoading}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '6px',
+                padding: '7px 16px',
+                backgroundColor: isForkLoading ? '#d4c4a8' : '#8b7355',
+                color: 'white',
+                border: 'none', borderRadius: '6px',
+                cursor: isForkLoading ? 'not-allowed' : 'pointer',
+                fontSize: '13px', fontWeight: '500',
+                transition: 'background-color 0.15s ease'
+              }}
+              onMouseEnter={(e) => { if (!isForkLoading) e.currentTarget.style.backgroundColor = '#7a6348'; }}
+              onMouseLeave={(e) => { if (!isForkLoading) e.currentTarget.style.backgroundColor = '#8b7355'; }}
+            >
+              <GitFork size={14} />
+              {isForkLoading ? 'Forking...' : 'Fork this course'}
+            </button>
+          )}
           <button
             onClick={() => navigate(-1)}
             style={{

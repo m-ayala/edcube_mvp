@@ -18,7 +18,8 @@ from schemas.teacher_schema import (
     CourseSharingFields as CSF,
     TEACHER_PROFILES_COLLECTION,
     COURSES_COLLECTION,
-    create_default_profile
+    create_default_profile,
+    get_org_from_email,
 )
 from schemas.curriculum_schema import CurriculumFields as CF
 import firebase_admin
@@ -246,8 +247,9 @@ async def list_all_teachers(
         List[TeacherProfilePublic]: List of all teacher profiles with public course counts
     """
     try:
-        # Get all profiles in the organization (org_id = "icc")
-        profiles_query = db.collection(TEACHER_PROFILES_COLLECTION).where(TPF.ORG_ID, "==", "icc")
+        # Resolve the caller's org_id from their email domain
+        caller_org_id = get_org_from_email(current_user["email"])
+        profiles_query = db.collection(TEACHER_PROFILES_COLLECTION).where(TPF.ORG_ID, "==", caller_org_id)
         profiles = profiles_query.stream()
         
         result = []
