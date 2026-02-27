@@ -23,6 +23,7 @@ const Sidebar = () => {
     { to: '/my-courses',        label: 'My Courses',      icon: '📚' },
     { to: '/course-designer',   label: 'Course Designer', icon: '✨' },
     { to: '/course-workspace',  label: 'Workspace',       icon: '⚙️' },
+    { to: '/search',            label: 'Search',          icon: '🔍' },
   ];
 
   return (

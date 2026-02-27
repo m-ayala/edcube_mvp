@@ -12,6 +12,7 @@ import CourseDesigner from './components/courses/CourseDesigner';
 import CourseUpload from './components/pages/CourseUpload';
 import CourseWorkspace from './components/courses/CourseWorkspace';
 import TeacherProfile from './components/teacherProfile/TeacherProfile';
+import Search from './components/search/Search';
 
 function App() {
   return (
@@ -44,6 +45,9 @@ function App() {
             {/* Teacher Profile Routes */}
             <Route path="profile" element={<TeacherProfile />} />
             <Route path="profile/:teacherUid" element={<TeacherProfile />} />
+
+            {/* Search */}
+            <Route path="search" element={<Search />} />
           </Route>
 
           {/* Catch all - redirect to login */}
