@@ -1,6 +1,6 @@
 // src/components/courses/CourseEditor.jsx
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { GripVertical, Edit2, Check, Trash2, Plus, Sparkles } from 'lucide-react';
+import { GripVertical, Edit2, Check, Trash2, Plus, Sparkles, PlayCircle, FileText, Zap } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import TopicDetailsModal from '../modals/TopicDetailsModal';
 
@@ -193,6 +193,7 @@ const CourseEditor = ({
   const [hoveredTopic, setHoveredTopic] = useState(null);
   const [activeBubble, setActiveBubble] = useState(null);
   const [aiPromptText, setAiPromptText] = useState('');
+  const [activeTabByTopic, setActiveTabByTopic] = useState({});
 
   const openBubble = (e, id, onGenerate) => {
     e.stopPropagation();
@@ -459,89 +460,275 @@ const CourseEditor = ({
     const worksheets = allResources.filter(r => r.type === 'worksheet');
     const activities = allResources.filter(r => r.type === 'activity');
 
-    const totalResources = videos.length + worksheets.length + activities.length;
+    const activeTab = activeTabByTopic[topicBox.id] || 'topic';
+    const setActiveTab = (tab) => setActiveTabByTopic(prev => ({ ...prev, [topicBox.id]: tab }));
 
-    const resourceSummary = [
-      videos.length > 0 && `${videos.length} video${videos.length > 1 ? 's' : ''}`,
-      worksheets.length > 0 && `${worksheets.length} worksheet${worksheets.length > 1 ? 's' : ''}`,
-      activities.length > 0 && `${activities.length} activit${activities.length > 1 ? 'ies' : 'y'}`
-    ].filter(Boolean).join(' • ');
+    const tabs = [
+      { id: 'topic', label: 'Topic' },
+      { id: 'videos', label: videos.length > 0 ? `Videos (${videos.length})` : 'Videos' },
+      { id: 'activities', label: activities.length > 0 ? `Activities (${activities.length})` : 'Activities' },
+      { id: 'worksheets', label: worksheets.length > 0 ? `Worksheets (${worksheets.length})` : 'Worksheets' },
+    ];
+
+    const getYouTubeThumbnail = (url) => {
+      try {
+        const urlObj = new URL(url);
+        let videoId = null;
+        if (urlObj.hostname.includes('youtube.com')) {
+          videoId = urlObj.searchParams.get('v');
+        } else if (urlObj.hostname.includes('youtu.be')) {
+          videoId = urlObj.pathname.slice(1).split('?')[0];
+        }
+        if (videoId) return `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
+      } catch {}
+      return null;
+    };
+
+    const renderResourceCards = (resources, type) => {
+      if (resources.length === 0) {
+        return (
+          <div style={{ padding: '14px 16px', color: '#9ca3af', fontSize: '13px', fontStyle: 'italic' }}>
+            No {type} added yet — click Edit to add some.
+          </div>
+        );
+      }
+      return (
+        <div style={{
+          display: 'flex',
+          gap: '10px',
+          overflowX: 'auto',
+          padding: '12px 16px',
+          scrollbarWidth: 'thin',
+          scrollbarColor: '#E8E6E1 transparent'
+        }}>
+          {resources.map((resource, idx) => {
+            const thumbnail = type === 'video' ? getYouTubeThumbnail(resource.url) : null;
+            const placeholderIcon = type === 'video'
+              ? <PlayCircle size={22} style={{ color: '#9ca3af' }} />
+              : type === 'worksheet'
+                ? <FileText size={22} style={{ color: '#9ca3af' }} />
+                : <Zap size={22} style={{ color: '#9ca3af' }} />;
+            const placeholderBg = type === 'video' ? '#E8E6E1' : type === 'worksheet' ? '#E4EEE4' : '#E8E4EE';
+
+            return (
+              <a
+                key={idx}
+                href={resource.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={e => e.stopPropagation()}
+                title={resource.title}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  width: '130px',
+                  flexShrink: 0,
+                  border: '1px solid #E8E6E1',
+                  borderRadius: '8px',
+                  overflow: 'hidden',
+                  textDecoration: 'none',
+                  backgroundColor: '#fff',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                  transition: 'box-shadow 0.2s, transform 0.15s'
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.boxShadow = '0 4px 10px rgba(0,0,0,0.14)';
+                  e.currentTarget.style.transform = 'translateY(-1px)';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.06)';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                }}
+              >
+                {thumbnail ? (
+                  <img
+                    src={thumbnail}
+                    alt={resource.title}
+                    style={{ width: '100%', height: '72px', objectFit: 'cover' }}
+                  />
+                ) : (
+                  <div style={{
+                    width: '100%',
+                    height: '72px',
+                    backgroundColor: placeholderBg,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}>
+                    {placeholderIcon}
+                  </div>
+                )}
+                <div style={{ padding: '6px 8px' }}>
+                  <p style={{
+                    margin: 0,
+                    fontSize: '11px',
+                    fontWeight: '600',
+                    color: '#2C2A26',
+                    lineHeight: '1.4',
+                    overflow: 'hidden',
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical'
+                  }}>
+                    {resource.title}
+                  </p>
+                </div>
+              </a>
+            );
+          })}
+        </div>
+      );
+    };
 
     return (
-      <div style={{ marginBottom: '12px' }}>
-        <div
-          onMouseEnter={() => setHoveredTopic(topicBox.id)}
-          onMouseLeave={() => setHoveredTopic(null)}
-          onClick={() => handleTopicBoxClick(topicBox, sectionId, subsectionId)}
-          style={{
-            border: '1px solid #e5e7eb',
-            borderRadius: '10px',
-            backgroundColor: colors.topicBg,
-            boxShadow: hoveredTopic === topicBox.id ? '0 4px 12px rgba(0,0,0,0.12)' : '0 1px 3px rgba(0,0,0,0.06)',
-            position: 'relative',
-            padding: '16px',
-            cursor: 'pointer',
-            transition: 'all 0.2s'
-          }}
-        >
-          {/* Drag handle */}
-          <div
-            {...dragHandleProps}
-            onClick={e => e.stopPropagation()}
-            style={{
-              position: 'absolute',
-              top: '12px',
-              left: '12px',
-              cursor: 'grab',
-              zIndex: 10,
-              padding: '4px',
-              background: 'rgba(255, 255, 255, 0.9)',
-              borderRadius: '4px',
-              display: 'flex',
-              alignItems: 'center'
-            }}
-          >
-            <GripVertical size={16} style={{ color: '#9ca3af' }} />
+      <div
+        style={{ marginBottom: '12px' }}
+        onMouseEnter={() => setHoveredTopic(topicBox.id)}
+        onMouseLeave={() => setHoveredTopic(null)}
+      >
+        <div style={{
+          border: '1px solid #e5e7eb',
+          borderRadius: '10px',
+          backgroundColor: colors.topicBg,
+          boxShadow: hoveredTopic === topicBox.id ? '0 4px 12px rgba(0,0,0,0.12)' : '0 1px 3px rgba(0,0,0,0.06)',
+          overflow: 'hidden',
+          transition: 'box-shadow 0.2s'
+        }}>
+
+          {/* ── Folder Tab Bar ── */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            backgroundColor: '#EDEAE4',
+            borderBottom: '1px solid #e5e7eb',
+            paddingLeft: '4px',
+            paddingRight: '6px',
+            gap: '0'
+          }}>
+            {/* Drag handle */}
+            <div
+              {...dragHandleProps}
+              onClick={e => e.stopPropagation()}
+              style={{ cursor: 'grab', display: 'flex', alignItems: 'center', padding: '8px 6px 8px 4px', flexShrink: 0 }}
+            >
+              <GripVertical size={14} style={{ color: '#9ca3af' }} />
+            </div>
+
+            {/* Tabs */}
+            {tabs.map(tab => (
+              <button
+                key={tab.id}
+                onClick={e => { e.stopPropagation(); setActiveTab(tab.id); }}
+                style={{
+                  padding: '7px 11px',
+                  border: 'none',
+                  borderBottom: activeTab === tab.id ? '2px solid #8B7355' : '2px solid transparent',
+                  backgroundColor: activeTab === tab.id ? colors.topicBg : 'transparent',
+                  cursor: 'pointer',
+                  fontSize: '11px',
+                  fontWeight: activeTab === tab.id ? '700' : '500',
+                  color: activeTab === tab.id ? '#2C2A26' : '#6B6760',
+                  transition: 'all 0.15s',
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0
+                }}
+              >
+                {tab.label}
+              </button>
+            ))}
+
+            {/* Spacer */}
+            <div style={{ flex: 1 }} />
+
+            {/* Edit button */}
+            <button
+              onClick={e => { e.stopPropagation(); handleTopicBoxClick(topicBox, sectionId, subsectionId); }}
+              style={{
+                padding: '4px 9px',
+                backgroundColor: '#fff',
+                color: '#6B6760',
+                border: '1px solid #D4C4A8',
+                borderRadius: '5px',
+                cursor: 'pointer',
+                fontSize: '11px',
+                fontWeight: '600',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                marginRight: '6px',
+                flexShrink: 0
+              }}
+              title="Edit topic"
+            >
+              <Edit2 size={11} /> Edit
+            </button>
+
+            {/* Delete button */}
+            <button
+              onClick={e => { e.stopPropagation(); actions.confirmDeleteTopicBox(sectionId, subsectionId, topicBox.id); }}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '4px',
+                display: 'flex',
+                alignItems: 'center',
+                color: colors.dangerBtn,
+                flexShrink: 0
+              }}
+              title="Delete topic box"
+            >
+              <Trash2 size={14} />
+            </button>
           </div>
 
-          {/* Delete button */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              actions.confirmDeleteTopicBox(sectionId, subsectionId, topicBox.id);
-            }}
-            style={{
-              position: 'absolute',
-              top: '12px',
-              right: '12px',
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              padding: '4px',
-              display: 'flex',
-              alignItems: 'center',
-              color: colors.dangerBtn,
-              zIndex: 10
-            }}
-            title="Delete topic box"
-          >
-            <Trash2 size={16} />
-          </button>
+          {/* ── Tab Content ── */}
+          {activeTab === 'topic' && (
+            <div
+              onClick={() => handleTopicBoxClick(topicBox, sectionId, subsectionId)}
+              style={{ padding: '14px 16px', cursor: 'pointer' }}
+            >
+              <h4 style={{ margin: '0 0 8px', fontSize: '15px', fontWeight: '600', color: colors.textPrimary }}>
+                {topicBox.title}
+              </h4>
 
-          {/* Action buttons - permanent in bottom-right corner */}
+              {(topicBox.learning_objectives || []).length > 0 && (
+                <ul style={{ margin: '0 0 10px', paddingLeft: '20px', fontSize: '13px', color: colors.textSecondary, lineHeight: '1.6' }}>
+                  {topicBox.learning_objectives.slice(0, 3).map((obj, i) => (
+                    <li key={i} style={{ marginBottom: '3px' }}>{obj}</li>
+                  ))}
+                  {topicBox.learning_objectives.length > 3 && (
+                    <li style={{ color: '#9ca3af', fontStyle: 'italic' }}>
+                      +{topicBox.learning_objectives.length - 3} more...
+                    </li>
+                  )}
+                </ul>
+              )}
+
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                <Pill label={`${topicBox.duration_minutes || 0} min`} color={{ bg: '#F5F3EE', text: colors.textSecondary }} />
+                {(topicBox.pla_pillars || []).map((pillar, idx) => (
+                  <Pill key={idx} label={pillar} color={{ bg: colors.pla[pillar] || colors.pillBg, text: colors.textPrimary }} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'videos' && renderResourceCards(videos, 'video')}
+          {activeTab === 'activities' && renderResourceCards(activities, 'activity')}
+          {activeTab === 'worksheets' && renderResourceCards(worksheets, 'worksheet')}
+
+          {/* ── Bottom Action Strip ── */}
           <div style={{
-            position: 'absolute',
-            bottom: '8px',
-            right: '8px',
             display: 'flex',
             gap: '4px',
-            zIndex: 10
+            padding: '5px 10px',
+            borderTop: '1px solid #EDEAE4',
+            backgroundColor: '#F7F5F2',
+            justifyContent: 'flex-end'
           }}>
             <button
-              onClick={(e) => {
-                e.stopPropagation();
-                actions.addTopicBox(sectionId, subsectionId);
-              }}
+              onClick={e => { e.stopPropagation(); actions.addTopicBox(sectionId, subsectionId); }}
               style={{
                 padding: '3px 8px',
                 backgroundColor: '#fff',
@@ -553,16 +740,15 @@ const CourseEditor = ({
                 fontWeight: '600',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '3px',
-                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                gap: '3px'
               }}
-              title="Add new topic"
+              title="Add new topic box"
             >
               <Plus size={10} /> Topic
             </button>
 
             <button
-              onClick={(e) => {
+              onClick={e => {
                 const section = sections.find(s => s.id === sectionId);
                 const subsection = section?.subsections?.find(sub => sub.id === subsectionId);
                 openBubble(e, `topic-${topicBox.id}`, (guidance) => {
@@ -612,8 +798,7 @@ const CourseEditor = ({
                 fontWeight: '600',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '3px',
-                boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                gap: '3px'
               }}
               title="AI generate topic"
             >
@@ -621,98 +806,6 @@ const CourseEditor = ({
             </button>
           </div>
 
-          {/* Content */}
-          <div style={{ paddingLeft: '28px', paddingRight: '28px' }}>
-            {/* Title */}
-            <h4 style={{ 
-              margin: '0 0 10px', 
-              fontSize: '15px', 
-              fontWeight: '600', 
-              color: colors.textPrimary 
-            }}>
-              {topicBox.title}
-            </h4>
-
-            {/* Learning Objectives */}
-            {(topicBox.learning_objectives || []).length > 0 && (
-              <ul style={{ 
-                margin: '0 0 12px', 
-                paddingLeft: '20px', 
-                fontSize: '13px', 
-                color: colors.textSecondary,
-                lineHeight: '1.6'
-              }}>
-                {topicBox.learning_objectives.slice(0, 3).map((obj, i) => (
-                  <li key={i} style={{ marginBottom: '4px' }}>{obj}</li>
-                ))}
-                {topicBox.learning_objectives.length > 3 && (
-                  <li style={{ color: '#9ca3af', fontStyle: 'italic' }}>
-                    +{topicBox.learning_objectives.length - 3} more...
-                  </li>
-                )}
-              </ul>
-            )}
-
-            {/* Pills Row */}
-            <div style={{ 
-              display: 'flex', 
-              gap: '6px', 
-              flexWrap: 'wrap', 
-              marginBottom: totalResources > 0 ? '12px' : '0'
-            }}>
-              <Pill 
-                label={`${topicBox.duration_minutes || 0} min`} 
-                color={{ bg: '#F5F3EE', text: colors.textSecondary }} 
-              />
-              {(topicBox.pla_pillars || []).map((pillar, idx) => (
-                <Pill 
-                  key={idx}
-                  label={pillar} 
-                  color={{ 
-                    bg: colors.pla[pillar] || colors.pillBg, 
-                    text: colors.textPrimary 
-                  }} 
-                />
-              ))}
-            </div>
-
-            {/* Resource Summary */}
-            {totalResources > 0 && (
-              <div style={{
-                padding: '10px 14px',
-                backgroundColor: '#F9FAFB',
-                borderRadius: '6px',
-                border: '1px solid #E5E7EB',
-                fontSize: '12px',
-                color: colors.textSecondary
-              }}>
-                <span style={{ fontWeight: '600', color: colors.textPrimary }}>📦 Resources:</span>{' '}
-                {resourceSummary}
-                <span style={{ 
-                  marginLeft: '8px', 
-                  fontStyle: 'italic', 
-                  color: '#9ca3af',
-                  fontSize: '11px'
-                }}>
-                  (click to view/edit)
-                </span>
-              </div>
-            )}
-
-            {totalResources === 0 && (
-              <div style={{
-                padding: '10px 14px',
-                backgroundColor: '#FFFBEB',
-                borderRadius: '6px',
-                border: '1px dashed #FCD34D',
-                fontSize: '12px',
-                color: '#92400E',
-                fontStyle: 'italic'
-              }}>
-                No resources yet — click to add videos, worksheets, or activities
-              </div>
-            )}
-          </div>
         </div>
       </div>
     );
