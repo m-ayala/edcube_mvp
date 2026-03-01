@@ -1,6 +1,6 @@
 // src/components/modals/TopicDetailsModal.jsx
 import { useState } from 'react';
-import { X, Edit2, Check, Trash2, Plus, Sparkles, ExternalLink } from 'lucide-react';
+import { X, Check, Trash2, Plus, Sparkles, ExternalLink } from 'lucide-react';
 import AddResourceModal from './AddResourceModal';
 
 const TopicDetailsModal = ({
@@ -24,7 +24,8 @@ const TopicDetailsModal = ({
     pla_pillars: [...(topic.pla_pillars || [])]
   });
   
-  const [showAddResourceModal, setShowAddResourceModal] = useState(null);
+  // resourceModal: null | { type, mode: 'add'|'edit', index?: number, initialData?: object }
+  const [resourceModal, setResourceModal] = useState(null);
   const [newObjective, setNewObjective] = useState('');
 
   const videos = videosByTopic?.[topic.id] || [];
@@ -97,11 +98,23 @@ const TopicDetailsModal = ({
     });
   };
 
-  const handleAddResource = (resourceData) => {
-    if (actions?.addManualResource) {
-      actions.addManualResource(topic.id, resourceData.type, resourceData);
+  const handleResourceModalSubmit = (resourceData) => {
+    if (resourceModal?.mode === 'edit') {
+      if (actions?.updateResource) {
+        actions.updateResource(topic.id, resourceModal.type, resourceModal.index, resourceData);
+      }
+    } else {
+      if (actions?.addManualResource) {
+        actions.addManualResource(topic.id, resourceData.type, resourceData);
+      }
     }
-    setShowAddResourceModal(null);
+    setResourceModal(null);
+  };
+
+  const handleDeleteResource = (resourceType, index) => {
+    if (actions?.removeResource) {
+      actions.removeResource(topic.id, resourceType, index);
+    }
   };
 
   const handleGenerateVideos = () => {
@@ -179,7 +192,7 @@ const TopicDetailsModal = ({
                     }}
                     title={isEditing ? 'Done editing' : 'Edit topic'}
                   >
-                    {isEditing ? <Check size={16} /> : <Edit2 size={16} />}
+                    {isEditing ? <Check size={16} /> : '✏️'}
                   </button>
                 )}
               </div>
@@ -414,7 +427,7 @@ const TopicDetailsModal = ({
               {!readOnly && (
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <button
-                    onClick={() => setShowAddResourceModal({ type: 'video' })}
+                    onClick={() => setResourceModal({ type: 'video', mode: 'add' })}
                     style={{
                       padding: '6px 12px',
                       backgroundColor: 'transparent',
@@ -468,64 +481,62 @@ const TopicDetailsModal = ({
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {videos.map((video, idx) => (
-                  <a
+                  <div
                     key={idx}
-                    href={video.url || `https://www.youtube.com/watch?v=${video.videoId}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
                     style={{
+                      position: 'relative',
                       display: 'flex',
                       gap: '14px',
                       padding: '12px',
+                      paddingRight: !readOnly ? '76px' : '12px',
                       backgroundColor: '#fafafa',
                       border: '1px solid #e5e7eb',
                       borderRadius: '10px',
-                      textDecoration: 'none',
-                      color: 'inherit',
-                      transition: 'all 0.2s'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = '#f3f4f6';
-                      e.currentTarget.style.borderColor = colors.accent;
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = '#fafafa';
-                      e.currentTarget.style.borderColor = '#e5e7eb';
+                      alignItems: 'flex-start'
                     }}
                   >
+                    {!readOnly && (
+                      <div style={{ position: 'absolute', top: '10px', right: '10px', display: 'flex', gap: '4px', alignItems: 'center' }}>
+                        <button
+                          onClick={() => setResourceModal({ type: 'video', mode: 'edit', index: idx, initialData: { title: video.title, url: video.url || `https://www.youtube.com/watch?v=${video.videoId}` } })}
+                          style={{ padding: '3px 8px', backgroundColor: '#fff', color: colors.textSecondary, border: `1px solid ${colors.border}`, borderRadius: '5px', cursor: 'pointer', fontSize: '11px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '3px', fontFamily: "'DM Sans', sans-serif" }}
+                        >
+                          ✏️ Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteResource('video', idx)}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', color: colors.dangerBtn }}
+                        >
+                          🗑
+                        </button>
+                      </div>
+                    )}
                     {video.thumbnailUrl && (
                       <img
                         src={video.thumbnailUrl}
                         alt={video.title}
-                        style={{ 
-                          width: '120px', 
-                          height: '90px', 
-                          objectFit: 'cover', 
-                          borderRadius: '6px', 
-                          flexShrink: 0 
-                        }}
+                        style={{ width: '120px', height: '90px', objectFit: 'cover', borderRadius: '6px', flexShrink: 0 }}
                       />
                     )}
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ 
-                        margin: '0 0 6px', 
-                        fontSize: '14px', 
-                        fontWeight: '600', 
-                        color: colors.textPrimary,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap'
-                      }}>
+                      <p style={{ margin: '0 0 6px', fontSize: '14px', fontWeight: '600', color: colors.textPrimary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {video.title}
                       </p>
                       {video.channelName && (
-                        <p style={{ margin: '0 0 4px', fontSize: '12px', color: colors.textSecondary }}>
+                        <p style={{ margin: '0 0 8px', fontSize: '12px', color: colors.textSecondary }}>
                           {video.channelName} {video.duration && `• ${video.duration}`}
                         </p>
                       )}
+                      <a
+                        href={video.url || `https://www.youtube.com/watch?v=${video.videoId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ fontSize: '12px', color: colors.accent, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '3px', fontWeight: '600' }}
+                      >
+                        Open <ExternalLink size={11} />
+                      </a>
                     </div>
-                    <ExternalLink size={18} style={{ color: colors.accent, flexShrink: 0, marginTop: '4px' }} />
-                  </a>
+                  </div>
                 ))}
               </div>
             )}
@@ -540,7 +551,7 @@ const TopicDetailsModal = ({
               {!readOnly && (
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <button
-                    onClick={() => setShowAddResourceModal({ type: 'worksheet' })}
+                    onClick={() => setResourceModal({ type: 'worksheet', mode: 'add' })}
                     style={{
                       padding: '6px 12px',
                       backgroundColor: 'transparent',
@@ -593,44 +604,57 @@ const TopicDetailsModal = ({
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {worksheets.map((ws, idx) => (
-                  <div
-                    key={idx}
-                    style={{
-                      padding: '14px 16px',
-                      backgroundColor: colors.accentLight,
-                      border: `1px solid ${colors.border}`,
-                      borderRadius: '10px'
-                    }}
-                  >
-                    <p style={{ margin: '0 0 6px', fontSize: '14px', fontWeight: '600', color: colors.textPrimary }}>
-                      {ws.title}
-                    </p>
-                    {ws.description && (
-                      <p style={{ margin: '0 0 8px', fontSize: '13px', color: colors.textSecondary }}>
-                        {ws.description}
+                {worksheets.map((ws) => {
+                  const actualIdx = allResources.indexOf(ws);
+                  return (
+                    <div
+                      key={actualIdx}
+                      style={{
+                        position: 'relative',
+                        padding: '14px 16px',
+                        paddingRight: !readOnly ? '76px' : '16px',
+                        backgroundColor: colors.accentLight,
+                        border: `1px solid ${colors.border}`,
+                        borderRadius: '10px'
+                      }}
+                    >
+                      {!readOnly && (
+                        <div style={{ position: 'absolute', top: '10px', right: '10px', display: 'flex', gap: '4px', alignItems: 'center' }}>
+                          <button
+                            onClick={() => setResourceModal({ type: 'worksheet', mode: 'edit', index: actualIdx, initialData: { title: ws.title, url: ws.url || ws.sourceUrl || '', description: ws.description || '' } })}
+                            style={{ padding: '3px 8px', backgroundColor: '#fff', color: colors.textSecondary, border: `1px solid ${colors.border}`, borderRadius: '5px', cursor: 'pointer', fontSize: '11px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '3px', fontFamily: "'DM Sans', sans-serif" }}
+                          >
+                            ✏️ Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteResource('worksheet', actualIdx)}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', color: colors.dangerBtn }}
+                          >
+                            🗑
+                          </button>
+                        </div>
+                      )}
+                      <p style={{ margin: '0 0 6px', fontSize: '14px', fontWeight: '600', color: colors.textPrimary }}>
+                        {ws.title}
                       </p>
-                    )}
-                    {(ws.url || ws.sourceUrl) && (
-                      <a
-                        href={ws.url || ws.sourceUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{
-                          fontSize: '13px',
-                          color: colors.accent,
-                          textDecoration: 'none',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                          fontWeight: '600'
-                        }}
-                      >
-                        View Resource <ExternalLink size={13} />
-                      </a>
-                    )}
-                  </div>
-                ))}
+                      {ws.description && (
+                        <p style={{ margin: '0 0 8px', fontSize: '13px', color: colors.textSecondary }}>
+                          {ws.description}
+                        </p>
+                      )}
+                      {(ws.url || ws.sourceUrl) && (
+                        <a
+                          href={ws.url || ws.sourceUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ fontSize: '13px', color: colors.accent, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: '600' }}
+                        >
+                          View Resource <ExternalLink size={13} />
+                        </a>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -644,7 +668,7 @@ const TopicDetailsModal = ({
               {!readOnly && (
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <button
-                    onClick={() => setShowAddResourceModal({ type: 'activity' })}
+                    onClick={() => setResourceModal({ type: 'activity', mode: 'add' })}
                     style={{
                       padding: '6px 12px',
                       backgroundColor: 'transparent',
@@ -697,44 +721,57 @@ const TopicDetailsModal = ({
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {activities.map((act, idx) => (
-                  <div
-                    key={idx}
-                    style={{
-                      padding: '14px 16px',
-                      backgroundColor: colors.accentLight,
-                      border: `1px solid ${colors.border}`,
-                      borderRadius: '10px'
-                    }}
-                  >
-                    <p style={{ margin: '0 0 6px', fontSize: '14px', fontWeight: '600', color: colors.textPrimary }}>
-                      {act.title}
-                    </p>
-                    {act.description && (
-                      <p style={{ margin: '0 0 8px', fontSize: '13px', color: colors.textSecondary, lineHeight: '1.5' }}>
-                        {act.description}
+                {activities.map((act) => {
+                  const actualIdx = allResources.indexOf(act);
+                  return (
+                    <div
+                      key={actualIdx}
+                      style={{
+                        position: 'relative',
+                        padding: '14px 16px',
+                        paddingRight: !readOnly ? '76px' : '16px',
+                        backgroundColor: colors.accentLight,
+                        border: `1px solid ${colors.border}`,
+                        borderRadius: '10px'
+                      }}
+                    >
+                      {!readOnly && (
+                        <div style={{ position: 'absolute', top: '10px', right: '10px', display: 'flex', gap: '4px', alignItems: 'center' }}>
+                          <button
+                            onClick={() => setResourceModal({ type: 'activity', mode: 'edit', index: actualIdx, initialData: { title: act.title, url: act.url || act.sourceUrl || '', description: act.description || '' } })}
+                            style={{ padding: '3px 8px', backgroundColor: '#fff', color: colors.textSecondary, border: `1px solid ${colors.border}`, borderRadius: '5px', cursor: 'pointer', fontSize: '11px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '3px', fontFamily: "'DM Sans', sans-serif" }}
+                          >
+                            ✏️ Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteResource('activity', actualIdx)}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', color: colors.dangerBtn }}
+                          >
+                            🗑
+                          </button>
+                        </div>
+                      )}
+                      <p style={{ margin: '0 0 6px', fontSize: '14px', fontWeight: '600', color: colors.textPrimary }}>
+                        {act.title}
                       </p>
-                    )}
-                    {(act.url || act.sourceUrl) && (
-                      <a
-                        href={act.url || act.sourceUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{
-                          fontSize: '13px',
-                          color: colors.accent,
-                          textDecoration: 'none',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                          fontWeight: '600'
-                        }}
-                      >
-                        View Resource <ExternalLink size={13} />
-                      </a>
-                    )}
-                  </div>
-                ))}
+                      {act.description && (
+                        <p style={{ margin: '0 0 8px', fontSize: '13px', color: colors.textSecondary, lineHeight: '1.5' }}>
+                          {act.description}
+                        </p>
+                      )}
+                      {(act.url || act.sourceUrl) && (
+                        <a
+                          href={act.url || act.sourceUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ fontSize: '13px', color: colors.accent, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: '600' }}
+                        >
+                          View Resource <ExternalLink size={13} />
+                        </a>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -792,12 +829,14 @@ const TopicDetailsModal = ({
         </div>
       </div>
 
-      {/* Add Resource Modal */}
+      {/* Add / Edit Resource Modal */}
       <AddResourceModal
-        isOpen={showAddResourceModal !== null}
-        onClose={() => setShowAddResourceModal(null)}
-        onAdd={handleAddResource}
-        resourceType={showAddResourceModal?.type || 'video'}
+        isOpen={resourceModal !== null}
+        onClose={() => setResourceModal(null)}
+        onAdd={handleResourceModalSubmit}
+        resourceType={resourceModal?.type || 'video'}
+        mode={resourceModal?.mode || 'add'}
+        initialData={resourceModal?.initialData || null}
       />
     </>
   );

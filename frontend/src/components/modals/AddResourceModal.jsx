@@ -1,12 +1,22 @@
 // src/components/modals/AddResourceModal.jsx
-import { useState } from 'react';
-import { X, Plus } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X, Plus, Check } from 'lucide-react';
 
-const AddResourceModal = ({ isOpen, onClose, onAdd, resourceType = 'video' }) => {
+const AddResourceModal = ({ isOpen, onClose, onAdd, resourceType = 'video', initialData = null, mode = 'add' }) => {
   const [title, setTitle] = useState('');
   const [url, setUrl] = useState('');
   const [description, setDescription] = useState('');
   const [errors, setErrors] = useState({});
+
+  // Pre-fill form when opening in edit mode, reset when opening in add mode
+  useEffect(() => {
+    if (isOpen) {
+      setTitle(initialData?.title || '');
+      setUrl(initialData?.url || '');
+      setDescription(initialData?.description || '');
+      setErrors({});
+    }
+  }, [isOpen, initialData]);
 
   if (!isOpen) return null;
 
@@ -121,7 +131,7 @@ const AddResourceModal = ({ isOpen, onClose, onAdd, resourceType = 'video' }) =>
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
           <h3 style={{ margin: 0, fontSize: '20px', color: '#2C2A26', fontWeight: '700' }}>
-            Add {getResourceTypeLabel()} Link
+            {mode === 'edit' ? 'Edit' : 'Add'} {getResourceTypeLabel()} Link
           </h3>
           <button
             onClick={handleClose}
@@ -334,8 +344,8 @@ const AddResourceModal = ({ isOpen, onClose, onAdd, resourceType = 'video' }) =>
                 e.target.style.backgroundColor = '#D4C4A8';
               }}
             >
-              <Plus size={16} />
-              Add {getResourceTypeLabel()}
+              {mode === 'edit' ? <Check size={16} /> : <Plus size={16} />}
+              {mode === 'edit' ? 'Save Changes' : `Add ${getResourceTypeLabel()}`}
             </button>
           </div>
         </form>

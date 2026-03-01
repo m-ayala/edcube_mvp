@@ -459,6 +459,28 @@ const useCourseActions = ({
     }
   };
 
+  const updateResource = (topicId, resourceType, resourceIndex, updatedData) => {
+    if (resourceType === 'video') {
+      setVideosByTopic(prev => ({
+        ...prev,
+        [topicId]: (prev[topicId] || []).map((item, idx) =>
+          idx === resourceIndex
+            ? { ...item, title: updatedData.title, url: updatedData.url }
+            : item
+        )
+      }));
+    } else {
+      setHandsOnResources(prev => ({
+        ...prev,
+        [topicId]: (prev[topicId] || []).map((item, idx) =>
+          idx === resourceIndex
+            ? { ...item, title: updatedData.title, url: updatedData.url, description: updatedData.description || '' }
+            : item
+        )
+      }));
+    }
+  };
+
   const updateTopicBoxFull = ({ sectionId, subsectionId, topicId, updatedData }) => {
     console.log('📝 Updating full topic box:', topicId, updatedData);
     
@@ -533,6 +555,7 @@ const useCourseActions = ({
     generateResource,
     addManualResource,
     removeResource,
+    updateResource,
     
     // State setters (for modals)
     setVideosByTopic,
