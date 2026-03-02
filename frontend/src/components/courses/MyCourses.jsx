@@ -54,7 +54,7 @@ const MyCourses = () => {
 
     try {
       const response = await fetch(
-        `http://localhost:8000/api/curricula/${courseId}/visibility?teacherUid=${currentUser.uid}`,
+        `https://edcube-backend-890930502654.us-west1.run.app/api/curricula/${courseId}/visibility?teacherUid=${currentUser.uid}`,
         {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },

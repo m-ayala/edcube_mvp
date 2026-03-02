@@ -15,7 +15,13 @@ app = FastAPI(title="EdCube API")
 # CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # Vite default port
+    allow_origins=[
+    "http://localhost:5173",
+    "https://edcube-8fe7d.web.app",
+    "https://edcube-8fe7d.firebaseapp.com",
+    "https://edcubeai.web.app",
+    "https://edcubeai.firebaseapp.com"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

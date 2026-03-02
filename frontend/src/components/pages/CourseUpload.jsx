@@ -45,7 +45,7 @@ const handleUpload = async () => {
     formData.append('file', selectedFile);
     
     const response = await fetch(
-      `http://localhost:8000/api/upload-course-file?teacherUid=${currentUser.uid}`,
+      `https://edcube-backend-890930502654.us-west1.run.app/api/upload-course-file?teacherUid=${currentUser.uid}`,
       {
         method: 'POST',
         body: formData

@@ -219,7 +219,7 @@ const CourseWorkspace = () => {
     try {
       const newIsPublic = !isPublic;
       const response = await fetch(
-        `http://localhost:8000/api/curricula/${curriculumId}/visibility?teacherUid=${currentUser.uid}`,
+        `https://edcube-backend-890930502654.us-west1.run.app/api/curricula/${curriculumId}/visibility?teacherUid=${currentUser.uid}`,
         {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -270,8 +270,8 @@ const CourseWorkspace = () => {
     if (hasExistingId) courseData.courseId = curriculumId;
 
     const endpoint = hasExistingId
-      ? `http://localhost:8000/api/update-course?teacherUid=${currentUser.uid}`
-      : `http://localhost:8000/api/save-course?teacherUid=${currentUser.uid}&organizationId=${organizationId}`;
+      ? `https://edcube-backend-890930502654.us-west1.run.app/api/update-course?teacherUid=${currentUser.uid}`
+      : `https://edcube-backend-890930502654.us-west1.run.app/api/save-course?teacherUid=${currentUser.uid}&organizationId=${organizationId}`;
 
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -303,7 +303,7 @@ const CourseWorkspace = () => {
       const orgId = organizationId || 'icc';
 
       const response = await fetch(
-        `http://localhost:8000/api/curricula/${curriculumId}/fork?teacherUid=${currentUser.uid}&displayName=${encodeURIComponent(displayName)}&organizationId=${orgId}`,
+        `https://edcube-backend-890930502654.us-west1.run.app/api/curricula/${curriculumId}/fork?teacherUid=${currentUser.uid}&displayName=${encodeURIComponent(displayName)}&organizationId=${orgId}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` }

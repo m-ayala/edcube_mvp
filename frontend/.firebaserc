@@ -1,0 +1,14 @@
+{
+  "projects": {
+    "default": "edcube-8fe7d"
+  },
+  "targets": {
+    "edcube-8fe7d": {
+      "hosting": {
+        "edcubeai": [
+          "edcubeai"
+        ]
+      }
+    }
+  }
+}

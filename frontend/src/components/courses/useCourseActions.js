@@ -332,7 +332,7 @@ const useCourseActions = ({
   const generateVideosFromBackend = async (topicBox) => {
     try {
       console.log('🎬 Generating videos for:', topicBox.title);
-      const response = await fetch('http://localhost:8000/api/generate-videos', {
+      const response = await fetch('https://edcube-backend-890930502654.us-west1.run.app/api/generate-videos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -382,7 +382,7 @@ const useCourseActions = ({
 
     try {
       console.log(`🔨 Generating ${resourceType} for:`, topicBox.title);
-      const response = await fetch('http://localhost:8000/api/generate-resource', {
+      const response = await fetch('https://edcube-backend-890930502654.us-west1.run.app/api/generate-resource', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
