@@ -834,22 +834,29 @@ const CourseEditor = ({
                   });
                 });
               }}
+              disabled={actions.generatingStates[`topics-${sectionId}-${subsectionId}`]}
               style={{
                 padding: '3px 8px',
                 backgroundColor: colors.accent,
                 color: '#fff',
                 border: 'none',
                 borderRadius: '4px',
-                cursor: 'pointer',
+                cursor: actions.generatingStates[`topics-${sectionId}-${subsectionId}`] ? 'not-allowed' : 'pointer',
                 fontSize: '10px',
                 fontWeight: '600',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '3px'
+                gap: '3px',
+                opacity: actions.generatingStates[`topics-${sectionId}-${subsectionId}`] ? 0.7 : 1
               }}
               title="AI generate topic"
             >
-              <Sparkles size={10} /> AI
+              {actions.generatingStates[`topics-${sectionId}-${subsectionId}`] ? (
+                <div style={{ width: '10px', height: '10px', border: '2px solid rgba(255,255,255,0.4)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+              ) : (
+                <Sparkles size={10} />
+              )}
+              AI
             </button>
           </div>
           </div>
@@ -994,15 +1001,21 @@ const CourseEditor = ({
                       });
                     });
                   }}
+                  disabled={actions.generatingStates['sections']}
                   style={{
                     padding: '3px 9px', backgroundColor: colors.aiBtn, color: '#fff',
-                    border: 'none', borderRadius: '4px', cursor: 'pointer',
+                    border: 'none', borderRadius: '4px', cursor: actions.generatingStates['sections'] ? 'not-allowed' : 'pointer',
                     fontSize: '10px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '3px',
-                    fontFamily: "'DM Sans', sans-serif"
+                    fontFamily: "'DM Sans', sans-serif", opacity: actions.generatingStates['sections'] ? 0.7 : 1
                   }}
                   title="AI generate section"
                 >
-                  <Sparkles size={10} /> AI
+                  {actions.generatingStates['sections'] ? (
+                    <div style={{ width: '10px', height: '10px', border: '2px solid rgba(255,255,255,0.4)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+                  ) : (
+                    <Sparkles size={10} />
+                  )}
+                  AI
                 </button>
 
                 <button
@@ -1113,22 +1126,29 @@ const CourseEditor = ({
                               });
                             });
                           }}
+                          disabled={actions.generatingStates[`subsections-${section.id}`]}
                           style={{
                             padding: '6px 14px',
                             backgroundColor: colors.accent,
                             color: '#fff',
                             border: 'none',
                             borderRadius: '6px',
-                            cursor: 'pointer',
+                            cursor: actions.generatingStates[`subsections-${section.id}`] ? 'not-allowed' : 'pointer',
                             fontSize: '12px',
                             fontWeight: '600',
                             display: 'flex',
                             alignItems: 'center',
                             gap: '5px',
-                            boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
+                            opacity: actions.generatingStates[`subsections-${section.id}`] ? 0.7 : 1
                           }}
                         >
-                          <Sparkles size={14} /> AI Generate
+                          {actions.generatingStates[`subsections-${section.id}`] ? (
+                            <div style={{ width: '12px', height: '12px', border: '2px solid rgba(255,255,255,0.4)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+                          ) : (
+                            <Sparkles size={14} />
+                          )}
+                          {actions.generatingStates[`subsections-${section.id}`] ? 'Generating…' : 'AI Generate'}
                         </button>
                       </div>
                     </div>
@@ -1269,15 +1289,23 @@ const CourseEditor = ({
                                             });
                                           });
                                         }}
+                                        disabled={actions.generatingStates[`subsections-${section.id}`]}
                                         style={{
                                           padding: '3px 8px', backgroundColor: colors.aiBtn, color: '#fff',
-                                          border: 'none', borderRadius: '4px', cursor: 'pointer',
+                                          border: 'none', borderRadius: '4px',
+                                          cursor: actions.generatingStates[`subsections-${section.id}`] ? 'not-allowed' : 'pointer',
                                           fontSize: '10px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '3px',
-                                          fontFamily: "'DM Sans', sans-serif"
+                                          fontFamily: "'DM Sans', sans-serif",
+                                          opacity: actions.generatingStates[`subsections-${section.id}`] ? 0.7 : 1
                                         }}
                                         title="AI generate subsection"
                                       >
-                                        <Sparkles size={10} /> AI
+                                        {actions.generatingStates[`subsections-${section.id}`] ? (
+                                          <div style={{ width: '10px', height: '10px', border: '2px solid rgba(255,255,255,0.4)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+                                        ) : (
+                                          <Sparkles size={10} />
+                                        )}
+                                        AI
                                       </button>
 
                                       <button
@@ -1399,22 +1427,29 @@ const CourseEditor = ({
                                                     });
                                                   });
                                                 }}
+                                                disabled={actions.generatingStates[`topics-${section.id}-${sub.id}`]}
                                                 style={{
                                                   padding: '6px 14px',
                                                   backgroundColor: colors.accent,
                                                   color: '#fff',
                                                   border: 'none',
                                                   borderRadius: '6px',
-                                                  cursor: 'pointer',
+                                                  cursor: actions.generatingStates[`topics-${section.id}-${sub.id}`] ? 'not-allowed' : 'pointer',
                                                   fontSize: '12px',
                                                   fontWeight: '600',
                                                   display: 'flex',
                                                   alignItems: 'center',
                                                   gap: '5px',
-                                                  boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                                                  boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
+                                                  opacity: actions.generatingStates[`topics-${section.id}-${sub.id}`] ? 0.7 : 1
                                                 }}
                                               >
-                                                <Sparkles size={14} /> AI Generate
+                                                {actions.generatingStates[`topics-${section.id}-${sub.id}`] ? (
+                                                  <div style={{ width: '12px', height: '12px', border: '2px solid rgba(255,255,255,0.4)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+                                                ) : (
+                                                  <Sparkles size={14} />
+                                                )}
+                                                {actions.generatingStates[`topics-${section.id}-${sub.id}`] ? 'Generating…' : 'AI Generate'}
                                               </button>
                                             </div>
                                           </div>
@@ -1465,7 +1500,10 @@ const CourseEditor = ({
   // ── RENDER ────────────────────────────────────────────────────────────
   return (
     <>
-      <style>{`@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }`}</style>
+      <style>{`
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  `}</style>
       {/* Top Bar */}
       <div style={{
         padding: '0 28px', borderBottom: '1px solid #E7E5E4', height: '60px',

@@ -143,8 +143,20 @@ const TopicDetailsModal = ({
     </span>
   );
 
+  const Spinner = () => (
+    <div style={{
+      width: '12px', height: '12px',
+      border: '2px solid rgba(255,255,255,0.4)',
+      borderTopColor: '#fff',
+      borderRadius: '50%',
+      animation: 'tdm-spin 0.7s linear infinite',
+      flexShrink: 0
+    }} />
+  );
+
   return (
     <>
+      <style>{`@keyframes tdm-spin { to { transform: rotate(360deg); } }`}</style>
       <div
         style={{
           position: 'fixed',
@@ -446,21 +458,24 @@ const TopicDetailsModal = ({
                   </button>
                   <button
                     onClick={handleGenerateVideos}
+                    disabled={actions?.generatingStates?.[`videos-${topic.id}`]}
                     style={{
                       padding: '6px 12px',
                       backgroundColor: colors.accent,
                       color: '#fff',
                       border: 'none',
                       borderRadius: '6px',
-                      cursor: 'pointer',
+                      cursor: actions?.generatingStates?.[`videos-${topic.id}`] ? 'not-allowed' : 'pointer',
                       fontSize: '12px',
                       fontWeight: '600',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '4px'
+                      gap: '4px',
+                      opacity: actions?.generatingStates?.[`videos-${topic.id}`] ? 0.7 : 1
                     }}
                   >
-                    <Sparkles size={14} /> AI
+                    {actions?.generatingStates?.[`videos-${topic.id}`] ? <Spinner /> : <Sparkles size={14} />}
+                    {actions?.generatingStates?.[`videos-${topic.id}`] ? 'Generating…' : 'AI'}
                   </button>
                 </div>
               )}
@@ -570,21 +585,24 @@ const TopicDetailsModal = ({
                   </button>
                   <button
                     onClick={() => handleGenerateResource('worksheet')}
+                    disabled={actions?.generatingStates?.[`worksheet-${topic.id}`]}
                     style={{
                       padding: '6px 12px',
                       backgroundColor: colors.accent,
                       color: '#fff',
                       border: 'none',
                       borderRadius: '6px',
-                      cursor: 'pointer',
+                      cursor: actions?.generatingStates?.[`worksheet-${topic.id}`] ? 'not-allowed' : 'pointer',
                       fontSize: '12px',
                       fontWeight: '600',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '4px'
+                      gap: '4px',
+                      opacity: actions?.generatingStates?.[`worksheet-${topic.id}`] ? 0.7 : 1
                     }}
                   >
-                    <Sparkles size={14} /> AI
+                    {actions?.generatingStates?.[`worksheet-${topic.id}`] ? <Spinner /> : <Sparkles size={14} />}
+                    {actions?.generatingStates?.[`worksheet-${topic.id}`] ? 'Generating…' : 'AI'}
                   </button>
                 </div>
               )}
@@ -687,21 +705,24 @@ const TopicDetailsModal = ({
                   </button>
                   <button
                     onClick={() => handleGenerateResource('activity')}
+                    disabled={actions?.generatingStates?.[`activity-${topic.id}`]}
                     style={{
                       padding: '6px 12px',
                       backgroundColor: colors.accent,
                       color: '#fff',
                       border: 'none',
                       borderRadius: '6px',
-                      cursor: 'pointer',
+                      cursor: actions?.generatingStates?.[`activity-${topic.id}`] ? 'not-allowed' : 'pointer',
                       fontSize: '12px',
                       fontWeight: '600',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '4px'
+                      gap: '4px',
+                      opacity: actions?.generatingStates?.[`activity-${topic.id}`] ? 0.7 : 1
                     }}
                   >
-                    <Sparkles size={14} /> AI
+                    {actions?.generatingStates?.[`activity-${topic.id}`] ? <Spinner /> : <Sparkles size={14} />}
+                    {actions?.generatingStates?.[`activity-${topic.id}`] ? 'Generating…' : 'AI'}
                   </button>
                 </div>
               )}

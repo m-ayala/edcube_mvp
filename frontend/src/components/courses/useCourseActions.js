@@ -17,6 +17,10 @@ const useCourseActions = ({
   const [collapsedSections, setCollapsedSections] = useState({});
   const [collapsedSubsections, setCollapsedSubsections] = useState({});
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [generatingStates, setGeneratingStates] = useState({});
+
+  const setGenerating = (key, value) =>
+    setGeneratingStates(prev => ({ ...prev, [key]: value }));
 
   // ── Section CRUD ──────────────────────────────────────────────────────
   const addSection = () => {
@@ -219,6 +223,7 @@ const useCourseActions = ({
 
   // ── AI Generation ─────────────────────────────────────────────────────
   const handleGenerateSections = async ({ level, context, userGuidance, count }) => {
+    setGenerating('sections', true);
     try {
       const result = await generateCurriculumContent({
         level,
@@ -235,17 +240,20 @@ const useCourseActions = ({
           description: item.description,
           subsections: []
         }));
-        
+
         setSections(prev => [...prev, ...newSections]);
         console.log(`✅ Generated ${result.items.length} sections`);
       }
     } catch (error) {
       console.error('Failed to generate sections:', error);
       alert('Failed to generate sections. Please try again.');
+    } finally {
+      setGenerating('sections', false);
     }
   };
 
   const handleGenerateSubsections = async (sectionId, { level, context, userGuidance, count }) => {
+    setGenerating(`subsections-${sectionId}`, true);
     try {
       const result = await generateCurriculumContent({
         level,
@@ -277,10 +285,13 @@ const useCourseActions = ({
     } catch (error) {
       console.error('Failed to generate subsections:', error);
       alert('Failed to generate subsections. Please try again.');
+    } finally {
+      setGenerating(`subsections-${sectionId}`, false);
     }
   };
 
   const handleGenerateTopicBoxes = async (sectionId, subsectionId, { level, context, userGuidance, count }) => {
+    setGenerating(`topics-${sectionId}-${subsectionId}`, true);
     try {
       const result = await generateCurriculumContent({
         level,
@@ -325,11 +336,14 @@ const useCourseActions = ({
     } catch (error) {
       console.error('Failed to generate topic boxes:', error);
       alert('Failed to generate topic boxes. Please try again.');
+    } finally {
+      setGenerating(`topics-${sectionId}-${subsectionId}`, false);
     }
   };
 
   // ── Video Generation ──────────────────────────────────────────────────
   const generateVideosFromBackend = async (topicBox) => {
+    setGenerating(`videos-${topicBox.id}`, true);
     try {
       console.log('🎬 Generating videos for:', topicBox.title);
       const response = await fetch('https://edcube-backend-890930502654.us-west1.run.app/api/generate-videos', {
@@ -363,6 +377,8 @@ const useCourseActions = ({
     } catch (error) {
       console.error('❌ Error:', error);
       alert('Error generating videos');
+    } finally {
+      setGenerating(`videos-${topicBox.id}`, false);
     }
   };
 
@@ -377,9 +393,10 @@ const useCourseActions = ({
       }
       if (topicBox) break;
     }
-    
+
     if (!topicBox) return;
 
+    setGenerating(`${resourceType}-${topicBoxId}`, true);
     try {
       console.log(`🔨 Generating ${resourceType} for:`, topicBox.title);
       const response = await fetch('https://edcube-backend-890930502654.us-west1.run.app/api/generate-resource', {
@@ -405,6 +422,8 @@ const useCourseActions = ({
     } catch (error) {
       console.error(`Error generating ${resourceType}:`, error);
       alert(`Failed to generate ${resourceType}`);
+    } finally {
+      setGenerating(`${resourceType}-${topicBoxId}`, false);
     }
   };
 
@@ -559,7 +578,10 @@ const useCourseActions = ({
     
     // State setters (for modals)
     setVideosByTopic,
-    setHandsOnResources
+    setHandsOnResources,
+
+    // Loading states
+    generatingStates
   };
 };
 
