@@ -732,12 +732,12 @@ const CourseEditor = ({
                 onClick={() => handleTopicBoxClick(topicBox, sectionId, subsectionId)}
                 style={{ padding: '13px 16px', cursor: 'pointer' }}
               >
-                <h4 style={{ margin: '0 0 7px', fontSize: '14px', fontWeight: '600', color: colors.textPrimary }}>
+                <h4 style={{ margin: '0 0 7px', fontSize: '15.5px', fontWeight: '600', color: colors.textPrimary, fontFamily: "'Fraunces', serif" }}>
                   {topicBox.title}
                 </h4>
 
                 {(topicBox.learning_objectives || []).length > 0 && (
-                  <ul style={{ margin: '0 0 10px', paddingLeft: '18px', fontSize: '12.5px', color: colors.textSecondary, lineHeight: '1.6' }}>
+                  <ul style={{ margin: '0 0 10px', paddingLeft: '18px', fontSize: '13.5px', color: colors.textSecondary, lineHeight: '1.6', fontFamily: "'Fraunces', serif" }}>
                     {topicBox.learning_objectives.slice(0, 3).map((obj, i) => (
                       <li key={i} style={{ marginBottom: '3px' }}>{obj}</li>
                     ))}
@@ -1034,7 +1034,8 @@ const CourseEditor = ({
                 maxLength={200}
                 style={{ flex: 1 }}
                 inputStyle={{
-                  fontSize: '12.5px',
+                  fontFamily: "'Fraunces', serif",
+                  fontSize: '14px',
                   color: colors.textSecondary,
                   fontStyle: section.description ? 'normal' : 'italic'
                 }}
@@ -1206,7 +1207,8 @@ const CourseEditor = ({
                                       maxLength={80}
                                       style={{ flex: 1 }}
                                       inputStyle={{
-                                        fontSize: '13.5px',
+                                        fontFamily: "'Fraunces', serif",
+                                        fontSize: '16px',
                                         fontWeight: '600',
                                         color: colors.textPrimary
                                       }}
@@ -1307,7 +1309,8 @@ const CourseEditor = ({
                                       maxLength={200}
                                       style={{ flex: 1 }}
                                       inputStyle={{
-                                        fontSize: '12px',
+                                        fontFamily: "'Fraunces', serif",
+                                        fontSize: '13.5px',
                                         color: colors.textSecondary,
                                         fontStyle: sub.description ? 'normal' : 'italic'
                                       }}

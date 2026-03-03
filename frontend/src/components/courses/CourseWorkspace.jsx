@@ -23,7 +23,8 @@ const CourseWorkspace = () => {
     isPublic: incomingIsPublic,
     readOnly: incomingReadOnly,
     ownerName: incomingOwnerName,
-    forkLineage: incomingForkLineage
+    forkLineage: incomingForkLineage,
+    isOwner: incomingIsOwner
   } = location.state || {};
 
   const [curriculumId, setCurriculumId] = useState(initialCurriculumId);
@@ -41,6 +42,7 @@ const CourseWorkspace = () => {
   const [organizationId, setOrganizationId] = useState(null);
   const [isPublic, setIsPublic] = useState(incomingIsPublic || false);
   const [readOnly] = useState(incomingReadOnly || false);
+  const [isOwner] = useState(incomingIsOwner || false);
   const [forkLineage] = useState(incomingForkLineage || []);
   const [isForkLoading, setIsForkLoading] = useState(false);
 
@@ -293,6 +295,22 @@ const CourseWorkspace = () => {
     }
   };
 
+  // ── Edit in Workspace (from view mode) ───────────────────────────────
+  const handleEditInWorkspace = () => {
+    navigate('/course-workspace', {
+      state: {
+        formData,
+        sections,
+        isEditing: true,
+        curriculumId,
+        isPublic,
+        forkLineage,
+        readOnly: false,
+        isOwner: false
+      }
+    });
+  };
+
   // ── Fork Course ───────────────────────────────────────────────────────
   const handleFork = async () => {
     if (!curriculumId || isForkLoading) return;
@@ -359,8 +377,10 @@ const CourseWorkspace = () => {
           handsOnResources={handsOnResources}
           ownerName={incomingOwnerName}
           forkLineage={forkLineage}
-          onFork={handleFork}
+          onFork={isOwner ? null : handleFork}
           isForkLoading={isForkLoading}
+          isOwner={isOwner}
+          onEditInWorkspace={isOwner ? handleEditInWorkspace : null}
           navigate={navigate}
         />
       ) : (

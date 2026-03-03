@@ -4,7 +4,6 @@ import { useAuth } from '../../contexts/AuthContext';
 import { getTeacherCurricula } from '../../firebase/dbService';
 import { logoutTeacher } from '../../firebase/authService';
 import CourseCard from './CourseCard';
-import CourseDetailsModal from '../modals/CourseDetailsModal';
 import DeleteConfirmModal from '../modals/DeleteConfirmModal';
 
 const MyCourses = () => {
@@ -12,7 +11,6 @@ const MyCourses = () => {
   const navigate = useNavigate();
   const [curricula, setCurricula] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedCurriculum, setSelectedCurriculum] = useState(null);
   const [deleteModalData, setDeleteModalData] = useState(null);
   const [visibilityModalData, setVisibilityModalData] = useState(null);
 
@@ -34,7 +32,48 @@ const MyCourses = () => {
   };
 
   const handleCardClick = (curriculum) => {
-    setSelectedCurriculum(curriculum);
+    const sections = (curriculum.outline?.sections || curriculum.sections || []).map(section => ({
+      id: section.id,
+      title: section.title,
+      description: section.description || '',
+      type: section.type,
+      duration: section.duration,
+      subsections: (section.subsections || []).map(sub => ({
+        id: sub.id,
+        title: sub.title,
+        description: sub.description || '',
+        topicBoxes: (sub.topicBoxes || []).map(topic => ({
+          id: topic.id,
+          title: topic.title,
+          description: topic.description || '',
+          duration_minutes: topic.duration_minutes || 20,
+          pla_pillars: topic.pla_pillars || [],
+          learning_objectives: topic.learning_objectives || [],
+          content_keywords: topic.content_keywords || [],
+          video_resources: topic.video_resources || [],
+          worksheets: topic.worksheets || [],
+          activities: topic.activities || []
+        }))
+      }))
+    }));
+
+    navigate('/course-view', {
+      state: {
+        formData: {
+          courseName: curriculum.courseName,
+          class: curriculum.class,
+          subject: curriculum.subject,
+          topic: curriculum.topic,
+          timeDuration: curriculum.timeDuration,
+          objectives: curriculum.objectives || ''
+        },
+        sections,
+        curriculumId: curriculum.courseId || curriculum.id,
+        isPublic: curriculum.isPublic || false,
+        forkLineage: curriculum.forkLineage || [],
+        isOwner: true
+      }
+    });
   };
 
   const handleDeleteClick = (curriculumId, courseName) => {
@@ -77,56 +116,6 @@ const MyCourses = () => {
     } finally {
       setVisibilityModalData(null);
     }
-  };
-
-  const handleEditCourse = (curriculum) => {
-    console.log('🔧 Editing course:', curriculum);
-
-    // New shape: sections come directly from outline, each has subsections
-    const sections = (curriculum.outline?.sections || curriculum.sections || []).map(section => ({
-      id: section.id,
-      title: section.title,
-      description: section.description || '',
-      type: section.type,
-      duration: section.duration,
-      subsections: (section.subsections || []).map(sub => ({
-        id: sub.id,
-        title: sub.title,
-        description: sub.description || '',
-        topicBoxes: (sub.topicBoxes || []).map(topic => ({
-          id: topic.id,
-          title: topic.title,
-          description: topic.description || '',
-          duration_minutes: topic.duration_minutes || 20,
-          pla_pillars: topic.pla_pillars || [],
-          learning_objectives: topic.learning_objectives || [],
-          content_keywords: topic.content_keywords || [],
-          video_resources: topic.video_resources || [],
-          worksheets: topic.worksheets || [],
-          activities: topic.activities || []
-        }))
-      }))
-    }));
-
-    console.log('🔧 Sections for workspace:', sections);
-
-    navigate('/course-workspace', {
-      state: {
-        formData: {
-          courseName: curriculum.courseName,
-          class: curriculum.class,
-          subject: curriculum.subject,
-          topic: curriculum.topic,
-          timeDuration: curriculum.timeDuration,
-          objectives: curriculum.objectives || ''
-        },
-        sections,
-        isEditing: true,
-        curriculumId: curriculum.courseId || curriculum.id,
-        isPublic: curriculum.isPublic || false,
-        forkLineage: curriculum.forkLineage || []
-      }
-    });
   };
 
   const handleLogout = async () => {
@@ -202,18 +191,6 @@ const MyCourses = () => {
             />
           ))}
         </div>
-      )}
-
-      {/* Course Details Modal */}
-      {selectedCurriculum && (
-        <CourseDetailsModal
-          curriculum={selectedCurriculum}
-          onClose={() => setSelectedCurriculum(null)}
-          onEdit={() => {
-            handleEditCourse(selectedCurriculum);
-            setSelectedCurriculum(null);
-          }}
-        />
       )}
 
       {/* Visibility Confirmation Modal */}

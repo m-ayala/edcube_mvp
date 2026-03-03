@@ -11,6 +11,7 @@ import CourseDesignerLanding from './components/pages/CourseDesignerLanding';
 import CourseDesigner from './components/courses/CourseDesigner';
 import CourseUpload from './components/pages/CourseUpload';
 import CourseWorkspace from './components/courses/CourseWorkspace';
+import CourseViewPage from './components/courses/CourseViewPage';
 import TeacherProfile from './components/teacherProfile/TeacherProfile';
 import Search from './components/search/Search';
 
@@ -41,6 +42,7 @@ function App() {
             <Route path="course-designer/create" element={<CourseDesigner />} />
             <Route path="course-designer/upload" element={<CourseUpload />} />
             <Route path="course-workspace" element={<CourseWorkspace />} />
+            <Route path="course-view" element={<CourseViewPage />} />
             
             {/* Teacher Profile Routes */}
             <Route path="profile" element={<TeacherProfile />} />
