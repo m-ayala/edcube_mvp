@@ -1,12 +1,14 @@
 // src/components/modals/AddResourceModal.jsx
 import { useState, useEffect } from 'react';
-import { X, Plus, Check } from 'lucide-react';
+import { X, Plus, Check, BookMarked } from 'lucide-react';
+import LibraryPickerModal from './LibraryPickerModal';
 
-const AddResourceModal = ({ isOpen, onClose, onAdd, resourceType = 'video', initialData = null, mode = 'add' }) => {
+const AddResourceModal = ({ isOpen, onClose, onAdd, resourceType = 'video', initialData = null, mode = 'add', currentUser = null }) => {
   const [title, setTitle] = useState('');
   const [url, setUrl] = useState('');
   const [description, setDescription] = useState('');
   const [errors, setErrors] = useState({});
+  const [showLibraryPicker, setShowLibraryPicker] = useState(false);
 
   // Pre-fill form when opening in edit mode, reset when opening in add mode
   useEffect(() => {
@@ -31,19 +33,19 @@ const AddResourceModal = ({ isOpen, onClose, onAdd, resourceType = 'video', init
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    
+
     const newErrors = {};
-    
+
     if (!title.trim()) {
       newErrors.title = 'Title is required';
     }
-    
+
     if (!url.trim()) {
       newErrors.url = 'URL is required';
     } else if (!validateUrl(url)) {
       newErrors.url = 'Please enter a valid URL (e.g., https://example.com)';
     }
-    
+
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
@@ -59,7 +61,7 @@ const AddResourceModal = ({ isOpen, onClose, onAdd, resourceType = 'video', init
     };
 
     onAdd(resourceData);
-    
+
     // Reset form
     setTitle('');
     setUrl('');
@@ -75,173 +77,124 @@ const AddResourceModal = ({ isOpen, onClose, onAdd, resourceType = 'video', init
     onClose();
   };
 
+  const handleLibrarySelect = (link) => {
+    setTitle(link.title || '');
+    setUrl(link.url || '');
+    setDescription(link.description || '');
+    setErrors({});
+    setShowLibraryPicker(false);
+  };
+
   const getResourceTypeLabel = () => {
     switch (resourceType) {
-      case 'video':
-        return 'Video';
-      case 'worksheet':
-        return 'Worksheet';
-      case 'activity':
-        return 'Activity';
-      default:
-        return 'Resource';
+      case 'video': return 'Video';
+      case 'worksheet': return 'Worksheet';
+      case 'activity': return 'Activity';
+      default: return 'Resource';
     }
   };
 
   const getPlaceholderUrl = () => {
     switch (resourceType) {
-      case 'video':
-        return 'https://www.youtube.com/watch?v=...';
-      case 'worksheet':
-        return 'https://example.com/worksheet.pdf';
-      case 'activity':
-        return 'https://example.com/activity-guide';
-      default:
-        return 'https://...';
+      case 'video': return 'https://www.youtube.com/watch?v=...';
+      case 'worksheet': return 'https://example.com/worksheet.pdf';
+      case 'activity': return 'https://example.com/activity-guide';
+      default: return 'https://...';
     }
   };
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 2000,
-        padding: '20px'
-      }}
-      onClick={handleClose}
-    >
+    <>
       <div
         style={{
-          backgroundColor: 'white',
-          borderRadius: '12px',
-          padding: '28px',
-          width: '100%',
-          maxWidth: '520px',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
-          maxHeight: '90vh',
-          overflowY: 'auto'
+          position: 'fixed',
+          inset: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 2000,
+          padding: '20px'
         }}
-        onClick={(e) => e.stopPropagation()}
+        onClick={handleClose}
       >
-        {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-          <h3 style={{ margin: 0, fontSize: '20px', color: '#2C2A26', fontWeight: '700' }}>
-            {mode === 'edit' ? 'Edit' : 'Add'} {getResourceTypeLabel()} Link
-          </h3>
-          <button
-            onClick={handleClose}
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              padding: '4px',
-              display: 'flex',
-              alignItems: 'center',
-              color: '#6B6760'
-            }}
-          >
-            <X size={24} />
-          </button>
-        </div>
-
-        {/* Form */}
-        <form onSubmit={handleSubmit}>
-          {/* Title Field */}
-          <div style={{ marginBottom: '20px' }}>
-            <label
+        <div
+          style={{
+            backgroundColor: 'white',
+            borderRadius: '12px',
+            padding: '28px',
+            width: '100%',
+            maxWidth: '520px',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
+            maxHeight: '90vh',
+            overflowY: 'auto'
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+            <h3 style={{ margin: 0, fontSize: '20px', color: '#2C2A26', fontWeight: '700' }}>
+              {mode === 'edit' ? 'Edit' : 'Add'} {getResourceTypeLabel()} Link
+            </h3>
+            <button
+              onClick={handleClose}
               style={{
-                display: 'block',
-                fontSize: '13px',
-                color: '#6B6760',
-                marginBottom: '8px',
-                fontWeight: '600'
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '4px',
+                display: 'flex',
+                alignItems: 'center',
+                color: '#6B6760'
               }}
             >
-              Title *
-            </label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => {
-                setTitle(e.target.value);
-                if (errors.title) setErrors({ ...errors, title: null });
-              }}
-              placeholder={`e.g., Introduction to ${getResourceTypeLabel()}`}
-              style={{
-                width: '100%',
-                padding: '10px 14px',
-                border: errors.title ? '2px solid #E57373' : '1px solid #E8E6E1',
-                borderRadius: '8px',
-                fontSize: '14px',
-                outline: 'none',
-                transition: 'border 0.2s'
-              }}
-              onFocus={(e) => {
-                if (!errors.title) e.target.style.borderColor = '#D4C4A8';
-              }}
-              onBlur={(e) => {
-                if (!errors.title) e.target.style.borderColor = '#E8E6E1';
-              }}
-            />
-            {errors.title && (
-              <p style={{ margin: '6px 0 0', fontSize: '12px', color: '#E57373' }}>
-                {errors.title}
-              </p>
-            )}
+              <X size={24} />
+            </button>
           </div>
 
-          {/* URL Field */}
-          <div style={{ marginBottom: '20px' }}>
-            <label
+          {/* Pick from Library button — only in add mode and when user is available */}
+          {mode === 'add' && currentUser && (
+            <button
+              type="button"
+              onClick={() => setShowLibraryPicker(true)}
               style={{
-                display: 'block',
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                padding: '10px 16px',
+                marginBottom: '20px',
+                backgroundColor: '#F5F3EE',
+                color: '#8b7355',
+                border: '1px solid #E8E6E1',
+                borderRadius: '8px',
+                cursor: 'pointer',
                 fontSize: '13px',
-                color: '#6B6760',
-                marginBottom: '8px',
-                fontWeight: '600'
+                fontWeight: '600',
+                transition: 'background-color 0.2s'
               }}
+              onMouseEnter={e => e.currentTarget.style.backgroundColor = '#EDE8DF'}
+              onMouseLeave={e => e.currentTarget.style.backgroundColor = '#F5F3EE'}
             >
-              URL *
-            </label>
-            <input
-              type="url"
-              value={url}
-              onChange={(e) => {
-                setUrl(e.target.value);
-                if (errors.url) setErrors({ ...errors, url: null });
-              }}
-              placeholder={getPlaceholderUrl()}
-              style={{
-                width: '100%',
-                padding: '10px 14px',
-                border: errors.url ? '2px solid #E57373' : '1px solid #E8E6E1',
-                borderRadius: '8px',
-                fontSize: '14px',
-                outline: 'none',
-                transition: 'border 0.2s'
-              }}
-              onFocus={(e) => {
-                if (!errors.url) e.target.style.borderColor = '#D4C4A8';
-              }}
-              onBlur={(e) => {
-                if (!errors.url) e.target.style.borderColor = '#E8E6E1';
-              }}
-            />
-            {errors.url && (
-              <p style={{ margin: '6px 0 0', fontSize: '12px', color: '#E57373' }}>
-                {errors.url}
-              </p>
-            )}
-          </div>
+              <BookMarked size={15} />
+              Pick from Resource Library
+            </button>
+          )}
 
-          {/* Description Field (optional) */}
-          {resourceType !== 'video' && (
-            <div style={{ marginBottom: '24px' }}>
+          {/* Divider when library button is shown */}
+          {mode === 'add' && currentUser && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+              <div style={{ flex: 1, height: '1px', backgroundColor: '#E8E6E1' }} />
+              <span style={{ fontSize: '12px', color: '#9ca3af', flexShrink: 0 }}>or enter manually</span>
+              <div style={{ flex: 1, height: '1px', backgroundColor: '#E8E6E1' }} />
+            </div>
+          )}
+
+          {/* Form */}
+          <form onSubmit={handleSubmit}>
+            {/* Title Field */}
+            <div style={{ marginBottom: '20px' }}>
               <label
                 style={{
                   display: 'block',
@@ -251,106 +204,204 @@ const AddResourceModal = ({ isOpen, onClose, onAdd, resourceType = 'video', init
                   fontWeight: '600'
                 }}
               >
-                Description (optional)
+                Title *
               </label>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Add a brief description..."
-                rows={3}
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => {
+                  setTitle(e.target.value);
+                  if (errors.title) setErrors({ ...errors, title: null });
+                }}
+                placeholder={`e.g., Introduction to ${getResourceTypeLabel()}`}
                 style={{
                   width: '100%',
                   padding: '10px 14px',
-                  border: '1px solid #E8E6E1',
+                  border: errors.title ? '2px solid #E57373' : '1px solid #E8E6E1',
                   borderRadius: '8px',
                   fontSize: '14px',
                   outline: 'none',
-                  resize: 'vertical',
-                  fontFamily: 'inherit',
                   transition: 'border 0.2s'
                 }}
                 onFocus={(e) => {
-                  e.target.style.borderColor = '#D4C4A8';
+                  if (!errors.title) e.target.style.borderColor = '#D4C4A8';
                 }}
                 onBlur={(e) => {
-                  e.target.style.borderColor = '#E8E6E1';
+                  if (!errors.title) e.target.style.borderColor = '#E8E6E1';
                 }}
               />
+              {errors.title && (
+                <p style={{ margin: '6px 0 0', fontSize: '12px', color: '#E57373' }}>
+                  {errors.title}
+                </p>
+              )}
             </div>
-          )}
 
-          {/* Helper Text */}
-          <div
-            style={{
-              padding: '12px 16px',
-              backgroundColor: '#F5F3EE',
-              borderRadius: '8px',
-              marginBottom: '24px'
-            }}
-          >
-            <p style={{ margin: 0, fontSize: '12px', color: '#6B6760', lineHeight: '1.5' }}>
-              <strong>Tip:</strong> You can add links to YouTube videos, Google Docs, PDFs, websites, or any other online resource that supports your lesson.
-            </p>
-          </div>
+            {/* URL Field */}
+            <div style={{ marginBottom: '20px' }}>
+              <label
+                style={{
+                  display: 'block',
+                  fontSize: '13px',
+                  color: '#6B6760',
+                  marginBottom: '8px',
+                  fontWeight: '600'
+                }}
+              >
+                URL *
+              </label>
+              <input
+                type="url"
+                value={url}
+                onChange={(e) => {
+                  setUrl(e.target.value);
+                  if (errors.url) setErrors({ ...errors, url: null });
+                }}
+                placeholder={getPlaceholderUrl()}
+                style={{
+                  width: '100%',
+                  padding: '10px 14px',
+                  border: errors.url ? '2px solid #E57373' : '1px solid #E8E6E1',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  outline: 'none',
+                  transition: 'border 0.2s'
+                }}
+                onFocus={(e) => {
+                  if (!errors.url) e.target.style.borderColor = '#D4C4A8';
+                }}
+                onBlur={(e) => {
+                  if (!errors.url) e.target.style.borderColor = '#E8E6E1';
+                }}
+              />
+              {errors.url && (
+                <p style={{ margin: '6px 0 0', fontSize: '12px', color: '#E57373' }}>
+                  {errors.url}
+                </p>
+              )}
+            </div>
 
-          {/* Action Buttons */}
-          <div style={{ display: 'flex', gap: '12px' }}>
-            <button
-              type="button"
-              onClick={handleClose}
+            {/* Description Field (optional) */}
+            {resourceType !== 'video' && (
+              <div style={{ marginBottom: '24px' }}>
+                <label
+                  style={{
+                    display: 'block',
+                    fontSize: '13px',
+                    color: '#6B6760',
+                    marginBottom: '8px',
+                    fontWeight: '600'
+                  }}
+                >
+                  Description (optional)
+                </label>
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Add a brief description..."
+                  rows={3}
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    border: '1px solid #E8E6E1',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    outline: 'none',
+                    resize: 'vertical',
+                    fontFamily: 'inherit',
+                    transition: 'border 0.2s'
+                  }}
+                  onFocus={(e) => {
+                    e.target.style.borderColor = '#D4C4A8';
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = '#E8E6E1';
+                  }}
+                />
+              </div>
+            )}
+
+            {/* Helper Text */}
+            <div
               style={{
-                flex: 1,
-                padding: '10px 16px',
-                backgroundColor: '#f3f4f6',
-                color: '#2C2A26',
-                border: 'none',
+                padding: '12px 16px',
+                backgroundColor: '#F5F3EE',
                 borderRadius: '8px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: '600',
-                transition: 'background-color 0.2s'
-              }}
-              onMouseEnter={(e) => {
-                e.target.style.backgroundColor = '#e5e7eb';
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.backgroundColor = '#f3f4f6';
+                marginBottom: '24px'
               }}
             >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              style={{
-                flex: 1,
-                padding: '10px 16px',
-                backgroundColor: '#D4C4A8',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: '600',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '6px',
-                transition: 'background-color 0.2s'
-              }}
-              onMouseEnter={(e) => {
-                e.target.style.backgroundColor = '#B8A888';
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.backgroundColor = '#D4C4A8';
-              }}
-            >
-              {mode === 'edit' ? <Check size={16} /> : <Plus size={16} />}
-              {mode === 'edit' ? 'Save Changes' : `Add ${getResourceTypeLabel()}`}
-            </button>
-          </div>
-        </form>
+              <p style={{ margin: 0, fontSize: '12px', color: '#6B6760', lineHeight: '1.5' }}>
+                <strong>Tip:</strong> You can add links to YouTube videos, Google Docs, PDFs, websites, or any other online resource that supports your lesson.
+              </p>
+            </div>
+
+            {/* Action Buttons */}
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                type="button"
+                onClick={handleClose}
+                style={{
+                  flex: 1,
+                  padding: '10px 16px',
+                  backgroundColor: '#f3f4f6',
+                  color: '#2C2A26',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.backgroundColor = '#e5e7eb';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.backgroundColor = '#f3f4f6';
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                style={{
+                  flex: 1,
+                  padding: '10px 16px',
+                  backgroundColor: '#D4C4A8',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.backgroundColor = '#B8A888';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.backgroundColor = '#D4C4A8';
+                }}
+              >
+                {mode === 'edit' ? <Check size={16} /> : <Plus size={16} />}
+                {mode === 'edit' ? 'Save Changes' : `Add ${getResourceTypeLabel()}`}
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
-    </div>
+
+      {/* Library Picker — renders above this modal */}
+      <LibraryPickerModal
+        isOpen={showLibraryPicker}
+        onClose={() => setShowLibraryPicker(false)}
+        onSelect={handleLibrarySelect}
+        currentUser={currentUser}
+      />
+    </>
   );
 };
 

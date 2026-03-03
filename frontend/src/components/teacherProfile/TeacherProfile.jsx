@@ -6,6 +6,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { getOwnProfile, getTeacherProfile, getTeacherCourses } from '../../utils/teacherService';
 import ProfileHeader from './ProfileHeader';
 import ProfileCourseGrid from './ProfileCourseGrid';
+import ResourceLibrary from './ResourceLibrary';
 import EditProfileModal from '../modals/EditProfileModal';
 import './TeacherProfile.css';
 
@@ -168,6 +169,13 @@ const TeacherProfile = () => {
           <ProfileCourseGrid courses={courses} onCourseClick={handleCourseClick} />
         )}
       </div>
+
+      {/* Resource Library — private, only visible to the owner */}
+      {isOwnProfile && (
+        <div className="profile-courses-section">
+          <ResourceLibrary currentUser={currentUser} />
+        </div>
+      )}
 
       {/* Edit Profile Modal */}
       <EditProfileModal

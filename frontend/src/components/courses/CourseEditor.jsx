@@ -1802,6 +1802,7 @@ const CourseEditor = ({
           actions={actions}
           videosByTopic={videosByTopic}
           handsOnResources={handsOnResources}
+          currentUser={currentUser}
         />
       )}
 

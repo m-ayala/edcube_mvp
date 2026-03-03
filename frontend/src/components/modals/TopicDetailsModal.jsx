@@ -12,7 +12,8 @@ const TopicDetailsModal = ({
   actions,
   videosByTopic,
   handsOnResources,
-  readOnly
+  readOnly,
+  currentUser
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedTopic, setEditedTopic] = useState({
@@ -858,6 +859,7 @@ const TopicDetailsModal = ({
         resourceType={resourceModal?.type || 'video'}
         mode={resourceModal?.mode || 'add'}
         initialData={resourceModal?.initialData || null}
+        currentUser={currentUser}
       />
     </>
   );

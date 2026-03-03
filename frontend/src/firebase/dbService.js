@@ -1,4 +1,4 @@
-import { 
+import {
   collection,
   doc,
   setDoc,
@@ -8,7 +8,10 @@ import {
   query,
   where,
   orderBy,
-  serverTimestamp
+  serverTimestamp,
+  arrayUnion,
+  arrayRemove,
+  updateDoc
 } from 'firebase/firestore';
 import { db } from './config';
 
@@ -121,6 +124,77 @@ export const deleteCurriculum = async (curriculumId) => {
     throw error;
   }
 };
+
+// ─── Resource Library ─────────────────────────────────────────────────────────
+
+/**
+ * Get all library folders for a teacher
+ */
+export const getLibraryFolders = async (teacherUid) => {
+  const q = query(
+    collection(db, 'teachers', teacherUid, 'libraryFolders'),
+    orderBy('createdAt', 'asc')
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+};
+
+/**
+ * Create a new library folder
+ */
+export const createLibraryFolder = async (teacherUid, name) => {
+  const ref = doc(collection(db, 'teachers', teacherUid, 'libraryFolders'));
+  await setDoc(ref, {
+    name,
+    links: [],
+    createdAt: serverTimestamp()
+  });
+  return ref.id;
+};
+
+/**
+ * Delete a library folder and all its links
+ */
+export const deleteLibraryFolder = async (teacherUid, folderId) => {
+  await deleteDoc(doc(db, 'teachers', teacherUid, 'libraryFolders', folderId));
+};
+
+/**
+ * Add a link to a folder
+ */
+export const addLinkToFolder = async (teacherUid, folderId, linkData) => {
+  const link = {
+    id: `link-${Date.now()}`,
+    title: linkData.title,
+    url: linkData.url,
+    description: linkData.description || '',
+    addedAt: new Date().toISOString()
+  };
+  await updateDoc(doc(db, 'teachers', teacherUid, 'libraryFolders', folderId), {
+    links: arrayUnion(link)
+  });
+  return link;
+};
+
+/**
+ * Delete a link from a folder
+ */
+export const deleteLinkFromFolder = async (teacherUid, folderId, link) => {
+  await updateDoc(doc(db, 'teachers', teacherUid, 'libraryFolders', folderId), {
+    links: arrayRemove(link)
+  });
+};
+
+/**
+ * Rename a library folder
+ */
+export const renameLibraryFolder = async (teacherUid, folderId, newName) => {
+  await updateDoc(doc(db, 'teachers', teacherUid, 'libraryFolders', folderId), {
+    name: newName
+  });
+};
+
+// ─── Teacher Profile ───────────────────────────────────────────────────────────
 
 /**
  * Get teacher profile

@@ -1,0 +1,31 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Curricula ────────────────────────────────────────────────────────
+    match /curricula/{curriculumId} {
+      // Anyone authenticated can read (for public course browsing)
+      allow read: if request.auth != null;
+      // Only the owning teacher can write
+      allow create: if request.auth != null
+                    && request.resource.data.teacherUid == request.auth.uid;
+      allow update, delete: if request.auth != null
+                    && resource.data.teacherUid == request.auth.uid;
+    }
+
+    // ── Teachers ─────────────────────────────────────────────────────────
+    match /teachers/{teacherUid} {
+      // Any authenticated user can read a teacher profile (for profile pages)
+      allow read: if request.auth != null;
+      // Only the teacher themselves can write their profile
+      allow write: if request.auth != null && request.auth.uid == teacherUid;
+
+      // ── Resource Library (private — owner only) ───────────────────────
+      match /libraryFolders/{folderId} {
+        allow read, write: if request.auth != null
+                           && request.auth.uid == teacherUid;
+      }
+    }
+
+  }
+}
