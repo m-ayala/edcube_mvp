@@ -7,8 +7,8 @@ const ProtectedRoute = ({ children }) => {
   const { currentUser } = useAuth();
 
   if (!currentUser) {
-    // User not logged in, redirect to login
-    return <Navigate to="/login" replace />;
+    // User not logged in, redirect to landing page
+    return <Navigate to="/" replace />;
   }
 
   // REMOVED email verification check since VerifyEmail component doesn't exist

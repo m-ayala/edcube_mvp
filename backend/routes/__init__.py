@@ -1,4 +1,4 @@
 """Routes package"""
-from . import curriculum, resources, topics
+from . import curriculum, resources, topics, teachers, contact
 
-__all__ = ['curriculum', 'resources', 'topics', 'teachers']
+__all__ = ['curriculum', 'resources', 'topics', 'teachers', 'contact']

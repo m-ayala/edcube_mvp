@@ -13,7 +13,7 @@ const Sidebar = () => {
   const handleLogout = async () => {
     try {
       await logoutTeacher();
-      navigate('/login');
+      navigate('/');
     } catch (error) {
       console.error('Logout error:', error);
     }

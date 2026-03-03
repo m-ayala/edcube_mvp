@@ -8,7 +8,7 @@ load_dotenv()
 import uvicorn
 from routes.file_upload import router as file_upload_router
 import os
-from routes import curriculum, resources, topics, teachers
+from routes import curriculum, resources, topics, teachers, contact
 
 app = FastAPI(title="EdCube API")
 
@@ -33,6 +33,7 @@ app.include_router(resources.router, prefix="/api", tags=["resources"])
 app.include_router(topics.router, prefix="/api", tags=["topics"])
 app.include_router(file_upload_router, prefix="/api", tags=["file_upload"])
 app.include_router(teachers.router, tags=["teachers"])
+app.include_router(contact.router, prefix="/api", tags=["contact"])
 
 @app.get("/")
 async def root():

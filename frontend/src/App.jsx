@@ -5,6 +5,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import Login from './components/auth/Login';
 import Signup from './components/auth/Signup';
+import LandingPage from './components/pages/LandingPage';
 import Layout from './components/layout/Layout';
 import MyCourses from './components/courses/MyCourses';
 import CourseDesignerLanding from './components/pages/CourseDesignerLanding';
@@ -21,39 +22,31 @@ function App() {
       <Router>
         <Routes>
           {/* Public Routes */}
+          <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
 
-          {/* Protected Routes */}
+          {/* Protected Routes — pathless layout wrapper */}
           <Route
-            path="/"
             element={
               <ProtectedRoute>
                 <Layout />
               </ProtectedRoute>
             }
           >
-            {/* Default redirect to My Courses */}
-            <Route index element={<Navigate to="/my-courses" replace />} />
-            
-            {/* Existing Routes */}
-            <Route path="my-courses" element={<MyCourses />} />
-            <Route path="course-designer" element={<CourseDesignerLanding />} />
-            <Route path="course-designer/create" element={<CourseDesigner />} />
-            <Route path="course-designer/upload" element={<CourseUpload />} />
-            <Route path="course-workspace" element={<CourseWorkspace />} />
-            <Route path="course-view" element={<CourseViewPage />} />
-            
-            {/* Teacher Profile Routes */}
-            <Route path="profile" element={<TeacherProfile />} />
-            <Route path="profile/:teacherUid" element={<TeacherProfile />} />
-
-            {/* Search */}
-            <Route path="search" element={<Search />} />
+            <Route path="/my-courses" element={<MyCourses />} />
+            <Route path="/course-designer" element={<CourseDesignerLanding />} />
+            <Route path="/course-designer/create" element={<CourseDesigner />} />
+            <Route path="/course-designer/upload" element={<CourseUpload />} />
+            <Route path="/course-workspace" element={<CourseWorkspace />} />
+            <Route path="/course-view" element={<CourseViewPage />} />
+            <Route path="/profile" element={<TeacherProfile />} />
+            <Route path="/profile/:teacherUid" element={<TeacherProfile />} />
+            <Route path="/search" element={<Search />} />
           </Route>
 
-          {/* Catch all - redirect to login */}
-          <Route path="*" element={<Navigate to="/login" replace />} />
+          {/* Catch all - redirect to landing */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Router>
     </AuthProvider>
