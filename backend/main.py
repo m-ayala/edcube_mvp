@@ -8,7 +8,7 @@ load_dotenv()
 import uvicorn
 from routes.file_upload import router as file_upload_router
 import os
-from routes import curriculum, resources, topics, teachers, contact
+from routes import curriculum, resources, topics, teachers, contact, notifications
 
 app = FastAPI(title="EdCube API")
 
@@ -17,6 +17,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
     "http://localhost:5173",
+    "http://localhost:5174",
+    "http://localhost:5175",
     "https://edcube-8fe7d.web.app",
     "https://edcube-8fe7d.firebaseapp.com",
     "https://edcubeai.web.app",
@@ -34,6 +36,7 @@ app.include_router(topics.router, prefix="/api", tags=["topics"])
 app.include_router(file_upload_router, prefix="/api", tags=["file_upload"])
 app.include_router(teachers.router, tags=["teachers"])
 app.include_router(contact.router, prefix="/api", tags=["contact"])
+app.include_router(notifications.router, tags=["notifications"])
 
 @app.get("/")
 async def root():

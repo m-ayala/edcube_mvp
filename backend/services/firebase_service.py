@@ -459,7 +459,72 @@ class FirebaseService:
 
         self.curricula_collection.document(new_id).set(new_doc)
         print(f"✅ Forked course {source_id} → {new_id} for {forker_uid}")
-        return new_id, new_doc
+        original_owner_uid = source.get(F.TEACHER_UID, '')
+        return new_id, new_doc, original_owner_uid
+
+    # ── Notifications ─────────────────────────────────────────────────────────
+
+    async def create_notification(
+        self,
+        to_uid: str,
+        from_uid: str,
+        from_name: str,
+        notif_type: str,
+        course_id: str,
+        course_name: str,
+    ) -> str:
+        """Create a notification document in Firestore."""
+        notif_id = str(uuid.uuid4())
+        now = datetime.utcnow().isoformat()
+        doc = {
+            'id': notif_id,
+            'toUid': to_uid,
+            'fromUid': from_uid,
+            'fromName': from_name,
+            'type': notif_type,
+            'courseId': course_id,
+            'courseName': course_name,
+            'status': 'unread',
+            'createdAt': now,
+        }
+        self.db.collection('notifications').document(notif_id).set(doc)
+        print(f"✅ Notification created: {notif_id}")
+        return notif_id
+
+    async def get_notifications(self, uid: str) -> List[Dict]:
+        """Get all notifications for a user, newest first."""
+        docs = self.db.collection('notifications').where('toUid', '==', uid).stream()
+        notifs = []
+        for doc in docs:
+            data = doc.to_dict()
+            data['id'] = doc.id
+            notifs.append(data)
+        notifs.sort(key=lambda n: n.get('createdAt', ''), reverse=True)
+        return notifs
+
+    async def mark_notification_read(self, notif_id: str, uid: str) -> bool:
+        """Mark a notification as read. Verifies ownership."""
+        ref = self.db.collection('notifications').document(notif_id)
+        doc = ref.get()
+        if not doc.exists:
+            return False
+        if doc.to_dict().get('toUid') != uid:
+            return False
+        ref.update({'status': 'read'})
+        return True
+
+    async def delete_notification(self, notif_id: str, uid: str) -> bool:
+        """Delete a notification. Verifies ownership."""
+        ref = self.db.collection('notifications').document(notif_id)
+        doc = ref.get()
+        if not doc.exists:
+            return False
+        if doc.to_dict().get('toUid') != uid:
+            return False
+        ref.delete()
+        return True
+
+    # ── Public Courses ────────────────────────────────────────────────────────
 
     async def get_public_courses(self, organizationId: str, limit: int = 20) -> List[Dict]:
         """Get public courses for an organization"""

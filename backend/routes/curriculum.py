@@ -436,12 +436,26 @@ async def fork_course(course_id: str, teacherUid: str, displayName: str, organiz
         if not teacherUid or not displayName or not organizationId:
             raise HTTPException(status_code=400, detail="teacherUid, displayName, and organizationId are required")
 
-        new_course_id, new_doc = await firebase.fork_curriculum(
+        new_course_id, new_doc, original_owner_uid = await firebase.fork_curriculum(
             source_id=course_id,
             forker_uid=teacherUid,
             forker_display_name=displayName,
             org_id=organizationId,
         )
+
+        # Notify the original course owner (skip if forking own course)
+        if original_owner_uid and original_owner_uid != teacherUid:
+            try:
+                await firebase.create_notification(
+                    to_uid=original_owner_uid,
+                    from_uid=teacherUid,
+                    from_name=displayName,
+                    notif_type='fork',
+                    course_id=course_id,
+                    course_name=new_doc.get('courseName', ''),
+                )
+            except Exception as notif_err:
+                logger.warning(f"Fork notification failed (non-fatal): {notif_err}")
 
         return {
             "success": True,

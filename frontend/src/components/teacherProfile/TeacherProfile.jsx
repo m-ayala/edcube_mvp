@@ -8,6 +8,7 @@ import ProfileHeader from './ProfileHeader';
 import ProfileCourseGrid from './ProfileCourseGrid';
 import ResourceLibrary from './ResourceLibrary';
 import EditProfileModal from '../modals/EditProfileModal';
+import NotificationBell from '../notifications/NotificationBell';
 import './TeacherProfile.css';
 
 const TeacherProfile = () => {
@@ -146,7 +147,18 @@ const TeacherProfile = () => {
   // Success State
   return (
     <div className="teacher-profile-container">
-      <ProfileHeader 
+      {isOwnProfile && (
+        <div style={{
+          display: 'flex',
+          justifyContent: 'flex-end',
+          alignItems: 'center',
+          width: '100%',
+          paddingBottom: '12px',
+        }}>
+          <NotificationBell />
+        </div>
+      )}
+      <ProfileHeader
         profile={profile}
         isOwnProfile={isOwnProfile}
         onEditClick={handleEditClick}

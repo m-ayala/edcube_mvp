@@ -4,11 +4,13 @@ import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { logoutTeacher } from '../../firebase/authService';
+import { useNotifications } from '../../contexts/NotificationContext';
 
 const Sidebar = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
   const [hoveredItem, setHoveredItem] = useState(null);
+  const { unreadCount } = useNotifications();
 
   const handleLogout = async () => {
     try {
@@ -78,11 +80,33 @@ const Sidebar = () => {
               backgroundColor: isActive ? '#292524' : hoveredItem === to ? '#292524' : 'transparent',
               fontWeight: isActive ? '500' : '400',
               fontSize: '13.5px',
-              transition: 'all 0.15s ease'
+              transition: 'all 0.15s ease',
+              position: 'relative',
             })}
           >
             <Icon />
             {label}
+            {to === '/profile' && unreadCount > 0 && (
+              <span style={{
+                position: 'absolute',
+                top: '5px',
+                right: '8px',
+                minWidth: '16px',
+                height: '16px',
+                borderRadius: '8px',
+                backgroundColor: '#EF4444',
+                color: '#FFFFFF',
+                fontSize: '9px',
+                fontWeight: '700',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '0 3px',
+                lineHeight: 1,
+              }}>
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
+            )}
           </NavLink>
         ))}
       </nav>
