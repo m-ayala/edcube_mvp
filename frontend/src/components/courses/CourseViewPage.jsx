@@ -3,8 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { ArrowLeft, PencilLine, GitFork, Edit2, PlayCircle, FileText, Zap, Download } from 'lucide-react';
-import { getOwnProfile } from '../../services/teacherService';
+import { ArrowLeft, PencilLine, Edit2, PlayCircle, FileText, Zap, Download } from 'lucide-react';
 import TopicDetailsModal from '../modals/TopicDetailsModal';
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
@@ -202,21 +201,16 @@ const CourseViewPage = () => {
     sections: incomingSections = [],
     curriculumId,
     isPublic,
-    forkLineage: incomingForkLineage = [],
     isOwner   = false,
     ownerName = ''
   } = location.state || {};
 
   const [sections]             = useState(incomingSections);
-  const [forkLineage]          = useState(incomingForkLineage);
   const [videosByTopic,    setVideosByTopic]    = useState({});
   const [handsOnResources, setHandsOnResources] = useState({});
-  const [isForkLoading,    setIsForkLoading]    = useState(false);
   const [selectedTopic,    setSelectedTopic]    = useState(null);
   const [collapsedSections,    setCollapsedSections]    = useState({});
   const [collapsedSubsections, setCollapsedSubsections] = useState({});
-  const [organizationId,   setOrganizationId]   = useState(null);
-
   const courseName = formData?.courseName || '';
 
   // Hydrate resource caches
@@ -235,12 +229,6 @@ const CourseViewPage = () => {
     setVideosByTopic(vids);
     setHandsOnResources(ho);
   }, []);
-
-  // Fetch org ID for fork
-  useEffect(() => {
-    if (!currentUser) return;
-    getOwnProfile(currentUser).then(p => setOrganizationId(p.org_id)).catch(() => {});
-  }, [currentUser]);
 
   const toggleSection    = id => setCollapsedSections(prev    => ({ ...prev, [id]: !prev[id] }));
   const toggleSubsection = id => setCollapsedSubsections(prev => ({ ...prev, [id]: !prev[id] }));
@@ -315,42 +303,8 @@ const CourseViewPage = () => {
 
   const handleEditInWorkspace = () => {
     navigate('/course-workspace', {
-      state: { formData, sections, isEditing: true, curriculumId, isPublic, forkLineage, readOnly: false }
+      state: { formData, sections, isEditing: true, curriculumId, isPublic, readOnly: false }
     });
-  };
-
-  const handleFork = async () => {
-    if (!curriculumId || isForkLoading) return;
-    setIsForkLoading(true);
-    try {
-      const idToken     = await currentUser.getIdToken();
-      const displayName = currentUser.displayName || currentUser.email?.split('@')[0] || 'Teacher';
-      const orgId       = organizationId || 'icc';
-      const res         = await fetch(
-        `https://edcube-backend-890930502654.us-west1.run.app/api/curricula/${curriculumId}/fork?teacherUid=${currentUser.uid}&displayName=${encodeURIComponent(displayName)}&organizationId=${orgId}`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` } }
-      );
-      const result = await res.json();
-      if (!result.success) throw new Error(result.detail || 'Fork failed');
-
-      const course = result.course;
-      navigate('/course-workspace', {
-        state: {
-          formData: {
-            courseName: course.courseName, class: course.class, subject: course.subject,
-            topic: course.topic, timeDuration: course.timeDuration, objectives: course.objectives || ''
-          },
-          sections: course.outline?.sections || course.sections || [],
-          isEditing: true, curriculumId: result.courseId, isPublic: false,
-          forkLineage: course.forkLineage || []
-        }
-      });
-    } catch (err) {
-      console.error('Fork error:', err);
-      alert('Failed to fork course. Please try again.');
-    } finally {
-      setIsForkLoading(false);
-    }
   };
 
   // Stats
@@ -420,7 +374,7 @@ const CourseViewPage = () => {
               <Download size={14} /> Download
             </button>
           )}
-          {isOwner ? (
+          {isOwner && (
             <button
               onClick={handleEditInWorkspace}
               style={{
@@ -433,23 +387,6 @@ const CourseViewPage = () => {
               onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#1d4ed8'; }}
             >
               <PencilLine size={14} /> Edit in Course Workspace
-            </button>
-          ) : (
-            <button
-              onClick={handleFork}
-              disabled={isForkLoading}
-              style={{
-                display: 'flex', alignItems: 'center', gap: '7px',
-                padding: '8px 18px',
-                backgroundColor: isForkLoading ? '#d4c4a8' : '#8b7355',
-                color: 'white', border: 'none', borderRadius: '6px',
-                cursor: isForkLoading ? 'not-allowed' : 'pointer',
-                fontSize: '14px', fontWeight: '500', fontFamily: SERIF
-              }}
-              onMouseEnter={e => { if (!isForkLoading) e.currentTarget.style.backgroundColor = '#7a6348'; }}
-              onMouseLeave={e => { if (!isForkLoading) e.currentTarget.style.backgroundColor = '#8b7355'; }}
-            >
-              <GitFork size={14} /> {isForkLoading ? 'Forking…' : 'Fork this course'}
             </button>
           )}
         </div>

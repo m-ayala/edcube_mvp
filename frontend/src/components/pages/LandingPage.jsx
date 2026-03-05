@@ -127,8 +127,8 @@ export default function LandingPage() {
     {
       emoji: '🤝',
       color: 'teal',
-      title: 'Fork and collaborate.',
-      body: 'See a course another teacher built? Fork it, make it yours, and build on it. Good curriculum compounds when teachers work together.',
+      title: 'Collaborate.',
+      body: 'See a course another teacher built? Invite them to collaborate or ask to join their course. Good curriculum compounds when teachers work together.',
     },
     {
       emoji: '🔖',

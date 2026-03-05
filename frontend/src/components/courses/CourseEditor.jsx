@@ -152,32 +152,6 @@ const EditableField = ({
   );
 };
 
-// Attribution chain display for forked courses
-const LineageAttribution = ({ lineage }) => {
-  if (!lineage || lineage.length === 0) return null;
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
-      {lineage.map((entry, i) => (
-        <span key={i} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <span style={{
-            fontSize: '11px',
-            color: entry.action === 'created' ? '#8b7355' : '#6b7280',
-            backgroundColor: entry.action === 'created' ? '#f5f0e8' : '#f3f4f6',
-            padding: '2px 8px',
-            borderRadius: '10px',
-            fontWeight: entry.action === 'created' ? '600' : '400',
-          }}>
-            {entry.display_name}
-          </span>
-          {i < lineage.length - 1 && (
-            <span style={{ fontSize: '10px', color: '#9ca3af' }}>→</span>
-          )}
-        </span>
-      ))}
-    </div>
-  );
-};
-
 const CourseEditor = ({
   courseName,
   setCourseName,
@@ -195,7 +169,6 @@ const CourseEditor = ({
   navigate,
   isPublic,
   onToggleVisibility,
-  forkLineage
 }) => {
   const [selectedTopicForDetail, setSelectedTopicForDetail] = useState(null);
   const [hoveredTopic, setHoveredTopic] = useState(null);
@@ -1527,7 +1500,6 @@ const CourseEditor = ({
               letterSpacing: '-0.3px'
             }}
           />
-          <LineageAttribution lineage={forkLineage} />
           {formData?.class && (
             <span style={{
               fontSize: '11.5px',

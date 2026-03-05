@@ -189,9 +189,12 @@ const NotificationBell = () => {
                       >
                         {notif.fromName}
                       </button>
-                      {' forked your '}
-                      <strong style={{ color: '#1C1917' }}>{notif.courseName}</strong>
-                      {' course'}
+                      {notif.type === 'collaboration_invite'
+                        ? <>{' invited you to collaborate on '}<strong style={{ color: '#1C1917' }}>{notif.courseName}</strong></>
+                        : notif.type === 'collaboration_request'
+                        ? <>{' requested to collaborate on '}<strong style={{ color: '#1C1917' }}>{notif.courseName}</strong></>
+                        : <>{' sent you a notification about '}<strong style={{ color: '#1C1917' }}>{notif.courseName}</strong></>
+                      }
                     </p>
                     <span style={{ fontSize: '11px', color: '#A8A29E', marginTop: '3px', display: 'block' }}>
                       {timeAgo(notif.createdAt)}

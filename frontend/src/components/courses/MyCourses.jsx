@@ -70,7 +70,6 @@ const MyCourses = () => {
         sections,
         curriculumId: curriculum.courseId || curriculum.id,
         isPublic: curriculum.isPublic || false,
-        forkLineage: curriculum.forkLineage || [],
         isOwner: true
       }
     });
