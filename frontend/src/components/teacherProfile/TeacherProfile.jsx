@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { getOwnProfile, getTeacherProfile, getTeacherCourses } from '../../utils/teacherService';
+import { getOwnProfile, getTeacherProfile, getTeacherCourses, getSharedCourses } from '../../utils/teacherService';
 import ProfileHeader from './ProfileHeader';
 import ProfileCourseGrid from './ProfileCourseGrid';
 import ResourceLibrary from './ResourceLibrary';
@@ -18,6 +18,7 @@ const TeacherProfile = () => {
 
   const [profile, setProfile] = useState(null);
   const [courses, setCourses] = useState([]);
+  const [sharedCourses, setSharedCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -53,6 +54,17 @@ const TeacherProfile = () => {
         } catch (err) {
           console.error('Error loading courses:', err);
           setCourses([]);
+        }
+      }
+
+      // Fetch courses shared with me (own profile only)
+      if (isOwnProfile) {
+        try {
+          const result = await getSharedCourses(currentUser);
+          setSharedCourses(result.courses || []);
+        } catch (err) {
+          console.error('Error loading shared courses:', err);
+          setSharedCourses([]);
         }
       }
     } catch (err) {
@@ -180,6 +192,67 @@ const TeacherProfile = () => {
           <ProfileCourseGrid courses={courses} onCourseClick={handleCourseClick} />
         )}
       </div>
+
+      {/* Shared With Me — only visible to the owner */}
+      {isOwnProfile && (
+        <div className="profile-courses-section">
+          <h2 className="profile-courses-header">
+            Shared With Me {sharedCourses.length > 0 && `(${sharedCourses.length})`}
+          </h2>
+          {sharedCourses.length === 0 ? (
+            <div className="profile-courses-empty">
+              No courses have been shared with you yet.
+            </div>
+          ) : (
+            <ProfileCourseGrid
+              courses={sharedCourses}
+              onCourseClick={(course) => {
+                const accessType = course.accessType || 'view';
+                const sections = (course.outline?.sections || course.sections || []).map(section => ({
+                  id: section.id,
+                  title: section.title,
+                  description: section.description || '',
+                  type: section.type,
+                  duration: section.duration,
+                  subsections: (section.subsections || []).map(sub => ({
+                    id: sub.id,
+                    title: sub.title,
+                    description: sub.description || '',
+                    topicBoxes: (sub.topicBoxes || []).map(topic => ({
+                      id: topic.id,
+                      title: topic.title,
+                      description: topic.description || '',
+                      duration_minutes: topic.duration_minutes || 20,
+                      pla_pillars: topic.pla_pillars || [],
+                      learning_objectives: topic.learning_objectives || [],
+                      content_keywords: topic.content_keywords || [],
+                      video_resources: topic.video_resources || [],
+                      worksheets: topic.worksheets || [],
+                      activities: topic.activities || []
+                    }))
+                  }))
+                }));
+                navigate('/course-view', {
+                  state: {
+                    formData: {
+                      courseName: course.courseName,
+                      class: course.class,
+                      subject: course.subject,
+                      topic: course.topic,
+                    },
+                    sections,
+                    curriculumId: course.courseId || course.id,
+                    isPublic: course.isPublic || false,
+                    isOwner: false,
+                    ownerName: '',
+                    isCollaborator: accessType === 'collaborate',
+                  }
+                });
+              }}
+            />
+          )}
+        </div>
+      )}
 
       {/* Resource Library — private, only visible to the owner */}
       {isOwnProfile && (

@@ -402,6 +402,7 @@ class FirebaseService:
         notif_type: str,
         course_id: str,
         course_name: str,
+        access_type: str = None,
     ) -> str:
         """Create a notification document in Firestore."""
         notif_id = str(uuid.uuid4())
@@ -417,9 +418,87 @@ class FirebaseService:
             'status': 'unread',
             'createdAt': now,
         }
+        if access_type:
+            doc['accessType'] = access_type
         self.db.collection('notifications').document(notif_id).set(doc)
         print(f"✅ Notification created: {notif_id}")
         return notif_id
+
+    async def add_shared_with(self, course_id: str, uid: str, access_type: str) -> None:
+        """Add or update a user in the course's sharedWith list."""
+        ref = self.curricula_collection.document(course_id)
+        doc = ref.get()
+        if not doc.exists:
+            return
+        data = doc.to_dict()
+        shared = data.get('sharedWith', [])
+        # Replace if already present, else append
+        shared = [s for s in shared if s.get('uid') != uid]
+        shared.append({'uid': uid, 'accessType': access_type})
+        ref.update({'sharedWith': shared})
+        print(f"✅ sharedWith updated for course {course_id}: {uid} → {access_type}")
+
+    async def get_shared_courses(self, uid: str) -> List[Dict]:
+        """Get all courses where this uid appears in sharedWith."""
+        try:
+            docs = self.curricula_collection.stream()
+            results = []
+            for doc in docs:
+                data = doc.to_dict()
+                shared = data.get('sharedWith', [])
+                match = next((s for s in shared if s.get('uid') == uid), None)
+                if match:
+                    results.append({
+                        'id': doc.id,
+                        'courseId': data.get('courseId', doc.id),
+                        'courseName': data.get('courseName', ''),
+                        'subject': data.get('subject', ''),
+                        'class': data.get('class', ''),
+                        'topic': data.get('topic', ''),
+                        'isPublic': data.get('isPublic', False),
+                        'teacherUid': data.get('teacherUid', ''),
+                        'sections': data.get('sections', []),
+                        'outline': data.get('outline', {}),
+                        'accessType': match.get('accessType', 'view'),
+                        'lastModified': data.get('lastModified', ''),
+                    })
+            results.sort(key=lambda c: c.get('lastModified', ''), reverse=True)
+            return results
+        except Exception as e:
+            print(f"❌ Error fetching shared courses: {e}")
+            raise
+
+    async def get_course_shared_with(self, course_id: str) -> List[Dict]:
+        """Get the sharedWith list for a course, enriched with display names."""
+        ref = self.curricula_collection.document(course_id)
+        doc = ref.get()
+        if not doc.exists:
+            return []
+        shared = doc.to_dict().get('sharedWith', [])
+        result = []
+        for entry in shared:
+            uid = entry.get('uid')
+            if not uid:
+                continue
+            profile_doc = self.db.collection('teacher_profiles').document(uid).get()
+            display_name = profile_doc.to_dict().get('display_name', uid) if profile_doc.exists else uid
+            result.append({
+                'uid': uid,
+                'display_name': display_name,
+                'accessType': entry.get('accessType', 'view'),
+            })
+        return result
+
+    async def remove_from_shared_with(self, course_id: str, uid: str) -> bool:
+        """Remove a user from the course's sharedWith list."""
+        ref = self.curricula_collection.document(course_id)
+        doc = ref.get()
+        if not doc.exists:
+            return False
+        data = doc.to_dict()
+        shared = [s for s in data.get('sharedWith', []) if s.get('uid') != uid]
+        ref.update({'sharedWith': shared})
+        return True
 
     async def get_notifications(self, uid: str) -> List[Dict]:
         """Get all notifications for a user, newest first."""

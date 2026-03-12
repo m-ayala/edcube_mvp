@@ -122,6 +122,28 @@ export const getAllTeachers = async (currentUser) => {
 };
 
 /**
+ * Get all courses shared with the current user.
+ */
+export const getSharedCourses = async (currentUser) => {
+  try {
+    const headers = await getAuthHeader(currentUser);
+    const API_CURRICULA = 'http://localhost:8000/api';
+    const response = await fetch(`${API_CURRICULA}/curricula/shared-with-me`, {
+      method: 'GET',
+      headers
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to fetch shared courses');
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching shared courses:', error);
+    throw error;
+  }
+};
+
+/**
  * Get a teacher's public courses
  */
 export const getTeacherCourses = async (currentUser, teacherUid) => {

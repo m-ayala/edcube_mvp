@@ -8,6 +8,7 @@ import useCourseActions from './useCourseActions';
 import useAutosave from './useAutosave';
 import BreakModal from '../modals/BreakModal';
 import TopicDetailsModal from '../modals/TopicDetailsModal';
+import ShareCourseModal from '../modals/ShareCourseModal';
 import { getOwnProfile } from '../../services/teacherService';
 
 const CourseWorkspace = () => {
@@ -23,7 +24,8 @@ const CourseWorkspace = () => {
     isPublic: incomingIsPublic,
     readOnly: incomingReadOnly,
     ownerName: incomingOwnerName,
-    isOwner: incomingIsOwner
+    isOwner: incomingIsOwner,
+    isCollaborator: incomingIsCollaborator,
   } = location.state || {};
 
   const [curriculumId, setCurriculumId] = useState(initialCurriculumId);
@@ -42,6 +44,7 @@ const CourseWorkspace = () => {
   const [isPublic, setIsPublic] = useState(incomingIsPublic || false);
   const [readOnly] = useState(incomingReadOnly || false);
   const [isOwner] = useState(incomingIsOwner || false);
+  const [showShareModal, setShowShareModal] = useState(false);
 
   // ── Initialize Actions Hook ───────────────────────────────────────────
   const actions = useCourseActions({
@@ -307,6 +310,22 @@ const CourseWorkspace = () => {
     });
   };
 
+  // ── Edit as Collaborator (from view mode) ────────────────────────────
+  const handleEditAsCollaborator = () => {
+    navigate('/course-workspace', {
+      state: {
+        formData,
+        sections,
+        isEditing: true,
+        curriculumId,
+        isPublic,
+        readOnly: false,
+        isOwner: false,
+        isCollaborator: true,
+      }
+    });
+  };
+
   // ── Autosave ─────────────────────────────────────────────────────────
   const saveStatus = useAutosave({
     performSave: saveCourse,
@@ -326,7 +345,9 @@ const CourseWorkspace = () => {
           handsOnResources={handsOnResources}
           ownerName={incomingOwnerName}
           isOwner={isOwner}
+          isCollaborator={incomingIsCollaborator || false}
           onEditInWorkspace={isOwner ? handleEditInWorkspace : null}
+          onEditAsCollaborator={incomingIsCollaborator ? handleEditAsCollaborator : null}
           navigate={navigate}
         />
       ) : (
@@ -349,6 +370,7 @@ const CourseWorkspace = () => {
             navigate={navigate}
             isPublic={isPublic}
             onToggleVisibility={handleToggleVisibility}
+            onShare={() => setShowShareModal(true)}
           />
 
           {/* Modals (only in edit mode) */}
@@ -359,6 +381,13 @@ const CourseWorkspace = () => {
           {isModalOpen && selectedTopic && (
             <TopicDetailsModal topic={selectedTopic} onClose={() => { setIsModalOpen(false); setSelectedTopic(null); }} />
           )}
+
+          <ShareCourseModal
+            isOpen={showShareModal}
+            onClose={() => setShowShareModal(false)}
+            courseId={curriculumId}
+            courseName={courseName}
+          />
         </>
       )}
     </div>

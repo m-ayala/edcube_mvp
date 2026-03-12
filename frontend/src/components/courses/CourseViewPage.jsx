@@ -201,8 +201,9 @@ const CourseViewPage = () => {
     sections: incomingSections = [],
     curriculumId,
     isPublic,
-    isOwner   = false,
-    ownerName = ''
+    isOwner       = false,
+    ownerName     = '',
+    isCollaborator = false,
   } = location.state || {};
 
   const [sections]             = useState(incomingSections);
@@ -303,7 +304,13 @@ const CourseViewPage = () => {
 
   const handleEditInWorkspace = () => {
     navigate('/course-workspace', {
-      state: { formData, sections, isEditing: true, curriculumId, isPublic, readOnly: false }
+      state: { formData, sections, isEditing: true, curriculumId, isPublic, readOnly: false, isOwner: true }
+    });
+  };
+
+  const handleEditAsCollaborator = () => {
+    navigate('/course-workspace', {
+      state: { formData, sections, isEditing: true, curriculumId, isPublic, readOnly: false, isOwner: false, isCollaborator: true }
     });
   };
 
@@ -346,6 +353,16 @@ const CourseViewPage = () => {
             )}
           </div>
 
+          {!isOwner && (
+            <span style={{
+              fontSize: '11px',
+              color: isCollaborator ? '#059669' : '#6b7280',
+              backgroundColor: isCollaborator ? '#ECFDF5' : '#f3f4f6',
+              padding: '3px 10px', borderRadius: '12px', fontWeight: '600', fontFamily: SERIF
+            }}>
+              {isCollaborator ? 'Collaborator' : 'View Only'}
+            </span>
+          )}
           {!isOwner && ownerName && (
             <span style={{
               fontSize: '13px', color: '#6b7280', backgroundColor: '#f3f4f6',
@@ -387,6 +404,21 @@ const CourseViewPage = () => {
               onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#1d4ed8'; }}
             >
               <PencilLine size={14} /> Edit in Course Workspace
+            </button>
+          )}
+          {isCollaborator && (
+            <button
+              onClick={handleEditAsCollaborator}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '7px',
+                padding: '8px 18px', backgroundColor: '#059669', color: 'white',
+                border: 'none', borderRadius: '6px', cursor: 'pointer',
+                fontSize: '14px', fontWeight: '500', fontFamily: SERIF, transition: 'background-color 0.15s'
+              }}
+              onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#047857'; }}
+              onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#059669'; }}
+            >
+              <PencilLine size={14} /> Edit as Collaborator
             </button>
           )}
         </div>

@@ -169,6 +169,7 @@ const CourseEditor = ({
   navigate,
   isPublic,
   onToggleVisibility,
+  onShare,
 }) => {
   const [selectedTopicForDetail, setSelectedTopicForDetail] = useState(null);
   const [hoveredTopic, setHoveredTopic] = useState(null);
@@ -1536,6 +1537,31 @@ const CourseEditor = ({
               {isPublic ? 'Public' : 'Private'}
             </span>
           </div>
+
+          {/* Share button */}
+          {onShare && (
+            <button
+              onClick={onShare}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '6px',
+                padding: '6px 16px',
+                backgroundColor: '#1C1917', color: '#fff',
+                border: 'none', borderRadius: '8px',
+                cursor: 'pointer', fontSize: '13px', fontWeight: '600',
+                fontFamily: "'DM Sans', sans-serif",
+                transition: 'background-color 0.15s',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#292524'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#1C1917'; }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
+                <polyline points="16 6 12 2 8 6"/>
+                <line x1="12" y1="2" x2="12" y2="15"/>
+              </svg>
+              Share
+            </button>
+          )}
 
           <button onClick={onUndo} disabled={!canUndo} style={{
             padding: '6px 13px',

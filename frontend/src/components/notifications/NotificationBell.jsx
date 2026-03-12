@@ -193,6 +193,14 @@ const NotificationBell = () => {
                         ? <>{' invited you to collaborate on '}<strong style={{ color: '#1C1917' }}>{notif.courseName}</strong></>
                         : notif.type === 'collaboration_request'
                         ? <>{' requested to collaborate on '}<strong style={{ color: '#1C1917' }}>{notif.courseName}</strong></>
+                        : notif.type === 'course_share_view'
+                        ? <>{' shared '}<strong style={{ color: '#1C1917' }}>{notif.courseName}</strong>{' with you to view'}</>
+                        : notif.type === 'course_share_collaborate'
+                        ? <>{' shared '}<strong style={{ color: '#1C1917' }}>{notif.courseName}</strong>{' with you to collaborate'}</>
+                        : notif.type === 'course_share_update'
+                        ? <>{' updated your access to '}<strong style={{ color: '#1C1917' }}>{notif.courseName}</strong>{` to ${notif.accessType === 'collaborate' ? 'Collaborator' : 'Viewer'}`}</>
+                        : notif.type === 'course_share_remove'
+                        ? <>{' removed your access to '}<strong style={{ color: '#1C1917' }}>{notif.courseName}</strong></>
                         : <>{' sent you a notification about '}<strong style={{ color: '#1C1917' }}>{notif.courseName}</strong></>
                       }
                     </p>

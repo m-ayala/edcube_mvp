@@ -11,7 +11,9 @@ const CourseViewer = ({
   handsOnResources,
   ownerName,
   isOwner,
+  isCollaborator,
   onEditInWorkspace,
+  onEditAsCollaborator,
   navigate
 }) => {
   const [selectedTopic, setSelectedTopic] = useState(null);
@@ -662,6 +664,26 @@ const CourseViewer = ({
             >
               <PencilLine size={14} />
               Edit in Course Workspace
+            </button>
+          )}
+          {isCollaborator && onEditAsCollaborator && (
+            <button
+              onClick={onEditAsCollaborator}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '6px',
+                padding: '7px 16px',
+                backgroundColor: '#059669',
+                color: 'white',
+                border: 'none', borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '13px', fontWeight: '600',
+                transition: 'background-color 0.15s ease'
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#047857'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#059669'; }}
+            >
+              <PencilLine size={14} />
+              Edit as Collaborator
             </button>
           )}
           <button

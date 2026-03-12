@@ -5,7 +5,7 @@ Curriculum generation routes - PHASE 1 ONLY
 Generates boxes/topics without any video or worksheet population
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional
@@ -16,6 +16,7 @@ from services.orchestrator import CurriculumOrchestrator
 from services.firebase_service import FirebaseService
 from schemas.generation_schema import GenerateRequest, GenerateResponse
 from services.generation_service import GenerationService
+from routes.teachers import verify_firebase_token
 
 generation_service = GenerationService()
 router = APIRouter()
@@ -121,6 +122,101 @@ async def generate_curriculum(request: CourseRequest):
             "X-Accel-Buffering": "no"
         }
     )
+
+
+@router.get("/curricula/shared-with-me")
+async def get_shared_courses(current_user: dict = Depends(verify_firebase_token)):
+    """Return all courses that have been shared with the authenticated user."""
+    try:
+        uid = current_user["uid"]
+        courses = await firebase.get_shared_courses(uid)
+        return {"success": True, "courses": courses}
+    except Exception as e:
+        logger.error(f"Error fetching shared courses: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class AccessTypeUpdate(BaseModel):
+    access_type: str  # "view" or "collaborate"
+
+
+@router.get("/curricula/{curriculum_id}/shared-with")
+async def get_course_collaborators(curriculum_id: str, current_user: dict = Depends(verify_firebase_token)):
+    """Return the sharedWith list (with display names) for a course. Owner only."""
+    try:
+        uid = current_user["uid"]
+        doc = firebase.curricula_collection.document(curriculum_id).get()
+        if not doc.exists:
+            raise HTTPException(status_code=404, detail="Course not found")
+        if doc.to_dict().get('teacherUid') != uid:
+            raise HTTPException(status_code=403, detail="Not authorized")
+        collaborators = await firebase.get_course_shared_with(curriculum_id)
+        return {"success": True, "collaborators": collaborators}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching collaborators: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch("/curricula/{curriculum_id}/shared-with/{uid}")
+async def update_collaborator_access(
+    curriculum_id: str,
+    uid: str,
+    body: AccessTypeUpdate,
+    current_user: dict = Depends(verify_firebase_token)
+):
+    """Update a collaborator's access type and notify them."""
+    from_uid = current_user["uid"]
+    try:
+        doc = firebase.curricula_collection.document(curriculum_id).get()
+        if not doc.exists or doc.to_dict().get('teacherUid') != from_uid:
+            raise HTTPException(status_code=403, detail="Not authorized")
+        course_name = doc.to_dict().get('courseName', '')
+        await firebase.add_shared_with(curriculum_id, uid, body.access_type)
+        profile_doc = firebase.db.collection("teacher_profiles").document(from_uid).get()
+        from_name = profile_doc.to_dict().get("display_name", "Someone") if profile_doc.exists else "Someone"
+        await firebase.create_notification(
+            to_uid=uid, from_uid=from_uid, from_name=from_name,
+            notif_type="course_share_update",
+            course_id=curriculum_id, course_name=course_name,
+            access_type=body.access_type,
+        )
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating collaborator: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/curricula/{curriculum_id}/shared-with/{uid}")
+async def remove_collaborator(
+    curriculum_id: str,
+    uid: str,
+    current_user: dict = Depends(verify_firebase_token)
+):
+    """Remove a collaborator from a course and notify them."""
+    from_uid = current_user["uid"]
+    try:
+        doc = firebase.curricula_collection.document(curriculum_id).get()
+        if not doc.exists or doc.to_dict().get('teacherUid') != from_uid:
+            raise HTTPException(status_code=403, detail="Not authorized")
+        course_name = doc.to_dict().get('courseName', '')
+        await firebase.remove_from_shared_with(curriculum_id, uid)
+        profile_doc = firebase.db.collection("teacher_profiles").document(from_uid).get()
+        from_name = profile_doc.to_dict().get("display_name", "Someone") if profile_doc.exists else "Someone"
+        await firebase.create_notification(
+            to_uid=uid, from_uid=from_uid, from_name=from_name,
+            notif_type="course_share_remove",
+            course_id=curriculum_id, course_name=course_name,
+        )
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error removing collaborator: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/curricula/{curriculum_id}")
@@ -255,10 +351,17 @@ async def update_course(course_data: dict, teacherUid: str):
         if not course_id:
             raise HTTPException(status_code=400, detail="courseId is required for updates")
         
-        # Verify ownership before updating
-        existing_course = await firebase.get_curriculum(course_id, teacherUid)
-        if not existing_course:
+        # Verify ownership OR collaborate access before updating
+        doc = firebase.curricula_collection.document(course_id).get()
+        if not doc.exists:
             raise HTTPException(status_code=404, detail="Course not found or unauthorized")
+        doc_data = doc.to_dict()
+        is_owner = doc_data.get('teacherUid') == teacherUid
+        if not is_owner:
+            shared = doc_data.get('sharedWith', [])
+            collab = next((s for s in shared if s.get('uid') == teacherUid), None)
+            if not collab or collab.get('accessType') != 'collaborate':
+                raise HTTPException(status_code=404, detail="Course not found or unauthorized")
         
         # Prepare update data (keep the same courseId)
         update_data = {
@@ -416,3 +519,5 @@ async def update_course_visibility(curriculum_id: str, body: VisibilityUpdate, t
     except Exception as e:
         logger.error(f"Error updating visibility: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+

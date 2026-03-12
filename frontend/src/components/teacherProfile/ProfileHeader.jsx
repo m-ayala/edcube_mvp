@@ -3,30 +3,47 @@
 import { useState } from 'react';
 import './TeacherProfile.css';
 
-const ProfileHeader = ({ 
-  profile, 
-  isOwnProfile, 
-  onEditClick 
+const getInitials = (name) => {
+  if (!name) return '?';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0][0].toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
+
+const ProfileHeader = ({
+  profile,
+  isOwnProfile,
+  onEditClick
 }) => {
   const [imageError, setImageError] = useState(false);
 
-  // Default profile picture if none provided or error loading
-  const defaultProfilePic = 'https://via.placeholder.com/120/f5f5dc/8b7355?text=Teacher';
-  const profilePicUrl = (!profile.profile_picture_url || imageError) 
-    ? defaultProfilePic 
-    : profile.profile_picture_url;
+  const showInitials = !profile.profile_picture_url || imageError;
 
   return (
     <div className="profile-header">
       <div className="profile-header-content">
         {/* Left: Profile Picture */}
         <div className="profile-picture-section">
-          <img 
-            src={profilePicUrl}
-            alt={`${profile.display_name}'s profile`}
-            className="profile-picture"
-            onError={() => setImageError(true)}
-          />
+          {showInitials ? (
+            <div
+              className="profile-picture"
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                backgroundColor: '#8b7355', color: '#ffffff',
+                fontSize: '40px', fontWeight: '700',
+                fontFamily: "'DM Sans', sans-serif",
+              }}
+            >
+              {getInitials(profile.display_name)}
+            </div>
+          ) : (
+            <img
+              src={profile.profile_picture_url}
+              alt={`${profile.display_name}'s profile`}
+              className="profile-picture"
+              onError={() => setImageError(true)}
+            />
+          )}
         </div>
 
         {/* Right: Profile Info */}
