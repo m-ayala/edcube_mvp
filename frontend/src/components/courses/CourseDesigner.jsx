@@ -58,7 +58,7 @@ const CourseDesigner = () => {
     setProgress({ message: 'Starting...', progress: 0 });
 
     try {
-      const response = await fetch('https://edcube-backend-890930502654.us-west1.run.app/api/generate-curriculum', {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/generate-curriculum`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -137,7 +137,7 @@ const CourseDesigner = () => {
         console.log('Fetching curriculum:', curriculumId);
 
         const curriculumResponse = await fetch(
-          `https://edcube-backend-890930502654.us-west1.run.app/api/curricula/${curriculumId}?teacherUid=${currentUser.uid}`
+          `${import.meta.env.VITE_API_BASE_URL}/api/curricula/${curriculumId}?teacherUid=${currentUser.uid}`
         );
         const curriculumData = await curriculumResponse.json();
 

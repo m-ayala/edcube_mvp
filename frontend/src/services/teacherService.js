@@ -1,6 +1,6 @@
 // frontend/src/utils/teacherService.js
 
-const API_BASE_URL = 'https://edcube-backend-890930502654.us-west1.run.app/api/teachers';
+const API_BASE_URL = `${import.meta.env.VITE_API_BASE_URL}/api/teachers`;
 
 /**
  * Get authorization header with Firebase ID token

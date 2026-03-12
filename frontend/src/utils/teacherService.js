@@ -1,6 +1,6 @@
 // frontend/src/utils/teacherService.js
 
-const API_BASE_URL = 'https://edcube-backend-890930502654.us-west1.run.app/api/teachers';
+const API_BASE_URL = `${import.meta.env.VITE_API_BASE_URL}/api/teachers`;
 
 /**
  * Get authorization header with Firebase ID token
@@ -127,8 +127,7 @@ export const getAllTeachers = async (currentUser) => {
 export const getSharedCourses = async (currentUser) => {
   try {
     const headers = await getAuthHeader(currentUser);
-    const API_CURRICULA = 'http://localhost:8000/api';
-    const response = await fetch(`${API_CURRICULA}/curricula/shared-with-me`, {
+    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/curricula/shared-with-me`, {
       method: 'GET',
       headers
     });

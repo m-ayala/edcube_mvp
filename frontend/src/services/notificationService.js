@@ -1,6 +1,6 @@
 // frontend/src/services/notificationService.js
-const API_BASE = 'http://localhost:8000/api/notifications';
-const CURRICULUM_BASE = 'http://localhost:8000/api/curricula';
+const API_BASE = `${import.meta.env.VITE_API_BASE_URL}/api/notifications`;
+const CURRICULUM_BASE = `${import.meta.env.VITE_API_BASE_URL}/api/curricula`;
 
 const authHeader = async (currentUser) => {
   const token = await currentUser.getIdToken();

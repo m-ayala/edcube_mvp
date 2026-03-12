@@ -346,7 +346,7 @@ const useCourseActions = ({
     setGenerating(`videos-${topicBox.id}`, true);
     try {
       console.log('🎬 Generating videos for:', topicBox.title);
-      const response = await fetch('https://edcube-backend-890930502654.us-west1.run.app/api/generate-videos', {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/generate-videos`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -399,7 +399,7 @@ const useCourseActions = ({
     setGenerating(`${resourceType}-${topicBoxId}`, true);
     try {
       console.log(`🔨 Generating ${resourceType} for:`, topicBox.title);
-      const response = await fetch('https://edcube-backend-890930502654.us-west1.run.app/api/generate-resource', {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/generate-resource`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

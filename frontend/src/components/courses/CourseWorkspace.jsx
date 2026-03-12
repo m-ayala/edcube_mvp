@@ -221,7 +221,7 @@ const CourseWorkspace = () => {
     try {
       const newIsPublic = !isPublic;
       const response = await fetch(
-        `https://edcube-backend-890930502654.us-west1.run.app/api/curricula/${curriculumId}/visibility?teacherUid=${currentUser.uid}`,
+        `${import.meta.env.VITE_API_BASE_URL}/api/curricula/${curriculumId}/visibility?teacherUid=${currentUser.uid}`,
         {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -272,8 +272,8 @@ const CourseWorkspace = () => {
     if (hasExistingId) courseData.courseId = curriculumId;
 
     const endpoint = hasExistingId
-      ? `https://edcube-backend-890930502654.us-west1.run.app/api/update-course?teacherUid=${currentUser.uid}`
-      : `https://edcube-backend-890930502654.us-west1.run.app/api/save-course?teacherUid=${currentUser.uid}&organizationId=${organizationId}`;
+      ? `${import.meta.env.VITE_API_BASE_URL}/api/update-course?teacherUid=${currentUser.uid}`
+      : `${import.meta.env.VITE_API_BASE_URL}/api/save-course?teacherUid=${currentUser.uid}&organizationId=${organizationId}`;
 
     const response = await fetch(endpoint, {
       method: 'POST',

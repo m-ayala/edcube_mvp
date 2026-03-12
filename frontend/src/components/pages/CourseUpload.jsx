@@ -45,7 +45,7 @@ const handleUpload = async () => {
     formData.append('file', selectedFile);
     
     const response = await fetch(
-      `https://edcube-backend-890930502654.us-west1.run.app/api/upload-course-file?teacherUid=${currentUser.uid}`,
+      `${import.meta.env.VITE_API_BASE_URL}/api/upload-course-file?teacherUid=${currentUser.uid}`,
       {
         method: 'POST',
         body: formData

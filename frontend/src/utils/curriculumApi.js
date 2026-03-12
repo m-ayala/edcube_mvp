@@ -1,6 +1,6 @@
 // frontend/src/utils/curriculumApi.js
 
-const API_BASE_URL = 'https://edcube-backend-890930502654.us-west1.run.app/api';
+const API_BASE_URL = `${import.meta.env.VITE_API_BASE_URL}/api`;
 
 /**
  * Generate curriculum content at any level

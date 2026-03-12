@@ -92,7 +92,7 @@ const MyCourses = () => {
 
     try {
       const response = await fetch(
-        `https://edcube-backend-890930502654.us-west1.run.app/api/curricula/${courseId}/visibility?teacherUid=${currentUser.uid}`,
+        `${import.meta.env.VITE_API_BASE_URL}/api/curricula/${courseId}/visibility?teacherUid=${currentUser.uid}`,
         {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
