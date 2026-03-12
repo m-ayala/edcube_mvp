@@ -17,7 +17,7 @@ const timeAgo = (iso) => {
 };
 
 const NotificationBell = () => {
-  const { notifications, unreadCount, refresh, markRead, remove } = useNotifications();
+  const { notifications, unreadCount, refresh, markRead, markAllRead, remove } = useNotifications();
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const ref = useRef(null);
@@ -31,11 +31,13 @@ const NotificationBell = () => {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const handleToggle = () => {
-    setOpen(prev => {
-      if (!prev) refresh(); // refresh on open
-      return !prev;
-    });
+  const handleToggle = async () => {
+    const opening = !open;
+    setOpen(opening);
+    if (opening) {
+      await markAllRead(); // mark all read first, then refresh to sync with server
+      refresh();
+    }
   };
 
   const handleUserClick = (fromUid, notifId) => {

@@ -43,6 +43,15 @@ export const NotificationProvider = ({ children }) => {
     }
   };
 
+  const markAllRead = useCallback(async () => {
+    const unread = notifications.filter(n => n.status === 'unread');
+    if (unread.length === 0) return;
+    // Optimistically update UI immediately
+    setNotifications(prev => prev.map(n => n.status === 'unread' ? { ...n, status: 'read' } : n));
+    // Await all API calls so a subsequent refresh sees the updated state
+    await Promise.all(unread.map(n => markAsRead(currentUser, n.id).catch(err => console.error('Mark read failed:', err))));
+  }, [notifications, currentUser]);
+
   const remove = async (notifId) => {
     try {
       await deleteNotification(currentUser, notifId);
@@ -53,7 +62,7 @@ export const NotificationProvider = ({ children }) => {
   };
 
   return (
-    <NotificationContext.Provider value={{ notifications, unreadCount, refresh, markRead, remove }}>
+    <NotificationContext.Provider value={{ notifications, unreadCount, refresh, markRead, markAllRead, remove }}>
       {children}
     </NotificationContext.Provider>
   );
