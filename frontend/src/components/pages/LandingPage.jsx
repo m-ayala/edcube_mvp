@@ -67,13 +67,20 @@ const LandingPage = () => {
         <div style={{ fontFamily: "'Sora', sans-serif", fontWeight: 800, fontSize: 20, color: '#1C1917', letterSpacing: '-0.5px' }}>
           EdCube
         </div>
-        <div />
-        <button
-          onClick={() => navigate('/signup')}
-          style={{ background: '#1C1917', color: '#FAF8F4', padding: '10px 22px', borderRadius: 100, fontSize: 14, fontWeight: 500, border: 'none', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}
-        >
-          Sign up free
-        </button>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <button
+            onClick={() => navigate('/login')}
+            style={{ background: 'transparent', color: '#1C1917', padding: '10px 20px', borderRadius: 100, fontSize: 14, fontWeight: 500, border: '0.5px solid #D0CAC0', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}
+          >
+            Log in
+          </button>
+          <button
+            onClick={() => navigate('/signup')}
+            style={{ background: '#1C1917', color: '#FAF8F4', padding: '10px 22px', borderRadius: 100, fontSize: 14, fontWeight: 500, border: 'none', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}
+          >
+            Sign up free
+          </button>
+        </div>
       </nav>
 
       {/* HERO */}
@@ -105,7 +112,7 @@ const LandingPage = () => {
           ,{' '}
           <em style={{ fontStyle: 'normal', fontWeight: 800, fontSize: '1.18em', color: '#A8D8B0' }}>easier</em>
           {' '}way to design{' '}
-          <em style={{ fontStyle: 'normal', fontWeight: 800, fontSize: '1.18em', color: '#F9C0A8' }}>holistic</em>
+          <em style={{ fontStyle: 'normal', fontWeight: 800, fontSize: '1.18em', color: '#E8C84A' }}>holistic</em>
           {' '}K–12 curriculum.
         </h1>
 
