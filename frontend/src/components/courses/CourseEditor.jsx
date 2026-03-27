@@ -1,6 +1,6 @@
 // src/components/courses/CourseEditor.jsx
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { GripVertical, Edit2, Check, Trash2, Plus, Sparkles, PlayCircle, FileText, Zap } from 'lucide-react';
+import { GripVertical, Edit2, Check, Trash2, Plus, PlayCircle, FileText, Zap, Sparkles } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import TopicDetailsModal from '../modals/TopicDetailsModal';
 
@@ -170,30 +170,12 @@ const CourseEditor = ({
   isPublic,
   onToggleVisibility,
   onShare,
+  isEdoOpen,
+  onToggleEdo,
 }) => {
   const [selectedTopicForDetail, setSelectedTopicForDetail] = useState(null);
   const [hoveredTopic, setHoveredTopic] = useState(null);
-  const [activeBubble, setActiveBubble] = useState(null);
-  const [aiPromptText, setAiPromptText] = useState('');
   const [activeTabByTopic, setActiveTabByTopic] = useState({});
-
-  const openBubble = (e, id, onGenerate) => {
-    e.stopPropagation();
-    if (activeBubble?.id === id) {
-      onGenerate(null);
-      setActiveBubble(null);
-      setAiPromptText('');
-    } else {
-      const rect = e.currentTarget.getBoundingClientRect();
-      setActiveBubble({ id, rect, onGenerate });
-      setAiPromptText('');
-    }
-  };
-
-  const closeBubble = () => {
-    setActiveBubble(null);
-    setAiPromptText('');
-  };
 
   // ── Colors ────────────────────────────────────────────────────────────
   const colors = {
@@ -767,71 +749,6 @@ const CourseEditor = ({
             >
               <Plus size={10} /> Topic
             </button>
-
-            <button
-              onClick={e => {
-                const section = sections.find(s => s.id === sectionId);
-                const subsection = section?.subsections?.find(sub => sub.id === subsectionId);
-                openBubble(e, `topic-${topicBox.id}`, (guidance) => {
-                  actions.handleGenerateTopicBoxes(sectionId, subsectionId, {
-                    level: 'topics',
-                    context: {
-                      course: {
-                        title: courseName,
-                        grade: formData?.class || '',
-                        description: formData?.objectives || ''
-                      },
-                      current_section: {
-                        title: section?.title || 'Unknown',
-                        description: section?.description || ''
-                      },
-                      subsection: {
-                        title: subsection?.title || 'Unknown',
-                        description: subsection?.description || '',
-                        existingTopics: (subsection?.topicBoxes || []).map(t => ({
-                          title: t.title,
-                          description: t.description
-                        }))
-                      },
-                      other_sections: sections.filter(s => s.type !== 'break' && s.id !== sectionId).map(s => ({
-                        title: s.title,
-                        description: s.description,
-                        subsections: (s.subsections || []).map(sub => sub.title)
-                      })),
-                      sibling_subsections: (section?.subsections || []).filter(sub => sub.id !== subsectionId).map(sub => ({
-                        title: sub.title,
-                        description: sub.description
-                      }))
-                    },
-                    userGuidance: guidance,
-                    count: 1
-                  });
-                });
-              }}
-              disabled={actions.generatingStates[`topics-${sectionId}-${subsectionId}`]}
-              style={{
-                padding: '3px 8px',
-                backgroundColor: colors.accent,
-                color: '#fff',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: actions.generatingStates[`topics-${sectionId}-${subsectionId}`] ? 'not-allowed' : 'pointer',
-                fontSize: '10px',
-                fontWeight: '600',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '3px',
-                opacity: actions.generatingStates[`topics-${sectionId}-${subsectionId}`] ? 0.7 : 1
-              }}
-              title="AI generate topic"
-            >
-              {actions.generatingStates[`topics-${sectionId}-${subsectionId}`] ? (
-                <div style={{ width: '10px', height: '10px', border: '2px solid rgba(255,255,255,0.4)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
-              ) : (
-                <Sparkles size={10} />
-              )}
-              AI
-            </button>
           </div>
           </div>
         </div>
@@ -966,33 +883,6 @@ const CourseEditor = ({
                 </button>
 
                 <button
-                  onClick={(e) => {
-                    openBubble(e, `section-${section.id}`, (guidance) => {
-                      actions.handleGenerateSections({
-                        level: 'sections',
-                        context: { course: { title: courseName, description: formData?.objectives || '', grade: formData?.class || '' } },
-                        userGuidance: guidance, count: 1
-                      });
-                    });
-                  }}
-                  disabled={actions.generatingStates['sections']}
-                  style={{
-                    padding: '3px 9px', backgroundColor: colors.aiBtn, color: '#fff',
-                    border: 'none', borderRadius: '4px', cursor: actions.generatingStates['sections'] ? 'not-allowed' : 'pointer',
-                    fontSize: '10px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '3px',
-                    fontFamily: "'DM Sans', sans-serif", opacity: actions.generatingStates['sections'] ? 0.7 : 1
-                  }}
-                  title="AI generate section"
-                >
-                  {actions.generatingStates['sections'] ? (
-                    <div style={{ width: '10px', height: '10px', border: '2px solid rgba(255,255,255,0.4)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
-                  ) : (
-                    <Sparkles size={10} />
-                  )}
-                  AI
-                </button>
-
-                <button
                   onClick={() => actions.confirmDeleteSection(section.id)}
                   style={{
                     background: 'none', border: 'none', cursor: 'pointer', padding: '4px',
@@ -1029,6 +919,7 @@ const CourseEditor = ({
               />
             </div>
           )}
+
         </div>
 
         {!isCollapsed && (
@@ -1071,58 +962,6 @@ const CourseEditor = ({
                           }}
                         >
                           <Plus size={14} /> Add Subsection
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            openBubble(e, `subsection-empty-${section.id}`, (guidance) => {
-                              actions.handleGenerateSubsections(section.id, {
-                                level: 'subsections',
-                                context: {
-                                  course: {
-                                    title: courseName,
-                                    description: formData?.objectives || '',
-                                    grade: formData?.class || ''
-                                  },
-                                  current_section: {
-                                    title: section?.title || 'Unknown',
-                                    description: section?.description || '',
-                                    existingSubsections: []
-                                  },
-                                  all_section_names: sections.filter(s => s.type !== 'break').map(s => s.title),
-                                  other_sections: sections.filter(s => s.type !== 'break' && s.id !== section.id).map(s => ({
-                                    title: s.title,
-                                    description: s.description,
-                                    subsections: (s.subsections || []).map(sub => sub.title)
-                                  }))
-                                },
-                                userGuidance: guidance,
-                                count: 1
-                              });
-                            });
-                          }}
-                          disabled={actions.generatingStates[`subsections-${section.id}`]}
-                          style={{
-                            padding: '6px 14px',
-                            backgroundColor: colors.accent,
-                            color: '#fff',
-                            border: 'none',
-                            borderRadius: '6px',
-                            cursor: actions.generatingStates[`subsections-${section.id}`] ? 'not-allowed' : 'pointer',
-                            fontSize: '12px',
-                            fontWeight: '600',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '5px',
-                            boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
-                            opacity: actions.generatingStates[`subsections-${section.id}`] ? 0.7 : 1
-                          }}
-                        >
-                          {actions.generatingStates[`subsections-${section.id}`] ? (
-                            <div style={{ width: '12px', height: '12px', border: '2px solid rgba(255,255,255,0.4)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
-                          ) : (
-                            <Sparkles size={14} />
-                          )}
-                          {actions.generatingStates[`subsections-${section.id}`] ? 'Generating…' : 'AI Generate'}
                         </button>
                       </div>
                     </div>
@@ -1242,47 +1081,6 @@ const CourseEditor = ({
                                       </button>
 
                                       <button
-                                        onClick={(e) => {
-                                          openBubble(e, `subsection-${section.id}-${sub.id}`, (guidance) => {
-                                            actions.handleGenerateSubsections(section.id, {
-                                              level: 'subsections',
-                                              context: {
-                                                course: { title: courseName, description: formData?.objectives || '', grade: formData?.class || '' },
-                                                current_section: {
-                                                  title: section?.title || 'Unknown',
-                                                  description: section?.description || '',
-                                                  existingSubsections: (section?.subsections || []).map(s => ({ title: s.title, description: s.description }))
-                                                },
-                                                all_section_names: sections.filter(s => s.type !== 'break').map(s => s.title),
-                                                other_sections: sections.filter(s => s.type !== 'break' && s.id !== section.id).map(s => ({
-                                                  title: s.title, description: s.description,
-                                                  subsections: (s.subsections || []).map(ss => ss.title)
-                                                }))
-                                              },
-                                              userGuidance: guidance, count: 1
-                                            });
-                                          });
-                                        }}
-                                        disabled={actions.generatingStates[`subsections-${section.id}`]}
-                                        style={{
-                                          padding: '3px 8px', backgroundColor: colors.aiBtn, color: '#fff',
-                                          border: 'none', borderRadius: '4px',
-                                          cursor: actions.generatingStates[`subsections-${section.id}`] ? 'not-allowed' : 'pointer',
-                                          fontSize: '10px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '3px',
-                                          fontFamily: "'DM Sans', sans-serif",
-                                          opacity: actions.generatingStates[`subsections-${section.id}`] ? 0.7 : 1
-                                        }}
-                                        title="AI generate subsection"
-                                      >
-                                        {actions.generatingStates[`subsections-${section.id}`] ? (
-                                          <div style={{ width: '10px', height: '10px', border: '2px solid rgba(255,255,255,0.4)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
-                                        ) : (
-                                          <Sparkles size={10} />
-                                        )}
-                                        AI
-                                      </button>
-
-                                      <button
                                         onClick={() => actions.confirmDeleteSubsection(section.id, sub.id)}
                                         style={{
                                           background: 'none', border: 'none', cursor: 'pointer', padding: '4px',
@@ -1319,6 +1117,7 @@ const CourseEditor = ({
                                     />
                                   </div>
                                 )}
+
                               </div>
 
                               {/* Subsection content */}
@@ -1363,67 +1162,6 @@ const CourseEditor = ({
                                                 }}
                                               >
                                                 <Plus size={14} /> Add Topic
-                                              </button>
-                                              <button
-                                                onClick={(e) => {
-                                                  const currentSection = sections.find(s => s.id === section.id);
-                                                  const currentSub = currentSection?.subsections?.find(s => s.id === sub.id);
-                                                  openBubble(e, `topic-empty-${section.id}-${sub.id}`, (guidance) => {
-                                                    actions.handleGenerateTopicBoxes(section.id, sub.id, {
-                                                      level: 'topics',
-                                                      context: {
-                                                        course: {
-                                                          title: courseName,
-                                                          grade: formData?.class || '',
-                                                          description: formData?.objectives || ''
-                                                        },
-                                                        current_section: {
-                                                          title: currentSection?.title || 'Unknown',
-                                                          description: currentSection?.description || ''
-                                                        },
-                                                        subsection: {
-                                                          title: currentSub?.title || 'Unknown',
-                                                          description: currentSub?.description || '',
-                                                          existingTopics: []
-                                                        },
-                                                        other_sections: sections.filter(s => s.type !== 'break' && s.id !== section.id).map(s => ({
-                                                          title: s.title,
-                                                          description: s.description,
-                                                          subsections: (s.subsections || []).map(sub => sub.title)
-                                                        })),
-                                                        sibling_subsections: (currentSection?.subsections || []).filter(s => s.id !== sub.id).map(s => ({
-                                                          title: s.title,
-                                                          description: s.description
-                                                        }))
-                                                      },
-                                                      userGuidance: guidance,
-                                                      count: 1
-                                                    });
-                                                  });
-                                                }}
-                                                disabled={actions.generatingStates[`topics-${section.id}-${sub.id}`]}
-                                                style={{
-                                                  padding: '6px 14px',
-                                                  backgroundColor: colors.accent,
-                                                  color: '#fff',
-                                                  border: 'none',
-                                                  borderRadius: '6px',
-                                                  cursor: actions.generatingStates[`topics-${section.id}-${sub.id}`] ? 'not-allowed' : 'pointer',
-                                                  fontSize: '12px',
-                                                  fontWeight: '600',
-                                                  display: 'flex',
-                                                  alignItems: 'center',
-                                                  gap: '5px',
-                                                  boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
-                                                  opacity: actions.generatingStates[`topics-${section.id}-${sub.id}`] ? 0.7 : 1
-                                                }}
-                                              >
-                                                {actions.generatingStates[`topics-${section.id}-${sub.id}`] ? (
-                                                  <div style={{ width: '12px', height: '12px', border: '2px solid rgba(255,255,255,0.4)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
-                                                ) : (
-                                                  <Sparkles size={14} />
-                                                )}
-                                                {actions.generatingStates[`topics-${section.id}-${sub.id}`] ? 'Generating…' : 'AI Generate'}
                                               </button>
                                             </div>
                                           </div>
@@ -1563,6 +1301,26 @@ const CourseEditor = ({
             </button>
           )}
 
+          {onToggleEdo && (
+            <button
+              onClick={onToggleEdo}
+              title={isEdoOpen ? 'Close Edo AI' : 'Open Edo AI'}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '6px',
+                padding: '6px 13px',
+                backgroundColor: isEdoOpen ? '#2C5F3A' : 'transparent',
+                color: isEdoOpen ? '#fff' : '#6B7280',
+                border: `1px solid ${isEdoOpen ? '#2C5F3A' : '#D1D5DB'}`,
+                borderRadius: '6px', cursor: 'pointer', fontSize: '13px',
+                fontFamily: "'DM Sans', sans-serif",
+                transition: 'all 0.15s',
+              }}
+            >
+              <Sparkles size={13} />
+              Edo
+            </button>
+          )}
+
           <button onClick={onUndo} disabled={!canUndo} style={{
             padding: '6px 13px',
             backgroundColor: 'transparent',
@@ -1699,96 +1457,6 @@ const CourseEditor = ({
         title={actions.deleteConfirm?.title || ''}
         message={actions.deleteConfirm?.message || ''}
       />
-
-      {/* AI Prompt Bubble */}
-      {activeBubble && (
-        <>
-          <div
-            onClick={(e) => { e.stopPropagation(); closeBubble(); }}
-            style={{ position: 'fixed', inset: 0, zIndex: 999 }}
-          />
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              position: 'fixed',
-              left: Math.max(10, activeBubble.rect.right - 220),
-              top: activeBubble.rect.top - 8,
-              transform: 'translateY(-100%)',
-              backgroundColor: 'white',
-              borderRadius: '10px',
-              boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
-              border: '1px solid #e5e7eb',
-              padding: '12px',
-              width: '220px',
-              zIndex: 1000,
-            }}
-          >
-            <div style={{
-              position: 'absolute',
-              bottom: '-6px',
-              right: '14px',
-              width: '12px',
-              height: '12px',
-              backgroundColor: 'white',
-              transform: 'rotate(45deg)',
-              borderRight: '1px solid #e5e7eb',
-              borderBottom: '1px solid #e5e7eb',
-            }} />
-            <div style={{ fontSize: '11px', fontWeight: '600', color: '#6B6760', marginBottom: '6px' }}>
-              Prompt (optional):
-            </div>
-            <input
-              type="text"
-              value={aiPromptText}
-              onChange={(e) => setAiPromptText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  activeBubble.onGenerate(aiPromptText.trim() || null);
-                  closeBubble();
-                }
-                if (e.key === 'Escape') closeBubble();
-              }}
-              onClick={(e) => e.stopPropagation()}
-              placeholder="e.g., Focus on hands-on..."
-              autoFocus
-              style={{
-                width: '100%',
-                padding: '6px 8px',
-                border: '1px solid #e5e7eb',
-                borderRadius: '6px',
-                fontSize: '11px',
-                outline: 'none',
-                marginBottom: '8px',
-                boxSizing: 'border-box',
-              }}
-            />
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                activeBubble.onGenerate(aiPromptText.trim() || null);
-                closeBubble();
-              }}
-              style={{
-                width: '100%',
-                padding: '5px 10px',
-                backgroundColor: colors.accent,
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontSize: '11px',
-                fontWeight: '600',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '4px',
-              }}
-            >
-              <Sparkles size={12} /> Generate
-            </button>
-          </div>
-        </>
-      )}
 
       {selectedTopicForDetail && (
         <TopicDetailsModal

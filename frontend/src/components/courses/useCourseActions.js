@@ -40,6 +40,15 @@ const useCourseActions = ({
     setSections(prev => prev.map(s => s.id === sectionId ? { ...s, description: newDesc } : s));
   };
 
+  const addSectionWithContent = (title, description) => {
+    setSections(prev => [...prev, {
+      id: `section-${Date.now()}`,
+      title,
+      description,
+      subsections: []
+    }]);
+  };
+
   const removeSection = (sectionId) => {
     setSections(prev => prev.filter(s => s.id !== sectionId));
   };
@@ -81,6 +90,50 @@ const useCourseActions = ({
         subsections: (section.subsections || []).map(sub =>
           sub.id === subId ? { ...sub, description: newDesc } : sub
         )
+      };
+    }));
+  };
+
+  const addSubsectionWithContent = (sectionId, title, description) => {
+    setSections(prev => prev.map(section => {
+      if (section.id !== sectionId) return section;
+      const idx = (section.subsections || []).length + 1;
+      return {
+        ...section,
+        subsections: [...(section.subsections || []), {
+          id: `sub-${Date.now()}-${idx}`,
+          title,
+          description,
+          topicBoxes: []
+        }]
+      };
+    }));
+  };
+
+  const addTopicBoxWithContent = (sectionId, subsectionId, title, description) => {
+    setSections(prev => prev.map(section => {
+      if (section.id !== sectionId) return section;
+      return {
+        ...section,
+        subsections: (section.subsections || []).map(sub => {
+          if (sub.id !== subsectionId) return sub;
+          const idx = (sub.topicBoxes || []).length + 1;
+          return {
+            ...sub,
+            topicBoxes: [...(sub.topicBoxes || []), {
+              id: `topic-${Date.now()}-${idx}`,
+              title,
+              description,
+              duration_minutes: 20,
+              pla_pillars: [],
+              learning_objectives: [],
+              content_keywords: [],
+              video_resources: [],
+              worksheets: [],
+              activities: []
+            }]
+          };
+        })
       };
     }));
   };
@@ -243,10 +296,12 @@ const useCourseActions = ({
 
         setSections(prev => [...prev, ...newSections]);
         console.log(`✅ Generated ${result.items.length} sections`);
+        return { success: true, count: result.items.length };
       }
+      return { success: false, error: 'No items returned' };
     } catch (error) {
       console.error('Failed to generate sections:', error);
-      alert('Failed to generate sections. Please try again.');
+      return { success: false, error: error.message };
     } finally {
       setGenerating('sections', false);
     }
@@ -281,10 +336,12 @@ const useCourseActions = ({
         }));
 
         console.log(`✅ Generated ${result.items.length} subsections for section ${sectionId}`);
+        return { success: true, count: result.items.length };
       }
+      return { success: false, error: 'No items returned' };
     } catch (error) {
       console.error('Failed to generate subsections:', error);
-      alert('Failed to generate subsections. Please try again.');
+      return { success: false, error: error.message };
     } finally {
       setGenerating(`subsections-${sectionId}`, false);
     }
@@ -332,10 +389,12 @@ const useCourseActions = ({
         }));
 
         console.log(`✅ Generated ${result.items.length} topic boxes for subsection ${subsectionId}`);
+        return { success: true, count: result.items.length };
       }
+      return { success: false, error: 'No items returned' };
     } catch (error) {
       console.error('Failed to generate topic boxes:', error);
-      alert('Failed to generate topic boxes. Please try again.');
+      return { success: false, error: error.message };
     } finally {
       setGenerating(`topics-${sectionId}-${subsectionId}`, false);
     }
@@ -354,13 +413,13 @@ const useCourseActions = ({
           topicTitle: topicBox.title,
           topicData: {
             title: topicBox.title,
-            duration: `${topicBox.duration_minutes} min`,
-            description: topicBox.description,
+            duration: `${topicBox.duration_minutes || 20} min`,
+            description: topicBox.description || '',
             learningObjectives: topicBox.learning_objectives || [],
             subtopics: topicBox.content_keywords || [],
-            subject: formData.subject,
-            courseName: formData.courseName,
-            courseTopic: formData.topic
+            subject: formData?.subject || '',
+            courseName: formData?.courseName || '',
+            courseTopic: formData?.topic || ''
           },
           sectionId: topicBox.id,
           gradeLevel: formData.class,
@@ -368,15 +427,21 @@ const useCourseActions = ({
         })
       });
       const result = await response.json();
+      if (!response.ok) {
+        const detail = result.detail || result.error || `Server error ${response.status}`;
+        console.error('❌ Video generation failed:', detail);
+        return { success: false, error: detail };
+      }
       if (result.success) {
         setVideosByTopic(prev => ({ ...prev, [topicBox.id]: result.videos }));
         console.log('✅ Videos received:', result.videos.length);
+        return { success: true, count: result.videos.length };
       } else {
-        alert('Failed to generate videos');
+        return { success: false, error: result.error || 'No videos returned' };
       }
     } catch (error) {
       console.error('❌ Error:', error);
-      alert('Error generating videos');
+      return { success: false, error: error.message || 'Network error' };
     } finally {
       setGenerating(`videos-${topicBox.id}`, false);
     }
@@ -411,17 +476,19 @@ const useCourseActions = ({
           learningObjectives: topicBox.learning_objectives || []
         })
       });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const resource = await response.json();
+      if (!response.ok) {
+        throw new Error(resource.detail || resource.error || `Server error ${response.status}`);
+      }
       console.log(`✅ ${resourceType} generated:`, resource);
       setHandsOnResources(prev => ({
         ...prev,
         [topicBoxId]: [...(prev[topicBoxId] || []), resource]
       }));
-      alert(`${resourceType.charAt(0).toUpperCase() + resourceType.slice(1)} generated!`);
+      return { success: true, title: resource.title };
     } catch (error) {
       console.error(`Error generating ${resourceType}:`, error);
-      alert(`Failed to generate ${resourceType}`);
+      return { success: false, error: error.message || 'Unknown error' };
     } finally {
       setGenerating(`${resourceType}-${topicBoxId}`, false);
     }
@@ -534,18 +601,21 @@ const useCourseActions = ({
   return {
     // Section
     addSection,
+    addSectionWithContent,
     updateSectionTitle,
     updateSectionDescription,
     removeSection,
-    
+
     // Subsection
     addSubsection,
+    addSubsectionWithContent,
     updateSubsectionTitle,
     updateSubsectionDescription,
     removeSubsection,
     
     // TopicBox
     addTopicBox,
+    addTopicBoxWithContent,
     updateTopicBoxTitle,
     removeTopicBox,
     updateTopicBoxFull,

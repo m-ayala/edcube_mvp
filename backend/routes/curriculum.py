@@ -8,7 +8,7 @@ Generates boxes/topics without any video or worksheet population
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Dict, List
 import json
 import asyncio
 import logging
@@ -521,3 +521,146 @@ async def update_course_visibility(curriculum_id: str, body: VisibilityUpdate, t
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ============================================================================
+# EDO AI CHAT ENDPOINT
+# ============================================================================
+
+class EdoChatMessage(BaseModel):
+    role: str  # "user" | "assistant"
+    content: str
+
+class EdoChatRequest(BaseModel):
+    message: str
+    context: Optional[Dict] = None
+    conversation_history: Optional[List[EdoChatMessage]] = []
+    teacher_uid: Optional[str] = None
+
+@router.post("/curriculum/chat")
+async def chat_with_edo(request: EdoChatRequest):
+    """Edo AI curriculum assistant — returns 2-3 structured suggestion blocks"""
+    try:
+        course_ctx = ""
+        if request.context:
+            course = request.context.get("course", {})
+            selected = request.context.get("selected_item", {})
+            structure = request.context.get("course_structure", [])
+
+            # Course-level info
+            grade = course.get("grade", "")
+            subject = course.get("subject", "")
+            topic = course.get("topic", "")
+            duration = course.get("duration", "")
+            grade_str = f"Grade {grade}" if grade else "unknown grade"
+            subject_str = f" | Subject: {subject}" if subject else ""
+            topic_str = f" | Topic: {topic}" if topic else ""
+            duration_str = f" | Duration: {duration}" if duration else ""
+            course_ctx = f'Course: "{course.get("title", "Untitled")}" ({grade_str}{subject_str}{topic_str}{duration_str})\n'
+            if course.get("description"):
+                course_ctx += f'Course objectives: {course["description"]}\n'
+
+            # Full course structure overview
+            if structure:
+                course_ctx += '\nFull course structure:\n'
+                for i, sec in enumerate(structure, 1):
+                    subsecs = sec.get("subsections", [])
+                    course_ctx += f'  Section {i}: {sec["title"]}'
+                    if subsecs:
+                        sub_names = [ss["title"] for ss in subsecs]
+                        course_ctx += f' → {", ".join(sub_names)}'
+                    course_ctx += '\n'
+
+            # Currently focused item
+            item_type = selected.get("type", "course")
+            course_ctx += f'\nCurrently focused on ({item_type}): "{selected.get("title", "")}"\n'
+            if selected.get("parent_section"):
+                course_ctx += f'Parent section: {selected["parent_section"]}\n'
+            if selected.get("parent_subsection"):
+                course_ctx += f'Parent subsection: {selected["parent_subsection"]}\n'
+            if selected.get("description"):
+                course_ctx += f'Description: {selected["description"]}\n'
+            if selected.get("subsections"):
+                course_ctx += f'Subsections: {", ".join(selected["subsections"])}\n'
+            if selected.get("topic_boxes"):
+                course_ctx += f'Topic boxes: {", ".join(selected["topic_boxes"])}\n'
+            if selected.get("learning_objectives"):
+                course_ctx += f'Learning objectives: {"; ".join(selected["learning_objectives"])}\n'
+            if selected.get("pla_pillars"):
+                course_ctx += f'PLA pillars: {", ".join(selected["pla_pillars"])}\n'
+
+        system_prompt = f"""You are Edo, a curriculum design assistant for EdCube. You're a knowledgeable colleague, not a help bot — respond like you're mid-conversation, picking up on exactly what was just said.
+
+CRITICAL: Respond ONLY with a valid JSON object in one of these two formats:
+
+FORMAT A — CONVERSATION:
+{{"type": "conversation", "message": "..."}}
+
+Use when clarifying intent, making a recommendation, or confirming before generating options.
+- The message must directly respond to the teacher's last message. If they said "also add X" or "but keep it simple", acknowledge that specific thing by name first.
+- Never use a generic opener. Never re-introduce the task.
+- End with one specific question or a "Want me to draft options?" prompt.
+- Use FORMAT A first unless the teacher has already confirmed they want options in this message.
+
+FORMAT B — SUGGESTION CARDS:
+{{"type": "cards", "intro": "...", "suggestions": [{{"label": "...", "body": "...", "apply_field": "..."}}], "conclusion": "..."}}
+
+Use when the teacher confirms they want options ("yes", "go ahead", "sure", etc.) or explicitly asks for alternatives.
+- intro: Directly acknowledge what they specifically asked for — e.g. "Love adding the force angle — here are three ways to weave that in for 1st graders:" or "Got it, dialing it back. Here are three simpler options:". Never repeat the same phrasing across turns.
+- conclusion: Brief, specific — e.g. "Option 2 leans into familiar objects which usually clicks for this age." Vary it every time.
+- Always return exactly 2-3 suggestions.
+
+APPLY_FIELD (Format B only):
+
+When focused on a TOPIC BOX — a topic box has exactly these editable components:
+  - "description" → the topic's written description (body = full replacement text). Use this for any content/explanation/expansion of the topic.
+  - "objectives" → learning objectives (body = newline-separated list, each line starting "Students will..."). Use this when drafting what students should be able to do.
+  - Videos, activities, and worksheets are generated by separate buttons — do NOT suggest these as apply_field cards. If asked about them, tell the teacher to use the green chips at the bottom.
+  IMPORTANT: When focused on a topic, NEVER use "new_subsection", "new_section", or "new_topic" as apply_field — those add new course structure items and are wrong in this context.
+
+When focused on a SECTION or SUBSECTION:
+  - "description" → rewrites the section/subsection description
+  - "title" → suggests a new name
+  - "new_subsection" / "new_topic" → adds a new child item (label = title, body = description)
+
+General:
+  - "new_section" → adds a new top-level section
+  - null → ONLY for holistic analysis spanning multiple fields simultaneously. Never use for any single-field rewrite.
+
+Current course context:
+{course_ctx}"""
+
+        messages = [{"role": "system", "content": system_prompt}]
+        for msg in (request.conversation_history or []):
+            messages.append({"role": msg.role, "content": msg.content})
+        messages.append({"role": "user", "content": request.message})
+
+        response = await generation_service.client.chat.completions.create(
+            model="gpt-4o",
+            messages=messages,
+            temperature=0.7,
+            max_tokens=900,
+            response_format={"type": "json_object"}
+        )
+
+        raw = response.choices[0].message.content
+        try:
+            parsed = json.loads(raw)
+            response_type = parsed.get("type", "cards")
+
+            if response_type == "conversation":
+                return {"type": "conversation", "message": parsed.get("message", raw)}
+
+            # Cards response
+            suggestions = parsed.get("suggestions", [])
+            intro = parsed.get("intro", "")
+            conclusion = parsed.get("conclusion", "")
+            if not suggestions:
+                # Fallback: treat as conversation if no suggestions
+                return {"type": "conversation", "message": intro or raw}
+            return {"type": "cards", "intro": intro, "suggestions": suggestions, "conclusion": conclusion}
+
+        except Exception:
+            return {"type": "conversation", "message": raw}
+
+    except Exception as e:
+        logger.error(f"Edo chat error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Chat failed: {str(e)}")

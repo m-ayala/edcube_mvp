@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import CourseEditor from './CourseEditor';
 import CourseViewer from './CourseViewer';
+import EdoChatbot from './EdoChatbot';
 import useCourseActions from './useCourseActions';
 import useAutosave from './useAutosave';
 import BreakModal from '../modals/BreakModal';
@@ -45,6 +46,7 @@ const CourseWorkspace = () => {
   const [readOnly] = useState(incomingReadOnly || false);
   const [isOwner] = useState(incomingIsOwner || false);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [isEdoOpen, setIsEdoOpen] = useState(false);
 
   // ── Initialize Actions Hook ───────────────────────────────────────────
   const actions = useCourseActions({
@@ -351,44 +353,59 @@ const CourseWorkspace = () => {
           navigate={navigate}
         />
       ) : (
-        <>
-          <CourseEditor
-            courseName={courseName}
-            setCourseName={setCourseName}
-            sections={sections}
-            setSections={setSections}
-            videosByTopic={videosByTopic}
-            handsOnResources={handsOnResources}
-            formData={formData}
-            currentUser={currentUser}
-            actions={actions}
-            saveStatus={saveStatus}
-            onUndo={undo}
-            canUndo={historyIndex > 0}
-            onAddBreak={() => setShowBreakModal(true)}
-            onTopicClick={handleTopicClick}
-            navigate={navigate}
-            isPublic={isPublic}
-            onToggleVisibility={handleToggleVisibility}
-            onShare={() => setShowShareModal(true)}
-          />
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'row', overflow: 'hidden' }}>
+          {/* Editor column — shrinks to make room for Edo */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+            <CourseEditor
+              courseName={courseName}
+              setCourseName={setCourseName}
+              sections={sections}
+              setSections={setSections}
+              videosByTopic={videosByTopic}
+              handsOnResources={handsOnResources}
+              formData={formData}
+              currentUser={currentUser}
+              actions={actions}
+              saveStatus={saveStatus}
+              onUndo={undo}
+              canUndo={historyIndex > 0}
+              onAddBreak={() => setShowBreakModal(true)}
+              onTopicClick={handleTopicClick}
+              navigate={navigate}
+              isPublic={isPublic}
+              onToggleVisibility={handleToggleVisibility}
+              onShare={() => setShowShareModal(true)}
+              isEdoOpen={isEdoOpen}
+              onToggleEdo={() => setIsEdoOpen(p => !p)}
+            />
+          </div>
 
-          {/* Modals (only in edit mode) */}
+          {/* Edo side panel */}
+          {isEdoOpen && (
+            <EdoChatbot
+              sections={sections}
+              courseName={courseName}
+              formData={formData}
+              actions={actions}
+              currentUser={currentUser}
+              onClose={() => setIsEdoOpen(false)}
+            />
+          )}
+
+          {/* Modals */}
           {showBreakModal && (
             <BreakModal onConfirm={handleBreakCreate} onCancel={() => setShowBreakModal(false)} />
           )}
-
           {isModalOpen && selectedTopic && (
             <TopicDetailsModal topic={selectedTopic} onClose={() => { setIsModalOpen(false); setSelectedTopic(null); }} />
           )}
-
           <ShareCourseModal
             isOpen={showShareModal}
             onClose={() => setShowShareModal(false)}
             courseId={curriculumId}
             courseName={courseName}
           />
-        </>
+        </div>
       )}
     </div>
   );

@@ -148,7 +148,7 @@ async def generate_videos(request: GenerateVideosRequest):
             'course_name': request.topicData.get('courseName', ''),
             'course_topic': request.topicData.get('courseTopic', ''),
             'description': request.topicData.get('description', ''),
-            'duration_minutes': int(request.topicData.get('duration', '0').split()[0]),
+            'duration_minutes': int(request.topicData.get('duration', '20 min').split()[0]) if request.topicData.get('duration', '').split() and request.topicData.get('duration', '').split()[0].isdigit() else 20,
             'components': {
                 'instruction': {
                     'learning_objectives': request.topicData.get('learningObjectives', []),
