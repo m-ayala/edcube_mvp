@@ -191,7 +191,6 @@ const CourseViewPage = () => {
     isOwner       = false,
     ownerName     = '',
     isCollaborator = false,
-    from           = 'my-courses',
   } = location.state || {};
 
   const [sections]             = useState(incomingSections);
@@ -296,12 +295,12 @@ const CourseViewPage = () => {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
           <button
-            onClick={() => from === 'workspace' ? navigate(-1) : navigate('/my-courses')}
+            onClick={() => navigate('/my-courses')}
             style={{ fontFamily: SANS, fontSize: '12.5px', fontWeight: '500', padding: '6px 13px', borderRadius: '8px', cursor: 'pointer', background: 'transparent', border: '1px solid rgba(0,0,0,0.12)', color: '#555', transition: 'background 0.15s' }}
             onMouseEnter={e => { e.currentTarget.style.background = 'rgba(0,0,0,0.04)'; }}
             onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
           >
-            {from === 'workspace' ? '← Course Workspace' : '← My Courses'}
+            ← My Courses
           </button>
           <span style={{ fontSize: '14px', fontWeight: '500', color: '#111', fontFamily: SANS }}>{courseName}</span>
           {!isOwner && ownerName && (

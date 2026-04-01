@@ -309,7 +309,6 @@ const CourseWorkspace = () => {
         isOwner,
         ownerName: incomingOwnerName,
         isCollaborator: incomingIsCollaborator || false,
-        from: 'workspace',
       }
     });
   };
