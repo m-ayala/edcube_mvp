@@ -13,14 +13,14 @@ const Home = () => {
     }}>
       <div style={{ textAlign: 'center' }}>
         <h1 style={{
-          fontSize: '32px',
+          fontSize: '35.2px',
           fontWeight: '600',
           color: '#1e1e2e',
           marginBottom: '8px'
         }}>
           Hello, {currentUser?.displayName || 'Teacher'}
         </h1>
-        <p style={{ color: '#888', fontSize: '16px' }}>
+        <p style={{ color: '#888', fontSize: '17.6px' }}>
           Welcome to EdCube. Pick a page from the sidebar to get started.
         </p>
       </div>

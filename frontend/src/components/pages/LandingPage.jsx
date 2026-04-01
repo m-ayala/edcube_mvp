@@ -15,7 +15,7 @@ const LandingPage = () => {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=DM+Sans:wght@400;500&display=swap');
 
-        .lp-nav-link { font-size: 14px; color: #6B6459; text-decoration: none; font-weight: 500; }
+        .lp-nav-link { font-size: 15.4px; color: #6B6459; text-decoration: none; font-weight: 500; }
         .lp-nav-link:hover { color: #1C1917; }
 
         .lp-blob { position: absolute; border-radius: 50%; filter: blur(60px); opacity: 0.45; }
@@ -26,7 +26,7 @@ const LandingPage = () => {
 
         .feature-row { display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: center; max-width: 1100px; margin: 0 auto; }
 
-        .feat-tag { display: inline-block; font-size: 11px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; padding: 4px 10px; border-radius: 100px; margin-bottom: 16px; }
+        .feat-tag { display: inline-block; font-size: 12.1px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; padding: 4px 10px; border-radius: 100px; margin-bottom: 16px; }
         .tag-orange { background: #FDEEE6; color: #C05A2A; }
         .tag-blue   { background: #E4EFF9; color: #1E5F99; }
         .tag-green  { background: #E5F4E9; color: #2E7A43; }
@@ -38,7 +38,7 @@ const LandingPage = () => {
         .play-icon { width: 20px; height: 20px; border-radius: 50%; background: #1C1917; display: flex; align-items: center; justify-content: center; }
         .play-icon::after { content: ''; border-style: solid; border-width: 4px 0 4px 7px; border-color: transparent transparent transparent #fff; margin-left: 2px; }
 
-        .pla-pill { font-size: 10px; padding: 2px 7px; border-radius: 100px; font-weight: 500; }
+        .pla-pill { font-size: 11px; padding: 2px 7px; border-radius: 100px; font-weight: 500; }
         .pill-pk { background: #FDEEE6; color: #C05A2A; }
         .pill-cl { background: #E4EFF9; color: #1E5F99; }
         .pill-ct { background: #E5F4E9; color: #2E7A43; }
@@ -46,10 +46,10 @@ const LandingPage = () => {
 
         .comment-bubble { background: #F5F1EC; border-radius: 12px 12px 12px 0; padding: 10px 12px; margin-bottom: 8px; max-width: 85%; }
         .comment-bubble.right { background: #1C1917; color: #FAF8F4; border-radius: 12px 12px 0 12px; margin-left: auto; }
-        .comment-bubble p { font-size: 12px; line-height: 1.5; margin: 0; }
-        .comment-bubble span { font-size: 10px; opacity: 0.6; display: block; margin-top: 3px; }
+        .comment-bubble p { font-size: 13.2px; line-height: 1.5; margin: 0; }
+        .comment-bubble span { font-size: 11px; opacity: 0.6; display: block; margin-top: 3px; }
 
-        .ai-chip { display: inline-flex; align-items: center; gap: 5px; background: #1C1917; color: #FAF8F4; font-size: 11px; padding: 4px 10px; border-radius: 100px; margin: 3px; }
+        .ai-chip { display: inline-flex; align-items: center; gap: 5px; background: #1C1917; color: #FAF8F4; font-size: 12.1px; padding: 4px 10px; border-radius: 100px; margin: 3px; }
 
         .cta-blob-l { position: absolute; width: 300px; height: 300px; background: #E8845A; border-radius: 50%; filter: blur(80px); opacity: 0.25; top: -80px; left: -60px; }
         .cta-blob-r { position: absolute; width: 280px; height: 280px; background: #7BAFD4; border-radius: 50%; filter: blur(80px); opacity: 0.2; bottom: -60px; right: -40px; }

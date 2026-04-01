@@ -203,7 +203,7 @@ const CourseDesigner = () => {
           padding: '8px 16px',
           borderRadius: '8px',
           cursor: 'pointer',
-          fontSize: '14px',
+          fontSize: '15.4px',
           marginBottom: '20px',
           transition: 'all 0.2s'
         }}
@@ -227,7 +227,7 @@ const CourseDesigner = () => {
           style={{
             background: 'none',
             border: 'none',
-            fontSize: '24px',
+            fontSize: '26.4px',
             cursor: 'pointer',
             marginRight: '15px'
           }}
@@ -267,7 +267,7 @@ const CourseDesigner = () => {
               transition: 'width 0.3s ease'
             }} />
           </div>
-          <div style={{ marginTop: '5px', fontSize: '14px', color: '#666' }}>
+          <div style={{ marginTop: '5px', fontSize: '15.4px', color: '#666' }}>
             {progress.progress}%
           </div>
         </div>
@@ -287,7 +287,7 @@ const CourseDesigner = () => {
             required
             disabled={loading}
             placeholder="e.g., Introduction to Fractions"
-            style={{ width: '100%', padding: '10px', fontSize: '16px', border: '1px solid #ddd', borderRadius: '4px' }}
+            style={{ width: '100%', padding: '10px', fontSize: '17.6px', border: '1px solid #ddd', borderRadius: '4px' }}
           />
         </div>
 
@@ -302,7 +302,7 @@ const CourseDesigner = () => {
               onChange={handleChange}
               required
               disabled={loading}
-              style={{ width: '100%', padding: '10px', fontSize: '16px', border: '1px solid #ddd', borderRadius: '4px' }}
+              style={{ width: '100%', padding: '10px', fontSize: '17.6px', border: '1px solid #ddd', borderRadius: '4px' }}
             >
               <option value="">Select Class</option>
               <option value="Class 1">Class 1</option>
@@ -327,14 +327,14 @@ const CourseDesigner = () => {
                 disabled={loading}
                 min="1"
                 placeholder="e.g., 6"
-                style={{ flex: 1, padding: '10px', fontSize: '16px', border: '1px solid #ddd', borderRadius: '4px' }}
+                style={{ flex: 1, padding: '10px', fontSize: '17.6px', border: '1px solid #ddd', borderRadius: '4px' }}
               />
               <select
                 name="timeUnit"
                 value={formData.timeUnit}
                 onChange={handleChange}
                 disabled={loading}
-                style={{ padding: '10px', fontSize: '16px', border: '1px solid #ddd', borderRadius: '4px' }}
+                style={{ padding: '10px', fontSize: '17.6px', border: '1px solid #ddd', borderRadius: '4px' }}
               >
                 <option value="minutes">minutes</option>
                 <option value="hours">hours</option>
@@ -357,7 +357,7 @@ const CourseDesigner = () => {
               required
               disabled={loading}
               placeholder="e.g., History"
-              style={{ width: '100%', padding: '10px', fontSize: '16px', border: '1px solid #ddd', borderRadius: '4px' }}
+              style={{ width: '100%', padding: '10px', fontSize: '17.6px', border: '1px solid #ddd', borderRadius: '4px' }}
             />
           </div>
 
@@ -373,7 +373,7 @@ const CourseDesigner = () => {
               required
               disabled={loading}
               placeholder="e.g., MLK and Civil Rights"
-              style={{ width: '100%', padding: '10px', fontSize: '16px', border: '1px solid #ddd', borderRadius: '4px' }}
+              style={{ width: '100%', padding: '10px', fontSize: '17.6px', border: '1px solid #ddd', borderRadius: '4px' }}
             />
           </div>
         </div>
@@ -392,7 +392,7 @@ const CourseDesigner = () => {
               disabled={loading}
               min="0"
               max="10"
-              style={{ width: '100%', padding: '10px', fontSize: '16px', border: '1px solid #ddd', borderRadius: '4px' }}
+              style={{ width: '100%', padding: '10px', fontSize: '17.6px', border: '1px solid #ddd', borderRadius: '4px' }}
             />
           </div>
 
@@ -409,7 +409,7 @@ const CourseDesigner = () => {
               disabled={loading}
               min="0"
               max="10"
-              style={{ width: '100%', padding: '10px', fontSize: '16px', border: '1px solid #ddd', borderRadius: '4px' }}
+              style={{ width: '100%', padding: '10px', fontSize: '17.6px', border: '1px solid #ddd', borderRadius: '4px' }}
             />
           </div>
         </div>
@@ -425,7 +425,7 @@ const CourseDesigner = () => {
             disabled={loading}
             placeholder="Any specific goals or requirements for this course..."
             rows="4"
-            style={{ width: '100%', padding: '10px', fontSize: '16px', border: '1px solid #ddd', borderRadius: '4px', resize: 'vertical' }}
+            style={{ width: '100%', padding: '10px', fontSize: '17.6px', border: '1px solid #ddd', borderRadius: '4px', resize: 'vertical' }}
           />
         </div>
 
@@ -439,7 +439,7 @@ const CourseDesigner = () => {
             color: 'white',
             border: 'none',
             borderRadius: '4px',
-            fontSize: '18px',
+            fontSize: '19.8px',
             fontWeight: '600',
             cursor: loading ? 'not-allowed' : 'pointer'
           }}

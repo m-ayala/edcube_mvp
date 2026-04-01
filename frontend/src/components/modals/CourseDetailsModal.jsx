@@ -36,7 +36,7 @@ const CourseDetailsModal = ({ curriculum, onClose, onEdit }) => {
             right: '10px',
             background: 'none',
             border: 'none',
-            fontSize: '24px',
+            fontSize: '26.4px',
             cursor: 'pointer',
             color: '#666'
           }}
@@ -89,7 +89,7 @@ const CourseDetailsModal = ({ curriculum, onClose, onEdit }) => {
               border: 'none',
               borderRadius: '4px',
               cursor: 'pointer',
-              fontSize: '16px'
+              fontSize: '17.6px'
             }}
           >
             Edit Course
@@ -104,7 +104,7 @@ const CourseDetailsModal = ({ curriculum, onClose, onEdit }) => {
               border: 'none',
               borderRadius: '4px',
               cursor: 'pointer',
-              fontSize: '16px'
+              fontSize: '17.6px'
             }}
           >
             Close

@@ -31,7 +31,7 @@ const DeleteConfirmModal = ({ courseName, onConfirm, onCancel }) => {
           Are you sure you want to delete <strong>"{courseName}"</strong>?
         </p>
         
-        <p style={{ marginBottom: '30px', color: '#dc3545', fontSize: '14px' }}>
+        <p style={{ marginBottom: '30px', color: '#dc3545', fontSize: '15.4px' }}>
           This action cannot be undone.
         </p>
 
@@ -46,7 +46,7 @@ const DeleteConfirmModal = ({ courseName, onConfirm, onCancel }) => {
               border: 'none',
               borderRadius: '4px',
               cursor: 'pointer',
-              fontSize: '16px'
+              fontSize: '17.6px'
             }}
           >
             Cancel
@@ -61,7 +61,7 @@ const DeleteConfirmModal = ({ courseName, onConfirm, onCancel }) => {
               border: 'none',
               borderRadius: '4px',
               cursor: 'pointer',
-              fontSize: '16px'
+              fontSize: '17.6px'
             }}
           >
             Delete Permanently

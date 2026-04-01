@@ -30,7 +30,7 @@ const ProfileHeader = ({
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 backgroundColor: '#8b7355', color: '#ffffff',
-                fontSize: '40px', fontWeight: '700',
+                fontSize: '44px', fontWeight: '700',
                 fontFamily: "'DM Sans', sans-serif",
               }}
             >

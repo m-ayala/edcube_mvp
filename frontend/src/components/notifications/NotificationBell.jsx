@@ -70,7 +70,7 @@ const NotificationBell = () => {
         onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#F5F5F4'; }}
         onMouseLeave={e => { e.currentTarget.style.backgroundColor = open ? '#F5F5F4' : '#FFFFFF'; }}
       >
-        <span style={{ fontSize: '17px', lineHeight: 1 }}>🔔</span>
+        <span style={{ fontSize: '18.7px', lineHeight: 1 }}>🔔</span>
         {unreadCount > 0 && (
           <span style={{
             position: 'absolute',
@@ -81,7 +81,7 @@ const NotificationBell = () => {
             borderRadius: '9px',
             backgroundColor: '#EF4444',
             color: '#FFFFFF',
-            fontSize: '10px',
+            fontSize: '11px',
             fontWeight: '700',
             display: 'flex',
             alignItems: 'center',
@@ -119,12 +119,12 @@ const NotificationBell = () => {
             alignItems: 'center',
             justifyContent: 'space-between',
           }}>
-            <span style={{ fontSize: '13px', fontWeight: '600', color: '#1C1917' }}>
+            <span style={{ fontSize: '14.3px', fontWeight: '600', color: '#1C1917' }}>
               Notifications
             </span>
             {unreadCount > 0 && (
               <span style={{
-                fontSize: '11px',
+                fontSize: '12.1px',
                 backgroundColor: '#FEE2E2',
                 color: '#DC2626',
                 padding: '2px 8px',
@@ -143,7 +143,7 @@ const NotificationBell = () => {
                 padding: '28px 16px',
                 textAlign: 'center',
                 color: '#78716C',
-                fontSize: '13px',
+                fontSize: '14.3px',
               }}>
                 No notifications yet
               </div>
@@ -173,7 +173,7 @@ const NotificationBell = () => {
 
                   {/* Text */}
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ margin: 0, fontSize: '13px', color: '#1C1917', lineHeight: '1.5' }}>
+                    <p style={{ margin: 0, fontSize: '14.3px', color: '#1C1917', lineHeight: '1.5' }}>
                       <button
                         onClick={() => handleUserClick(notif.fromUid, notif.id)}
                         style={{
@@ -183,7 +183,7 @@ const NotificationBell = () => {
                           cursor: 'pointer',
                           color: '#166534',
                           fontWeight: '600',
-                          fontSize: '13px',
+                          fontSize: '14.3px',
                           fontFamily: "'DM Sans', sans-serif",
                           textDecoration: 'underline',
                           textUnderlineOffset: '2px',
@@ -206,7 +206,7 @@ const NotificationBell = () => {
                         : <>{' sent you a notification about '}<strong style={{ color: '#1C1917' }}>{notif.courseName}</strong></>
                       }
                     </p>
-                    <span style={{ fontSize: '11px', color: '#A8A29E', marginTop: '3px', display: 'block' }}>
+                    <span style={{ fontSize: '12.1px', color: '#A8A29E', marginTop: '3px', display: 'block' }}>
                       {timeAgo(notif.createdAt)}
                     </span>
                   </div>
@@ -220,7 +220,7 @@ const NotificationBell = () => {
                       border: 'none',
                       cursor: 'pointer',
                       color: '#A8A29E',
-                      fontSize: '16px',
+                      fontSize: '17.6px',
                       lineHeight: 1,
                       padding: '0 2px',
                       flexShrink: 0,

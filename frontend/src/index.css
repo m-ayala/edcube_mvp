@@ -121,6 +121,27 @@ button:focus-visible {
   outline-offset: 2px;
 }
 
+/* ── Glass button overrides — defeat global blue + translateY ── */
+.glass-btn,
+.glass-btn:hover:not(:disabled),
+.glass-btn:active:not(:disabled),
+.add-dashed-btn,
+.add-dashed-btn:hover:not(:disabled),
+.add-dashed-btn:active:not(:disabled) {
+  transform: none !important;
+  background-color: unset;
+  color: unset;
+}
+
+/* Blob background container */
+.blobs-bg {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
 /* Scrollbar styling */
 ::-webkit-scrollbar {
   width: 8px;
@@ -128,22 +149,22 @@ button:focus-visible {
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #888;
+  background: rgba(0,0,0,0.15);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #555;
+  background: rgba(0,0,0,0.25);
 }
 
 /* Firefox scrollbar */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #888 #f1f1f1;
+  scrollbar-color: rgba(0,0,0,0.15) transparent;
 }
 
 /* Loading spinner animation */

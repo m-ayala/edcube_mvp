@@ -57,7 +57,7 @@ const Search = () => {
           left: '16px',
           top: '50%',
           transform: 'translateY(-50%)',
-          fontSize: '18px',
+          fontSize: '19.8px',
           color: '#8b7355',
           pointerEvents: 'none',
         }}>
@@ -71,7 +71,7 @@ const Search = () => {
           style={{
             width: '100%',
             padding: '14px 16px 14px 44px',
-            fontSize: '16px',
+            fontSize: '17.6px',
             border: '1px solid #d4c4a8',
             borderRadius: '12px',
             backgroundColor: '#fffdf7',
@@ -94,19 +94,19 @@ const Search = () => {
       {/* Results area */}
       <div style={{ marginTop: '24px' }}>
         {loading && (
-          <p style={{ textAlign: 'center', color: '#8b7355', fontSize: '15px' }}>
+          <p style={{ textAlign: 'center', color: '#8b7355', fontSize: '16.5px' }}>
             Loading teachers...
           </p>
         )}
 
         {error && (
-          <p style={{ textAlign: 'center', color: '#d32f2f', fontSize: '15px' }}>
+          <p style={{ textAlign: 'center', color: '#d32f2f', fontSize: '16.5px' }}>
             {error}
           </p>
         )}
 
         {!loading && !error && query.trim() && results.length === 0 && (
-          <p style={{ textAlign: 'center', color: '#8b7355', fontSize: '15px' }}>
+          <p style={{ textAlign: 'center', color: '#8b7355', fontSize: '16.5px' }}>
             No teachers found matching "{query.trim()}"
           </p>
         )}
@@ -162,7 +162,7 @@ const Search = () => {
                 alignItems: 'center',
                 justifyContent: 'center',
                 fontWeight: '600',
-                fontSize: '15px',
+                fontSize: '16.5px',
                 flexShrink: 0,
               }}>
                 {getInitials(teacher.display_name)}
@@ -171,7 +171,7 @@ const Search = () => {
 
             {/* Name */}
             <span style={{
-              fontSize: '15px',
+              fontSize: '16.5px',
               fontWeight: '500',
               color: '#2c3e50',
             }}>

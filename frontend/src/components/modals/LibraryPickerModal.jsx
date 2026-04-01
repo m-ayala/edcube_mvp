@@ -93,10 +93,10 @@ const LibraryPickerModal = ({ isOpen, onClose, onSelect, currentUser }) => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <BookMarked size={18} color={colors.accent} />
             <div>
-              <h3 style={{ margin: 0, fontSize: '16px', color: colors.textPrimary, fontWeight: '700' }}>
+              <h3 style={{ margin: 0, fontSize: '17.6px', color: colors.textPrimary, fontWeight: '700' }}>
                 Pick from Library
               </h3>
-              <p style={{ margin: 0, fontSize: '12px', color: colors.textSecondary }}>
+              <p style={{ margin: 0, fontSize: '13.2px', color: colors.textSecondary }}>
                 {totalLinks} saved {totalLinks === 1 ? 'link' : 'links'} across {folders.length} {folders.length === 1 ? 'folder' : 'folders'}
               </p>
             </div>
@@ -112,16 +112,16 @@ const LibraryPickerModal = ({ isOpen, onClose, onSelect, currentUser }) => {
         {/* Body */}
         <div style={{ overflowY: 'auto', flex: 1 }}>
           {loading ? (
-            <div style={{ padding: '40px', textAlign: 'center', color: colors.textSecondary, fontSize: '14px' }}>
+            <div style={{ padding: '40px', textAlign: 'center', color: colors.textSecondary, fontSize: '15.4px' }}>
               Loading your library…
             </div>
           ) : folders.length === 0 ? (
             <div style={{ padding: '40px 24px', textAlign: 'center' }}>
               <BookMarked size={36} color={colors.border} style={{ marginBottom: '12px' }} />
-              <p style={{ margin: '0 0 6px', fontSize: '15px', fontWeight: '600', color: colors.textPrimary }}>
+              <p style={{ margin: '0 0 6px', fontSize: '16.5px', fontWeight: '600', color: colors.textPrimary }}>
                 No saved links yet
               </p>
-              <p style={{ margin: 0, fontSize: '13px', color: colors.textSecondary }}>
+              <p style={{ margin: 0, fontSize: '14.3px', color: colors.textSecondary }}>
                 Add links to your Resource Library on your profile page, then pick them here.
               </p>
             </div>
@@ -155,10 +155,10 @@ const LibraryPickerModal = ({ isOpen, onClose, onSelect, currentUser }) => {
                       {isExpanded
                         ? <FolderOpen size={16} color={colors.accent} />
                         : <Folder size={16} color={colors.textSecondary} />}
-                      <span style={{ flex: 1, fontSize: '14px', fontWeight: '600', color: colors.textPrimary }}>
+                      <span style={{ flex: 1, fontSize: '15.4px', fontWeight: '600', color: colors.textPrimary }}>
                         {folder.name}
                       </span>
-                      <span style={{ fontSize: '12px', color: colors.textSecondary }}>
+                      <span style={{ fontSize: '13.2px', color: colors.textSecondary }}>
                         {linkCount} {linkCount === 1 ? 'link' : 'links'}
                       </span>
                     </button>
@@ -167,7 +167,7 @@ const LibraryPickerModal = ({ isOpen, onClose, onSelect, currentUser }) => {
                     {isExpanded && (
                       <div>
                         {linkCount === 0 ? (
-                          <div style={{ padding: '12px 20px 12px 52px', fontSize: '13px', color: colors.textSecondary, fontStyle: 'italic' }}>
+                          <div style={{ padding: '12px 20px 12px 52px', fontSize: '14.3px', color: colors.textSecondary, fontStyle: 'italic' }}>
                             No links in this folder.
                           </div>
                         ) : (
@@ -192,22 +192,22 @@ const LibraryPickerModal = ({ isOpen, onClose, onSelect, currentUser }) => {
                               onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
                             >
                               <div style={{ flex: 1, minWidth: 0 }}>
-                                <p style={{ margin: '0 0 2px', fontSize: '13px', fontWeight: '600', color: colors.textPrimary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                <p style={{ margin: '0 0 2px', fontSize: '14.3px', fontWeight: '600', color: colors.textPrimary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                   {link.title}
                                 </p>
-                                <p style={{ margin: 0, fontSize: '11px', color: colors.textSecondary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                <p style={{ margin: 0, fontSize: '12.1px', color: colors.textSecondary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '3px' }}>
                                   <ExternalLink size={10} />
                                   {link.url.length > 45 ? link.url.slice(0, 45) + '…' : link.url}
                                 </p>
                                 {link.description && (
-                                  <p style={{ margin: '3px 0 0', fontSize: '11px', color: colors.textSecondary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  <p style={{ margin: '3px 0 0', fontSize: '12.1px', color: colors.textSecondary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                     {link.description}
                                   </p>
                                 )}
                               </div>
                               <span style={{
                                 flexShrink: 0,
-                                fontSize: '11px',
+                                fontSize: '12.1px',
                                 fontWeight: '600',
                                 color: colors.accent,
                                 backgroundColor: colors.accentLight,
@@ -236,7 +236,7 @@ const LibraryPickerModal = ({ isOpen, onClose, onSelect, currentUser }) => {
           backgroundColor: colors.accentLight,
           flexShrink: 0
         }}>
-          <p style={{ margin: 0, fontSize: '12px', color: colors.textSecondary }}>
+          <p style={{ margin: 0, fontSize: '13.2px', color: colors.textSecondary }}>
             Manage your library from your profile page.
           </p>
         </div>

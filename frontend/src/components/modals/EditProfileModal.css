@@ -37,7 +37,7 @@
 
 .modal-header h2 {
   margin: 0;
-  font-size: 24px;
+  font-size: 26.4px;
   color: #2c3e50;
   font-weight: 600;
 }
@@ -45,7 +45,7 @@
 .modal-close-btn {
   background: none;
   border: none;
-  font-size: 32px;
+  font-size: 35.2px;
   color: #8b7355;
   cursor: pointer;
   padding: 0;
@@ -76,7 +76,7 @@
   margin-bottom: 8px;
   font-weight: 500;
   color: #2c3e50;
-  font-size: 14px;
+  font-size: 15.4px;
 }
 
 .form-group input,
@@ -86,7 +86,7 @@
   padding: 10px 12px;
   border: 1px solid #d4c4a8;
   border-radius: 8px;
-  font-size: 15px;
+  font-size: 16.5px;
   font-family: inherit;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
@@ -124,7 +124,7 @@
 .field-hint {
   display: block;
   margin-top: 6px;
-  font-size: 13px;
+  font-size: 14.3px;
   color: #8b7355;
   font-style: italic;
 }
@@ -136,7 +136,7 @@
   color: #8b7355;
   border: 1px solid #8b7355;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 15.4px;
   cursor: pointer;
   transition: all 0.2s;
   font-weight: 500;
@@ -163,7 +163,7 @@
   padding: 12px;
   border-radius: 8px;
   margin-bottom: 16px;
-  font-size: 14px;
+  font-size: 15.4px;
 }
 
 /* Modal Footer */
@@ -179,7 +179,7 @@
 .btn-save {
   padding: 10px 24px;
   border-radius: 8px;
-  font-size: 15px;
+  font-size: 16.5px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;

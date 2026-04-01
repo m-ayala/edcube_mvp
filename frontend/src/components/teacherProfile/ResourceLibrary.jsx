@@ -26,7 +26,7 @@ const inputStyle = {
   padding: '8px 12px',
   border: `1px solid ${colors.border}`,
   borderRadius: '6px',
-  fontSize: '13px',
+  fontSize: '14.3px',
   outline: 'none',
   fontFamily: 'inherit',
   color: colors.textPrimary,
@@ -167,7 +167,7 @@ const ResourceLibrary = ({ currentUser }) => {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <BookMarked size={20} color={colors.accent} />
-          <h2 style={{ margin: 0, fontSize: '22px', fontWeight: '700', color: colors.textPrimary }}>
+          <h2 style={{ margin: 0, fontSize: '24.2px', fontWeight: '700', color: colors.textPrimary }}>
             Resource Library
           </h2>
         </div>
@@ -181,7 +181,7 @@ const ResourceLibrary = ({ currentUser }) => {
             border: 'none',
             borderRadius: '8px',
             cursor: 'pointer',
-            fontSize: '13px',
+            fontSize: '14.3px',
             fontWeight: '600'
           }}
         >
@@ -192,7 +192,7 @@ const ResourceLibrary = ({ currentUser }) => {
       {/* Private badge */}
       <p style={{
         margin: '0 0 20px',
-        fontSize: '12px',
+        fontSize: '13.2px',
         color: colors.textSecondary,
         fontStyle: 'italic'
       }}>
@@ -224,7 +224,7 @@ const ResourceLibrary = ({ currentUser }) => {
             disabled={savingFolder || !newFolderName.trim()}
             style={{
               padding: '8px 14px', backgroundColor: colors.accent, color: '#fff',
-              border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: '600',
+              border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14.3px', fontWeight: '600',
               opacity: savingFolder || !newFolderName.trim() ? 0.6 : 1
             }}
           >
@@ -241,7 +241,7 @@ const ResourceLibrary = ({ currentUser }) => {
 
       {/* Content */}
       {loading ? (
-        <div style={{ padding: '32px', textAlign: 'center', color: colors.textSecondary, fontSize: '14px' }}>
+        <div style={{ padding: '32px', textAlign: 'center', color: colors.textSecondary, fontSize: '15.4px' }}>
           Loading library…
         </div>
       ) : folders.length === 0 ? (
@@ -253,10 +253,10 @@ const ResourceLibrary = ({ currentUser }) => {
           border: `1px dashed ${colors.border}`
         }}>
           <BookMarked size={32} color={colors.border} style={{ marginBottom: '12px' }} />
-          <p style={{ margin: '0 0 6px', fontSize: '15px', fontWeight: '600', color: colors.textPrimary }}>
+          <p style={{ margin: '0 0 6px', fontSize: '16.5px', fontWeight: '600', color: colors.textPrimary }}>
             Your library is empty
           </p>
-          <p style={{ margin: 0, fontSize: '13px', color: colors.textSecondary }}>
+          <p style={{ margin: 0, fontSize: '14.3px', color: colors.textSecondary }}>
             Create a folder and start saving links to videos, worksheets, and activities.
           </p>
         </div>
@@ -306,15 +306,15 @@ const ResourceLibrary = ({ currentUser }) => {
                         if (e.key === 'Escape') setRenamingFolder(null);
                       }}
                       onClick={e => e.stopPropagation()}
-                      style={{ ...inputStyle, flex: 1, fontSize: '14px', fontWeight: '600' }}
+                      style={{ ...inputStyle, flex: 1, fontSize: '15.4px', fontWeight: '600' }}
                     />
                   ) : (
-                    <span style={{ flex: 1, fontSize: '14px', fontWeight: '600', color: colors.textPrimary }}>
+                    <span style={{ flex: 1, fontSize: '15.4px', fontWeight: '600', color: colors.textPrimary }}>
                       {folder.name}
                     </span>
                   )}
 
-                  <span style={{ fontSize: '12px', color: colors.textSecondary, flexShrink: 0 }}>
+                  <span style={{ fontSize: '13.2px', color: colors.textSecondary, flexShrink: 0 }}>
                     {linkCount} {linkCount === 1 ? 'link' : 'links'}
                   </span>
 
@@ -355,7 +355,7 @@ const ResourceLibrary = ({ currentUser }) => {
                         border: `1px solid ${colors.border}`,
                         borderRadius: '5px',
                         cursor: 'pointer',
-                        fontSize: '12px',
+                        fontSize: '13.2px',
                         fontWeight: '600'
                       }}
                       title="Add link"
@@ -377,7 +377,7 @@ const ResourceLibrary = ({ currentUser }) => {
                   <div style={{ borderTop: `1px solid ${colors.border}` }}>
                     {/* Links list */}
                     {(folder.links || []).length === 0 && !isAddingHere && (
-                      <div style={{ padding: '16px 20px', fontSize: '13px', color: colors.textSecondary, fontStyle: 'italic' }}>
+                      <div style={{ padding: '16px 20px', fontSize: '14.3px', color: colors.textSecondary, fontStyle: 'italic' }}>
                         No links yet. Click "Add Link" to save one.
                       </div>
                     )}
@@ -395,11 +395,11 @@ const ResourceLibrary = ({ currentUser }) => {
                         }}
                       >
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <p style={{ margin: '0 0 3px', fontSize: '13px', fontWeight: '600', color: colors.textPrimary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <p style={{ margin: '0 0 3px', fontSize: '14.3px', fontWeight: '600', color: colors.textPrimary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {link.title}
                           </p>
                           {link.description && (
-                            <p style={{ margin: '0 0 4px', fontSize: '12px', color: colors.textSecondary }}>
+                            <p style={{ margin: '0 0 4px', fontSize: '13.2px', color: colors.textSecondary }}>
                               {link.description}
                             </p>
                           )}
@@ -407,7 +407,7 @@ const ResourceLibrary = ({ currentUser }) => {
                             href={link.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            style={{ fontSize: '12px', color: colors.accent, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '3px', fontWeight: '500' }}
+                            style={{ fontSize: '13.2px', color: colors.accent, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '3px', fontWeight: '500' }}
                           >
                             {link.url.length > 50 ? link.url.slice(0, 50) + '…' : link.url}
                             <ExternalLink size={11} />
@@ -426,7 +426,7 @@ const ResourceLibrary = ({ currentUser }) => {
                     {/* Add-link inline form */}
                     {isAddingHere && (
                       <div style={{ padding: '16px 20px', backgroundColor: colors.accentLight, display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                        <p style={{ margin: 0, fontSize: '12px', fontWeight: '700', color: colors.textSecondary, letterSpacing: '0.4px' }}>
+                        <p style={{ margin: 0, fontSize: '13.2px', fontWeight: '700', color: colors.textSecondary, letterSpacing: '0.4px' }}>
                           ADD LINK TO "{folder.name.toUpperCase()}"
                         </p>
                         <input
@@ -452,7 +452,7 @@ const ResourceLibrary = ({ currentUser }) => {
                           style={{ ...inputStyle, width: '100%' }}
                         />
                         {linkError && (
-                          <p style={{ margin: 0, fontSize: '12px', color: colors.danger }}>{linkError}</p>
+                          <p style={{ margin: 0, fontSize: '13.2px', color: colors.danger }}>{linkError}</p>
                         )}
                         <div style={{ display: 'flex', gap: '8px' }}>
                           <button
@@ -460,7 +460,7 @@ const ResourceLibrary = ({ currentUser }) => {
                             disabled={savingLink}
                             style={{
                               padding: '8px 16px', backgroundColor: colors.accent, color: '#fff',
-                              border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: '600',
+                              border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14.3px', fontWeight: '600',
                               opacity: savingLink ? 0.6 : 1
                             }}
                           >
@@ -470,7 +470,7 @@ const ResourceLibrary = ({ currentUser }) => {
                             onClick={() => { setAddingLinkTo(null); setLinkError(''); }}
                             style={{
                               padding: '8px 16px', backgroundColor: '#f3f4f6', color: colors.textPrimary,
-                              border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: '600'
+                              border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14.3px', fontWeight: '600'
                             }}
                           >
                             Cancel

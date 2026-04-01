@@ -103,7 +103,7 @@ const handleUpload = async () => {
           padding: '10px 20px',
           borderRadius: '8px',
           cursor: 'pointer',
-          fontSize: '14px',
+          fontSize: '15.4px',
           marginBottom: '2rem'
         }}
       >

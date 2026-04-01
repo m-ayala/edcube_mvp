@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { getTeacherCurricula } from '../../firebase/dbService';
-import { logoutTeacher } from '../../firebase/authService';
 import CourseCard from './CourseCard';
 import DeleteConfirmModal from '../modals/DeleteConfirmModal';
 
@@ -117,36 +116,12 @@ const MyCourses = () => {
     }
   };
 
-  const handleLogout = async () => {
-    try {
-      await logoutTeacher();
-      navigate('/login');
-    } catch (error) {
-      console.error('Logout error:', error);
-    }
-  };
-
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '20px' }}>
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
-        <div>
-          <h1>My Courses</h1>
-          <p style={{ color: '#666' }}>Welcome, {currentUser?.displayName || 'Teacher'}!</p>
-        </div>
-        <button
-          onClick={handleLogout}
-          style={{
-            padding: '10px 20px',
-            backgroundColor: '#6c757d',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer'
-          }}
-        >
-          Sign Out
-        </button>
+      <div style={{ marginBottom: '30px' }}>
+        <h1>My Courses</h1>
+        <p style={{ color: '#666' }}>Welcome, {currentUser?.displayName || 'Teacher'}!</p>
       </div>
 
       {/* Create New Course Button */}
@@ -159,7 +134,7 @@ const MyCourses = () => {
           border: 'none',
           borderRadius: '4px',
           cursor: 'pointer',
-          fontSize: '16px',
+          fontSize: '17.6px',
           marginBottom: '30px'
         }}
       >
@@ -179,7 +154,11 @@ const MyCourses = () => {
 
       {/* Course Cards */}
       {!loading && curricula.length > 0 && (
-        <div>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+          gap: '16px'
+        }}>
           {curricula.map((curriculum) => (
             <CourseCard
               key={curriculum.id}
@@ -204,10 +183,10 @@ const MyCourses = () => {
             maxWidth: '420px', width: '90%', textAlign: 'center',
             boxShadow: '0 8px 30px rgba(0,0,0,0.15)'
           }}>
-            <h3 style={{ margin: '0 0 12px 0', fontSize: '18px' }}>
+            <h3 style={{ margin: '0 0 12px 0', fontSize: '19.8px' }}>
               {visibilityModalData.isPublic ? 'Make Course Private?' : 'Make Course Public?'}
             </h3>
-            <p style={{ color: '#666', marginBottom: '24px', fontSize: '14px', lineHeight: '1.5' }}>
+            <p style={{ color: '#666', marginBottom: '24px', fontSize: '15.4px', lineHeight: '1.5' }}>
               {visibilityModalData.isPublic
                 ? `"${visibilityModalData.courseName}" will no longer be visible to other teachers in your organization.`
                 : `"${visibilityModalData.courseName}" will be visible to all teachers in your organization.`
@@ -219,7 +198,7 @@ const MyCourses = () => {
                 style={{
                   padding: '8px 20px', backgroundColor: '#f3f4f6', color: '#374151',
                   border: '1px solid #d1d5db', borderRadius: '6px', cursor: 'pointer',
-                  fontSize: '14px', fontWeight: '500'
+                  fontSize: '15.4px', fontWeight: '500'
                 }}
               >
                 Cancel
@@ -230,7 +209,7 @@ const MyCourses = () => {
                   padding: '8px 20px',
                   backgroundColor: visibilityModalData.isPublic ? '#6b7280' : '#10B981',
                   color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer',
-                  fontSize: '14px', fontWeight: '600'
+                  fontSize: '15.4px', fontWeight: '600'
                 }}
               >
                 {visibilityModalData.isPublic ? 'Make Private' : 'Make Public'}

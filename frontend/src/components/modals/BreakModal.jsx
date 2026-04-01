@@ -60,7 +60,7 @@ const BreakModal = ({ onConfirm, onCancel }) => {
                 style={{
                   flex: 1,
                   padding: '10px',
-                  fontSize: '16px',
+                  fontSize: '17.6px',
                   border: '1px solid #ddd',
                   borderRadius: '4px'
                 }}
@@ -71,7 +71,7 @@ const BreakModal = ({ onConfirm, onCancel }) => {
                 onChange={(e) => setUnit(e.target.value)}
                 style={{
                   padding: '10px',
-                  fontSize: '16px',
+                  fontSize: '17.6px',
                   border: '1px solid #ddd',
                   borderRadius: '4px'
                 }}
@@ -94,7 +94,7 @@ const BreakModal = ({ onConfirm, onCancel }) => {
                 border: 'none',
                 borderRadius: '4px',
                 cursor: 'pointer',
-                fontSize: '16px'
+                fontSize: '17.6px'
               }}
             >
               Cancel
@@ -110,7 +110,7 @@ const BreakModal = ({ onConfirm, onCancel }) => {
                 border: 'none',
                 borderRadius: '4px',
                 cursor: 'pointer',
-                fontSize: '16px',
+                fontSize: '17.6px',
                 fontWeight: '600'
               }}
             >

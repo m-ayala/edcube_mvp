@@ -36,7 +36,7 @@ const ProfileCourseGrid = ({ courses, onCourseClick }) => {
         >
           <h3 style={{
             margin: '0 0 10px 0',
-            fontSize: '16px',
+            fontSize: '17.6px',
             fontWeight: '600',
             color: '#3d2e1f',
             overflow: 'hidden',
@@ -53,7 +53,7 @@ const ProfileCourseGrid = ({ courses, onCourseClick }) => {
                 color: '#6b5438',
                 padding: '3px 10px',
                 borderRadius: '12px',
-                fontSize: '12px',
+                fontSize: '13.2px',
                 fontWeight: '500'
               }}>
                 {course.subject}
@@ -65,7 +65,7 @@ const ProfileCourseGrid = ({ courses, onCourseClick }) => {
                 color: '#3d6b3d',
                 padding: '3px 10px',
                 borderRadius: '12px',
-                fontSize: '12px',
+                fontSize: '13.2px',
                 fontWeight: '500'
               }}>
                 {course.class}
@@ -76,7 +76,7 @@ const ProfileCourseGrid = ({ courses, onCourseClick }) => {
           {course.topic && (
             <p style={{
               margin: '0',
-              fontSize: '13px',
+              fontSize: '14.3px',
               color: '#8b7355',
               overflow: 'hidden',
               textOverflow: 'ellipsis',

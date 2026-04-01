@@ -80,7 +80,7 @@ const SuggestionCard = ({ card, index, onApply, onApplyBlocked, applied, selecte
         gap: '6px',
       }}>
         <span style={{
-          fontSize: '11px', fontWeight: '700', textTransform: 'uppercase',
+          fontSize: '12.1px', fontWeight: '700', textTransform: 'uppercase',
           letterSpacing: '0.5px',
           color: applied ? '#16A34A' : '#78716C',
           fontFamily: "'DM Sans', sans-serif",
@@ -88,7 +88,7 @@ const SuggestionCard = ({ card, index, onApply, onApplyBlocked, applied, selecte
           {applied ? '✓ Applied' : `Option ${index + 1}`}
         </span>
         <span style={{
-          fontSize: '12px', fontWeight: '600', color: applied ? '#16A34A' : '#1C1917',
+          fontSize: '13.2px', fontWeight: '600', color: applied ? '#16A34A' : '#1C1917',
           fontFamily: "'DM Sans', sans-serif",
         }}>
           {card.label}
@@ -98,7 +98,7 @@ const SuggestionCard = ({ card, index, onApply, onApplyBlocked, applied, selecte
       {/* Card body */}
       <div style={{ padding: '11px 12px' }}>
         <p style={{
-          margin: 0, fontSize: '12.5px', lineHeight: '1.6',
+          margin: 0, fontSize: '13.8px', lineHeight: '1.6',
           color: '#374151', fontFamily: "'DM Sans', sans-serif",
           whiteSpace: 'pre-wrap',
         }}>
@@ -118,7 +118,7 @@ const SuggestionCard = ({ card, index, onApply, onApplyBlocked, applied, selecte
             padding: '4px 10px',
             backgroundColor: 'white', border: '1px solid #E7E5E4',
             borderRadius: '5px', cursor: 'pointer',
-            fontSize: '11.5px', fontWeight: '500', color: '#6B7280',
+            fontSize: '12.7px', fontWeight: '500', color: '#6B7280',
             display: 'flex', alignItems: 'center', gap: '4px',
             fontFamily: "'DM Sans', sans-serif",
           }}
@@ -143,7 +143,7 @@ const SuggestionCard = ({ card, index, onApply, onApplyBlocked, applied, selecte
             border: 'none',
             borderRadius: '5px',
             cursor: canApply && !applied ? 'pointer' : 'default',
-            fontSize: '11.5px', fontWeight: '600',
+            fontSize: '12.7px', fontWeight: '600',
             color: canApply && !applied ? 'white' : '#9CA3AF',
             display: 'flex', alignItems: 'center', gap: '4px',
             fontFamily: "'DM Sans', sans-serif",
@@ -595,12 +595,12 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
           width: '22px', height: '22px', borderRadius: '50%',
           backgroundColor: 'rgba(255,255,255,0.25)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontWeight: '700', fontSize: '12px', color: 'white', flexShrink: 0,
+          fontWeight: '700', fontSize: '13.2px', color: 'white', flexShrink: 0,
           fontFamily: "'Fraunces', serif",
         }}>E</div>
         <span style={{
           color: 'white',
-          fontSize: '11px',
+          fontSize: '12.1px',
           fontWeight: '700',
           fontFamily: "'DM Sans', sans-serif",
           writingMode: 'vertical-rl',
@@ -641,12 +641,12 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
           width: '32px', height: '32px', borderRadius: '50%',
           backgroundColor: 'rgba(255,255,255,0.22)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontWeight: '700', fontSize: '15px', color: 'white', flexShrink: 0,
+          fontWeight: '700', fontSize: '16.5px', color: 'white', flexShrink: 0,
           fontFamily: "'Fraunces', serif",
         }}>E</div>
         <div style={{ flex: 1 }}>
-          <div style={{ color: 'white', fontWeight: '700', fontSize: '14px', fontFamily: "'DM Sans', sans-serif" }}>Edo</div>
-          <div style={{ color: 'rgba(255,255,255,0.75)', fontSize: '11px', fontFamily: "'DM Sans', sans-serif" }}>EdCube AI</div>
+          <div style={{ color: 'white', fontWeight: '700', fontSize: '15.4px', fontFamily: "'DM Sans', sans-serif" }}>Edo</div>
+          <div style={{ color: 'rgba(255,255,255,0.75)', fontSize: '12.1px', fontFamily: "'DM Sans', sans-serif" }}>EdCube AI</div>
         </div>
         <button
           onClick={() => setIsMinimized(true)}
@@ -683,7 +683,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
         flexShrink: 0, gap: '8px', position: 'relative',
       }}>
         <span style={{
-          fontSize: '11.5px', color: '#78716C', fontFamily: "'DM Sans', sans-serif",
+          fontSize: '12.7px', color: '#78716C', fontFamily: "'DM Sans', sans-serif",
           flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>
           {getContextDot()}{' '}
@@ -694,7 +694,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
           style={{
             padding: '3px 8px', backgroundColor: 'white',
             border: '1px solid #E7E5E4', borderRadius: '5px', cursor: 'pointer',
-            fontSize: '11px', fontWeight: '600', color: '#78716C',
+            fontSize: '12.1px', fontWeight: '600', color: '#78716C',
             display: 'flex', alignItems: 'center', gap: '3px',
             flexShrink: 0, fontFamily: "'DM Sans', sans-serif",
           }}
@@ -717,7 +717,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
                 style={{
                   width: '100%', textAlign: 'left', padding: '9px 12px', border: 'none',
                   backgroundColor: !selectedContext ? '#F0FDF4' : 'transparent',
-                  cursor: 'pointer', fontSize: '12px', fontWeight: '600', color: '#1C1917',
+                  cursor: 'pointer', fontSize: '13.2px', fontWeight: '600', color: '#1C1917',
                   display: 'flex', alignItems: 'center', gap: '7px',
                   fontFamily: "'DM Sans', sans-serif", borderBottom: '1px solid #F5F5F4',
                 }}
@@ -732,7 +732,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
                     style={{
                       width: '100%', textAlign: 'left', padding: '7px 12px', border: 'none',
                       backgroundColor: selectedContext?.id === sec.id && selectedContext?.type === 'section' ? '#F0FDF4' : 'transparent',
-                      cursor: 'pointer', fontSize: '12px', fontWeight: '600', color: '#1C1917',
+                      cursor: 'pointer', fontSize: '13.2px', fontWeight: '600', color: '#1C1917',
                       display: 'flex', alignItems: 'center', gap: '7px', fontFamily: "'DM Sans', sans-serif",
                     }}
                   >
@@ -749,7 +749,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
                         style={{
                           width: '100%', textAlign: 'left', padding: '6px 12px 6px 28px', border: 'none',
                           backgroundColor: selectedContext?.id === sub.id && selectedContext?.type === 'subsection' ? '#EFF6FF' : 'transparent',
-                          cursor: 'pointer', fontSize: '11.5px', fontWeight: '500', color: '#44403C',
+                          cursor: 'pointer', fontSize: '12.7px', fontWeight: '500', color: '#44403C',
                           display: 'flex', alignItems: 'center', gap: '6px', fontFamily: "'DM Sans', sans-serif",
                         }}
                       >
@@ -766,7 +766,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
                           style={{
                             width: '100%', textAlign: 'left', padding: '5px 12px 5px 44px', border: 'none',
                             backgroundColor: selectedContext?.id === topic.id && selectedContext?.type === 'topic' ? '#FEF9EE' : 'transparent',
-                            cursor: 'pointer', fontSize: '11px', fontWeight: '400', color: '#57534E',
+                            cursor: 'pointer', fontSize: '12.1px', fontWeight: '400', color: '#57534E',
                             display: 'flex', alignItems: 'center', gap: '6px', fontFamily: "'DM Sans', sans-serif",
                           }}
                         >
@@ -780,7 +780,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
               ))}
 
               {regularSections.length === 0 && (
-                <div style={{ padding: '12px', fontSize: '12px', color: '#9CA3AF', textAlign: 'center' }}>No sections yet</div>
+                <div style={{ padding: '12px', fontSize: '13.2px', color: '#9CA3AF', textAlign: 'center' }}>No sections yet</div>
               )}
             </div>
           </>
@@ -801,7 +801,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
                   maxWidth: '82%', padding: '8px 12px',
                   borderRadius: '14px 14px 2px 14px',
                   backgroundColor: EDO_GREEN, color: 'white',
-                  fontSize: '13px', lineHeight: '1.5', fontFamily: "'DM Sans', sans-serif",
+                  fontSize: '14.3px', lineHeight: '1.5', fontFamily: "'DM Sans', sans-serif",
                   wordBreak: 'break-word',
                 }}>
                   {msg.text}
@@ -818,13 +818,13 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
                   backgroundColor: EDO_GREEN, flexShrink: 0, marginTop: '2px',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}>
-                  <span style={{ color: 'white', fontSize: '10px', fontWeight: '700', fontFamily: "'Fraunces', serif" }}>E</span>
+                  <span style={{ color: 'white', fontSize: '11px', fontWeight: '700', fontFamily: "'Fraunces', serif" }}>E</span>
                 </div>
                 <div style={{
                   maxWidth: '82%', padding: '8px 12px',
                   borderRadius: '14px 14px 14px 2px',
                   backgroundColor: 'white', color: '#1C1917',
-                  fontSize: '13px', lineHeight: '1.55', fontFamily: "'DM Sans', sans-serif",
+                  fontSize: '14.3px', lineHeight: '1.55', fontFamily: "'DM Sans', sans-serif",
                   border: '1px solid #E7E5E4', wordBreak: 'break-word',
                 }}>
                   {msg.text}
@@ -841,14 +841,14 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
                   backgroundColor: EDO_GREEN, flexShrink: 0, marginTop: '2px',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}>
-                  <span style={{ color: 'white', fontSize: '10px', fontWeight: '700', fontFamily: "'Fraunces', serif" }}>E</span>
+                  <span style={{ color: 'white', fontSize: '11px', fontWeight: '700', fontFamily: "'Fraunces', serif" }}>E</span>
                 </div>
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '7px' }}>
                   {msg.intro && (
                     <div style={{
                       padding: '8px 12px', borderRadius: '14px 14px 14px 2px',
                       backgroundColor: 'white', border: '1px solid #E7E5E4',
-                      fontSize: '13px', lineHeight: '1.55', color: '#1C1917',
+                      fontSize: '14.3px', lineHeight: '1.55', color: '#1C1917',
                       fontFamily: "'DM Sans', sans-serif", wordBreak: 'break-word',
                     }}>
                       {msg.intro}
@@ -869,7 +869,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
                     <div style={{
                       padding: '8px 12px', borderRadius: '14px 14px 14px 2px',
                       backgroundColor: 'white', border: '1px solid #E7E5E4',
-                      fontSize: '13px', lineHeight: '1.55', color: '#1C1917',
+                      fontSize: '14.3px', lineHeight: '1.55', color: '#1C1917',
                       fontFamily: "'DM Sans', sans-serif", wordBreak: 'break-word',
                     }}>
                       {msg.conclusion}
@@ -891,7 +891,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
               backgroundColor: EDO_GREEN, flexShrink: 0,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-              <span style={{ color: 'white', fontSize: '10px', fontWeight: '700', fontFamily: "'Fraunces', serif" }}>E</span>
+              <span style={{ color: 'white', fontSize: '11px', fontWeight: '700', fontFamily: "'Fraunces', serif" }}>E</span>
             </div>
             <div style={{
               padding: '10px 14px', backgroundColor: 'white',
@@ -927,7 +927,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
               backgroundColor: chip.isGenerate ? '#DCFCE7' : 'white',
               border: `1px solid ${chip.isGenerate ? '#86EFAC' : '#E7E5E4'}`,
               borderRadius: '20px', cursor: isTyping ? 'not-allowed' : 'pointer',
-              fontSize: '11.5px', fontWeight: '500',
+              fontSize: '12.7px', fontWeight: '500',
               color: chip.isGenerate ? '#166534' : '#44403C',
               whiteSpace: 'nowrap', flexShrink: 0,
               fontFamily: "'DM Sans', sans-serif",
@@ -957,7 +957,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
           style={{
             flex: 1, padding: '8px 12px',
             border: '1px solid #E7E5E4', borderRadius: '22px',
-            outline: 'none', fontSize: '13px',
+            outline: 'none', fontSize: '14.3px',
             fontFamily: "'DM Sans', sans-serif",
             backgroundColor: isTyping ? '#F9F9F8' : 'white', color: '#1C1917',
           }}

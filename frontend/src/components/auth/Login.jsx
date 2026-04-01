@@ -50,7 +50,7 @@ const Login = () => {
         .li-input {
           width: 100%; padding: 11px 14px; background: #FAF8F4;
           border: 1px solid #E5E0D8; border-radius: 10px;
-          font-family: 'DM Sans', sans-serif; font-size: 14px;
+          font-family: 'DM Sans', sans-serif; font-size: 15.4px;
           color: #1C1917; outline: none; box-sizing: border-box;
           transition: border-color 0.18s;
         }
@@ -60,7 +60,7 @@ const Login = () => {
         .li-submit {
           width: 100%; padding: 13px; background: #1C1917; color: #FAF8F4;
           border: none; border-radius: 100px; font-family: 'DM Sans', sans-serif;
-          font-size: 15px; font-weight: 600; cursor: pointer;
+          font-size: 16.5px; font-weight: 600; cursor: pointer;
           transition: opacity 0.18s; margin-top: 8px;
         }
         .li-submit:hover { opacity: 0.85; }
@@ -69,7 +69,7 @@ const Login = () => {
         .li-resend {
           width: 100%; padding: 11px; background: transparent; color: #8A6B00;
           border: 1px solid #F9E0A0; border-radius: 100px;
-          font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 500;
+          font-family: 'DM Sans', sans-serif; font-size: 15.4px; font-weight: 500;
           cursor: pointer; transition: background 0.18s; margin-top: 8px;
         }
         .li-resend:hover { background: #FDF5DC; }
@@ -77,7 +77,7 @@ const Login = () => {
         .li-back {
           display: inline-flex; align-items: center; gap: 6px;
           background: none; border: none; cursor: pointer;
-          font-family: 'DM Sans', sans-serif; font-size: 14px;
+          font-family: 'DM Sans', sans-serif; font-size: 15.4px;
           color: #6B6459; padding: 0; transition: color 0.15s;
         }
         .li-back:hover { color: #1C1917; }

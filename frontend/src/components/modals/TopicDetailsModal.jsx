@@ -135,7 +135,7 @@ const TopicDetailsModal = ({
       display: 'inline-block',
       padding: '5px 12px',
       borderRadius: '12px',
-      fontSize: '12px',
+      fontSize: '13.2px',
       fontWeight: '500',
       backgroundColor: color?.bg || colors.accentLight,
       color: color?.text || colors.textSecondary
@@ -188,7 +188,7 @@ const TopicDetailsModal = ({
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '28px' }}>
             <div style={{ flex: 1 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-                <label style={{ fontSize: '11px', color: colors.textSecondary, fontWeight: '700', letterSpacing: '0.5px' }}>
+                <label style={{ fontSize: '12.1px', color: colors.textSecondary, fontWeight: '700', letterSpacing: '0.5px' }}>
                   TOPIC TITLE
                 </label>
                 {!readOnly && (
@@ -216,7 +216,7 @@ const TopicDetailsModal = ({
                   value={editedTopic.title}
                   onChange={(e) => setEditedTopic({ ...editedTopic, title: e.target.value })}
                   style={{
-                    fontSize: '26px',
+                    fontSize: '28.6px',
                     fontWeight: '700',
                     color: colors.textPrimary,
                     border: '2px solid #000',
@@ -228,7 +228,7 @@ const TopicDetailsModal = ({
                   }}
                 />
               ) : (
-                <h2 style={{ margin: 0, fontSize: '26px', fontWeight: '700', color: colors.textPrimary }}>
+                <h2 style={{ margin: 0, fontSize: '28.6px', fontWeight: '700', color: colors.textPrimary }}>
                   {editedTopic.title}
                 </h2>
               )}
@@ -252,7 +252,7 @@ const TopicDetailsModal = ({
 
           {/* Description */}
           <div style={{ marginBottom: '24px' }}>
-            <label style={{ display: 'block', fontSize: '11px', color: colors.textSecondary, marginBottom: '8px', fontWeight: '700', letterSpacing: '0.5px' }}>
+            <label style={{ display: 'block', fontSize: '12.1px', color: colors.textSecondary, marginBottom: '8px', fontWeight: '700', letterSpacing: '0.5px' }}>
               DESCRIPTION
             </label>
             {isEditing ? (
@@ -265,7 +265,7 @@ const TopicDetailsModal = ({
                   padding: '12px 16px',
                   border: '2px solid #000',
                   borderRadius: '8px',
-                  fontSize: '14px',
+                  fontSize: '15.4px',
                   color: colors.textPrimary,
                   resize: 'vertical',
                   outline: 'none',
@@ -277,7 +277,7 @@ const TopicDetailsModal = ({
             ) : (
               <p style={{ 
                 margin: 0, 
-                fontSize: '14px', 
+                fontSize: '15.4px', 
                 color: colors.textSecondary, 
                 lineHeight: '1.6',
                 fontStyle: editedTopic.description ? 'normal' : 'italic'
@@ -290,7 +290,7 @@ const TopicDetailsModal = ({
           {/* Meta Info Row */}
           <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '20px', marginBottom: '28px' }}>
             <div>
-              <label style={{ display: 'block', fontSize: '11px', color: colors.textSecondary, marginBottom: '8px', fontWeight: '700', letterSpacing: '0.5px' }}>
+              <label style={{ display: 'block', fontSize: '12.1px', color: colors.textSecondary, marginBottom: '8px', fontWeight: '700', letterSpacing: '0.5px' }}>
                 DURATION
               </label>
               {isEditing ? (
@@ -305,11 +305,11 @@ const TopicDetailsModal = ({
                       padding: '8px 12px',
                       border: '2px solid #000',
                       borderRadius: '6px',
-                      fontSize: '14px',
+                      fontSize: '15.4px',
                       outline: 'none'
                     }}
                   />
-                  <span style={{ fontSize: '14px', color: colors.textSecondary }}>min</span>
+                  <span style={{ fontSize: '15.4px', color: colors.textSecondary }}>min</span>
                 </div>
               ) : (
                 <Pill label={`${editedTopic.duration_minutes} min`} />
@@ -317,7 +317,7 @@ const TopicDetailsModal = ({
             </div>
             
             <div>
-              <label style={{ display: 'block', fontSize: '11px', color: colors.textSecondary, marginBottom: '8px', fontWeight: '700', letterSpacing: '0.5px' }}>
+              <label style={{ display: 'block', fontSize: '12.1px', color: colors.textSecondary, marginBottom: '8px', fontWeight: '700', letterSpacing: '0.5px' }}>
                 PLA PILLARS
               </label>
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -333,7 +333,7 @@ const TopicDetailsModal = ({
                     />
                   ))
                 ) : (
-                  <span style={{ fontSize: '13px', color: '#9ca3af', fontStyle: 'italic' }}>No pillars assigned</span>
+                  <span style={{ fontSize: '14.3px', color: '#9ca3af', fontStyle: 'italic' }}>No pillars assigned</span>
                 )}
               </div>
             </div>
@@ -341,14 +341,14 @@ const TopicDetailsModal = ({
 
           {/* Learning Objectives */}
           <div style={{ marginBottom: '28px' }}>
-            <label style={{ display: 'block', fontSize: '11px', color: colors.textSecondary, marginBottom: '12px', fontWeight: '700', letterSpacing: '0.5px' }}>
+            <label style={{ display: 'block', fontSize: '12.1px', color: colors.textSecondary, marginBottom: '12px', fontWeight: '700', letterSpacing: '0.5px' }}>
               LEARNING OBJECTIVES
             </label>
             
             {editedTopic.learning_objectives.length > 0 ? (
               <ul style={{ margin: '0 0 12px', paddingLeft: '24px', listStyle: 'disc' }}>
                 {editedTopic.learning_objectives.map((obj, idx) => (
-                  <li key={idx} style={{ marginBottom: '10px', color: colors.textPrimary, fontSize: '14px', lineHeight: '1.5' }}>
+                  <li key={idx} style={{ marginBottom: '10px', color: colors.textPrimary, fontSize: '15.4px', lineHeight: '1.5' }}>
                     {isEditing ? (
                       <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                         <input
@@ -360,7 +360,7 @@ const TopicDetailsModal = ({
                             padding: '8px 12px',
                             border: '1px solid #E8E6E1',
                             borderRadius: '6px',
-                            fontSize: '13px',
+                            fontSize: '14.3px',
                             outline: 'none'
                           }}
                         />
@@ -384,7 +384,7 @@ const TopicDetailsModal = ({
                 ))}
               </ul>
             ) : (
-              <p style={{ margin: '0 0 12px', fontSize: '13px', color: '#9ca3af', fontStyle: 'italic' }}>
+              <p style={{ margin: '0 0 12px', fontSize: '14.3px', color: '#9ca3af', fontStyle: 'italic' }}>
                 No learning objectives yet
               </p>
             )}
@@ -402,7 +402,7 @@ const TopicDetailsModal = ({
                     padding: '8px 12px',
                     border: '1px solid #E8E6E1',
                     borderRadius: '6px',
-                    fontSize: '13px',
+                    fontSize: '14.3px',
                     outline: 'none'
                   }}
                 />
@@ -415,7 +415,7 @@ const TopicDetailsModal = ({
                     border: 'none',
                     borderRadius: '6px',
                     cursor: 'pointer',
-                    fontSize: '13px',
+                    fontSize: '14.3px',
                     fontWeight: '600',
                     display: 'flex',
                     alignItems: 'center',
@@ -434,7 +434,7 @@ const TopicDetailsModal = ({
           {/* Video Resources */}
           <div style={{ marginBottom: '28px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-              <label style={{ fontSize: '11px', color: colors.textSecondary, fontWeight: '700', letterSpacing: '0.5px' }}>
+              <label style={{ fontSize: '12.1px', color: colors.textSecondary, fontWeight: '700', letterSpacing: '0.5px' }}>
                 VIDEO RESOURCES
               </label>
               {!readOnly && (
@@ -448,7 +448,7 @@ const TopicDetailsModal = ({
                       border: `1px solid ${colors.border}`,
                       borderRadius: '6px',
                       cursor: 'pointer',
-                      fontSize: '12px',
+                      fontSize: '13.2px',
                       fontWeight: '600',
                       display: 'flex',
                       alignItems: 'center',
@@ -467,7 +467,7 @@ const TopicDetailsModal = ({
                       border: 'none',
                       borderRadius: '6px',
                       cursor: actions?.generatingStates?.[`videos-${topic.id}`] ? 'not-allowed' : 'pointer',
-                      fontSize: '12px',
+                      fontSize: '13.2px',
                       fontWeight: '600',
                       display: 'flex',
                       alignItems: 'center',
@@ -490,7 +490,7 @@ const TopicDetailsModal = ({
                 borderRadius: '8px',
                 border: `1px dashed ${colors.border}`
               }}>
-                <p style={{ margin: 0, fontSize: '13px', color: colors.textSecondary, fontStyle: 'italic' }}>
+                <p style={{ margin: 0, fontSize: '14.3px', color: colors.textSecondary, fontStyle: 'italic' }}>
                   No videos yet. Add a link or generate with AI.
                 </p>
               </div>
@@ -515,7 +515,7 @@ const TopicDetailsModal = ({
                       <div style={{ position: 'absolute', top: '10px', right: '10px', display: 'flex', gap: '4px', alignItems: 'center' }}>
                         <button
                           onClick={() => setResourceModal({ type: 'video', mode: 'edit', index: idx, initialData: { title: video.title, url: video.url || `https://www.youtube.com/watch?v=${video.videoId}` } })}
-                          style={{ padding: '3px 8px', backgroundColor: '#fff', color: colors.textSecondary, border: `1px solid ${colors.border}`, borderRadius: '5px', cursor: 'pointer', fontSize: '11px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '3px', fontFamily: "'DM Sans', sans-serif" }}
+                          style={{ padding: '3px 8px', backgroundColor: '#fff', color: colors.textSecondary, border: `1px solid ${colors.border}`, borderRadius: '5px', cursor: 'pointer', fontSize: '12.1px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '3px', fontFamily: "'DM Sans', sans-serif" }}
                         >
                           ✏️ Edit
                         </button>
@@ -535,11 +535,11 @@ const TopicDetailsModal = ({
                       />
                     )}
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ margin: '0 0 6px', fontSize: '14px', fontWeight: '600', color: colors.textPrimary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <p style={{ margin: '0 0 6px', fontSize: '15.4px', fontWeight: '600', color: colors.textPrimary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {video.title}
                       </p>
                       {video.channelName && (
-                        <p style={{ margin: '0 0 8px', fontSize: '12px', color: colors.textSecondary }}>
+                        <p style={{ margin: '0 0 8px', fontSize: '13.2px', color: colors.textSecondary }}>
                           {video.channelName} {video.duration && `• ${video.duration}`}
                         </p>
                       )}
@@ -547,7 +547,7 @@ const TopicDetailsModal = ({
                         href={video.url || `https://www.youtube.com/watch?v=${video.videoId}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        style={{ fontSize: '12px', color: colors.accent, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '3px', fontWeight: '600' }}
+                        style={{ fontSize: '13.2px', color: colors.accent, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '3px', fontWeight: '600' }}
                       >
                         Open <ExternalLink size={11} />
                       </a>
@@ -561,7 +561,7 @@ const TopicDetailsModal = ({
           {/* Worksheets */}
           <div style={{ marginBottom: '28px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-              <label style={{ fontSize: '11px', color: colors.textSecondary, fontWeight: '700', letterSpacing: '0.5px' }}>
+              <label style={{ fontSize: '12.1px', color: colors.textSecondary, fontWeight: '700', letterSpacing: '0.5px' }}>
                 WORKSHEETS
               </label>
               {!readOnly && (
@@ -575,7 +575,7 @@ const TopicDetailsModal = ({
                       border: `1px solid ${colors.border}`,
                       borderRadius: '6px',
                       cursor: 'pointer',
-                      fontSize: '12px',
+                      fontSize: '13.2px',
                       fontWeight: '600',
                       display: 'flex',
                       alignItems: 'center',
@@ -594,7 +594,7 @@ const TopicDetailsModal = ({
                       border: 'none',
                       borderRadius: '6px',
                       cursor: actions?.generatingStates?.[`worksheet-${topic.id}`] ? 'not-allowed' : 'pointer',
-                      fontSize: '12px',
+                      fontSize: '13.2px',
                       fontWeight: '600',
                       display: 'flex',
                       alignItems: 'center',
@@ -617,7 +617,7 @@ const TopicDetailsModal = ({
                 borderRadius: '8px',
                 border: `1px dashed ${colors.border}`
               }}>
-                <p style={{ margin: 0, fontSize: '13px', color: colors.textSecondary, fontStyle: 'italic' }}>
+                <p style={{ margin: 0, fontSize: '14.3px', color: colors.textSecondary, fontStyle: 'italic' }}>
                   No worksheets yet. Add a link or generate with AI.
                 </p>
               </div>
@@ -641,7 +641,7 @@ const TopicDetailsModal = ({
                         <div style={{ position: 'absolute', top: '10px', right: '10px', display: 'flex', gap: '4px', alignItems: 'center' }}>
                           <button
                             onClick={() => setResourceModal({ type: 'worksheet', mode: 'edit', index: actualIdx, initialData: { title: ws.title, url: ws.url || ws.sourceUrl || '', description: ws.description || '' } })}
-                            style={{ padding: '3px 8px', backgroundColor: '#fff', color: colors.textSecondary, border: `1px solid ${colors.border}`, borderRadius: '5px', cursor: 'pointer', fontSize: '11px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '3px', fontFamily: "'DM Sans', sans-serif" }}
+                            style={{ padding: '3px 8px', backgroundColor: '#fff', color: colors.textSecondary, border: `1px solid ${colors.border}`, borderRadius: '5px', cursor: 'pointer', fontSize: '12.1px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '3px', fontFamily: "'DM Sans', sans-serif" }}
                           >
                             ✏️ Edit
                           </button>
@@ -653,11 +653,11 @@ const TopicDetailsModal = ({
                           </button>
                         </div>
                       )}
-                      <p style={{ margin: '0 0 6px', fontSize: '14px', fontWeight: '600', color: colors.textPrimary }}>
+                      <p style={{ margin: '0 0 6px', fontSize: '15.4px', fontWeight: '600', color: colors.textPrimary }}>
                         {ws.title}
                       </p>
                       {ws.description && (
-                        <p style={{ margin: '0 0 8px', fontSize: '13px', color: colors.textSecondary }}>
+                        <p style={{ margin: '0 0 8px', fontSize: '14.3px', color: colors.textSecondary }}>
                           {ws.description}
                         </p>
                       )}
@@ -666,7 +666,7 @@ const TopicDetailsModal = ({
                           href={ws.url || ws.sourceUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          style={{ fontSize: '13px', color: colors.accent, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: '600' }}
+                          style={{ fontSize: '14.3px', color: colors.accent, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: '600' }}
                         >
                           View Resource <ExternalLink size={13} />
                         </a>
@@ -681,7 +681,7 @@ const TopicDetailsModal = ({
           {/* Activities */}
           <div style={{ marginBottom: '32px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-              <label style={{ fontSize: '11px', color: colors.textSecondary, fontWeight: '700', letterSpacing: '0.5px' }}>
+              <label style={{ fontSize: '12.1px', color: colors.textSecondary, fontWeight: '700', letterSpacing: '0.5px' }}>
                 ACTIVITIES
               </label>
               {!readOnly && (
@@ -695,7 +695,7 @@ const TopicDetailsModal = ({
                       border: `1px solid ${colors.border}`,
                       borderRadius: '6px',
                       cursor: 'pointer',
-                      fontSize: '12px',
+                      fontSize: '13.2px',
                       fontWeight: '600',
                       display: 'flex',
                       alignItems: 'center',
@@ -714,7 +714,7 @@ const TopicDetailsModal = ({
                       border: 'none',
                       borderRadius: '6px',
                       cursor: actions?.generatingStates?.[`activity-${topic.id}`] ? 'not-allowed' : 'pointer',
-                      fontSize: '12px',
+                      fontSize: '13.2px',
                       fontWeight: '600',
                       display: 'flex',
                       alignItems: 'center',
@@ -737,7 +737,7 @@ const TopicDetailsModal = ({
                 borderRadius: '8px',
                 border: `1px dashed ${colors.border}`
               }}>
-                <p style={{ margin: 0, fontSize: '13px', color: colors.textSecondary, fontStyle: 'italic' }}>
+                <p style={{ margin: 0, fontSize: '14.3px', color: colors.textSecondary, fontStyle: 'italic' }}>
                   No activities yet. Add a link or generate with AI.
                 </p>
               </div>
@@ -761,7 +761,7 @@ const TopicDetailsModal = ({
                         <div style={{ position: 'absolute', top: '10px', right: '10px', display: 'flex', gap: '4px', alignItems: 'center' }}>
                           <button
                             onClick={() => setResourceModal({ type: 'activity', mode: 'edit', index: actualIdx, initialData: { title: act.title, url: act.url || act.sourceUrl || '', description: act.description || '' } })}
-                            style={{ padding: '3px 8px', backgroundColor: '#fff', color: colors.textSecondary, border: `1px solid ${colors.border}`, borderRadius: '5px', cursor: 'pointer', fontSize: '11px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '3px', fontFamily: "'DM Sans', sans-serif" }}
+                            style={{ padding: '3px 8px', backgroundColor: '#fff', color: colors.textSecondary, border: `1px solid ${colors.border}`, borderRadius: '5px', cursor: 'pointer', fontSize: '12.1px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '3px', fontFamily: "'DM Sans', sans-serif" }}
                           >
                             ✏️ Edit
                           </button>
@@ -773,11 +773,11 @@ const TopicDetailsModal = ({
                           </button>
                         </div>
                       )}
-                      <p style={{ margin: '0 0 6px', fontSize: '14px', fontWeight: '600', color: colors.textPrimary }}>
+                      <p style={{ margin: '0 0 6px', fontSize: '15.4px', fontWeight: '600', color: colors.textPrimary }}>
                         {act.title}
                       </p>
                       {act.description && (
-                        <p style={{ margin: '0 0 8px', fontSize: '13px', color: colors.textSecondary, lineHeight: '1.5' }}>
+                        <p style={{ margin: '0 0 8px', fontSize: '14.3px', color: colors.textSecondary, lineHeight: '1.5' }}>
                           {act.description}
                         </p>
                       )}
@@ -786,7 +786,7 @@ const TopicDetailsModal = ({
                           href={act.url || act.sourceUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          style={{ fontSize: '13px', color: colors.accent, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: '600' }}
+                          style={{ fontSize: '14.3px', color: colors.accent, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: '600' }}
                         >
                           View Resource <ExternalLink size={13} />
                         </a>
@@ -815,7 +815,7 @@ const TopicDetailsModal = ({
                 border: 'none',
                 borderRadius: '8px',
                 cursor: 'pointer',
-                fontSize: '14px',
+                fontSize: '15.4px',
                 fontWeight: '600',
                 transition: 'background-color 0.2s'
               }}
@@ -834,7 +834,7 @@ const TopicDetailsModal = ({
                   border: 'none',
                   borderRadius: '8px',
                   cursor: 'pointer',
-                  fontSize: '14px',
+                  fontSize: '15.4px',
                   fontWeight: '600',
                   display: 'flex',
                   alignItems: 'center',

@@ -33,6 +33,7 @@ const CourseWorkspace = () => {
 
   // ── Core State ────────────────────────────────────────────────────────
   const [courseName, setCourseName] = useState(formData?.courseName || '');
+  const [courseClass, setCourseClass] = useState(formData?.class || '');
   const [sections, setSections] = useState(incomingSections || []);
   const [showBreakModal, setShowBreakModal] = useState(false);
   const [history, setHistory] = useState([]);
@@ -261,7 +262,7 @@ const CourseWorkspace = () => {
 
     const courseData = {
       courseName,
-      class: formData?.class || '',
+      class: courseClass,
       subject: formData?.subject || '',
       topic: formData?.topic || '',
       timeDuration: formData?.timeDuration || '',
@@ -295,6 +296,22 @@ const CourseWorkspace = () => {
     if (!hasExistingId && result.courseId) {
       setCurriculumId(result.courseId);
     }
+  };
+
+  // ── Back to Course View ───────────────────────────────────────────────
+  const handleBack = () => {
+    navigate('/course-view', {
+      state: {
+        formData,
+        sections,
+        curriculumId,
+        isPublic,
+        isOwner,
+        ownerName: incomingOwnerName,
+        isCollaborator: incomingIsCollaborator || false,
+        from: 'workspace',
+      }
+    });
   };
 
   // ── Edit in Workspace (from view mode) ───────────────────────────────
@@ -338,7 +355,7 @@ const CourseWorkspace = () => {
 
   // ── Render ────────────────────────────────────────────────────────────
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#FAF9F6' }}>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
       {readOnly ? (
         <CourseViewer
           courseName={courseName}
@@ -359,6 +376,8 @@ const CourseWorkspace = () => {
             <CourseEditor
               courseName={courseName}
               setCourseName={setCourseName}
+              courseClass={courseClass}
+              setCourseClass={setCourseClass}
               sections={sections}
               setSections={setSections}
               videosByTopic={videosByTopic}
@@ -372,6 +391,7 @@ const CourseWorkspace = () => {
               onAddBreak={() => setShowBreakModal(true)}
               onTopicClick={handleTopicClick}
               navigate={navigate}
+              onBack={handleBack}
               isPublic={isPublic}
               onToggleVisibility={handleToggleVisibility}
               onShare={() => setShowShareModal(true)}

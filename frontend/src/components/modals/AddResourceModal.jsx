@@ -133,7 +133,7 @@ const AddResourceModal = ({ isOpen, onClose, onAdd, resourceType = 'video', init
         >
           {/* Header */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-            <h3 style={{ margin: 0, fontSize: '20px', color: '#2C2A26', fontWeight: '700' }}>
+            <h3 style={{ margin: 0, fontSize: '22px', color: '#2C2A26', fontWeight: '700' }}>
               {mode === 'edit' ? 'Edit' : 'Add'} {getResourceTypeLabel()} Link
             </h3>
             <button
@@ -170,7 +170,7 @@ const AddResourceModal = ({ isOpen, onClose, onAdd, resourceType = 'video', init
                 border: '1px solid #E8E6E1',
                 borderRadius: '8px',
                 cursor: 'pointer',
-                fontSize: '13px',
+                fontSize: '14.3px',
                 fontWeight: '600',
                 transition: 'background-color 0.2s'
               }}
@@ -186,7 +186,7 @@ const AddResourceModal = ({ isOpen, onClose, onAdd, resourceType = 'video', init
           {mode === 'add' && currentUser && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
               <div style={{ flex: 1, height: '1px', backgroundColor: '#E8E6E1' }} />
-              <span style={{ fontSize: '12px', color: '#9ca3af', flexShrink: 0 }}>or enter manually</span>
+              <span style={{ fontSize: '13.2px', color: '#9ca3af', flexShrink: 0 }}>or enter manually</span>
               <div style={{ flex: 1, height: '1px', backgroundColor: '#E8E6E1' }} />
             </div>
           )}
@@ -198,7 +198,7 @@ const AddResourceModal = ({ isOpen, onClose, onAdd, resourceType = 'video', init
               <label
                 style={{
                   display: 'block',
-                  fontSize: '13px',
+                  fontSize: '14.3px',
                   color: '#6B6760',
                   marginBottom: '8px',
                   fontWeight: '600'
@@ -219,7 +219,7 @@ const AddResourceModal = ({ isOpen, onClose, onAdd, resourceType = 'video', init
                   padding: '10px 14px',
                   border: errors.title ? '2px solid #E57373' : '1px solid #E8E6E1',
                   borderRadius: '8px',
-                  fontSize: '14px',
+                  fontSize: '15.4px',
                   outline: 'none',
                   transition: 'border 0.2s'
                 }}
@@ -231,7 +231,7 @@ const AddResourceModal = ({ isOpen, onClose, onAdd, resourceType = 'video', init
                 }}
               />
               {errors.title && (
-                <p style={{ margin: '6px 0 0', fontSize: '12px', color: '#E57373' }}>
+                <p style={{ margin: '6px 0 0', fontSize: '13.2px', color: '#E57373' }}>
                   {errors.title}
                 </p>
               )}
@@ -242,7 +242,7 @@ const AddResourceModal = ({ isOpen, onClose, onAdd, resourceType = 'video', init
               <label
                 style={{
                   display: 'block',
-                  fontSize: '13px',
+                  fontSize: '14.3px',
                   color: '#6B6760',
                   marginBottom: '8px',
                   fontWeight: '600'
@@ -263,7 +263,7 @@ const AddResourceModal = ({ isOpen, onClose, onAdd, resourceType = 'video', init
                   padding: '10px 14px',
                   border: errors.url ? '2px solid #E57373' : '1px solid #E8E6E1',
                   borderRadius: '8px',
-                  fontSize: '14px',
+                  fontSize: '15.4px',
                   outline: 'none',
                   transition: 'border 0.2s'
                 }}
@@ -275,7 +275,7 @@ const AddResourceModal = ({ isOpen, onClose, onAdd, resourceType = 'video', init
                 }}
               />
               {errors.url && (
-                <p style={{ margin: '6px 0 0', fontSize: '12px', color: '#E57373' }}>
+                <p style={{ margin: '6px 0 0', fontSize: '13.2px', color: '#E57373' }}>
                   {errors.url}
                 </p>
               )}
@@ -287,7 +287,7 @@ const AddResourceModal = ({ isOpen, onClose, onAdd, resourceType = 'video', init
                 <label
                   style={{
                     display: 'block',
-                    fontSize: '13px',
+                    fontSize: '14.3px',
                     color: '#6B6760',
                     marginBottom: '8px',
                     fontWeight: '600'
@@ -305,7 +305,7 @@ const AddResourceModal = ({ isOpen, onClose, onAdd, resourceType = 'video', init
                     padding: '10px 14px',
                     border: '1px solid #E8E6E1',
                     borderRadius: '8px',
-                    fontSize: '14px',
+                    fontSize: '15.4px',
                     outline: 'none',
                     resize: 'vertical',
                     fontFamily: 'inherit',
@@ -330,7 +330,7 @@ const AddResourceModal = ({ isOpen, onClose, onAdd, resourceType = 'video', init
                 marginBottom: '24px'
               }}
             >
-              <p style={{ margin: 0, fontSize: '12px', color: '#6B6760', lineHeight: '1.5' }}>
+              <p style={{ margin: 0, fontSize: '13.2px', color: '#6B6760', lineHeight: '1.5' }}>
                 <strong>Tip:</strong> You can add links to YouTube videos, Google Docs, PDFs, websites, or any other online resource that supports your lesson.
               </p>
             </div>
@@ -348,7 +348,7 @@ const AddResourceModal = ({ isOpen, onClose, onAdd, resourceType = 'video', init
                   border: 'none',
                   borderRadius: '8px',
                   cursor: 'pointer',
-                  fontSize: '14px',
+                  fontSize: '15.4px',
                   fontWeight: '600',
                   transition: 'background-color 0.2s'
                 }}
@@ -371,7 +371,7 @@ const AddResourceModal = ({ isOpen, onClose, onAdd, resourceType = 'video', init
                   border: 'none',
                   borderRadius: '8px',
                   cursor: 'pointer',
-                  fontSize: '14px',
+                  fontSize: '15.4px',
                   fontWeight: '600',
                   display: 'flex',
                   alignItems: 'center',

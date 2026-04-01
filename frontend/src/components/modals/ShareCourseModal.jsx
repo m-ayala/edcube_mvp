@@ -23,7 +23,7 @@ const Avatar = ({ name }) => (
     width: '32px', height: '32px', borderRadius: '50%',
     backgroundColor: '#8B7355', color: '#fff',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
-    fontSize: '12px', fontWeight: '600', flexShrink: 0,
+    fontSize: '13.2px', fontWeight: '600', flexShrink: 0,
   }}>
     {getInitials(name)}
   </div>
@@ -37,7 +37,7 @@ const PersonRow = ({ person, onAccessChange, onRemove }) => (
     backgroundColor: '#F9FAFB', border: '1px solid #F3F4F6',
   }}>
     <Avatar name={person.display_name} />
-    <span style={{ flex: 1, fontSize: '14px', color: '#1C1917', fontWeight: '500' }}>
+    <span style={{ flex: 1, fontSize: '15.4px', color: '#1C1917', fontWeight: '500' }}>
       {person.display_name}
     </span>
     <select
@@ -45,7 +45,7 @@ const PersonRow = ({ person, onAccessChange, onRemove }) => (
       onChange={(e) => onAccessChange(e.target.value)}
       style={{
         border: '1px solid #D1D5DB', borderRadius: '6px',
-        padding: '4px 8px', fontSize: '12px', color: '#374151',
+        padding: '4px 8px', fontSize: '13.2px', color: '#374151',
         backgroundColor: '#fff', cursor: 'pointer',
         fontFamily: "'DM Sans', sans-serif",
       }}
@@ -58,7 +58,7 @@ const PersonRow = ({ person, onAccessChange, onRemove }) => (
       title="Remove access"
       style={{
         background: 'none', border: 'none', cursor: 'pointer',
-        color: '#9CA3AF', fontSize: '18px', lineHeight: 1,
+        color: '#9CA3AF', fontSize: '19.8px', lineHeight: 1,
         padding: '0 2px', flexShrink: 0,
       }}
       onMouseEnter={(e) => { e.currentTarget.style.color = '#EF4444'; }}
@@ -241,14 +241,14 @@ const ShareCourseModal = ({ isOpen, onClose, courseId, courseName }) => {
           flexShrink: 0,
         }}>
           <div>
-            <div style={{ fontSize: '16px', fontWeight: '700', color: '#1C1917' }}>Share</div>
-            <div style={{ fontSize: '12px', color: '#78716C', marginTop: '2px' }}>{courseName}</div>
+            <div style={{ fontSize: '17.6px', fontWeight: '700', color: '#1C1917' }}>Share</div>
+            <div style={{ fontSize: '13.2px', color: '#78716C', marginTop: '2px' }}>{courseName}</div>
           </div>
           <button
             onClick={onClose}
             style={{
               background: 'none', border: 'none', cursor: 'pointer',
-              fontSize: '20px', color: '#9CA3AF', lineHeight: 1, padding: '2px 6px',
+              fontSize: '22px', color: '#9CA3AF', lineHeight: 1, padding: '2px 6px',
             }}
           >×</button>
         </div>
@@ -264,7 +264,7 @@ const ShareCourseModal = ({ isOpen, onClose, courseId, courseName }) => {
               padding: '8px 12px', minHeight: '44px',
               backgroundColor: '#FAFAF9',
             }}>
-              <span style={{ color: '#9CA3AF', fontSize: '15px' }}>🔍</span>
+              <span style={{ color: '#9CA3AF', fontSize: '16.5px' }}>🔍</span>
               <input
                 ref={inputRef}
                 type="text"
@@ -274,7 +274,7 @@ const ShareCourseModal = ({ isOpen, onClose, courseId, courseName }) => {
                 onFocus={() => { if (query.trim()) setDropdownOpen(true); }}
                 style={{
                   border: 'none', outline: 'none', background: 'transparent',
-                  fontSize: '14px', color: '#1C1917', flex: 1, minWidth: '120px',
+                  fontSize: '15.4px', color: '#1C1917', flex: 1, minWidth: '120px',
                   fontFamily: "'DM Sans', sans-serif",
                 }}
               />
@@ -296,7 +296,7 @@ const ShareCourseModal = ({ isOpen, onClose, courseId, courseName }) => {
                     onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
                   >
                     <Avatar name={teacher.display_name} />
-                    <span style={{ fontSize: '14px', color: '#1C1917' }}>{teacher.display_name}</span>
+                    <span style={{ fontSize: '15.4px', color: '#1C1917' }}>{teacher.display_name}</span>
                   </div>
                 ))}
               </div>
@@ -318,28 +318,28 @@ const ShareCourseModal = ({ isOpen, onClose, courseId, courseName }) => {
           )}
 
           {sent && (
-            <div style={{ color: '#16A34A', fontSize: '13px', fontWeight: '600', marginTop: '12px' }}>
+            <div style={{ color: '#16A34A', fontSize: '14.3px', fontWeight: '600', marginTop: '12px' }}>
               ✓ Invitations sent!
             </div>
           )}
 
           {error && (
-            <p style={{ fontSize: '13px', color: '#DC2626', marginTop: '10px' }}>{error}</p>
+            <p style={{ fontSize: '14.3px', color: '#DC2626', marginTop: '10px' }}>{error}</p>
           )}
 
           {/* ── People with access (always visible) ── */}
           <div style={{ marginTop: '24px' }}>
             <div style={{
-              fontSize: '12px', fontWeight: '600', color: '#6B7280',
+              fontSize: '13.2px', fontWeight: '600', color: '#6B7280',
               textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px',
             }}>
               People with access
             </div>
 
             {loadingCollab ? (
-              <div style={{ fontSize: '13px', color: '#9CA3AF', padding: '8px 0' }}>Loading…</div>
+              <div style={{ fontSize: '14.3px', color: '#9CA3AF', padding: '8px 0' }}>Loading…</div>
             ) : collaborators.length === 0 ? (
-              <div style={{ fontSize: '13px', color: '#9CA3AF', fontStyle: 'italic', padding: '8px 0' }}>
+              <div style={{ fontSize: '14.3px', color: '#9CA3AF', fontStyle: 'italic', padding: '8px 0' }}>
                 No one has access yet.
               </div>
             ) : (
@@ -374,7 +374,7 @@ const ShareCourseModal = ({ isOpen, onClose, courseId, courseName }) => {
                 color: sending ? '#9CA3AF' : '#fff',
                 border: 'none', borderRadius: '8px',
                 cursor: sending ? 'not-allowed' : 'pointer',
-                fontSize: '14px', fontWeight: '600',
+                fontSize: '15.4px', fontWeight: '600',
                 fontFamily: "'DM Sans', sans-serif",
               }}
             >

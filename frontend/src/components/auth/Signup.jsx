@@ -67,7 +67,7 @@ const Signup = () => {
         .su-input {
           width: 100%; padding: 11px 14px; background: #FAF8F4;
           border: 1px solid #E5E0D8; border-radius: 10px;
-          font-family: 'DM Sans', sans-serif; font-size: 14px;
+          font-family: 'DM Sans', sans-serif; font-size: 15.4px;
           color: #1C1917; outline: none; box-sizing: border-box;
           transition: border-color 0.18s;
         }
@@ -77,7 +77,7 @@ const Signup = () => {
         .su-submit {
           width: 100%; padding: 13px; background: #1C1917; color: #FAF8F4;
           border: none; border-radius: 100px; font-family: 'DM Sans', sans-serif;
-          font-size: 15px; font-weight: 600; cursor: pointer;
+          font-size: 16.5px; font-weight: 600; cursor: pointer;
           transition: opacity 0.18s; margin-top: 8px;
         }
         .su-submit:hover { opacity: 0.85; }
@@ -86,7 +86,7 @@ const Signup = () => {
         .su-back {
           display: inline-flex; align-items: center; gap: 6px;
           background: none; border: none; cursor: pointer;
-          font-family: 'DM Sans', sans-serif; font-size: 14px;
+          font-family: 'DM Sans', sans-serif; font-size: 15.4px;
           color: #6B6459; padding: 0; transition: color 0.15s;
         }
         .su-back:hover { color: #1C1917; }
