@@ -122,6 +122,12 @@ TEACHER'S GUIDANCE:
 TASK:
 Generate {count} new section(s) that complement the existing curriculum structure.
 
+UNIQUENESS REQUIREMENT:
+- Before generating, review ALL existing sections listed above
+- Each new section must cover territory that NONE of the existing sections touch
+- If existing sections already cover a concept (even partially), do not overlap — find a genuinely distinct angle or chapter
+- The new section must add clear value that is missing from the current structure
+
 IMPORTANT SPECIFICITY RULES:
 - Section titles must be SPECIFIC to the actual course content, NOT generic templates like "Introduction" or "Advanced Concepts"
 - For example, for a Grade 3 course on "The Water Cycle": use "How Water Moves Through Nature" NOT "Introduction to Topic"
@@ -205,6 +211,12 @@ TEACHER'S GUIDANCE:
 
 TASK:
 Generate {count} new subsection(s) for the section "{section.get('title', 'Unknown')}".
+
+UNIQUENESS REQUIREMENT:
+- Before generating, review ALL existing subsections in this section listed above
+- Each new subsection must cover an angle that NONE of the existing subsections in this section already cover
+- Also check other sections — do not generate a subsection that belongs more naturally in a different section
+- The new subsection must add a genuinely distinct perspective or skill within "{section.get('title', 'Unknown')}"
 
 IMPORTANT SPECIFICITY AND SCOPE RULES:
 - ONLY generate subsections that belong in the CURRENT section "{section.get('title', 'Unknown')}"
@@ -302,37 +314,61 @@ TEACHER'S GUIDANCE:
 TASK:
 Generate {count} topic box(es) for the subsection "{subsection.get('title', 'Unknown')}" in section "{section.get('title', 'Unknown')}".
 
-Topic boxes are modular learning units (10-30 minutes each) within a subsection.
+Topic boxes are the ATOMIC unit of learning — narrow, self-contained, and resource-ready.
 
-IMPORTANT SPECIFICITY AND SCOPE RULES:
-- ONLY generate content that belongs in the CURRENT subsection "{subsection.get('title', 'Unknown')}" within section "{section.get('title', 'Unknown')}"
-- Do NOT generate content that would be more appropriate for other sections or subsections listed above
-- Topic titles must describe the EXACT learning activity or concept, not generic labels
-- BAD: "Introduction", "Key Facts", "Practice Activity", "Wrap Up"
-- GOOD (for subsection "Evaporation"): "Watch: How the Sun Turns Puddles Into Water Vapor", "Experiment: Measuring Evaporation with Two Cups of Water"
-- GOOD (for subsection "Adding Fractions"): "Visual Models: Using Fraction Bars to Add 1/4 + 2/4", "Word Problems: Sharing Pizza Slices with Friends"
-- The title should tell a teacher EXACTLY what happens during this learning block
-- Learning objectives must be specific and measurable (use verbs: identify, describe, compare, calculate, demonstrate, explain)
-- Content keywords must be specific enough to find real YouTube videos and worksheets about this exact topic for Grade {course.get('grade', 'Unknown')}
+UNIQUENESS REQUIREMENT:
+- Review ALL existing topic boxes in this subsection listed above
+- Each new topic box must cover something NONE of the existing ones already cover
+- Also compare against sibling subsections — do not generate content that belongs in another subsection
+- If in doubt, go narrower — a topic box should cover ONE specific idea or skill, not a broad theme
 
-Each topic box should:
-- Have a specific, descriptive title (what the student will DO or LEARN)
-- Include a description (2-3 sentences) with concrete details about the activity or content
-- Specify duration in minutes (10-30 min typical)
-- Map to 1-2 PLA pillars: "Personal Growth", "Core Learning", "Critical Thinking", "Application & Impact"
-- List 2-3 specific, measurable learning objectives
-- Include 3-5 searchable content keywords
+NARROWNESS AND SPECIFICITY (CRITICAL):
+- Topic boxes must be NARROW. Not "Forces and Motion" — "How Friction Slows a Sliding Object"
+- Not "Introduction to Fractions" — "Using a Number Line to Place Fractions Between 0 and 1"
+- The title must describe exactly ONE concept or activity. If the title could apply to a full chapter, it is too broad.
+- Scope: 10–30 minutes of focused instruction on a single idea
+
+DESCRIPTION REQUIREMENTS (for resource generation quality):
+- 2–3 sentences, fully concrete — name the EXACT objects, phenomena, equations, or scenarios students engage with
+- Must be specific enough that a search engine can find real YouTube videos and worksheets about it
+- BAD: "Students explore forces and how they affect motion." (too vague — will surface generic results)
+- GOOD: "Students observe how increasing the mass of a cart affects its speed when pushed with equal force, recording data in a table." (specific — will surface relevant physics demos)
+- No filler phrases: avoid "students will explore", "learn about", "discover the concept of"
+
+LEARNING OBJECTIVES REQUIREMENTS (for resource generation quality):
+- 2–3 objectives per topic box
+- Must use specific action verbs: identify, calculate, compare, label, describe, demonstrate, explain, predict, measure
+- Each objective must name the EXACT skill or knowledge being assessed — specific enough to write a test question for
+- BAD: "Students will understand forces." (untestable)
+- GOOD: "Students will identify the direction of friction force on an object moving across a rough surface." (testable)
+- GOOD: "Students will calculate net force when two forces act in opposite directions." (testable)
+- Objectives must directly correspond to what the description says students will do
+
+CONTENT KEYWORDS REQUIREMENTS (for resource generation):
+- 3–5 keywords specific enough to find Grade {course.get('grade', 'Unknown')}-appropriate videos and worksheets
+- Must include: the specific concept name + grade level + format hint (e.g., "friction experiment grade 4", "net force worksheet middle school")
+- BAD: "forces", "motion", "physics" (too broad — will surface college-level results)
+- GOOD: "friction forces grade 4 experiment", "sliding friction vs static friction elementary" (specific — surfaces appropriate resources)
+
+PLA PILLARS — map to 1-2 of:
+- "Personal Growth": self-reflection, identity, collaboration, emotional awareness
+- "Core Learning": facts, vocabulary, foundational concepts, essential skills
+- "Critical Thinking": analysis, comparison, debate, synthesis, why/how questions
+- "Application & Impact": real-world projects, career connections, making something, community relevance
 
 Return ONLY valid JSON in this exact format:
 {{
   "topics": [
     {{
-      "title": "Specific descriptive topic title",
-      "description": "Detailed description of what students will learn and do in this topic box",
+      "title": "Specific narrow topic title — one concept only",
+      "description": "2-3 concrete sentences describing exactly what students see, do, and engage with",
       "duration_minutes": 20,
       "pla_pillars": ["Core Learning"],
-      "learning_objectives": ["Students will be able to...", "Students will demonstrate..."],
-      "content_keywords": ["specific searchable term", "grade-appropriate keyword", "topic-specific term"]
+      "learning_objectives": [
+        "Students will identify the direction of friction force on a moving object.",
+        "Students will compare friction on rough vs smooth surfaces using experimental data."
+      ],
+      "content_keywords": ["friction force direction grade 4", "rough vs smooth surface friction experiment elementary"]
     }}
   ]
 }}

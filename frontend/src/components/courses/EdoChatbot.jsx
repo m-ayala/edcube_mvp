@@ -6,6 +6,41 @@ import { chatWithEdo } from '../../utils/curriculumApi';
 const EDO_GREEN = '#2C5F3A';
 const EDO_ORANGE = '#E8761A';
 
+// Render text with bullet points as <ul> lists and paragraphs as separate blocks
+const renderFormattedText = (text) => {
+  if (!text) return null;
+  const lines = text.split('\n');
+  const elements = [];
+  let bulletGroup = [];
+  let key = 0;
+
+  const flushBullets = () => {
+    if (bulletGroup.length === 0) return;
+    elements.push(
+      <ul key={key++} style={{ margin: '4px 0 4px 0', paddingLeft: '18px', listStyleType: 'disc' }}>
+        {bulletGroup.map((b, i) => (
+          <li key={i} style={{ marginBottom: '3px' }}>{b}</li>
+        ))}
+      </ul>
+    );
+    bulletGroup = [];
+  };
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('•') || trimmed.startsWith('-') || trimmed.startsWith('*')) {
+      bulletGroup.push(trimmed.replace(/^[•\-*]\s*/, ''));
+    } else if (trimmed === '') {
+      flushBullets();
+    } else {
+      flushBullets();
+      elements.push(<span key={key++} style={{ display: 'block', marginBottom: '4px' }}>{trimmed}</span>);
+    }
+  }
+  flushBullets();
+  return elements;
+};
+
 const QUICK_CHIPS = {
   course: [
     { label: 'Add a section', action: 'add-section', isGenerate: true },
@@ -41,8 +76,12 @@ const SuggestionCard = ({ card, index, onApply, onApplyBlocked, applied, selecte
     if (!card.apply_field) return false;
     if (card.apply_field === 'new_section') return true;
     if (!selectedContext || selectedContext.type === 'course') return false;
-    if (card.apply_field === 'new_subsection') return selectedContext.type === 'section';
-    if (card.apply_field === 'new_topic') return selectedContext.type === 'subsection';
+    // new_subsection: need a section — section, subsection, or topic contexts all carry a sectionId
+    if (card.apply_field === 'new_subsection') return ['section', 'subsection', 'topic'].includes(selectedContext.type);
+    // new_topic: need a subsection — subsection or topic contexts both carry a subsectionId
+    if (card.apply_field === 'new_topic') return ['subsection', 'topic'].includes(selectedContext.type);
+    // topic_full: combined description + objectives — only applies to a topic box
+    if (card.apply_field === 'topic_full') return selectedContext.type === 'topic';
     return true;
   })();
 
@@ -98,7 +137,7 @@ const SuggestionCard = ({ card, index, onApply, onApplyBlocked, applied, selecte
       {/* Card body */}
       <div style={{ padding: '11px 12px' }}>
         <p style={{
-          margin: 0, fontSize: '13.8px', lineHeight: '1.6',
+          margin: 0, fontSize: '13.8px', lineHeight: '1.65',
           color: '#374151', fontFamily: "'DM Sans', sans-serif",
           whiteSpace: 'pre-wrap',
         }}>
@@ -132,9 +171,10 @@ const SuggestionCard = ({ card, index, onApply, onApplyBlocked, applied, selecte
           title={
             applied ? 'Already applied' :
             !card.apply_field ? 'Click to learn how to use this suggestion' :
-            !selectedContext || selectedContext.type === 'course' ? 'Click for help applying this' :
-            card.apply_field === 'new_subsection' && selectedContext.type !== 'section' ? 'Click for help applying this' :
-            card.apply_field === 'new_topic' && selectedContext.type !== 'subsection' ? 'Click for help applying this' :
+            !selectedContext || selectedContext.type === 'course' ? 'Select a section, subsection, or topic first' :
+            card.apply_field === 'topic_full' && selectedContext.type !== 'topic' ? 'Select a Topic Box first' :
+            card.apply_field === 'new_topic' && !['subsection', 'topic'].includes(selectedContext.type) ? 'Select a subsection or topic first' :
+            card.apply_field === 'new_subsection' && !['section', 'subsection', 'topic'].includes(selectedContext.type) ? 'Select a section first' :
             'Apply to course'
           }
           style={{
@@ -153,7 +193,8 @@ const SuggestionCard = ({ card, index, onApply, onApplyBlocked, applied, selecte
           <Check size={11} />
           {applied ? 'Applied' : (
             !card.apply_field ? 'Apply' :
-            card.apply_field === 'description' ? 'Apply to Description' :
+            card.apply_field === 'topic_full' ? 'Apply to Topic Box' :
+            card.apply_field === 'description' ? 'Apply Description' :
             card.apply_field === 'objectives' ? 'Apply Objectives' :
             card.apply_field === 'title' ? 'Apply Title' :
             card.apply_field === 'new_section' ? 'Add Section' :
@@ -199,8 +240,8 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
   const addTextMessage = (kind, text) =>
     setMessages(prev => [...prev, { id: `${Date.now()}-${Math.random()}`, kind, text }]);
 
-  const addCardsMessage = (cards, intro, conclusion) =>
-    setMessages(prev => [...prev, { id: `${Date.now()}-${Math.random()}`, kind: 'ai-cards', cards, intro: intro || '', conclusion: conclusion || '', appliedCards: new Set() }]);
+  const addCardsMessage = (cards, intro, conclusion, ctx) =>
+    setMessages(prev => [...prev, { id: `${Date.now()}-${Math.random()}`, kind: 'ai-cards', cards, intro: intro || '', conclusion: conclusion || '', appliedCards: new Set(), generatedContext: ctx || null }]);
 
   const getContextLabel = () => {
     if (!selectedContext) return courseName || 'Your Course';
@@ -310,7 +351,18 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
       if (data.type === 'conversation') {
         addTextMessage('ai-text', data.message || "I'm not sure how to help with that — could you tell me more?");
       } else if (data.type === 'cards' && data.suggestions?.length > 0) {
-        addCardsMessage(data.suggestions, data.intro, data.conclusion);
+        // Build context hint if cards need a deeper context than currently selected
+        let conclusion = data.conclusion || '';
+        const hasNewTopic = data.suggestions.some(c => c.apply_field === 'new_topic');
+        const hasNewSubsection = data.suggestions.some(c => c.apply_field === 'new_subsection');
+        if (hasNewTopic && !['subsection', 'topic'].includes(selectedContext?.type)) {
+          const hint = '👆 To enable the "Add Topic Box" buttons above, select a Subsection from the Structure menu.';
+          conclusion = conclusion ? `${conclusion}\n\n${hint}` : hint;
+        } else if (hasNewSubsection && !['section', 'subsection', 'topic'].includes(selectedContext?.type)) {
+          const hint = '👆 To enable the "Add Subsection" buttons above, select a Section from the Structure menu.';
+          conclusion = conclusion ? `${conclusion}\n\n${hint}` : hint;
+        }
+        addCardsMessage(data.suggestions, data.intro, conclusion, selectedContext);
       } else {
         addTextMessage('ai-text', "I couldn't generate suggestions right now. Please try again.");
       }
@@ -329,8 +381,11 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
   };
 
   // ── Apply a suggestion card to the course structure ────────────────────
-  const applyCard = (messageId, card, cardIndex) => {
-    const ctx = selectedContext;
+  const applyCard = (messageId, card, cardIndex, ctxOverride) => {
+    // ADD operations use current selectedContext so user can pick any target after seeing suggestions.
+    // EDIT operations use the snapshot from when suggestions were generated (ctxOverride), falling back to current.
+    const isAddOp = ['new_section', 'new_subsection', 'new_topic'].includes(card.apply_field);
+    const ctx = isAddOp ? selectedContext : (ctxOverride || selectedContext);
     if (!card.apply_field) return;
 
     if (card.apply_field === 'new_section') {
@@ -342,21 +397,47 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
 
     if (!ctx) return;
 
-    if (card.apply_field === 'new_subsection' && ctx.type === 'section') {
-      actions.addSubsectionWithContent(ctx.id, card.label, card.body);
+    if (card.apply_field === 'new_subsection' && ['section', 'subsection', 'topic'].includes(ctx.type)) {
+      // Derive the section ID regardless of how deep the context is
+      const sectionId = ctx.type === 'section' ? ctx.id : ctx.sectionId;
+      actions.addSubsectionWithContent(sectionId, card.label, card.body);
       markApplied(messageId, cardIndex);
-      addTextMessage('ai-text', `Added new subsection "${card.label}" to "${ctx.title}". ✓`);
+      addTextMessage('ai-text', `Added new subsection "${card.label}". ✓`);
       return;
     }
 
-    if (card.apply_field === 'new_topic' && ctx.type === 'subsection') {
-      actions.addTopicBoxWithContent(ctx.sectionId, ctx.id, card.label, card.body);
+    if (card.apply_field === 'new_topic' && ['subsection', 'topic'].includes(ctx.type)) {
+      // Derive the subsection ID whether focused on a subsection or a sibling topic
+      const sectionId = ctx.sectionId;
+      const subsectionId = ctx.type === 'subsection' ? ctx.id : ctx.subsectionId;
+      actions.addTopicBoxWithContent(sectionId, subsectionId, card.label, card.body);
       markApplied(messageId, cardIndex);
-      addTextMessage('ai-text', `Added new topic "${card.label}" to "${ctx.title}". ✓`);
+      addTextMessage('ai-text', `Added new topic box "${card.label}". ✓`);
       return;
     }
 
-    if (card.apply_field === 'description') {
+    if (card.apply_field === 'topic_full') {
+      if (ctx.type === 'topic') {
+        const sec = sections.find(s => s.id === ctx.sectionId);
+        const sub = sec?.subsections?.find(ss => ss.id === ctx.subsectionId);
+        const topic = sub?.topicBoxes?.find(t => t.id === ctx.id);
+        if (!topic) {
+          addTextMessage('ai-text', "Couldn't find that topic box — it may have been deleted. Try selecting it again.");
+          return;
+        }
+        // Parse body: description before "Objectives:" delimiter, objectives after
+        const objMatch = card.body.match(/\n\n?Objectives?:?\n/i);
+        const description = objMatch
+          ? card.body.slice(0, objMatch.index).trim()
+          : card.body.trim();
+        const objectivesText = objMatch ? card.body.slice(objMatch.index + objMatch[0].length) : '';
+        const objectives = objectivesText.split('\n').map(s => s.replace(/^[-•*\d.]\s*/, '').trim()).filter(Boolean);
+        actions.updateTopicBoxFull({
+          sectionId: ctx.sectionId, subsectionId: ctx.subsectionId, topicId: ctx.id,
+          updatedData: { ...topic, description, learning_objectives: objectives },
+        });
+      }
+    } else if (card.apply_field === 'description') {
       if (ctx.type === 'section') {
         actions.updateSectionDescription(ctx.id, card.body);
       } else if (ctx.type === 'subsection') {
@@ -365,12 +446,14 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
         const sec = sections.find(s => s.id === ctx.sectionId);
         const sub = sec?.subsections?.find(ss => ss.id === ctx.subsectionId);
         const topic = sub?.topicBoxes?.find(t => t.id === ctx.id);
-        if (topic) {
-          actions.updateTopicBoxFull({
-            sectionId: ctx.sectionId, subsectionId: ctx.subsectionId, topicId: ctx.id,
-            updatedData: { ...topic, description: card.body },
-          });
+        if (!topic) {
+          addTextMessage('ai-text', "Couldn't find that topic box — it may have been deleted. Try selecting it again.");
+          return;
         }
+        actions.updateTopicBoxFull({
+          sectionId: ctx.sectionId, subsectionId: ctx.subsectionId, topicId: ctx.id,
+          updatedData: { ...topic, description: card.body },
+        });
       }
     } else if (card.apply_field === 'title') {
       if (ctx.type === 'section') {
@@ -380,16 +463,18 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
       }
     } else if (card.apply_field === 'objectives') {
       if (ctx.type === 'topic') {
-        const objectives = card.body.split('\n').map(s => s.replace(/^[-•*\d.]\s*/, '').trim()).filter(Boolean);
         const sec = sections.find(s => s.id === ctx.sectionId);
         const sub = sec?.subsections?.find(ss => ss.id === ctx.subsectionId);
         const topic = sub?.topicBoxes?.find(t => t.id === ctx.id);
-        if (topic) {
-          actions.updateTopicBoxFull({
-            sectionId: ctx.sectionId, subsectionId: ctx.subsectionId, topicId: ctx.id,
-            updatedData: { ...topic, learning_objectives: objectives },
-          });
+        if (!topic) {
+          addTextMessage('ai-text', "Couldn't find that topic box — it may have been deleted. Try selecting it again.");
+          return;
         }
+        const objectives = card.body.split('\n').map(s => s.replace(/^[-•*\d.]\s*/, '').trim()).filter(Boolean);
+        actions.updateTopicBoxFull({
+          sectionId: ctx.sectionId, subsectionId: ctx.subsectionId, topicId: ctx.id,
+          updatedData: { ...topic, learning_objectives: objectives },
+        });
       }
     }
 
@@ -401,10 +486,12 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
     let msg;
     if (!card.apply_field) {
       msg = "This suggestion is informational — use the Copy button to grab the text and paste it wherever you need it.";
+    } else if (card.apply_field === 'topic_full') {
+      msg = "To apply this, first select a Topic Box from the Structure menu above, then click Apply.";
     } else if (card.apply_field === 'new_subsection') {
-      msg = "To add a subsection, first select a Section from the Structure menu above, then click Apply.";
+      msg = "To add a subsection, first select a Section, Subsection, or Topic from the Structure menu above, then click Apply.";
     } else if (card.apply_field === 'new_topic') {
-      msg = "To add a topic box, first select a Subsection from the Structure menu above, then click Apply.";
+      msg = "To add a topic box, first select a Subsection or Topic from the Structure menu above, then click Apply.";
     } else {
       msg = "To apply this, first select a section, subsection, or topic from the Structure menu above — then click Apply on this card.";
     }
@@ -429,7 +516,10 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
       try {
         const result = await actions.handleGenerateSections({
           level: 'sections',
-          context: { course: { title: courseName, description: formData?.objectives || '', grade: formData?.class || '' } },
+          context: {
+            course: { title: courseName, description: formData?.objectives || '', grade: formData?.class || '' },
+            existing_sections: sections.filter(s => s.type !== 'break').map(s => ({ title: s.title, description: s.description || '' })),
+          },
           userGuidance: null, count: 1,
         });
         if (result?.success === false) throw new Error(result.error);
@@ -470,22 +560,25 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
     } else if (chip.action === 'add-topic' && selectedContext?.type === 'subsection') {
       addTextMessage('user', chip.label);
       setIsTyping(true);
-      let parentSec = null, parentSub = null;
-      for (const s of sections) {
-        const ss = (s.subsections || []).find(ss => ss.id === selectedContext.id);
-        if (ss) { parentSec = s; parentSub = ss; break; }
+      const parentSecId = selectedContext.sectionId;
+      const parentSec = sections.find(s => s.id === parentSecId);
+      const parentSub = parentSec?.subsections?.find(ss => ss.id === selectedContext.id);
+      if (!parentSecId) {
+        addTextMessage('ai-text', 'Could not find the parent section. Try selecting the subsection again from the Structure menu.');
+        setIsTyping(false);
+        return;
       }
       try {
-        const result = await actions.handleGenerateTopicBoxes(parentSec?.id, selectedContext.id, {
+        const result = await actions.handleGenerateTopicBoxes(parentSecId, selectedContext.id, {
           level: 'topics',
           context: {
             course: { title: courseName, grade: formData?.class || '', description: formData?.objectives || '' },
             current_section: { title: parentSec?.title || '', description: parentSec?.description || '' },
             subsection: {
-              title: parentSub?.title || '', description: parentSub?.description || '',
+              title: parentSub?.title || selectedContext.title, description: parentSub?.description || '',
               existingTopics: (parentSub?.topicBoxes || []).map(t => ({ title: t.title, description: t.description })),
             },
-            other_sections: sections.filter(s => s.type !== 'break' && s.id !== parentSec?.id)
+            other_sections: sections.filter(s => s.type !== 'break' && s.id !== parentSecId)
               .map(s => ({ title: s.title, description: s.description, subsections: (s.subsections || []).map(ss => ss.title) })),
             sibling_subsections: (parentSec?.subsections || []).filter(ss => ss.id !== selectedContext.id)
               .map(ss => ({ title: ss.title, description: ss.description })),
@@ -493,7 +586,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
           userGuidance: null, count: 1,
         });
         if (result?.success === false) throw new Error(result.error);
-        addTextMessage('ai-text', `Done! Added a topic box to "${parentSub?.title}". Click it to add details!`);
+        addTextMessage('ai-text', `Done! Added a topic box to "${parentSub?.title || selectedContext.title}". Click it to add details!`);
       } catch {
         addTextMessage('ai-text', 'I had trouble generating a topic box. Please try again.');
       } finally {
@@ -827,7 +920,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
                   fontSize: '14.3px', lineHeight: '1.55', fontFamily: "'DM Sans', sans-serif",
                   border: '1px solid #E7E5E4', wordBreak: 'break-word',
                 }}>
-                  {msg.text}
+                  {renderFormattedText(msg.text)}
                 </div>
               </div>
             );
@@ -851,7 +944,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
                       fontSize: '14.3px', lineHeight: '1.55', color: '#1C1917',
                       fontFamily: "'DM Sans', sans-serif", wordBreak: 'break-word',
                     }}>
-                      {msg.intro}
+                      {renderFormattedText(msg.intro)}
                     </div>
                   )}
                   {(msg.cards || []).map((card, idx) => (
@@ -861,7 +954,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
                       index={idx}
                       applied={(msg.appliedCards || new Set()).has(idx)}
                       selectedContext={selectedContext}
-                      onApply={(c, i) => applyCard(msg.id, c, i)}
+                      onApply={(c, i) => applyCard(msg.id, c, i, msg.generatedContext)}
                       onApplyBlocked={handleApplyBlocked}
                     />
                   ))}
@@ -872,7 +965,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
                       fontSize: '14.3px', lineHeight: '1.55', color: '#1C1917',
                       fontFamily: "'DM Sans', sans-serif", wordBreak: 'break-word',
                     }}>
-                      {msg.conclusion}
+                      {renderFormattedText(msg.conclusion)}
                     </div>
                   )}
                 </div>
