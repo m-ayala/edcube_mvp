@@ -8,7 +8,7 @@ async def parse_course_file(file_path: str, file_ext: str, teacher_uid: str):
     """
     Parse uploaded course file using GPT-4 to extract structured data
     """
-    
+
     # Read file content based on type
     if file_ext in ['.xlsx', '.xls']:
         file_content = read_excel_file(file_path)
@@ -16,10 +16,10 @@ async def parse_course_file(file_path: str, file_ext: str, teacher_uid: str):
         file_content = read_word_file(file_path)
     else:
         raise ValueError(f"Unsupported file extension: {file_ext}")
-    
+
     # Use GPT-4 to parse and structure the content
     prompt = f"""
-You are a curriculum parser. Extract course structure from this teacher's file.
+You are a curriculum parser. Your job is to extract EVERY piece of content from the teacher's file and map it faithfully into a structured course format — losing nothing.
 
 FILE CONTENT:
 {file_content}
@@ -27,87 +27,150 @@ FILE CONTENT:
 OUTPUT FORMAT (JSON only, no markdown):
 {{
   "course_name": "string",
-  "class": "string (e.g., Class 1, Class 2, or Grade 3, etc.)",
-  "subject": "string (e.g., Math, Science, History)",
-  "topic": "string (main topic/theme of the course)",
+  "class": "string (e.g., Class 1, Grade 3 — infer from content if not stated)",
+  "subject": "string (e.g., Math, Science, Health — infer if not stated)",
+  "topic": "string (main theme of the course)",
   "sections": [
     {{
       "id": "section-1",
-      "title": "string",
-      "description": "string",
+      "title": "string (e.g., the day/unit/chapter name)",
+      "description": "string (overview of what this section covers)",
       "subsections": [
         {{
-          "id": "sub-1",
-          "title": "string",
-          "description": "string",
-          "duration_minutes": 30,
-          "pla_pillars": [],
-          "learning_objectives": ["objective1", "objective2"],
-          "content_keywords": ["keyword1", "keyword2"],
-          "what_must_be_covered": "string",
-          "video_resources": [],
-          "worksheets": [],
-          "activities": []
+          "id": "sub-1-1",
+          "title": "string (logical grouping within the section, e.g., 'Main Topics', 'Activities', 'Key Concepts')",
+          "description": "string (what this group covers)",
+          "topicBoxes": [
+            {{
+              "id": "topic-1-1-1",
+              "title": "string (ONE specific topic, concept, organ, activity, or skill from the file)",
+              "description": "string (2-3 sentences: what is covered, any activity instructions or notes from the file go here)",
+              "duration_minutes": 20,
+              "pla_pillars": [],
+              "learning_objectives": ["string — infer 1-2 measurable objectives per topic"],
+              "content_keywords": ["keyword1", "keyword2"],
+              "video_resources": [],
+              "worksheets": [],
+              "activities": ["string — copy any activity or game description from the file here"]
+            }}
+          ]
         }}
       ]
     }}
   ]
 }}
 
-RULES:
-1. Extract course_name, class/grade level, subject, and main topic from the document
-2. If class/grade not mentioned, infer from content complexity (e.g., "Class 3" for elementary)
-3. If subject not explicit, infer from content (e.g., "Math" if discussing fractions)
-4. Extract all sections/topics as separate sections
-5. Each section should have subsections (break down topics into smaller parts)
-6. Infer learning objectives from content
-7. Extract key content keywords
-8. Generate unique IDs (section-1, section-2, sub-1, sub-2, etc.)
-9. If duration isn't specified, estimate reasonable durations (15-45 mins per subsection)
-10. Return ONLY valid JSON, no explanations or markdown
+CRITICAL RULES — read carefully:
+
+1. CAPTURE EVERYTHING. Every listed topic, organ, concept, activity, game, or note in the file must appear as a topicBox somewhere. Do not summarize or skip items.
+
+2. STRUCTURE: Map the file's natural hierarchy:
+   - Top-level groups (days, units, chapters) → sections
+   - Sub-groupings (Main Topics, Activities, Videos) → subsections
+   - Individual items (each organ, each activity, each concept) → topicBoxes
+
+3. TOPIC BOXES are the atomic unit. Each topicBox should cover exactly ONE item:
+   - "Brain", "Heart", "Liver" → three separate topicBoxes, not one
+   - "Hand-washing demo", "Hygiene matching game" → two separate topicBoxes
+   - "Sing Head, Shoulders, Knees & Toes" → one topicBox
+
+4. ACTIVITIES: If the file lists activities, games, demos, or worksheets:
+   - Each activity becomes its own topicBox under an "Activities" subsection
+   - Copy the activity description into the topicBox's "description" field
+   - Also put it in the "activities" array
+   - If it's a song, game, craft, or demo — make that clear in the description
+
+5. LINKS/URLs: If any links or URLs appear in the file, put them in:
+   - "video_resources" if they are video links
+   - "worksheets" if they are worksheet/document links
+   - "activities" if they are activity/game links
+
+6. SUBSECTION GROUPING: Group topicBoxes logically:
+   - Organs/body parts → one subsection (e.g., "Key Organs & Body Parts")
+   - Activities & games → another subsection (e.g., "Activities & Games")
+   - Notes or additional content → another subsection if needed
+
+7. IDs: Use section-1, section-2, sub-1-1, sub-1-2, topic-1-1-1, topic-1-1-2, etc.
+
+8. INFER when needed:
+   - Grade/class: infer from content complexity
+   - Subject: infer from content domain
+   - Learning objectives: write 1-2 measurable objectives per topicBox (use action verbs: identify, describe, demonstrate, explain, list)
+   - Duration: 10-15 min per topicBox is typical
+
+9. Return ONLY valid JSON. No markdown, no explanations, no code fences.
 """
 
     response = await client.chat.completions.create(
         model="gpt-4o",
         messages=[
-            {"role": "system", "content": "You are a curriculum structure parser. Output only valid JSON."},
+            {"role": "system", "content": "You are a curriculum structure parser. Output only valid JSON. Capture every single item from the source file as a topicBox — never skip or summarize content."},
             {"role": "user", "content": prompt}
         ],
-        temperature=0.3
+        temperature=0.2,
+        max_tokens=16000,
+        response_format={"type": "json_object"}
     )
-    
+
     parsed_text = response.choices[0].message.content.strip()
-    
-    # Remove markdown code fences if present
-    if parsed_text.startswith("```json"):
-        parsed_text = parsed_text[7:]
-    if parsed_text.startswith("```"):
-        parsed_text = parsed_text[3:]
-    if parsed_text.endswith("```"):
-        parsed_text = parsed_text[:-3]
-    
-    course_data = json.loads(parsed_text.strip())
-    
+    course_data = json.loads(parsed_text)
+
     return course_data
 
 
 def read_excel_file(file_path: str) -> str:
-    """Read Excel file and convert to text"""
-    import pandas as pd
-    
+    """Read Excel file and convert to text, preserving merged cell structure"""
     try:
-        # Read all sheets
-        excel_file = pd.ExcelFile(file_path)
+        import openpyxl
+        wb = openpyxl.load_workbook(file_path, data_only=True)
         content_parts = []
-        
-        for sheet_name in excel_file.sheet_names:
-            df = pd.read_excel(file_path, sheet_name=sheet_name)
+
+        for sheet_name in wb.sheetnames:
+            ws = wb[sheet_name]
             content_parts.append(f"SHEET: {sheet_name}\n")
-            content_parts.append(df.to_string(index=False))
+
+            # Build a cell value map that fills merged cell ranges with the merged value
+            merged_values = {}
+            for merged_range in ws.merged_cells.ranges:
+                top_left = ws.cell(merged_range.min_row, merged_range.min_col).value
+                for row in merged_range.rows:
+                    for cell in row:
+                        merged_values[(cell.row, cell.column)] = top_left
+
+            rows_text = []
+            for row in ws.iter_rows():
+                row_values = []
+                for cell in row:
+                    val = merged_values.get((cell.row, cell.column), cell.value)
+                    row_values.append(str(val) if val is not None else "")
+                # Skip completely empty rows
+                if any(v.strip() for v in row_values):
+                    rows_text.append(" | ".join(row_values))
+
+            content_parts.append("\n".join(rows_text))
             content_parts.append("\n\n")
-        
+
         return "\n".join(content_parts)
-    
+
+    except ImportError:
+        # Fallback to pandas if openpyxl not available directly
+        import pandas as pd
+        try:
+            excel_file = pd.ExcelFile(file_path)
+            content_parts = []
+            for sheet_name in excel_file.sheet_names:
+                df = pd.read_excel(file_path, sheet_name=sheet_name, header=None)
+                content_parts.append(f"SHEET: {sheet_name}\n")
+                # Forward-fill to handle merged cells
+                df = df.ffill(axis=0)
+                for _, row in df.iterrows():
+                    row_vals = [str(v) for v in row if str(v) not in ('nan', 'None', '')]
+                    if row_vals:
+                        content_parts.append(" | ".join(row_vals))
+                content_parts.append("\n\n")
+            return "\n".join(content_parts)
+        except Exception as e:
+            raise ValueError(f"Failed to read Excel file: {str(e)}")
     except Exception as e:
         raise ValueError(f"Failed to read Excel file: {str(e)}")
 
