@@ -11,15 +11,15 @@ import {
 } from '../../firebase/dbService';
 
 const colors = {
-  bg: '#FAF9F6',
+  bg: '#FFFFFF',
   card: '#FFFFFF',
-  accent: '#8b7355',
-  accentLight: '#F5F3EE',
-  border: '#E8E6E1',
-  textPrimary: '#2C2A26',
-  textSecondary: '#6B6760',
+  accent: '#222',
+  accentLight: '#F5F5F5',
+  border: '#E5E7EB',
+  textPrimary: '#111',
+  textSecondary: '#444',
   danger: '#E57373',
-  success: '#52A67A'
+  success: '#2C5F3A'
 };
 
 const inputStyle = {
@@ -252,7 +252,7 @@ const ResourceLibrary = ({ currentUser }) => {
           borderRadius: '12px',
           border: `1px dashed ${colors.border}`
         }}>
-          <BookMarked size={32} color={colors.border} style={{ marginBottom: '12px' }} />
+          <BookMarked size={32} color="#bbb" style={{ marginBottom: '12px' }} />
           <p style={{ margin: '0 0 6px', fontSize: '16.5px', fontWeight: '600', color: colors.textPrimary }}>
             Your library is empty
           </p>
@@ -391,7 +391,7 @@ const ResourceLibrary = ({ currentUser }) => {
                           gap: '10px',
                           padding: '12px 20px',
                           borderBottom: `1px solid ${colors.border}`,
-                          backgroundColor: '#FAFAF8'
+                          backgroundColor: '#FAFAFA'
                         }}
                       >
                         <div style={{ flex: 1, minWidth: 0 }}>
@@ -407,7 +407,7 @@ const ResourceLibrary = ({ currentUser }) => {
                             href={link.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            style={{ fontSize: '13.2px', color: colors.accent, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '3px', fontWeight: '500' }}
+                            style={{ fontSize: '13.2px', color: '#007bff', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '3px', fontWeight: '500' }}
                           >
                             {link.url.length > 50 ? link.url.slice(0, 50) + '…' : link.url}
                             <ExternalLink size={11} />

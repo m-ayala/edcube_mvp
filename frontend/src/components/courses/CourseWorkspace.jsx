@@ -1,5 +1,6 @@
 // src/components/courses/CourseWorkspace.jsx
 import { useState, useEffect, useRef } from 'react';
+import { DragDropContext } from '@hello-pangea/dnd';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import CourseEditor from './CourseEditor';
@@ -48,6 +49,7 @@ const CourseWorkspace = () => {
   const [isOwner] = useState(incomingIsOwner || false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [isEdoOpen, setIsEdoOpen] = useState(false);
+  const [trayItems, setTrayItems] = useState([]);
 
   // ── Initialize Actions Hook ───────────────────────────────────────────
   const actions = useCourseActions({
@@ -88,7 +90,9 @@ const CourseWorkspace = () => {
       return {
         ...section,
         subsections: (section.subsections || []).map(sub => {
-          if (sub.topicBoxes && Array.isArray(sub.topicBoxes)) {
+          // Only preserve topicBoxes if they are actually populated.
+          // An empty array [] is truthy but means no boxes — fall through to rebuild.
+          if (sub.topicBoxes && Array.isArray(sub.topicBoxes) && sub.topicBoxes.length > 0) {
             return sub;
           }
 
@@ -352,6 +356,148 @@ const CourseWorkspace = () => {
     enabled: !!organizationId && !!currentUser && !readOnly
   });
 
+  // ── Drag and Drop ─────────────────────────────────────────────────────
+  const handleDragEnd = (result) => {
+    const { source, destination, draggableId, type } = result;
+
+    if (!destination) return;
+    if (
+      source.droppableId === destination.droppableId &&
+      source.index === destination.index
+    ) return;
+
+    // Tray → Course drop
+    if (source.droppableId.startsWith('edo-tray-')) {
+      const trayItem = trayItems.find(i => i.id === draggableId);
+      if (!trayItem) return;
+
+      if (type === 'SECTION' && destination.droppableId === 'all-sections') {
+        actions.insertSectionAt(trayItem.data, destination.index);
+        setTrayItems(prev => prev.filter(i => i.id !== draggableId));
+        return;
+      }
+      if (type === 'SUBSECTION' && destination.droppableId.startsWith('subsections-')) {
+        const sectionId = destination.droppableId.replace('subsections-', '');
+        actions.insertSubsectionAt(sectionId, trayItem.data, destination.index);
+        setTrayItems(prev => prev.filter(i => i.id !== draggableId));
+        return;
+      }
+      if (type === 'TOPICBOX' && destination.droppableId.startsWith('topicboxes-')) {
+        const subsectionId = destination.droppableId.replace('topicboxes-', '');
+        let parentSectionId = null;
+        for (const s of sections) {
+          if ((s.subsections || []).some(ss => ss.id === subsectionId)) {
+            parentSectionId = s.id;
+            break;
+          }
+        }
+        if (!parentSectionId) return;
+        actions.insertTopicBoxAt(parentSectionId, subsectionId, trayItem.data, destination.index);
+        setTrayItems(prev => prev.filter(i => i.id !== draggableId));
+        return;
+      }
+      return;
+    }
+
+    // Within-course reorder
+    if (type === 'SECTION') {
+      const reorderedSections = Array.from(sections);
+      const [movedSection] = reorderedSections.splice(source.index, 1);
+      reorderedSections.splice(destination.index, 0, movedSection);
+      setSections(reorderedSections);
+      return;
+    }
+
+    if (type === 'SUBSECTION') {
+      const sectionId = source.droppableId.replace('subsections-', '');
+      const section = sections.find(s => s.id === sectionId);
+      if (section && section.subsections) {
+        const reorderedSubsections = Array.from(section.subsections);
+        const [movedSubsection] = reorderedSubsections.splice(source.index, 1);
+        reorderedSubsections.splice(destination.index, 0, movedSubsection);
+        setSections(sections.map(s =>
+          s.id === sectionId ? { ...s, subsections: reorderedSubsections } : s
+        ));
+      }
+      return;
+    }
+
+    if (type === 'TOPICBOX') {
+      const sourceSubId = source.droppableId.replace('topicboxes-', '');
+      const destSubId = destination.droppableId.replace('topicboxes-', '');
+
+      let sourceSection = null, sourceSub = null, sourceTopicBox = null;
+      for (const section of sections) {
+        const sub = (section.subsections || []).find(s => s.id === sourceSubId);
+        if (sub) { sourceSection = section; sourceSub = sub; sourceTopicBox = sub.topicBoxes[source.index]; break; }
+      }
+      let destSection = null, destSub = null;
+      for (const section of sections) {
+        const sub = (section.subsections || []).find(s => s.id === destSubId);
+        if (sub) { destSection = section; destSub = sub; break; }
+      }
+      if (!sourceSection || !sourceSub || !sourceTopicBox || !destSection || !destSub) return;
+
+      if (sourceSubId === destSubId) {
+        setSections(sections.map(section => {
+          if (section.id !== sourceSection.id) return section;
+          return {
+            ...section,
+            subsections: section.subsections.map(sub => {
+              if (sub.id !== sourceSubId) return sub;
+              const reorderedTopicBoxes = Array.from(sub.topicBoxes);
+              const [moved] = reorderedTopicBoxes.splice(source.index, 1);
+              reorderedTopicBoxes.splice(destination.index, 0, moved);
+              return { ...sub, topicBoxes: reorderedTopicBoxes };
+            })
+          };
+        }));
+      } else if (sourceSection.id === destSection.id) {
+        setSections(sections.map(section => {
+          if (section.id !== sourceSection.id) return section;
+          return {
+            ...section,
+            subsections: section.subsections.map(sub => {
+              if (sub.id === sourceSubId) return { ...sub, topicBoxes: sub.topicBoxes.filter((_, idx) => idx !== source.index) };
+              if (sub.id === destSubId) {
+                const newTopicBoxes = [...sub.topicBoxes];
+                newTopicBoxes.splice(destination.index, 0, sourceTopicBox);
+                return { ...sub, topicBoxes: newTopicBoxes };
+              }
+              return sub;
+            })
+          };
+        }));
+      } else {
+        setSections(sections.map(section => {
+          if (section.id === sourceSection.id) {
+            return {
+              ...section,
+              subsections: section.subsections.map(sub => {
+                if (sub.id === sourceSubId) return { ...sub, topicBoxes: sub.topicBoxes.filter((_, idx) => idx !== source.index) };
+                return sub;
+              })
+            };
+          }
+          if (section.id === destSection.id) {
+            return {
+              ...section,
+              subsections: section.subsections.map(sub => {
+                if (sub.id === destSubId) {
+                  const newTopicBoxes = [...sub.topicBoxes];
+                  newTopicBoxes.splice(destination.index, 0, sourceTopicBox);
+                  return { ...sub, topicBoxes: newTopicBoxes };
+                }
+                return sub;
+              })
+            };
+          }
+          return section;
+        }));
+      }
+    }
+  };
+
   // ── Render ────────────────────────────────────────────────────────────
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
@@ -370,48 +516,52 @@ const CourseWorkspace = () => {
         />
       ) : (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'row', overflow: 'hidden' }}>
-          {/* Editor column — shrinks to make room for Edo */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
-            <CourseEditor
-              courseName={courseName}
-              setCourseName={setCourseName}
-              courseClass={courseClass}
-              setCourseClass={setCourseClass}
-              sections={sections}
-              setSections={setSections}
-              videosByTopic={videosByTopic}
-              handsOnResources={handsOnResources}
-              formData={formData}
-              currentUser={currentUser}
-              actions={actions}
-              saveStatus={saveStatus}
-              onUndo={undo}
-              canUndo={historyIndex > 0}
-              onAddBreak={() => setShowBreakModal(true)}
-              onTopicClick={handleTopicClick}
-              navigate={navigate}
-              onBack={handleBack}
-              isPublic={isPublic}
-              onToggleVisibility={handleToggleVisibility}
-              onShare={() => setShowShareModal(true)}
-              isEdoOpen={isEdoOpen}
-              onToggleEdo={() => setIsEdoOpen(p => !p)}
-            />
-          </div>
+          <DragDropContext onDragEnd={handleDragEnd}>
+            {/* Editor column — shrinks to make room for Edo */}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+              <CourseEditor
+                courseName={courseName}
+                setCourseName={setCourseName}
+                courseClass={courseClass}
+                setCourseClass={setCourseClass}
+                sections={sections}
+                setSections={setSections}
+                videosByTopic={videosByTopic}
+                handsOnResources={handsOnResources}
+                formData={formData}
+                currentUser={currentUser}
+                actions={actions}
+                saveStatus={saveStatus}
+                onUndo={undo}
+                canUndo={historyIndex > 0}
+                onAddBreak={() => setShowBreakModal(true)}
+                onTopicClick={handleTopicClick}
+                navigate={navigate}
+                onBack={handleBack}
+                isPublic={isPublic}
+                onToggleVisibility={handleToggleVisibility}
+                onShare={() => setShowShareModal(true)}
+                isEdoOpen={isEdoOpen}
+                onToggleEdo={() => setIsEdoOpen(p => !p)}
+              />
+            </div>
 
-          {/* Edo side panel */}
-          {isEdoOpen && (
-            <EdoChatbot
-              sections={sections}
-              courseName={courseName}
-              formData={formData}
-              actions={actions}
-              currentUser={currentUser}
-              onClose={() => setIsEdoOpen(false)}
-            />
-          )}
+            {/* Edo side panel */}
+            {isEdoOpen && (
+              <EdoChatbot
+                sections={sections}
+                courseName={courseName}
+                formData={formData}
+                actions={actions}
+                currentUser={currentUser}
+                onClose={() => { setIsEdoOpen(false); setTrayItems([]); }}
+                trayItems={trayItems}
+                setTrayItems={setTrayItems}
+              />
+            )}
+          </DragDropContext>
 
-          {/* Modals */}
+          {/* Modals — outside DragDropContext to avoid coordinate interference */}
           {showBreakModal && (
             <BreakModal onConfirm={handleBreakCreate} onCancel={() => setShowBreakModal(false)} />
           )}

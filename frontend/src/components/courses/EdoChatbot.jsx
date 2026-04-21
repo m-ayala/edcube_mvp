@@ -1,6 +1,7 @@
 // src/components/courses/EdoChatbot.jsx
 import { useState, useRef, useEffect } from 'react';
-import { X, Send, ChevronDown, Check, Copy, Minus } from 'lucide-react';
+import { Droppable, Draggable } from '@hello-pangea/dnd';
+import { X, Send, ChevronDown, Check, Copy, Minus, GripVertical } from 'lucide-react';
 import { chatWithEdo } from '../../utils/curriculumApi';
 
 const EDO_GREEN = '#2C5F3A';
@@ -44,25 +45,29 @@ const renderFormattedText = (text) => {
 const QUICK_CHIPS = {
   course: [
     { label: 'Add a section', action: 'add-section', isGenerate: true },
+    { label: 'Add a subsection', action: 'add-subsection', isGenerate: true },
+    { label: 'Add a topic box', action: 'add-topic', isGenerate: true },
     { label: 'Improve course structure', action: 'chat' },
     { label: 'Review objectives', action: 'chat' },
-    { label: 'Check course balance', action: 'chat' },
   ],
   section: [
+    { label: 'Add a section', action: 'add-section', isGenerate: true },
     { label: 'Add subsection', action: 'add-subsection', isGenerate: true },
+    { label: 'Add a topic box', action: 'add-topic', isGenerate: true },
     { label: 'Rewrite description', action: 'chat' },
     { label: 'Improve structure', action: 'chat' },
-    { label: 'Learning objectives', action: 'chat' },
   ],
   subsection: [
+    { label: 'Add a section', action: 'add-section', isGenerate: true },
+    { label: 'Add a subsection', action: 'add-subsection', isGenerate: true },
     { label: 'Add a topic box', action: 'add-topic', isGenerate: true },
     { label: 'Rewrite description', action: 'chat' },
     { label: 'Suggest activities', action: 'chat' },
-    { label: 'Check PLA coverage', action: 'chat' },
   ],
   topic: [
-    { label: 'Expand this topic', action: 'chat' },
-    { label: 'Write objectives', action: 'chat' },
+    { label: 'Add a section', action: 'add-section', isGenerate: true },
+    { label: 'Add a subsection', action: 'add-subsection', isGenerate: true },
+    { label: 'Add a topic box', action: 'add-topic', isGenerate: true },
     { label: 'Find video resources', action: 'find-videos', isGenerate: true },
     { label: 'Generate activity', action: 'gen-activity', isGenerate: true },
     { label: 'Generate worksheet', action: 'gen-worksheet', isGenerate: true },
@@ -70,17 +75,24 @@ const QUICK_CHIPS = {
 };
 
 // ── Suggestion Card ────────────────────────────────────────────────────────
-const SuggestionCard = ({ card, index, onApply, onApplyBlocked, applied, selectedContext }) => {
+// apply_field values that create new items (go to tray) vs edit existing ones (use Apply)
+const ADD_TRAY_TYPE = {
+  new_section: 'SECTION',
+  new_subsection: 'SUBSECTION',
+  new_topic: 'TOPICBOX',
+  topic_full: 'TOPICBOX',
+};
+
+const SuggestionCard = ({ card, index, onApply, onApplyBlocked, applied, selectedContext, onAddToTray }) => {
   const [copied, setCopied] = useState(false);
+  const [addedToTray, setAddedToTray] = useState(false);
+
+  const trayType = ADD_TRAY_TYPE[card.apply_field] || null;
+  const isAddCard = !!trayType;
+
   const canApply = (() => {
-    if (!card.apply_field) return false;
-    if (card.apply_field === 'new_section') return true;
+    if (!card.apply_field || isAddCard) return false;
     if (!selectedContext || selectedContext.type === 'course') return false;
-    // new_subsection: need a section — section, subsection, or topic contexts all carry a sectionId
-    if (card.apply_field === 'new_subsection') return ['section', 'subsection', 'topic'].includes(selectedContext.type);
-    // new_topic: need a subsection — subsection or topic contexts both carry a subsectionId
-    if (card.apply_field === 'new_topic') return ['subsection', 'topic'].includes(selectedContext.type);
-    // topic_full: combined description + objectives — only applies to a topic box
     if (card.apply_field === 'topic_full') return selectedContext.type === 'topic';
     return true;
   })();
@@ -94,17 +106,20 @@ const SuggestionCard = ({ card, index, onApply, onApplyBlocked, applied, selecte
 
   const handleApplyClick = () => {
     if (applied) return;
-    if (canApply) {
-      onApply(card, index);
-    } else {
-      onApplyBlocked && onApplyBlocked(card);
-    }
+    if (canApply) onApply(card, index);
+    else onApplyBlocked && onApplyBlocked(card);
+  };
+
+  const handleAddToTray = () => {
+    if (addedToTray || !onAddToTray) return;
+    onAddToTray(card, trayType);
+    setAddedToTray(true);
   };
 
   return (
     <div style={{
       backgroundColor: 'white',
-      border: `1px solid ${applied ? '#86EFAC' : '#E7E5E4'}`,
+      border: `1px solid ${applied || addedToTray ? '#86EFAC' : '#E7E5E4'}`,
       borderRadius: '10px',
       overflow: 'hidden',
       boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
@@ -114,20 +129,20 @@ const SuggestionCard = ({ card, index, onApply, onApplyBlocked, applied, selecte
       <div style={{
         padding: '8px 12px',
         borderBottom: '1px solid #F3F4F6',
-        backgroundColor: applied ? '#F0FDF4' : '#FAFAF8',
+        backgroundColor: applied || addedToTray ? '#F0FDF4' : '#FAFAF8',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         gap: '6px',
       }}>
         <span style={{
           fontSize: '12.1px', fontWeight: '700', textTransform: 'uppercase',
           letterSpacing: '0.5px',
-          color: applied ? '#16A34A' : '#78716C',
+          color: applied || addedToTray ? '#16A34A' : '#78716C',
           fontFamily: "'DM Sans', sans-serif",
         }}>
-          {applied ? '✓ Applied' : `Option ${index + 1}`}
+          {applied || addedToTray ? '✓ In Tray' : `Option ${index + 1}`}
         </span>
         <span style={{
-          fontSize: '13.2px', fontWeight: '600', color: applied ? '#16A34A' : '#1C1917',
+          fontSize: '13.2px', fontWeight: '600', color: applied || addedToTray ? '#16A34A' : '#1C1917',
           fontFamily: "'DM Sans', sans-serif",
         }}>
           {card.label}
@@ -149,7 +164,7 @@ const SuggestionCard = ({ card, index, onApply, onApplyBlocked, applied, selecte
       <div style={{
         padding: '7px 12px',
         borderTop: '1px solid #F3F4F6',
-        display: 'flex', gap: '6px', justifyContent: 'flex-end',
+        display: 'flex', gap: '6px', justifyContent: 'flex-end', alignItems: 'center',
       }}>
         <button
           onClick={handleCopy}
@@ -166,50 +181,70 @@ const SuggestionCard = ({ card, index, onApply, onApplyBlocked, applied, selecte
           {copied ? 'Copied' : 'Copy'}
         </button>
 
-        <button
-          onClick={handleApplyClick}
-          title={
-            applied ? 'Already applied' :
-            !card.apply_field ? 'Click to learn how to use this suggestion' :
-            !selectedContext || selectedContext.type === 'course' ? 'Select a section, subsection, or topic first' :
-            card.apply_field === 'topic_full' && selectedContext.type !== 'topic' ? 'Select a Topic Box first' :
-            card.apply_field === 'new_topic' && !['subsection', 'topic'].includes(selectedContext.type) ? 'Select a subsection or topic first' :
-            card.apply_field === 'new_subsection' && !['section', 'subsection', 'topic'].includes(selectedContext.type) ? 'Select a section first' :
-            'Apply to course'
-          }
-          style={{
-            padding: '4px 12px',
-            backgroundColor: canApply && !applied ? EDO_GREEN : '#E5E7EB',
-            border: 'none',
-            borderRadius: '5px',
-            cursor: canApply && !applied ? 'pointer' : 'default',
-            fontSize: '12.7px', fontWeight: '600',
-            color: canApply && !applied ? 'white' : '#9CA3AF',
-            display: 'flex', alignItems: 'center', gap: '4px',
-            fontFamily: "'DM Sans', sans-serif",
-            transition: 'background-color 0.15s',
-          }}
-        >
-          <Check size={11} />
-          {applied ? 'Applied' : (
-            !card.apply_field ? 'Apply' :
-            card.apply_field === 'topic_full' ? 'Apply to Topic Box' :
-            card.apply_field === 'description' ? 'Apply Description' :
-            card.apply_field === 'objectives' ? 'Apply Objectives' :
-            card.apply_field === 'title' ? 'Apply Title' :
-            card.apply_field === 'new_section' ? 'Add Section' :
-            card.apply_field === 'new_subsection' ? 'Add Subsection' :
-            card.apply_field === 'new_topic' ? 'Add Topic Box' :
-            'Apply'
-          )}
-        </button>
+        {isAddCard ? (
+          <button
+            onClick={handleAddToTray}
+            disabled={addedToTray}
+            title={addedToTray ? 'Already in tray — drag it into your course' : 'Add to tray, then drag into course'}
+            style={{
+              padding: '4px 10px',
+              backgroundColor: addedToTray ? '#F0FDF4' : '#DCFCE7',
+              border: `1px solid ${addedToTray ? '#86EFAC' : '#4ADE80'}`,
+              borderRadius: '5px',
+              cursor: addedToTray ? 'default' : 'pointer',
+              fontSize: '12.7px', fontWeight: '600',
+              color: addedToTray ? '#16A34A' : '#166534',
+              display: 'flex', alignItems: 'center', gap: '5px',
+              fontFamily: "'DM Sans', sans-serif",
+              transition: 'all 0.15s',
+            }}
+          >
+            <GripVertical size={13} />
+            {addedToTray ? 'In Tray ↓' : '+ Add to Tray'}
+          </button>
+        ) : (
+          <button
+            onClick={handleApplyClick}
+            title={
+              applied ? 'Already applied' :
+              !card.apply_field ? 'Click to learn how to use this suggestion' :
+              (!selectedContext || selectedContext.type === 'course') && !canApply ? 'Select a section, subsection, or topic first' :
+              'Apply to course'
+            }
+            style={{
+              padding: '4px 12px',
+              backgroundColor: canApply && !applied ? EDO_GREEN : '#E5E7EB',
+              border: 'none', borderRadius: '5px',
+              cursor: canApply && !applied ? 'pointer' : 'default',
+              fontSize: '12.7px', fontWeight: '600',
+              color: canApply && !applied ? 'white' : '#9CA3AF',
+              display: 'flex', alignItems: 'center', gap: '4px',
+              fontFamily: "'DM Sans', sans-serif",
+              transition: 'background-color 0.15s',
+            }}
+          >
+            <Check size={11} />
+            {applied ? 'Applied' : (
+              card.apply_field === 'description' ? 'Apply Description' :
+              card.apply_field === 'objectives' ? 'Apply Objectives' :
+              card.apply_field === 'title' ? 'Apply Title' :
+              'Apply'
+            )}
+          </button>
+        )}
       </div>
     </div>
   );
 };
 
 // ── Main Component ─────────────────────────────────────────────────────────
-const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onClose }) => {
+const TRAY_DROPPABLE = {
+  SECTION: 'edo-tray-sections',
+  SUBSECTION: 'edo-tray-subsections',
+  TOPICBOX: 'edo-tray-topics',
+};
+
+const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onClose, trayItems = [], setTrayItems }) => {
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [selectedContext, setSelectedContext] = useState(null);
@@ -382,10 +417,23 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
 
   // ── Apply a suggestion card to the course structure ────────────────────
   const applyCard = (messageId, card, cardIndex, ctxOverride) => {
-    // ADD operations use current selectedContext so user can pick any target after seeing suggestions.
+    // ADD operations: prefer current selectedContext if it has the right level,
+    // otherwise fall back to generatedContext (ctxOverride) so the button works
+    // without requiring a context re-selection.
     // EDIT operations use the snapshot from when suggestions were generated (ctxOverride), falling back to current.
     const isAddOp = ['new_section', 'new_subsection', 'new_topic'].includes(card.apply_field);
-    const ctx = isAddOp ? selectedContext : (ctxOverride || selectedContext);
+    let ctx;
+    if (isAddOp) {
+      if (card.apply_field === 'new_topic') {
+        ctx = ['subsection', 'topic'].includes(selectedContext?.type) ? selectedContext : ctxOverride;
+      } else if (card.apply_field === 'new_subsection') {
+        ctx = ['section', 'subsection', 'topic'].includes(selectedContext?.type) ? selectedContext : ctxOverride;
+      } else {
+        ctx = selectedContext;
+      }
+    } else {
+      ctx = ctxOverride || selectedContext;
+    }
     if (!card.apply_field) return;
 
     if (card.apply_field === 'new_section') {
@@ -395,7 +443,10 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
       return;
     }
 
-    if (!ctx) return;
+    if (!ctx) {
+      addTextMessage('ai-text', 'Please select a section or subsection from the Structure menu, then click Apply again.');
+      return;
+    }
 
     if (card.apply_field === 'new_subsection' && ['section', 'subsection', 'topic'].includes(ctx.type)) {
       // Derive the section ID regardless of how deep the context is
@@ -412,7 +463,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
       const subsectionId = ctx.type === 'subsection' ? ctx.id : ctx.subsectionId;
       actions.addTopicBoxWithContent(sectionId, subsectionId, card.label, card.body);
       markApplied(messageId, cardIndex);
-      addTextMessage('ai-text', `Added new topic box "${card.label}". ✓`);
+      addTextMessage('ai-text', `Added topic box "${card.label}". ✓ The subsection has been expanded — you should see it in the workspace.`);
       return;
     }
 
@@ -506,6 +557,12 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
     ));
   };
 
+  // ── Tray helpers ───────────────────────────────────────────────────────
+  const addToTray = (type, data) => {
+    const id = `tray-${type.toLowerCase()}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    setTrayItems(prev => [...prev, { id, type, data }]);
+  };
+
   // ── Generate chip handlers ─────────────────────────────────────────────
   const handleChipClick = async (chip) => {
     if (isTyping) return;
@@ -514,81 +571,90 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
       addTextMessage('user', chip.label);
       setIsTyping(true);
       try {
-        const result = await actions.handleGenerateSections({
+        const result = await actions.generateSectionsForTray({
           level: 'sections',
           context: {
             course: { title: courseName, description: formData?.objectives || '', grade: formData?.class || '' },
             existing_sections: sections.filter(s => s.type !== 'break').map(s => ({ title: s.title, description: s.description || '' })),
           },
-          userGuidance: null, count: 1,
+          count: 1,
         });
         if (result?.success === false) throw new Error(result.error);
-        addTextMessage('ai-text', `Done! I've added a new section to your course. Check the bottom of the workspace!`);
+        result.items.forEach(item => addToTray('SECTION', item));
+        addTextMessage('ai-text', `Generated ${result.items.length} section${result.items.length !== 1 ? 's' : ''}! Drag it from the tray below into your course wherever you want.`);
       } catch {
         addTextMessage('ai-text', 'I had trouble generating a section. Please try again.');
       } finally {
         setIsTyping(false);
       }
 
-    } else if (chip.action === 'add-subsection' && selectedContext?.type === 'section') {
+    } else if (chip.action === 'add-subsection') {
       addTextMessage('user', chip.label);
       setIsTyping(true);
-      const sec = sections.find(s => s.id === selectedContext.id);
+      const sec = selectedContext?.type === 'section' ? sections.find(s => s.id === selectedContext.id) : null;
       try {
-        const result = await actions.handleGenerateSubsections(selectedContext.id, {
+        const result = await actions.generateSubsectionsForTray({
           level: 'subsections',
           context: {
             course: { title: courseName, description: formData?.objectives || '', grade: formData?.class || '' },
-            current_section: {
-              title: sec?.title || 'Unknown', description: sec?.description || '',
-              existingSubsections: (sec?.subsections || []).map(s => ({ title: s.title, description: s.description })),
-            },
+            ...(sec ? {
+              current_section: {
+                title: sec.title, description: sec.description || '',
+                existingSubsections: (sec.subsections || []).map(s => ({ title: s.title, description: s.description })),
+              },
+            } : {}),
             all_section_names: sections.filter(s => s.type !== 'break').map(s => s.title),
-            other_sections: sections.filter(s => s.type !== 'break' && s.id !== selectedContext.id)
-              .map(s => ({ title: s.title, description: s.description, subsections: (s.subsections || []).map(ss => ss.title) })),
+            all_sections: sections.filter(s => s.type !== 'break').map(s => ({
+              title: s.title, description: s.description,
+              subsections: (s.subsections || []).map(ss => ss.title),
+            })),
           },
-          userGuidance: null, count: 1,
+          count: 1,
         });
         if (result?.success === false) throw new Error(result.error);
-        addTextMessage('ai-text', `Done! Added a subsection to "${sec?.title}". Ready to fill in!`);
+        result.items.forEach(item => addToTray('SUBSECTION', item));
+        addTextMessage('ai-text', `Generated ${result.items.length} subsection${result.items.length !== 1 ? 's' : ''}! Drag it from the tray into any section in your course.`);
       } catch {
         addTextMessage('ai-text', 'I had trouble generating a subsection. Please try again.');
       } finally {
         setIsTyping(false);
       }
 
-    } else if (chip.action === 'add-topic' && selectedContext?.type === 'subsection') {
+    } else if (chip.action === 'add-topic') {
       addTextMessage('user', chip.label);
       setIsTyping(true);
-      const parentSecId = selectedContext.sectionId;
+      const parentSecId = selectedContext?.sectionId || (selectedContext?.type === 'section' ? selectedContext.id : null);
+      const subsectionId = selectedContext?.type === 'subsection' ? selectedContext.id
+        : selectedContext?.type === 'topic' ? selectedContext.subsectionId : null;
       const parentSec = sections.find(s => s.id === parentSecId);
-      const parentSub = parentSec?.subsections?.find(ss => ss.id === selectedContext.id);
-      if (!parentSecId) {
-        addTextMessage('ai-text', 'Could not find the parent section. Try selecting the subsection again from the Structure menu.');
-        setIsTyping(false);
-        return;
-      }
+      const parentSub = parentSec?.subsections?.find(ss => ss.id === subsectionId);
       try {
-        const result = await actions.handleGenerateTopicBoxes(parentSecId, selectedContext.id, {
+        const result = await actions.generateTopicBoxesForTray({
           level: 'topics',
           context: {
             course: { title: courseName, grade: formData?.class || '', description: formData?.objectives || '' },
-            current_section: { title: parentSec?.title || '', description: parentSec?.description || '' },
-            subsection: {
-              title: parentSub?.title || selectedContext.title, description: parentSub?.description || '',
-              existingTopics: (parentSub?.topicBoxes || []).map(t => ({ title: t.title, description: t.description })),
-            },
-            other_sections: sections.filter(s => s.type !== 'break' && s.id !== parentSecId)
-              .map(s => ({ title: s.title, description: s.description, subsections: (s.subsections || []).map(ss => ss.title) })),
-            sibling_subsections: (parentSec?.subsections || []).filter(ss => ss.id !== selectedContext.id)
-              .map(ss => ({ title: ss.title, description: ss.description })),
+            all_sections: sections.filter(s => s.type !== 'break').map(s => ({
+              title: s.title, description: s.description,
+              subsections: (s.subsections || []).map(ss => ({
+                title: ss.title, description: ss.description,
+                existingTopics: (ss.topicBoxes || []).map(t => t.title),
+              })),
+            })),
+            ...(parentSec ? { current_section: { title: parentSec.title, description: parentSec.description || '' } } : {}),
+            ...(parentSub ? {
+              subsection: {
+                title: parentSub.title, description: parentSub.description || '',
+                existingTopics: (parentSub.topicBoxes || []).map(t => ({ title: t.title, description: t.description })),
+              },
+            } : {}),
           },
-          userGuidance: null, count: 1,
+          count: 1,
         });
         if (result?.success === false) throw new Error(result.error);
-        addTextMessage('ai-text', `Done! Added a topic box to "${parentSub?.title || selectedContext.title}". Click it to add details!`);
-      } catch {
-        addTextMessage('ai-text', 'I had trouble generating a topic box. Please try again.');
+        result.items.forEach(item => addToTray('TOPICBOX', item));
+        addTextMessage('ai-text', `Generated ${result.items.length} topic box${result.items.length !== 1 ? 'es' : ''}! Drag it from the tray into any subsection.`);
+      } catch (err) {
+        addTextMessage('ai-text', `I had trouble generating the topic box. ${err?.message || 'Please try again.'}`);
       } finally {
         setIsTyping(false);
       }
@@ -954,8 +1020,32 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
                       index={idx}
                       applied={(msg.appliedCards || new Set()).has(idx)}
                       selectedContext={selectedContext}
+                      generatedContext={msg.generatedContext}
                       onApply={(c, i) => applyCard(msg.id, c, i, msg.generatedContext)}
                       onApplyBlocked={handleApplyBlocked}
+                      onAddToTray={(c, type) => {
+                        const isTopicFull = c.apply_field === 'topic_full';
+                        const data = type === 'SECTION'
+                          ? { id: `section-${Date.now()}`, title: c.label, description: c.body, subsections: [] }
+                          : type === 'SUBSECTION'
+                          ? { id: `sub-${Date.now()}`, title: c.label, description: c.body, topicBoxes: [] }
+                          : {
+                              id: `topic-${Date.now()}`,
+                              title: c.label,
+                              description: isTopicFull ? (c.body.split(/\n\n?Objectives?:?\n/i)[0] || c.body).trim() : c.body,
+                              duration_minutes: 20,
+                              pla_pillars: [],
+                              learning_objectives: isTopicFull && c.body.includes('bjective')
+                                ? c.body.split(/\n\n?Objectives?:?\n/i)[1]?.split('\n').map(s => s.replace(/^[-•*\d.]\s*/, '').trim()).filter(Boolean) || []
+                                : [],
+                              content_keywords: [],
+                              video_resources: [],
+                              worksheets: [],
+                              activities: [],
+                            };
+                        addToTray(type, data);
+                        markApplied(msg.id, idx);
+                      }}
                     />
                   ))}
                   {msg.conclusion && (
@@ -1003,6 +1093,216 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
         )}
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Generated Items Tray */}
+      {trayItems.length > 0 && (
+        <div style={{
+          borderTop: '2px solid #E8761A',
+          backgroundColor: '#FFFBF5',
+          flexShrink: 0,
+          maxHeight: '220px',
+          overflowY: 'auto',
+          scrollbarWidth: 'thin',
+          scrollbarColor: '#E8E6E1 transparent',
+        }}>
+          <div style={{
+            padding: '7px 12px 4px',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          }}>
+            <span style={{
+              fontSize: '10px', fontWeight: '700', textTransform: 'uppercase',
+              letterSpacing: '0.6px', color: '#E8761A',
+              fontFamily: "'DM Sans', sans-serif",
+            }}>
+              Generated — Drag into Course
+            </span>
+            <button
+              onClick={() => setTrayItems([])}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                fontSize: '11px', color: '#9CA3AF', fontFamily: "'DM Sans', sans-serif",
+                padding: '2px 4px',
+              }}
+            >
+              Clear all
+            </button>
+          </div>
+
+          {/* Sections group */}
+          {trayItems.some(i => i.type === 'SECTION') && (
+            <div style={{ padding: '0 10px 6px' }}>
+              <div style={{ fontSize: '9px', fontWeight: '700', color: '#166534', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px', fontFamily: "'DM Sans', sans-serif" }}>
+                Sections
+              </div>
+              <Droppable droppableId={TRAY_DROPPABLE.SECTION} type="SECTION" direction="horizontal">
+                {(provided, snapshot) => (
+                  <div
+                    ref={provided.innerRef}
+                    {...provided.droppableProps}
+                    style={{
+                      display: 'flex', gap: '6px', flexWrap: 'wrap',
+                      minHeight: '34px', padding: '3px',
+                      backgroundColor: snapshot.isDraggingOver ? '#DCFCE7' : 'transparent',
+                      borderRadius: '6px', transition: 'background-color 0.15s',
+                    }}
+                  >
+                    {trayItems.filter(i => i.type === 'SECTION').map((item, idx) => (
+                      <Draggable key={item.id} draggableId={item.id} index={idx}>
+                        {(provided, snapshot) => (
+                          <div
+                            ref={provided.innerRef}
+                            {...provided.draggableProps}
+                            {...provided.dragHandleProps}
+                            style={{
+                              ...provided.draggableProps.style,
+                              padding: '4px 10px',
+                              backgroundColor: snapshot.isDragging ? '#16A34A' : '#DCFCE7',
+                              border: '1px solid #86EFAC',
+                              borderRadius: '20px',
+                              fontSize: '12px', fontWeight: '600',
+                              color: snapshot.isDragging ? 'white' : '#166534',
+                              display: 'flex', alignItems: 'center', gap: '5px',
+                              cursor: 'grab', userSelect: 'none',
+                              fontFamily: "'DM Sans', sans-serif",
+                              maxWidth: '140px',
+                              boxShadow: snapshot.isDragging ? '0 4px 12px rgba(0,0,0,0.2)' : 'none',
+                            }}
+                          >
+                            <span style={{ fontSize: '9px', opacity: 0.6, flexShrink: 0 }}>S</span>
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.data.title}</span>
+                            <button
+                              onMouseDown={e => e.stopPropagation()}
+                              onClick={e => { e.stopPropagation(); setTrayItems(prev => prev.filter(i => i.id !== item.id)); }}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#166534', padding: 0, lineHeight: 1, fontSize: '14px', flexShrink: 0 }}
+                            >×</button>
+                          </div>
+                        )}
+                      </Draggable>
+                    ))}
+                    {provided.placeholder}
+                  </div>
+                )}
+              </Droppable>
+            </div>
+          )}
+
+          {/* Subsections group */}
+          {trayItems.some(i => i.type === 'SUBSECTION') && (
+            <div style={{ padding: '0 10px 6px' }}>
+              <div style={{ fontSize: '9px', fontWeight: '700', color: '#1D4ED8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px', fontFamily: "'DM Sans', sans-serif" }}>
+                Subsections
+              </div>
+              <Droppable droppableId={TRAY_DROPPABLE.SUBSECTION} type="SUBSECTION" direction="horizontal">
+                {(provided, snapshot) => (
+                  <div
+                    ref={provided.innerRef}
+                    {...provided.droppableProps}
+                    style={{
+                      display: 'flex', gap: '6px', flexWrap: 'wrap',
+                      minHeight: '34px', padding: '3px',
+                      backgroundColor: snapshot.isDraggingOver ? '#DBEAFE' : 'transparent',
+                      borderRadius: '6px', transition: 'background-color 0.15s',
+                    }}
+                  >
+                    {trayItems.filter(i => i.type === 'SUBSECTION').map((item, idx) => (
+                      <Draggable key={item.id} draggableId={item.id} index={idx}>
+                        {(provided, snapshot) => (
+                          <div
+                            ref={provided.innerRef}
+                            {...provided.draggableProps}
+                            {...provided.dragHandleProps}
+                            style={{
+                              ...provided.draggableProps.style,
+                              padding: '4px 10px',
+                              backgroundColor: snapshot.isDragging ? '#2563EB' : '#DBEAFE',
+                              border: '1px solid #93C5FD',
+                              borderRadius: '20px',
+                              fontSize: '12px', fontWeight: '600',
+                              color: snapshot.isDragging ? 'white' : '#1D4ED8',
+                              display: 'flex', alignItems: 'center', gap: '5px',
+                              cursor: 'grab', userSelect: 'none',
+                              fontFamily: "'DM Sans', sans-serif",
+                              maxWidth: '140px',
+                              boxShadow: snapshot.isDragging ? '0 4px 12px rgba(0,0,0,0.2)' : 'none',
+                            }}
+                          >
+                            <span style={{ fontSize: '9px', opacity: 0.6, flexShrink: 0 }}>SS</span>
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.data.title}</span>
+                            <button
+                              onMouseDown={e => e.stopPropagation()}
+                              onClick={e => { e.stopPropagation(); setTrayItems(prev => prev.filter(i => i.id !== item.id)); }}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1D4ED8', padding: 0, lineHeight: 1, fontSize: '14px', flexShrink: 0 }}
+                            >×</button>
+                          </div>
+                        )}
+                      </Draggable>
+                    ))}
+                    {provided.placeholder}
+                  </div>
+                )}
+              </Droppable>
+            </div>
+          )}
+
+          {/* Topics group */}
+          {trayItems.some(i => i.type === 'TOPICBOX') && (
+            <div style={{ padding: '0 10px 6px' }}>
+              <div style={{ fontSize: '9px', fontWeight: '700', color: '#86198F', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px', fontFamily: "'DM Sans', sans-serif" }}>
+                Topics
+              </div>
+              <Droppable droppableId={TRAY_DROPPABLE.TOPICBOX} type="TOPICBOX" direction="horizontal">
+                {(provided, snapshot) => (
+                  <div
+                    ref={provided.innerRef}
+                    {...provided.droppableProps}
+                    style={{
+                      display: 'flex', gap: '6px', flexWrap: 'wrap',
+                      minHeight: '34px', padding: '3px',
+                      backgroundColor: snapshot.isDraggingOver ? '#FAE8FF' : 'transparent',
+                      borderRadius: '6px', transition: 'background-color 0.15s',
+                    }}
+                  >
+                    {trayItems.filter(i => i.type === 'TOPICBOX').map((item, idx) => (
+                      <Draggable key={item.id} draggableId={item.id} index={idx}>
+                        {(provided, snapshot) => (
+                          <div
+                            ref={provided.innerRef}
+                            {...provided.draggableProps}
+                            {...provided.dragHandleProps}
+                            style={{
+                              ...provided.draggableProps.style,
+                              padding: '4px 10px',
+                              backgroundColor: snapshot.isDragging ? '#A21CAF' : '#FAE8FF',
+                              border: '1px solid #E879F9',
+                              borderRadius: '20px',
+                              fontSize: '12px', fontWeight: '600',
+                              color: snapshot.isDragging ? 'white' : '#86198F',
+                              display: 'flex', alignItems: 'center', gap: '5px',
+                              cursor: 'grab', userSelect: 'none',
+                              fontFamily: "'DM Sans', sans-serif",
+                              maxWidth: '140px',
+                              boxShadow: snapshot.isDragging ? '0 4px 12px rgba(0,0,0,0.2)' : 'none',
+                            }}
+                          >
+                            <span style={{ fontSize: '9px', opacity: 0.6, flexShrink: 0 }}>T</span>
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.data.title}</span>
+                            <button
+                              onMouseDown={e => e.stopPropagation()}
+                              onClick={e => { e.stopPropagation(); setTrayItems(prev => prev.filter(i => i.id !== item.id)); }}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#86198F', padding: 0, lineHeight: 1, fontSize: '14px', flexShrink: 0 }}
+                            >×</button>
+                          </div>
+                        )}
+                      </Draggable>
+                    ))}
+                    {provided.placeholder}
+                  </div>
+                )}
+              </Droppable>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Quick chips */}
       <div style={{

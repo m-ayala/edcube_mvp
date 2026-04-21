@@ -9,7 +9,7 @@ Phase 2 and Phase 3 are commented out for testing.
 
 import logging
 import asyncio
-from typing import Dict
+from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -26,10 +26,10 @@ class CurriculumOrchestrator:
         """Initialize the orchestrator"""
         logger.info("Initialized CurriculumOrchestrator (Phase 1 Only)")
     
-    async def run_phase1(self, teacher_input: Dict) -> Dict:
+    async def run_phase1(self, teacher_input: Dict, images: Optional[List[str]] = None) -> Dict:
         """
         Run Phase 1: Generate curriculum boxes/topics
-        
+
         Args:
             teacher_input: Dictionary containing:
                 - grade_level: str
@@ -39,19 +39,20 @@ class CurriculumOrchestrator:
                 - num_worksheets: int
                 - num_activities: int
                 - objectives: str (optional)
-        
+            images: Optional list of base64 data URIs for reference images
+
         Returns:
             dict: Outline data with generated boxes
         """
         from outliner.outline_generator import generate_boxes, create_final_outline
-        
+
         logger.info(f"Running Phase 1 for: {teacher_input.get('topic', 'Unknown')}")
-        
+
         try:
             # Convert duration string to minutes
             duration_str = teacher_input.get('duration', '8 hours')
             total_minutes = self._parse_duration_to_minutes(duration_str)
-            
+
             # Add total_minutes and requirements fields expected by generate_boxes
             teacher_input_formatted = {
                 'grade_level': teacher_input.get('grade_level'),
@@ -61,9 +62,9 @@ class CurriculumOrchestrator:
                 'total_minutes': total_minutes,
                 'requirements': teacher_input.get('objectives', 'None')
             }
-            
+
             # Generate outline (sections + subsections)
-            outline_data = generate_boxes(teacher_input_formatted)
+            outline_data = generate_boxes(teacher_input_formatted, images=images)
             
             if not outline_data:
                 logger.error("Phase 1 failed: No outline generated")

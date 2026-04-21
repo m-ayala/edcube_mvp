@@ -29,7 +29,7 @@ const ProfileHeader = ({
               className="profile-picture"
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                backgroundColor: '#8b7355', color: '#ffffff',
+                backgroundColor: '#B2E8C8', color: '#1C5C35',
                 fontSize: '44px', fontWeight: '700',
                 fontFamily: "'DM Sans', sans-serif",
               }}

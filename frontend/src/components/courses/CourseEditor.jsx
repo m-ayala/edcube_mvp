@@ -1,5 +1,5 @@
 // src/components/courses/CourseEditor.jsx
-import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
+import { Droppable, Draggable } from '@hello-pangea/dnd';
 import { GripVertical, Edit2, Check, Trash2, Plus, PlayCircle, FileText, Zap, Sparkles } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import TopicDetailsModal from '../modals/TopicDetailsModal';
@@ -189,12 +189,12 @@ const CourseEditor = ({
     sectionBodyBg: 'rgba(255,255,255,0.30)',
     subsectionBg: 'rgba(255,255,255,0.78)',
     subsectionBorder: 'rgba(255,255,255,0.92)',
-    topicBg: 'rgba(255,255,255,0.70)',
+    topicBg: '#FFFFFF',
     topicBorder: 'rgba(200,200,200,0.4)',
     textPrimary: '#111',
-    textSecondary: '#666',
+    textSecondary: '#111',
     pillBg: '#F5F5F4',
-    pillText: '#78716C',
+    pillText: '#333',
     dangerBtn: '#F87171',
     aiBtn: '#7C3AED',
     sectionGradients: [
@@ -221,157 +221,6 @@ const CourseEditor = ({
   // Hover tracking for sections/subsections (for reveal-on-hover buttons)
   const [hoveredSection, setHoveredSection] = useState(null);
   const [hoveredSubsection, setHoveredSubsection] = useState(null);
-
-  // ── Drag and Drop Handler ─────────────────────────────────────────────
-  const handleDragEnd = (result) => {
-    const { source, destination, type } = result;
-
-    if (!destination) return;
-
-    if (
-      source.droppableId === destination.droppableId &&
-      source.index === destination.index
-    ) {
-      return;
-    }
-
-    if (type === 'SECTION') {
-      const reorderedSections = Array.from(sections);
-      const [movedSection] = reorderedSections.splice(source.index, 1);
-      reorderedSections.splice(destination.index, 0, movedSection);
-      setSections(reorderedSections);
-      return;
-    }
-
-    if (type === 'SUBSECTION') {
-      const sectionId = source.droppableId.replace('subsections-', '');
-      const section = sections.find(s => s.id === sectionId);
-      
-      if (section && section.subsections) {
-        const reorderedSubsections = Array.from(section.subsections);
-        const [movedSubsection] = reorderedSubsections.splice(source.index, 1);
-        reorderedSubsections.splice(destination.index, 0, movedSubsection);
-        
-        const updatedSections = sections.map(s =>
-          s.id === sectionId
-            ? { ...s, subsections: reorderedSubsections }
-            : s
-        );
-        setSections(updatedSections);
-      }
-      return;
-    }
-
-    if (type === 'TOPICBOX') {
-      const sourceSubId = source.droppableId.replace('topicboxes-', '');
-      const destSubId = destination.droppableId.replace('topicboxes-', '');
-
-      let sourceSection = null;
-      let sourceSub = null;
-      let sourceTopicBox = null;
-      
-      for (const section of sections) {
-        const sub = (section.subsections || []).find(s => s.id === sourceSubId);
-        if (sub) {
-          sourceSection = section;
-          sourceSub = sub;
-          sourceTopicBox = sub.topicBoxes[source.index];
-          break;
-        }
-      }
-
-      let destSection = null;
-      let destSub = null;
-      
-      for (const section of sections) {
-        const sub = (section.subsections || []).find(s => s.id === destSubId);
-        if (sub) {
-          destSection = section;
-          destSub = sub;
-          break;
-        }
-      }
-
-      if (!sourceSection || !sourceSub || !sourceTopicBox || !destSection || !destSub) return;
-
-      if (sourceSubId === destSubId) {
-        const updatedSections = sections.map(section => {
-          if (section.id !== sourceSection.id) return section;
-          
-          return {
-            ...section,
-            subsections: section.subsections.map(sub => {
-              if (sub.id !== sourceSubId) return sub;
-              
-              const reorderedTopicBoxes = Array.from(sub.topicBoxes);
-              const [moved] = reorderedTopicBoxes.splice(source.index, 1);
-              reorderedTopicBoxes.splice(destination.index, 0, moved);
-              
-              return { ...sub, topicBoxes: reorderedTopicBoxes };
-            })
-          };
-        });
-        setSections(updatedSections);
-      } else if (sourceSection.id === destSection.id) {
-        // Different subsections within the SAME section — handle both in one pass
-        const updatedSections = sections.map(section => {
-          if (section.id !== sourceSection.id) return section;
-          return {
-            ...section,
-            subsections: section.subsections.map(sub => {
-              if (sub.id === sourceSubId) {
-                return {
-                  ...sub,
-                  topicBoxes: sub.topicBoxes.filter((_, idx) => idx !== source.index)
-                };
-              }
-              if (sub.id === destSubId) {
-                const newTopicBoxes = [...sub.topicBoxes];
-                newTopicBoxes.splice(destination.index, 0, sourceTopicBox);
-                return { ...sub, topicBoxes: newTopicBoxes };
-              }
-              return sub;
-            })
-          };
-        });
-        setSections(updatedSections);
-      } else {
-        // Different sections entirely
-        const updatedSections = sections.map(section => {
-          if (section.id === sourceSection.id) {
-            return {
-              ...section,
-              subsections: section.subsections.map(sub => {
-                if (sub.id === sourceSubId) {
-                  return {
-                    ...sub,
-                    topicBoxes: sub.topicBoxes.filter((_, idx) => idx !== source.index)
-                  };
-                }
-                return sub;
-              })
-            };
-          }
-          if (section.id === destSection.id) {
-            return {
-              ...section,
-              subsections: section.subsections.map(sub => {
-                if (sub.id === destSubId) {
-                  const newTopicBoxes = [...sub.topicBoxes];
-                  newTopicBoxes.splice(destination.index, 0, sourceTopicBox);
-                  return { ...sub, topicBoxes: newTopicBoxes };
-                }
-                return sub;
-              })
-            };
-          }
-          return section;
-        });
-        setSections(updatedSections);
-      }
-      return;
-    }
-  };
 
   // ── Topic Detail Modal Handler ────────────────────────────────────────
   const handleTopicBoxClick = (topicBox, sectionId, subsectionId) => {
@@ -497,7 +346,7 @@ const CourseEditor = ({
     const renderResourceCards = (resources, type) => {
       if (resources.length === 0) {
         return (
-          <div style={{ padding: '14px 16px', color: '#9ca3af', fontSize: '18.7px', fontStyle: 'italic' }}>
+          <div style={{ padding: '14px 16px', color: '#444', fontSize: '15px', fontStyle: 'italic' }}>
             No {type} added yet — click Edit to add some.
           </div>
         );
@@ -514,10 +363,10 @@ const CourseEditor = ({
           {resources.map((resource, idx) => {
             const thumbnail = type === 'video' ? getYouTubeThumbnail(resource.url) : null;
             const placeholderIcon = type === 'video'
-              ? <PlayCircle size={22} style={{ color: '#9ca3af' }} />
+              ? <PlayCircle size={22} style={{ color: '#666' }} />
               : type === 'worksheet'
-                ? <FileText size={22} style={{ color: '#9ca3af' }} />
-                : <Zap size={22} style={{ color: '#9ca3af' }} />;
+                ? <FileText size={22} style={{ color: '#666' }} />
+                : <Zap size={22} style={{ color: '#666' }} />;
             const placeholderBg = type === 'video' ? '#E8E6E1' : type === 'worksheet' ? '#E4EEE4' : '#E8E4EE';
 
             return (
@@ -571,9 +420,9 @@ const CourseEditor = ({
                 <div style={{ padding: '6px 8px' }}>
                   <p style={{
                     margin: 0,
-                    fontSize: '12.1px',
+                    fontSize: '13px',
                     fontWeight: '600',
-                    color: '#2C2A26',
+                    color: '#111',
                     lineHeight: '1.4',
                     overflow: 'hidden',
                     display: '-webkit-box',
@@ -598,11 +447,11 @@ const CourseEditor = ({
         onMouseLeave={() => setHoveredTopic(null)}
       >
         <div style={{
-          border: '1px solid rgba(200,200,200,0.4)',
+          border: '1px solid rgba(0,0,0,0.09)',
           borderLeft: `3px solid ${topicAccentColor}`,
           borderRadius: '0 8px 8px 0',
-          background: 'rgba(255,255,255,0.70)',
-          boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+          background: '#FFFFFF',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
           overflow: 'hidden',
         }}>
 
@@ -611,8 +460,8 @@ const CourseEditor = ({
             <div style={{
               display: 'flex',
               alignItems: 'center',
-              background: 'rgba(255,255,255,0.5)',
-              borderBottom: '1px solid rgba(0,0,0,0.05)',
+              background: '#F9F9F9',
+              borderBottom: '1px solid rgba(0,0,0,0.07)',
               paddingLeft: '2px',
               paddingRight: '6px',
               gap: '0'
@@ -624,10 +473,10 @@ const CourseEditor = ({
                 style={{
                   cursor: 'grab', display: 'flex', alignItems: 'center',
                   padding: '8px 6px 8px 4px', flexShrink: 0,
-                  color: '#D6D3D1', fontSize: '13.2px'
+                  color: '#999', fontSize: '13.2px'
                 }}
               >
-                <GripVertical size={13} style={{ color: '#D6D3D1' }} />
+                <GripVertical size={13} style={{ color: '#999' }} />
               </div>
 
               {/* Tabs */}
@@ -643,8 +492,8 @@ const CourseEditor = ({
                     backgroundColor: 'transparent',
                     cursor: 'pointer',
                     fontSize: '13.2px',
-                    fontWeight: activeTab === tab.id ? '500' : '400',
-                    color: activeTab === tab.id ? '#333' : '#BBB',
+                    fontWeight: activeTab === tab.id ? '600' : '400',
+                    color: activeTab === tab.id ? '#111' : '#555',
                     transition: 'all 0.15s',
                     whiteSpace: 'nowrap',
                     flexShrink: 0,
@@ -662,7 +511,7 @@ const CourseEditor = ({
               <button
                 onClick={e => { e.stopPropagation(); handleTopicBoxClick(topicBox, sectionId, subsectionId); }}
                 style={{
-                  padding: '3px 9px', background: 'rgba(255,255,255,0.7)', color: '#888',
+                  padding: '3px 9px', background: '#FFFFFF', color: '#333',
                   border: '1px solid rgba(0,0,0,0.1)', borderRadius: '5px',
                   cursor: 'pointer', fontSize: '12.1px', fontWeight: '500',
                   display: 'flex', alignItems: 'center', gap: '4px', marginRight: '6px', flexShrink: 0,
@@ -695,12 +544,12 @@ const CourseEditor = ({
                 onClick={() => handleTopicBoxClick(topicBox, sectionId, subsectionId)}
                 style={{ padding: '13px 16px', cursor: 'pointer' }}
               >
-                <h4 style={{ margin: '0 0 7px', fontSize: '14.3px', fontWeight: '600', color: '#111', fontFamily: "'DM Sans', sans-serif" }}>
+                <h4 style={{ margin: '0 0 7px', fontSize: '15px', fontWeight: '600', color: '#111', fontFamily: "'DM Sans', sans-serif" }}>
                   {topicBox.title}
                 </h4>
 
                 {(topicBox.learning_objectives || []).length > 0 && (
-                  <ul style={{ margin: '0 0 10px', padding: 0, listStyle: 'none', fontSize: '13.8px', color: '#666', lineHeight: '1.5' }}>
+                  <ul style={{ margin: '0 0 10px', padding: 0, listStyle: 'none', fontSize: '14px', color: '#111', lineHeight: '1.5' }}>
                     {topicBox.learning_objectives.slice(0, 3).map((obj, i) => (
                       <li key={i} style={{ marginBottom: '2.5px', paddingLeft: '13px', position: 'relative' }}>
                         <span style={{ position: 'absolute', left: 0, top: '9px', width: '4px', height: '4px', borderRadius: '50%', background: '#D1D5DB', display: 'inline-block' }} />
@@ -708,7 +557,7 @@ const CourseEditor = ({
                       </li>
                     ))}
                     {topicBox.learning_objectives.length > 3 && (
-                      <li style={{ color: '#9CA3AF', fontStyle: 'italic', paddingLeft: '13px' }}>
+                      <li style={{ color: '#555', fontStyle: 'italic', paddingLeft: '13px' }}>
                         +{topicBox.learning_objectives.length - 3} more…
                       </li>
                     )}
@@ -716,7 +565,7 @@ const CourseEditor = ({
                 )}
 
                 {/* Duration */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12.1px', color: '#CCC' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', color: '#444' }}>
                   ⏱ {topicBox.duration_minutes || 0} min
                 </div>
               </div>
@@ -732,16 +581,16 @@ const CourseEditor = ({
               gap: '4px',
               padding: '5px 10px',
               borderTop: '1px solid rgba(0,0,0,0.05)',
-              background: 'rgba(255,255,255,0.4)',
+              background: '#F9F9F9',
               justifyContent: 'flex-end'
             }}>
             <button
               onClick={e => { e.stopPropagation(); actions.addTopicBox(sectionId, subsectionId); }}
               style={{
                 padding: '3px 8px',
-                background: 'rgba(255,255,255,0.7)',
-                color: '#6B6760',
-                border: '1px solid rgba(0,0,0,0.1)',
+                background: '#FFFFFF',
+                color: '#333',
+                border: '1px solid rgba(0,0,0,0.12)',
                 borderRadius: '4px',
                 cursor: 'pointer',
                 fontSize: '11px',
@@ -767,15 +616,14 @@ const CourseEditor = ({
       return (
         <div style={{
           padding: '12px 16px', marginBottom: '18px',
-          background: 'rgba(247,228,160,0.35)', border: '1px solid rgba(247,228,160,0.6)',
-          backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+          background: '#FFFDF0', border: '1px solid rgba(0,0,0,0.09)',
           borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <div {...dragHandleProps} style={{ cursor: 'grab', display: 'flex', alignItems: 'center' }}>
-              <GripVertical size={18} style={{ color: '#9ca3af' }} />
+              <GripVertical size={18} style={{ color: '#666' }} />
             </div>
-            <span style={{ fontWeight: '500', fontSize: '15.4px' }}>⏸ Break — {section.duration}</span>
+            <span style={{ fontWeight: '500', fontSize: '15.4px', color: '#111' }}>⏸ Break — {section.duration}</span>
           </div>
           <button
             onClick={() => actions.confirmDeleteSection(section.id)}
@@ -809,10 +657,9 @@ const CourseEditor = ({
           onClick={() => actions.toggleSection(section.id)}
           style={{
             display: 'flex', alignItems: 'center', gap: '12px', padding: '13px 16px',
-            background: 'rgba(255,255,255,0.70)',
-            backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
-            border: '1px solid rgba(255,255,255,0.88)',
-            borderBottom: isCollapsed ? '1px solid rgba(255,255,255,0.88)' : '1px solid rgba(0,0,0,0.05)',
+            background: '#FFFFFF',
+            border: '1px solid rgba(0,0,0,0.09)',
+            borderBottom: isCollapsed ? '1px solid rgba(0,0,0,0.09)' : '1px solid rgba(0,0,0,0.07)',
             borderRadius: isCollapsed ? '12px' : '12px 12px 0 0',
             cursor: 'pointer', transition: 'background 0.15s'
           }}
@@ -825,12 +672,12 @@ const CourseEditor = ({
 
           {/* Drag handle */}
           <div {...dragHandleProps} onClick={e => e.stopPropagation()} style={{ cursor: 'grab', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-            <GripVertical size={14} style={{ color: '#D6D3D1' }} />
+            <GripVertical size={14} style={{ color: '#999' }} />
           </div>
 
           {/* Section metadata */}
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '1.1px', color: '#999' }}>
+            <div style={{ fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '1.1px', color: '#555' }}>
               Section {index + 1}
             </div>
             <EditableField
@@ -858,7 +705,7 @@ const CourseEditor = ({
             <button
               onClick={(e) => { e.stopPropagation(); actions.addSection(); }}
               style={{
-                padding: '3px 8px', background: 'rgba(255,255,255,0.7)', color: '#6B6760',
+                padding: '3px 8px', background: '#FFFFFF', color: '#333',
                 border: '1px solid rgba(0,0,0,0.1)', borderRadius: '4px',
                 cursor: 'pointer', fontSize: '11px', fontWeight: '600',
                 display: 'flex', alignItems: 'center', gap: '3px',
@@ -881,14 +728,13 @@ const CourseEditor = ({
           </div>
 
           {/* Chevron */}
-          <div style={{ color: '#CCC', fontSize: '14.3px', flexShrink: 0, transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▾</div>
+          <div style={{ color: '#555', fontSize: '14.3px', flexShrink: 0, transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▾</div>
         </div>
 
         {!isCollapsed && (
           <div style={{
-            background: 'rgba(255,255,255,0.30)',
-            backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
-            border: '1px solid rgba(255,255,255,0.68)',
+            background: '#FAFAFA',
+            border: '1px solid rgba(0,0,0,0.09)',
             borderTop: 'none',
             borderRadius: '0 0 12px 12px',
             padding: '18px 16px 14px'
@@ -903,10 +749,10 @@ const CourseEditor = ({
                 maxLength={200}
                 style={{ flex: 1 }}
                 inputStyle={{
-                  fontSize: '13.2px',
-                  color: '#888',
+                  fontSize: '14px',
+                  color: '#333',
                   fontStyle: section.description ? 'normal' : 'italic',
-                  fontWeight: '300'
+                  fontWeight: '400'
                 }}
               />
             </div>
@@ -921,8 +767,8 @@ const CourseEditor = ({
                     <div style={{
                       textAlign: 'center',
                       padding: '20px 0',
-                      color: '#CCC',
-                      fontSize: '13.8px',
+                      color: '#444',
+                      fontSize: '14px',
                       marginBottom: '12px'
                     }}>
                       <p style={{ margin: '0 0 10px' }}>No subsections yet</p>
@@ -930,12 +776,12 @@ const CourseEditor = ({
                         onClick={() => actions.addSubsection(section.id)}
                         style={{
                           background: 'transparent',
-                          border: '1px dashed rgba(0,0,0,0.1)',
+                          border: '1px dashed rgba(0,0,0,0.2)',
                           borderRadius: '6px',
                           padding: '5px 20px',
                           cursor: 'pointer',
-                          fontSize: '13.2px',
-                          color: '#BBB',
+                          fontSize: '14px',
+                          color: '#444',
                           fontFamily: "'DM Sans', sans-serif",
                           display: 'inline-block'
                         }}
@@ -968,11 +814,11 @@ const CourseEditor = ({
                               ...provided.draggableProps.style,
                               marginLeft: '24px',
                               marginBottom: '10px',
-                              border: '1px solid rgba(255,255,255,0.92)',
+                              border: '1px solid rgba(0,0,0,0.08)',
                               borderRadius: '9px',
-                              background: 'rgba(255,255,255,0.78)',
+                              background: '#FFFFFF',
                               overflow: 'hidden',
-                              boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+                              boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
                               opacity: snapshot.isDragging ? 0.85 : 1,
                             }}
                           >
@@ -984,7 +830,7 @@ const CourseEditor = ({
                             }}>
                               {/* Drag handle */}
                               <div {...provided.dragHandleProps} style={{ cursor: 'grab', display: 'flex', alignItems: 'center', flexShrink: 0, paddingTop: '2px' }}>
-                                <GripVertical size={13} style={{ color: '#D6D3D1' }} />
+                                <GripVertical size={13} style={{ color: '#999' }} />
                               </div>
 
                               {/* Collapse chevron */}
@@ -992,7 +838,7 @@ const CourseEditor = ({
                                 onClick={() => actions.toggleSubsection(sub.id)}
                                 style={{
                                   background: 'none', border: 'none', cursor: 'pointer',
-                                  color: '#CCC', fontSize: '14.3px', padding: '2px 4px',
+                                  color: '#555', fontSize: '14.3px', padding: '2px 4px',
                                   flexShrink: 0, transition: 'transform 0.2s',
                                   transform: isSubCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)'
                                 }}
@@ -1001,7 +847,7 @@ const CourseEditor = ({
                               </button>
 
                               {/* Sub number */}
-                              <div style={{ fontSize: '12.1px', fontWeight: '500', color: '#CCC', minWidth: '20px', paddingTop: '2px', flexShrink: 0 }}>
+                              <div style={{ fontSize: '13px', fontWeight: '500', color: '#555', minWidth: '20px', paddingTop: '2px', flexShrink: 0 }}>
                                 {index + 1}.{subIdx + 1}
                               </div>
 
@@ -1015,9 +861,9 @@ const CourseEditor = ({
                                   maxLength={80}
                                   style={{ flex: 1 }}
                                   inputStyle={{
-                                    fontSize: '14.9px',
-                                    fontWeight: '500',
-                                    color: '#222',
+                                    fontSize: '15px',
+                                    fontWeight: '600',
+                                    color: '#111',
                                     lineHeight: '1.35'
                                   }}
                                 />
@@ -1025,13 +871,13 @@ const CourseEditor = ({
                                   value={sub.description}
                                   onChange={val => actions.updateSubsectionDescription(section.id, sub.id, val)}
                                   placeholder="Add a description…"
-                                  accentColor="#888"
+                                  accentColor="#555"
                                   maxLength={200}
                                   style={{ flex: 1 }}
                                   inputStyle={{
-                                    fontSize: '12.7px',
-                                    color: '#888',
-                                    fontWeight: '300',
+                                    fontSize: '13.5px',
+                                    color: '#333',
+                                    fontWeight: '400',
                                     lineHeight: '1.4',
                                     fontStyle: sub.description ? 'normal' : 'italic'
                                   }}
@@ -1063,7 +909,7 @@ const CourseEditor = ({
                                 <button
                                   onClick={(e) => { e.stopPropagation(); actions.addSubsection(section.id); }}
                                   style={{
-                                    padding: '3px 8px', background: 'rgba(255,255,255,0.7)', color: '#6B6760',
+                                    padding: '3px 8px', background: '#FFFFFF', color: '#333',
                                     border: '1px solid rgba(0,0,0,0.1)', borderRadius: '4px',
                                     cursor: 'pointer', fontSize: '11px', fontWeight: '600',
                                     display: 'flex', alignItems: 'center', gap: '3px',
@@ -1101,8 +947,8 @@ const CourseEditor = ({
                                         <div style={{
                                           textAlign: 'center',
                                           padding: '20px 0',
-                                          color: '#CCC',
-                                          fontSize: '13.8px',
+                                          color: '#444',
+                                          fontSize: '14px',
                                           marginBottom: '12px'
                                         }}>
                                           <p style={{ margin: '0 0 10px' }}>No topic boxes yet</p>
@@ -1110,12 +956,12 @@ const CourseEditor = ({
                                             onClick={() => actions.addTopicBox(section.id, sub.id)}
                                             style={{
                                               background: 'transparent',
-                                              border: '1px dashed rgba(0,0,0,0.1)',
+                                              border: '1px dashed rgba(0,0,0,0.2)',
                                               borderRadius: '6px',
                                               padding: '5px 20px',
                                               cursor: 'pointer',
-                                              fontSize: '13.2px',
-                                              color: '#BBB',
+                                              fontSize: '14px',
+                                              color: '#444',
                                               fontFamily: "'DM Sans', sans-serif",
                                               display: 'inline-block'
                                             }}
@@ -1166,8 +1012,8 @@ const CourseEditor = ({
             <button
               onClick={() => actions.addSubsection(section.id)}
               style={{
-                fontFamily: "'DM Sans', sans-serif", fontSize: '13.8px', color: '#AAA',
-                background: 'rgba(255,255,255,0.45)', border: '1px dashed rgba(0,0,0,0.11)',
+                fontFamily: "'DM Sans', sans-serif", fontSize: '14px', color: '#444',
+                background: '#FFFFFF', border: '1px dashed rgba(0,0,0,0.2)',
                 borderRadius: '8px', padding: '7px 14px', cursor: 'pointer',
                 width: 'calc(100% - 24px)', marginLeft: '24px', textAlign: 'left',
                 marginTop: '10px', display: 'block'
@@ -1192,16 +1038,15 @@ const CourseEditor = ({
       <div style={{
         padding: '0 20px', height: '60px',
         display: 'flex', alignItems: 'center', gap: '8px',
-        background: 'rgba(255,255,255,0.55)',
-        backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)',
-        borderBottom: '1px solid rgba(255,255,255,0.75)',
+        background: '#FFFFFF',
+        borderBottom: '1px solid rgba(0,0,0,0.08)',
         flexShrink: 0, position: 'sticky', top: 0, zIndex: 9
       }}>
         <button onClick={() => onBack ? onBack() : navigate('/my-courses')} style={{
           fontFamily: "'DM Sans', sans-serif", fontSize: '13.8px', fontWeight: '500',
           padding: '6px 13px', borderRadius: '8px', cursor: 'pointer',
-          background: 'rgba(255,255,255,0.65)', border: '1px solid rgba(0,0,0,0.1)',
-          color: '#444', whiteSpace: 'nowrap', flexShrink: 0, transition: 'background 0.15s'
+          background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.12)',
+          color: '#111', whiteSpace: 'nowrap', flexShrink: 0, transition: 'background 0.15s'
         }}>← Course View</button>
 
         {/* Centre: course title + grade */}
@@ -1221,13 +1066,13 @@ const CourseEditor = ({
             }}
           />
           <>
-            <span style={{ color: '#CCC', fontSize: '15.4px' }}>·</span>
+            <span style={{ color: '#888', fontSize: '15.4px' }}>·</span>
             <EditableField
               value={courseClass ? `Grade ${courseClass}` : ''}
               onChange={val => setCourseClass(val.replace(/^grade\s*/i, '').trim())}
               placeholder="Grade"
               accentColor="#666"
-              inputStyle={{ fontSize: '12.7px', fontWeight: '500', color: '#444' }}
+              inputStyle={{ fontSize: '13px', fontWeight: '500', color: '#111' }}
             />
           </>
         </div>
@@ -1236,15 +1081,15 @@ const CourseEditor = ({
         <button onClick={onUndo} disabled={!canUndo} style={{
           fontFamily: "'DM Sans', sans-serif", fontSize: '13.8px', fontWeight: '500',
           padding: '6px 13px', borderRadius: '8px', cursor: !canUndo ? 'not-allowed' : 'pointer',
-          background: 'rgba(255,255,255,0.65)', border: '1px solid rgba(0,0,0,0.1)',
-          color: !canUndo ? '#CCC' : '#444', whiteSpace: 'nowrap', flexShrink: 0
+          background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.12)',
+          color: !canUndo ? '#999' : '#111', whiteSpace: 'nowrap', flexShrink: 0
         }}>↶ Undo</button>
 
         {/* Save status */}
         <div style={{
           fontFamily: "'DM Sans', sans-serif", fontSize: '13.8px', fontWeight: '500',
           padding: '6px 13px', borderRadius: '8px',
-          background: 'rgba(255,255,255,0.65)', border: '1px solid rgba(0,0,0,0.1)',
+          background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.12)',
           color: saveStatus === 'saving' ? '#6B7280' : '#1C5C35',
           whiteSpace: 'nowrap', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '5px'
         }}>
@@ -1260,9 +1105,9 @@ const CourseEditor = ({
           style={{
             display: 'flex', alignItems: 'center', gap: '7px', cursor: 'pointer',
             padding: '5px 11px', borderRadius: '8px',
-            background: 'rgba(255,255,255,0.65)', border: '1px solid rgba(0,0,0,0.1)',
+            background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.12)',
             whiteSpace: 'nowrap', flexShrink: 0, transition: 'background 0.15s',
-            fontFamily: "'DM Sans', sans-serif", fontSize: '13.8px', fontWeight: '500', color: '#444'
+            fontFamily: "'DM Sans', sans-serif", fontSize: '13.8px', fontWeight: '500', color: '#111'
           }}
         >
           <div style={{
@@ -1288,8 +1133,8 @@ const CourseEditor = ({
             style={{
               fontFamily: "'DM Sans', sans-serif", fontSize: '13.8px', fontWeight: '500',
               padding: '6px 13px', borderRadius: '8px', cursor: 'pointer',
-              background: 'rgba(255,255,255,0.65)', border: '1px solid rgba(0,0,0,0.1)',
-              color: '#444', whiteSpace: 'nowrap', flexShrink: 0, transition: 'background 0.15s',
+              background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.12)',
+              color: '#111', whiteSpace: 'nowrap', flexShrink: 0, transition: 'background 0.15s',
               display: 'flex', alignItems: 'center', gap: '5px'
             }}
           >
@@ -1328,16 +1173,15 @@ const CourseEditor = ({
       {/* Action bar */}
       <div style={{
         padding: '9px 24px',
-        background: 'rgba(255,255,255,0.35)',
-        backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)',
-        borderBottom: '1px solid rgba(255,255,255,0.65)',
+        background: '#FAFAFA',
+        borderBottom: '1px solid rgba(0,0,0,0.07)',
         display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'space-between',
         flexShrink: 0
       }}>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <button onClick={actions.addSection} style={{
-            fontFamily: "'DM Sans', sans-serif", fontSize: '13.8px', color: '#888',
-            background: 'rgba(255,255,255,0.55)', border: '1px dashed rgba(0,0,0,0.14)',
+            fontFamily: "'DM Sans', sans-serif", fontSize: '14px', color: '#333',
+            background: '#FFFFFF', border: '1px dashed rgba(0,0,0,0.2)',
             borderRadius: '7px', padding: '5px 14px', cursor: 'pointer',
             display: 'flex', alignItems: 'center', gap: '4px', transition: 'background 0.15s'
           }}>
@@ -1345,14 +1189,14 @@ const CourseEditor = ({
           </button>
 
           <button onClick={onAddBreak} style={{
-            fontFamily: "'DM Sans', sans-serif", fontSize: '13.8px', color: '#888',
-            background: 'rgba(255,255,255,0.55)', border: '1px dashed rgba(0,0,0,0.14)',
+            fontFamily: "'DM Sans', sans-serif", fontSize: '14px', color: '#333',
+            background: '#FFFFFF', border: '1px dashed rgba(0,0,0,0.2)',
             borderRadius: '7px', padding: '5px 14px', cursor: 'pointer',
             display: 'flex', alignItems: 'center', gap: '4px', transition: 'background 0.15s'
           }}>⏸ Break</button>
         </div>
 
-        <span style={{ fontSize: '12.7px', color: '#AAA' }}>
+        <span style={{ fontSize: '13px', color: '#555' }}>
           {sections.filter(s => s.type !== 'break').length} section{sections.filter(s => s.type !== 'break').length !== 1 ? 's' : ''} ·{' '}
           {sections.reduce((acc, s) => acc + (s.subsections?.length || 0), 0)} subsections ·{' '}
           {sections.reduce((acc, s) => acc + (s.subsections?.reduce((total, sub) => total + (sub.topicBoxes?.length || 0), 0) || 0), 0)} topic boxes
@@ -1364,17 +1208,15 @@ const CourseEditor = ({
         {sections.length === 0 ? (
           <div style={{
             textAlign: 'center', padding: '80px 20px',
-            border: '1px solid rgba(255,255,255,0.68)', borderRadius: '16px',
-            background: 'rgba(255,255,255,0.45)',
-            backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)'
+            border: '1px solid rgba(0,0,0,0.08)', borderRadius: '16px',
+            background: '#FFFFFF'
           }}>
             <p style={{ fontSize: '30.8px', marginBottom: '8px' }}>📚</p>
             <p style={{ fontSize: '22px', color: colors.textPrimary, fontWeight: '600', margin: '0 0 4px' }}>No sections yet</p>
             <p style={{ fontSize: '14.3px', color: colors.textSecondary, margin: 0 }}>Click "+ Section" above to start building your course</p>
           </div>
         ) : (
-          <DragDropContext onDragEnd={handleDragEnd}>
-            <Droppable droppableId="all-sections" type="SECTION">
+          <Droppable droppableId="all-sections" type="SECTION">
               {(provided) => (
                 <div
                   ref={provided.innerRef}
@@ -1404,7 +1246,6 @@ const CourseEditor = ({
                 </div>
               )}
             </Droppable>
-          </DragDropContext>
         )}
       </div>
 

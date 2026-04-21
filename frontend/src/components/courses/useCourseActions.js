@@ -111,31 +111,51 @@ const useCourseActions = ({
   };
 
   const addTopicBoxWithContent = (sectionId, subsectionId, title, description) => {
-    setSections(prev => prev.map(section => {
-      if (section.id !== sectionId) return section;
-      return {
-        ...section,
-        subsections: (section.subsections || []).map(sub => {
-          if (sub.id !== subsectionId) return sub;
-          const idx = (sub.topicBoxes || []).length + 1;
-          return {
-            ...sub,
-            topicBoxes: [...(sub.topicBoxes || []), {
-              id: `topic-${Date.now()}-${idx}`,
-              title,
-              description,
-              duration_minutes: 20,
-              pla_pillars: [],
-              learning_objectives: [],
-              content_keywords: [],
-              video_resources: [],
-              worksheets: [],
-              activities: []
-            }]
-          };
-        })
-      };
-    }));
+    // Validate inside the functional update so we always check against the latest state (prev),
+    // not the potentially-stale closure value of `sections`.
+    setSections(prev => {
+      const targetSection = prev.find(s => s.id === sectionId);
+      if (!targetSection) {
+        console.warn(`[Edo] addTopicBoxWithContent: section "${sectionId}" not found`, prev.map(s => s.id));
+        return prev; // no-op
+      }
+      const targetSub = (targetSection.subsections || []).find(ss => ss.id === subsectionId);
+      if (!targetSub) {
+        console.warn(`[Edo] addTopicBoxWithContent: subsection "${subsectionId}" not found`, (targetSection.subsections || []).map(ss => ss.id));
+        return prev; // no-op
+      }
+      return prev.map(section => {
+        if (section.id !== sectionId) return section;
+        return {
+          ...section,
+          subsections: (section.subsections || []).map(sub => {
+            if (sub.id !== subsectionId) return sub;
+            const idx = (sub.topicBoxes || []).length + 1;
+            return {
+              ...sub,
+              topicBoxes: [...(sub.topicBoxes || []), {
+                id: `topic-${Date.now()}-${idx}`,
+                title,
+                description,
+                duration_minutes: 20,
+                pla_pillars: [],
+                learning_objectives: [],
+                content_keywords: [],
+                video_resources: [],
+                worksheets: [],
+                activities: []
+              }]
+            };
+          })
+        };
+      });
+    });
+
+    // Auto-expand so the user can see the new topic box.
+    // Always expand optimistically — if IDs were wrong the no-op is harmless.
+    setCollapsedSections(prev => ({ ...prev, [sectionId]: false }));
+    setCollapsedSubsections(prev => ({ ...prev, [subsectionId]: false }));
+    return true;
   };
 
   const removeSubsection = (sectionId, subId) => {
@@ -274,6 +294,41 @@ const useCourseActions = ({
     setDeleteConfirm(null);
   };
 
+  // ── Insert-at-index (for tray drops) ─────────────────────────────────
+  const insertSectionAt = (section, index) => {
+    setSections(prev => {
+      const next = [...prev];
+      next.splice(Math.min(Math.max(0, index), next.length), 0, section);
+      return next;
+    });
+  };
+
+  const insertSubsectionAt = (sectionId, subsection, index) => {
+    setSections(prev => prev.map(s => {
+      if (s.id !== sectionId) return s;
+      const subs = [...(s.subsections || [])];
+      subs.splice(Math.min(Math.max(0, index), subs.length), 0, subsection);
+      return { ...s, subsections: subs };
+    }));
+  };
+
+  const insertTopicBoxAt = (sectionId, subsectionId, topicBox, index) => {
+    setSections(prev => prev.map(s => {
+      if (s.id !== sectionId) return s;
+      return {
+        ...s,
+        subsections: (s.subsections || []).map(sub => {
+          if (sub.id !== subsectionId) return sub;
+          const boxes = [...(sub.topicBoxes || [])];
+          boxes.splice(Math.min(Math.max(0, index), boxes.length), 0, topicBox);
+          return { ...sub, topicBoxes: boxes };
+        })
+      };
+    }));
+    setCollapsedSections(prev => ({ ...prev, [sectionId]: false }));
+    setCollapsedSubsections(prev => ({ ...prev, [subsectionId]: false }));
+  };
+
   // ── AI Generation ─────────────────────────────────────────────────────
   const handleGenerateSections = async ({ level, context, userGuidance, count }) => {
     setGenerating('sections', true);
@@ -358,35 +413,45 @@ const useCourseActions = ({
         teacherUid: currentUser.uid
       });
 
-      if (result.success && result.items) {
-        setSections(prev => prev.map(section => {
-          if (section.id !== sectionId) return section;
-
-          return {
-            ...section,
-            subsections: (section.subsections || []).map(sub => {
-              if (sub.id !== subsectionId) return sub;
-
-              const newTopicBoxes = result.items.map(item => ({
-                id: item.id,
-                title: item.title,
-                description: item.description,
-                duration_minutes: item.duration_minutes || 20,
-                pla_pillars: item.pla_pillars || [],
-                learning_objectives: item.learning_objectives || [],
-                content_keywords: item.content_keywords || [],
-                video_resources: [],
-                worksheets: [],
-                activities: []
-              }));
-
-              return {
-                ...sub,
-                topicBoxes: [...(sub.topicBoxes || []), ...newTopicBoxes]
-              };
-            })
-          };
+      if (result.success && result.items && result.items.length > 0) {
+        // Validate and update inside the functional update so we always use latest state.
+        const newTopicBoxes = result.items.map((item, i) => ({
+          id: item.id || `topic-${Date.now()}-${i + 1}`,
+          title: item.title,
+          description: item.description,
+          duration_minutes: item.duration_minutes || 20,
+          pla_pillars: item.pla_pillars || [],
+          learning_objectives: item.learning_objectives || [],
+          content_keywords: item.content_keywords || [],
+          video_resources: [],
+          worksheets: [],
+          activities: []
         }));
+
+        setSections(prev => {
+          const hasSection = prev.some(s => s.id === sectionId);
+          if (!hasSection) {
+            console.warn(`[Edo] handleGenerateTopicBoxes: section "${sectionId}" not found in latest state`);
+            return prev;
+          }
+          return prev.map(section => {
+            if (section.id !== sectionId) return section;
+            return {
+              ...section,
+              subsections: (section.subsections || []).map(sub => {
+                if (sub.id !== subsectionId) return sub;
+                return {
+                  ...sub,
+                  topicBoxes: [...(sub.topicBoxes || []), ...newTopicBoxes]
+                };
+              })
+            };
+          });
+        });
+
+        // Auto-expand so the user sees the new topic boxes
+        setCollapsedSections(prev => ({ ...prev, [sectionId]: false }));
+        setCollapsedSubsections(prev => ({ ...prev, [subsectionId]: false }));
 
         console.log(`✅ Generated ${result.items.length} topic boxes for subsection ${subsectionId}`);
         return { success: true, count: result.items.length };
@@ -397,6 +462,88 @@ const useCourseActions = ({
       return { success: false, error: error.message };
     } finally {
       setGenerating(`topics-${sectionId}-${subsectionId}`, false);
+    }
+  };
+
+  // ── Generate-for-Tray (returns items without inserting) ───────────────
+  const generateSectionsForTray = async ({ level, context, count }) => {
+    setGenerating('sections-tray', true);
+    try {
+      const result = await generateCurriculumContent({
+        level, context, count, teacherUid: currentUser.uid
+      });
+      if (result.success && result.items) {
+        return {
+          success: true,
+          items: result.items.map(item => ({
+            id: item.id || `section-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+            title: item.title,
+            description: item.description,
+            subsections: []
+          }))
+        };
+      }
+      return { success: false, error: 'No items returned' };
+    } catch (error) {
+      return { success: false, error: error.message };
+    } finally {
+      setGenerating('sections-tray', false);
+    }
+  };
+
+  const generateSubsectionsForTray = async ({ level, context, count }) => {
+    setGenerating('subsections-tray', true);
+    try {
+      const result = await generateCurriculumContent({
+        level, context, count, teacherUid: currentUser.uid
+      });
+      if (result.success && result.items) {
+        return {
+          success: true,
+          items: result.items.map(item => ({
+            id: item.id || `sub-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+            title: item.title,
+            description: item.description,
+            topicBoxes: []
+          }))
+        };
+      }
+      return { success: false, error: 'No items returned' };
+    } catch (error) {
+      return { success: false, error: error.message };
+    } finally {
+      setGenerating('subsections-tray', false);
+    }
+  };
+
+  const generateTopicBoxesForTray = async ({ level, context, count }) => {
+    setGenerating('topics-tray', true);
+    try {
+      const result = await generateCurriculumContent({
+        level, context, count, teacherUid: currentUser.uid
+      });
+      if (result.success && result.items) {
+        return {
+          success: true,
+          items: result.items.map((item, i) => ({
+            id: item.id || `topic-${Date.now()}-${i + 1}`,
+            title: item.title,
+            description: item.description,
+            duration_minutes: item.duration_minutes || 20,
+            pla_pillars: item.pla_pillars || [],
+            learning_objectives: item.learning_objectives || [],
+            content_keywords: item.content_keywords || [],
+            video_resources: [],
+            worksheets: [],
+            activities: []
+          }))
+        };
+      }
+      return { success: false, error: 'No items returned' };
+    } catch (error) {
+      return { success: false, error: error.message };
+    } finally {
+      setGenerating('topics-tray', false);
     }
   };
 
@@ -638,6 +785,14 @@ const useCourseActions = ({
     handleGenerateSections,
     handleGenerateSubsections,
     handleGenerateTopicBoxes,
+    generateSectionsForTray,
+    generateSubsectionsForTray,
+    generateTopicBoxesForTray,
+
+    // Insert-at-index (for tray drops)
+    insertSectionAt,
+    insertSubsectionAt,
+    insertTopicBoxAt,
     
     // Resources
     generateVideosFromBackend,

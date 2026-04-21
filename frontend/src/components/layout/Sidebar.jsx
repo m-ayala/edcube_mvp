@@ -87,7 +87,7 @@ const Sidebar = () => {
               padding: '9px 12px',
               borderRadius: '8px',
               textDecoration: 'none',
-              color: isActive ? '#111' : hoveredItem === to ? '#111' : '#666',
+              color: isActive ? '#111' : hoveredItem === to ? '#111' : '#333',
               backgroundColor: isActive ? 'rgba(255,255,255,0.85)' : hoveredItem === to ? 'rgba(255,255,255,0.45)' : 'transparent',
               boxShadow: isActive ? '0 0 0 1px rgba(0,0,0,0.08)' : 'none',
               fontWeight: isActive ? '500' : '400',
@@ -157,7 +157,7 @@ const Sidebar = () => {
             <div style={{ fontSize: '14.3px', color: '#111', fontWeight: '500', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {displayName}
             </div>
-            <div style={{ fontSize: '12.1px', color: '#999' }}>ICC Teacher</div>
+            <div style={{ fontSize: '12.1px', color: '#555' }}>ICC Teacher</div>
           </div>
         </div>
 
@@ -167,7 +167,7 @@ const Sidebar = () => {
             width: '100%',
             padding: '7px 12px',
             backgroundColor: 'transparent',
-            color: '#999',
+            color: '#444',
             border: '1px solid rgba(0,0,0,0.1)',
             borderRadius: '6px',
             cursor: 'pointer',
@@ -177,7 +177,7 @@ const Sidebar = () => {
             fontFamily: "'DM Sans', sans-serif"
           }}
           onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.6)'; e.currentTarget.style.color = '#E57373'; }}
-          onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#999'; }}
+          onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#444'; }}
         >
           Sign Out
         </button>

@@ -5,13 +5,15 @@ Curriculum generation routes - PHASE 1 ONLY
 Generates boxes/topics without any video or worksheet population
 """
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Form, UploadFile, File
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional, Dict, List
 import json
 import asyncio
 import logging
+import os
+import tempfile
 from services.orchestrator import CurriculumOrchestrator
 from services.firebase_service import FirebaseService
 from schemas.generation_schema import GenerateRequest, GenerateResponse
@@ -25,102 +27,120 @@ firebase = FirebaseService()
 logger = logging.getLogger(__name__)
 
 
-class CourseRequest(BaseModel):
-    """Request model for course generation"""
-    course_name: str
-    grade_level: str
-    subject: str
-    topic: str
-    time_duration: str
-    num_worksheets: int
-    num_activities: int
-    objectives: Optional[str] = ""
-    teacherUid: str
-    organizationId: str
-
-
 @router.post("/generate-curriculum")
-async def generate_curriculum(request: CourseRequest):
+async def generate_curriculum(
+    course_name:    str = Form(...),
+    grade_level:    str = Form(...),
+    subject:        str = Form(...),
+    topic:          str = Form(...),
+    time_duration:  str = Form(...),
+    num_worksheets: int = Form(...),
+    num_activities: int = Form(...),
+    objectives:     str = Form(""),
+    teacherUid:     str = Form(...),
+    organizationId: str = Form(...),
+    files: List[UploadFile] = File(default=[]),
+):
     """
-    PHASE 1 ONLY: Generate curriculum boxes/topics
-    
-    This endpoint ONLY generates boxes. It does NOT:
-    - Generate videos (Phase 2)
-    - Generate worksheets/activities (Phase 3)
-    
-    Flow:
-    1. Validate request
-    2. Run Phase 1 (outliner) - generate boxes
-    3. Save boxes to Firebase
-    4. Return curriculum ID and boxes
+    PHASE 1 ONLY: Generate curriculum boxes/topics.
+    Accepts multipart/form-data so teachers can attach reference files
+    (PDF, Word, Excel, PPT, images) alongside the form fields.
     """
-    
+    # ── Read all file bytes EAGERLY before the generator ──────────────────
+    # UploadFile objects are closed after the request, so we must read them
+    # here (in the endpoint body) before handing control to the SSE generator.
+    file_bytes: List[tuple] = []  # list of (filename, ext, bytes)
+    for uf in (files or []):
+        ext = os.path.splitext(uf.filename)[1].lower()
+        data = await uf.read()
+        file_bytes.append((uf.filename, ext, data))
+
     async def generate():
-        """Generator function for SSE streaming"""
+        tmp_paths = []
         try:
-            # Initial status
-            yield f"data: {json.dumps({'phase': 0, 'message': 'Starting box generation...', 'progress': 0})}\n\n"
+            yield f"data: {json.dumps({'phase': 0, 'message': 'Starting...', 'progress': 0})}\n\n"
             await asyncio.sleep(0.1)
-            
-            # Phase 1: Generate boxes ONLY
-            yield f"data: {json.dumps({'phase': 1, 'message': 'Generating curriculum boxes...', 'progress': 10})}\n\n"
-            
-            outline_data = await orchestrator.run_phase1({
-                'grade_level': request.grade_level,
-                'subject': request.subject,
-                'topic': request.topic,
-                'duration': request.time_duration,
-                'num_worksheets': request.num_worksheets,
-                'num_activities': request.num_activities,
-                'objectives': request.objectives
-            })
-            
-            if not outline_data:
-                yield f"data: {json.dumps({'phase': 1, 'message': 'Error: Failed to generate boxes', 'progress': 0, 'error': True})}\n\n"
-                return
-            
-            yield f"data: {json.dumps({'phase': 1, 'message': 'Boxes generated successfully!', 'progress': 80})}\n\n"
-            await asyncio.sleep(0.5)
-            
-            # Save to Firebase (just the boxes, NO VIDEOS)
-            yield f"data: {json.dumps({'phase': 1, 'message': 'Saving curriculum...', 'progress': 90})}\n\n"
-            
-            curriculum_id = await firebase.save_curriculum(
-                teacherUid=request.teacherUid,
-                curriculum_data={
-                    'course_name': request.course_name,
-                    'grade_level': request.grade_level,
-                    'subject': request.subject,
-                    'topic': request.topic,
-                    'duration': request.time_duration,
-                    'outline': outline_data,
-                    'sections': outline_data.get('sections', [])
+
+            # ── Write pre-read bytes to temp files & extract content ────────
+            extracted_text = ""
+            vision_images = []
+
+            if file_bytes:
+                yield f"data: {json.dumps({'phase': 0, 'message': 'Reading attached files...', 'progress': 5})}\n\n"
+                from services.file_parser import extract_content_from_uploaded_files
+
+                file_tuples = []
+                for filename, ext, data in file_bytes:
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
+                        tmp.write(data)
+                        tmp_paths.append(tmp.name)
+                        file_tuples.append((tmp.name, ext))
+
+                result = await extract_content_from_uploaded_files(file_tuples)
+                extracted_text = result['extracted_text']
+                vision_images = result['images']
+
+            # ── Merge objectives + extracted file text ──────────────────────
+            full_objectives = objectives or ""
+            if extracted_text.strip():
+                full_objectives = (
+                    (full_objectives + "\n\n") if full_objectives else ""
+                ) + "ATTACHED MATERIALS:\n" + extracted_text
+
+            yield f"data: {json.dumps({'phase': 1, 'message': 'Generating curriculum outline...', 'progress': 10})}\n\n"
+
+            outline_data = await orchestrator.run_phase1(
+                {
+                    'grade_level':    grade_level,
+                    'subject':        subject,
+                    'topic':          topic,
+                    'duration':       time_duration,
+                    'num_worksheets': num_worksheets,
+                    'num_activities': num_activities,
+                    'objectives':     full_objectives,
                 },
-                organizationId=request.organizationId
+                images=vision_images or None,
             )
-            
-            # Complete
-            result = {
-                'phase': 1,
-                'message': 'Complete! Boxes ready to drag into outline',
-                'progress': 100,
-                'curriculum_id': curriculum_id,
-                'done': True
-            }
-            yield f"data: {json.dumps(result)}\n\n"
-            
+
+            if not outline_data:
+                yield f"data: {json.dumps({'phase': 1, 'message': 'Error: Failed to generate outline', 'progress': 0, 'error': True})}\n\n"
+                return
+
+            yield f"data: {json.dumps({'phase': 1, 'message': 'Outline generated!', 'progress': 80})}\n\n"
+            await asyncio.sleep(0.3)
+
+            yield f"data: {json.dumps({'phase': 1, 'message': 'Saving curriculum...', 'progress': 90})}\n\n"
+
+            curriculum_id = await firebase.save_curriculum(
+                teacherUid=teacherUid,
+                curriculum_data={
+                    'course_name': course_name,
+                    'grade_level': grade_level,
+                    'subject':     subject,
+                    'topic':       topic,
+                    'duration':    time_duration,
+                    'outline':     outline_data,
+                    'sections':    outline_data.get('sections', []),
+                },
+                organizationId=organizationId,
+            )
+
+            yield f"data: {json.dumps({'phase': 1, 'message': 'Complete!', 'progress': 100, 'curriculum_id': curriculum_id, 'done': True})}\n\n"
+
         except Exception as e:
-            error_msg = f"Error during generation: {str(e)}"
-            yield f"data: {json.dumps({'message': error_msg, 'error': True})}\n\n"
-    
+            logger.error(f"generate-curriculum error: {e}", exc_info=True)
+            yield f"data: {json.dumps({'message': f'Error: {str(e)}', 'error': True})}\n\n"
+        finally:
+            for p in tmp_paths:
+                try:
+                    os.remove(p)
+                except OSError:
+                    pass
+
     return StreamingResponse(
         generate(),
         media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no"
-        }
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
     )
 
 

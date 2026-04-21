@@ -89,7 +89,7 @@ const CourseCard = ({ curriculum, onCardClick, onDelete, onToggleVisibility }) =
             display: 'flex', alignItems: 'center', gap: '5px',
             padding: '4px 9px',
             background: isPublic ? 'rgba(178,232,200,0.45)' : 'rgba(0,0,0,0.04)',
-            color: isPublic ? '#1C5C35' : '#888',
+            color: isPublic ? '#1C5C35' : '#444',
             border: `1px solid ${isPublic ? 'rgba(178,232,200,0.8)' : 'rgba(0,0,0,0.1)'}`,
             borderRadius: '6px', cursor: 'pointer',
             fontSize: '12.1px', fontWeight: '500',
@@ -125,10 +125,10 @@ const chip = {
   display: 'inline-block',
   padding: '2px 8px',
   borderRadius: '20px',
-  fontSize: '11px',
+  fontSize: '12px',
   fontWeight: '500',
-  background: 'rgba(0,0,0,0.05)',
-  color: '#555',
+  background: 'rgba(0,0,0,0.07)',
+  color: '#222',
 };
 
 export default CourseCard;

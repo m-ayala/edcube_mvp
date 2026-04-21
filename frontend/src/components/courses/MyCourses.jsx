@@ -121,7 +121,7 @@ const MyCourses = () => {
       {/* Header */}
       <div style={{ marginBottom: '30px' }}>
         <h1>My Courses</h1>
-        <p style={{ color: '#666' }}>Welcome, {currentUser?.displayName || 'Teacher'}!</p>
+        <p style={{ color: '#333' }}>Welcome, {currentUser?.displayName || 'Teacher'}!</p>
       </div>
 
       {/* Create New Course Button */}
@@ -146,7 +146,7 @@ const MyCourses = () => {
 
       {/* Empty State */}
       {!loading && curricula.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '50px', color: '#666' }}>
+        <div style={{ textAlign: 'center', padding: '50px', color: '#333' }}>
           <h2>No courses yet</h2>
           <p>Click "Create New Course" to get started!</p>
         </div>
@@ -186,7 +186,7 @@ const MyCourses = () => {
             <h3 style={{ margin: '0 0 12px 0', fontSize: '19.8px' }}>
               {visibilityModalData.isPublic ? 'Make Course Private?' : 'Make Course Public?'}
             </h3>
-            <p style={{ color: '#666', marginBottom: '24px', fontSize: '15.4px', lineHeight: '1.5' }}>
+            <p style={{ color: '#333', marginBottom: '24px', fontSize: '15.4px', lineHeight: '1.5' }}>
               {visibilityModalData.isPublic
                 ? `"${visibilityModalData.courseName}" will no longer be visible to other teachers in your organization.`
                 : `"${visibilityModalData.courseName}" will be visible to all teachers in your organization.`

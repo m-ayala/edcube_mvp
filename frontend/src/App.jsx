@@ -9,9 +9,7 @@ import Signup from './components/auth/Signup';
 import LandingPage from './components/pages/LandingPage';
 import Layout from './components/layout/Layout';
 import MyCourses from './components/courses/MyCourses';
-import CourseDesignerLanding from './components/pages/CourseDesignerLanding';
 import CourseDesigner from './components/courses/CourseDesigner';
-import CourseUpload from './components/pages/CourseUpload';
 import CourseWorkspace from './components/courses/CourseWorkspace';
 import CourseViewPage from './components/courses/CourseViewPage';
 import TeacherProfile from './components/teacherProfile/TeacherProfile';
@@ -37,9 +35,7 @@ function App() {
             }
           >
             <Route path="/my-courses" element={<MyCourses />} />
-            <Route path="/course-designer" element={<CourseDesignerLanding />} />
-            <Route path="/course-designer/create" element={<CourseDesigner />} />
-            <Route path="/course-designer/upload" element={<CourseUpload />} />
+            <Route path="/course-designer" element={<CourseDesigner />} />
             <Route path="/course-workspace" element={<CourseWorkspace />} />
             <Route path="/course-view" element={<CourseViewPage />} />
             <Route path="/profile" element={<TeacherProfile />} />

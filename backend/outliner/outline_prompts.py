@@ -6,7 +6,7 @@ from config import OutlinerConfig
 from typing import Dict
 
 
-def get_box_generation_prompt(teacher_input: Dict) -> str:
+def get_box_generation_prompt(teacher_input: Dict, has_images: bool = False) -> str:
     """
     Generate the prompt for creating a GROUPED course outline.
     Output is sections (chapters) containing subsections (individual lessons).
@@ -27,9 +27,22 @@ def get_box_generation_prompt(teacher_input: Dict) -> str:
     # Target 2x content so teacher has flexibility
     target_total_minutes = total_minutes * 2
 
+    image_instruction = ""
+    if has_images:
+        image_instruction = """
+REFERENCE IMAGES PROVIDED:
+The teacher has uploaded reference images (e.g., syllabus pages, curriculum guides, textbook pages, whiteboard notes, or other materials). Carefully analyze each image and extract:
+- Any specific topics, subtopics, or concepts to cover
+- Vocabulary words or key terms visible in the images
+- Learning objectives or standards mentioned
+- Suggested activities, projects, or assessment ideas
+- Any sequencing or pacing information
+Incorporate all relevant details extracted from the images into the course outline below.
+"""
+
     prompt = f"""
 You are an expert elementary education curriculum designer. Generate a structured course outline for the following topic. The outline must be organized into SECTIONS (logical chapters) and SUBSECTIONS (individual lessons within each chapter).
-
+{image_instruction}
 TEACHER INPUT:
 - Grade Level: {grade_level}
 - Subject: {subject}

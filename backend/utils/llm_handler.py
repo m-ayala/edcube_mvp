@@ -5,7 +5,7 @@ Consolidates all LLM interactions across all three phases
 
 import json
 import logging
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 from openai import OpenAI
 
 from config import OPENAI_API_KEY, OPENAI_MODEL, OPENAI_TEMPERATURE
@@ -22,7 +22,8 @@ def call_openai(
     system_message: str = "You are a helpful assistant.",
     temperature: float = OPENAI_TEMPERATURE,
     max_tokens: Optional[int] = None,
-    json_mode: bool = True
+    json_mode: bool = True,
+    images: Optional[List[str]] = None
 ) -> Dict:
     """
     Call OpenAI API and return parsed JSON response.
@@ -53,11 +54,23 @@ def call_openai(
     """
     try:
         # Build API call parameters
+        # If images are provided, use multi-modal content for vision
+        if images:
+            user_content = [{"type": "text", "text": prompt}]
+            for img_data_url in images:
+                user_content.append({
+                    "type": "image_url",
+                    "image_url": {"url": img_data_url, "detail": "high"}
+                })
+            user_message = {"role": "user", "content": user_content}
+        else:
+            user_message = {"role": "user", "content": prompt}
+
         params = {
             "model": OPENAI_MODEL,
             "messages": [
                 {"role": "system", "content": system_message},
-                {"role": "user", "content": prompt}
+                user_message
             ],
             "temperature": temperature,
         }

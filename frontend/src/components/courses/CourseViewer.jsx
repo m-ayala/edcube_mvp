@@ -104,10 +104,10 @@ const CourseViewer = ({
     topicBg: '#FFFFFF',
     topicBorder: '#E7E5E4',
     topicStripe: '#C2547A',         // Pink/red left stripe
-    textPrimary: '#1C1917',
-    textSecondary: '#78716C',
+    textPrimary: '#111',
+    textSecondary: '#111',
     pillBg: '#F5F5F4',
-    pillText: '#78716C',
+    pillText: '#333',
     pla: {
       'Personal Growth': '#FEF3C7',
       'Core Learning': '#E0F2FE',
@@ -156,7 +156,7 @@ const CourseViewer = ({
     const renderResourceCards = (resources, type) => {
       if (resources.length === 0) {
         return (
-          <div style={{ padding: '14px 16px', color: '#9ca3af', fontSize: '14.3px', fontStyle: 'italic' }}>
+          <div style={{ padding: '14px 16px', color: '#444', fontSize: '14px', fontStyle: 'italic' }}>
             No {type} added for this topic.
           </div>
         );
@@ -173,10 +173,10 @@ const CourseViewer = ({
           {resources.map((resource, idx) => {
             const thumbnail = type === 'video' ? getYouTubeThumbnail(resource.url) : null;
             const placeholderIcon = type === 'video'
-              ? <PlayCircle size={22} style={{ color: '#9ca3af' }} />
+              ? <PlayCircle size={22} style={{ color: '#666' }} />
               : type === 'worksheet'
-                ? <FileText size={22} style={{ color: '#9ca3af' }} />
-                : <Zap size={22} style={{ color: '#9ca3af' }} />;
+                ? <FileText size={22} style={{ color: '#666' }} />
+                : <Zap size={22} style={{ color: '#666' }} />;
             const placeholderBg = type === 'video' ? '#E8E6E1' : type === 'worksheet' ? '#E4EEE4' : '#E8E4EE';
 
             return (
@@ -287,9 +287,9 @@ const CourseViewer = ({
                     borderBottom: activeTab === tab.id ? `2px solid ${colors.topicStripe}` : '2px solid transparent',
                     backgroundColor: 'transparent',
                     cursor: 'pointer',
-                    fontSize: '12.7px',
+                    fontSize: '13px',
                     fontWeight: activeTab === tab.id ? '600' : '400',
-                    color: activeTab === tab.id ? colors.topicStripe : colors.textSecondary,
+                    color: activeTab === tab.id ? colors.topicStripe : '#555',
                     transition: 'all 0.15s',
                     whiteSpace: 'nowrap',
                     fontFamily: "'DM Sans', sans-serif"
@@ -307,7 +307,7 @@ const CourseViewer = ({
                 style={{
                   padding: '4px 9px',
                   backgroundColor: '#fff',
-                  color: colors.textSecondary,
+                  color: '#333',
                   border: `1px solid ${colors.topicBorder}`,
                   borderRadius: '5px',
                   cursor: 'pointer',
@@ -331,17 +331,17 @@ const CourseViewer = ({
                 onClick={() => setSelectedTopic(topicBox)}
                 style={{ padding: '13px 16px', cursor: 'pointer' }}
               >
-                <h4 style={{ margin: '0 0 7px', fontSize: '15.4px', fontWeight: '600', color: colors.textPrimary }}>
+                <h4 style={{ margin: '0 0 7px', fontSize: '16px', fontWeight: '600', color: '#111' }}>
                   {topicBox.title}
                 </h4>
 
                 {(topicBox.learning_objectives || []).length > 0 && (
-                  <ul style={{ margin: '0 0 10px', paddingLeft: '18px', fontSize: '13.8px', color: colors.textSecondary, lineHeight: '1.6' }}>
+                  <ul style={{ margin: '0 0 10px', paddingLeft: '18px', fontSize: '14px', color: '#111', lineHeight: '1.6' }}>
                     {topicBox.learning_objectives.slice(0, 3).map((obj, i) => (
                       <li key={i} style={{ marginBottom: '3px' }}>{obj}</li>
                     ))}
                     {topicBox.learning_objectives.length > 3 && (
-                      <li style={{ color: '#9CA3AF', fontStyle: 'italic' }}>
+                      <li style={{ color: '#555', fontStyle: 'italic' }}>
                         +{topicBox.learning_objectives.length - 3} more…
                       </li>
                     )}
@@ -350,16 +350,16 @@ const CourseViewer = ({
 
                 <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                   <span style={{
-                    fontSize: '12.7px', padding: '3px 8px', borderRadius: '4px',
-                    backgroundColor: colors.pillBg, color: colors.textSecondary
+                    fontSize: '13px', padding: '3px 8px', borderRadius: '4px',
+                    backgroundColor: colors.pillBg, color: '#333'
                   }}>
                     🕐 {topicBox.duration_minutes || 0} min
                   </span>
                   {(topicBox.pla_pillars || []).map((pillar, idx) => (
                     <span key={idx} style={{
-                      fontSize: '12.7px', padding: '3px 8px', borderRadius: '4px',
+                      fontSize: '13px', padding: '3px 8px', borderRadius: '4px',
                       backgroundColor: colors.pla[pillar] || colors.pillBg,
-                      color: colors.plaText[pillar] || colors.textSecondary
+                      color: colors.plaText[pillar] || '#333'
                     }}>
                       {pillar}
                     </span>
@@ -441,7 +441,7 @@ const CourseViewer = ({
             </span>
 
             <span style={{
-              fontSize: '17.6px', fontWeight: '500', color: colors.textPrimary,
+              fontSize: '18px', fontWeight: '600', color: '#111',
               flex: 1, letterSpacing: '-0.2px'
             }}>
               {section.title}
@@ -456,7 +456,7 @@ const CourseViewer = ({
             padding: '9px 16px 9px 21px',
             borderBottom: `1px solid ${colors.sectionBorder}`
           }}>
-            <span style={{ fontSize: '13.8px', color: colors.textSecondary }}>
+            <span style={{ fontSize: '14px', color: '#333' }}>
               {section.description}
             </span>
           </div>
@@ -469,7 +469,7 @@ const CourseViewer = ({
               <div style={{
                 textAlign: 'center', padding: '24px 20px',
                 border: '1px dashed #e5e7eb', borderRadius: '8px',
-                backgroundColor: '#fafafa', color: colors.textSecondary, fontSize: '14.3px'
+                backgroundColor: '#fafafa', color: '#444', fontSize: '14px'
               }}>
                 No subsections in this section
               </div>
@@ -523,7 +523,7 @@ const CourseViewer = ({
                           </span>
 
                           <span style={{
-                            fontSize: '14.9px', fontWeight: '600', color: colors.textPrimary, flex: 1
+                            fontSize: '15px', fontWeight: '600', color: '#111', flex: 1
                           }}>
                             {sub.title}
                           </span>
@@ -549,7 +549,7 @@ const CourseViewer = ({
                           padding: '7px 12px 10px 16px',
                           borderBottom: `1px solid ${colors.subsectionBorder}`
                         }}>
-                          <span style={{ fontSize: '13.2px', color: colors.textSecondary }}>
+                          <span style={{ fontSize: '14px', color: '#333' }}>
                             {sub.description}
                           </span>
                         </div>
@@ -616,7 +616,7 @@ const CourseViewer = ({
           </span>
           {ownerName && (
             <span style={{
-              fontSize: '13.2px', color: '#6b7280', backgroundColor: '#f3f4f6',
+              fontSize: '13px', color: '#333', backgroundColor: '#f3f4f6',
               padding: '4px 10px', borderRadius: '12px', fontWeight: '500'
             }}>
               By {ownerName}
@@ -632,7 +632,7 @@ const CourseViewer = ({
                 display: 'flex', alignItems: 'center', gap: '6px',
                 padding: '7px 14px',
                 backgroundColor: '#fff',
-                color: '#374151',
+                color: '#111',
                 border: '1px solid #d1d5db', borderRadius: '6px',
                 cursor: 'pointer',
                 fontSize: '14.3px', fontWeight: '500',
@@ -705,7 +705,7 @@ const CourseViewer = ({
         borderBottom: `1px solid ${colors.sectionBorder}`,
         display: 'flex', gap: '10px', alignItems: 'center', justifyContent: 'center'
       }}>
-        <span style={{ fontSize: '13.2px', color: '#9ca3af' }}>
+        <span style={{ fontSize: '14px', color: '#444' }}>
           {sectionCount} section{sectionCount !== 1 ? 's' : ''} {'\u2022'}{' '}
           {subsectionCount} subsection{subsectionCount !== 1 ? 's' : ''} {'\u2022'}{' '}
           {topicCount} topic box{topicCount !== 1 ? 'es' : ''}

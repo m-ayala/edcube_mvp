@@ -20,7 +20,7 @@ const Home = () => {
         }}>
           Hello, {currentUser?.displayName || 'Teacher'}
         </h1>
-        <p style={{ color: '#888', fontSize: '17.6px' }}>
+        <p style={{ color: '#333', fontSize: '18px' }}>
           Welcome to EdCube. Pick a page from the sidebar to get started.
         </p>
       </div>

@@ -5,7 +5,7 @@ Generates modular teaching boxes and creates final course outlines
 
 import json
 import logging
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from outliner.outline_prompts import get_box_generation_prompt
 from utils.llm_handler import call_openai, validate_json_response
@@ -14,10 +14,10 @@ from utils.llm_handler import call_openai, validate_json_response
 logger = logging.getLogger(__name__)
 
 
-def generate_boxes(teacher_input: Dict) -> Dict:
+def generate_boxes(teacher_input: Dict, images: Optional[List[str]] = None) -> Dict:
     """
     Generate course outline with sections and subsections using LLM.
-    
+
     Args:
         teacher_input: Teacher's requirements containing:
             - grade_level (str)
@@ -26,12 +26,13 @@ def generate_boxes(teacher_input: Dict) -> Dict:
             - duration (str)
             - total_minutes (int)
             - requirements (str)
-    
+        images: Optional list of base64 data URIs for reference images
+
     Returns:
         dict: Outline data from LLM containing:
             - topic, grade_level, subject
             - sections (list of section objects, each with subsections)
-    
+
     Raises:
         ValueError: If response is invalid
     """
@@ -39,17 +40,19 @@ def generate_boxes(teacher_input: Dict) -> Dict:
     logger.info("Generating course outline (sections + subsections)...")
     logger.info(f"Topic: {teacher_input.get('topic', 'Unknown')}")
     logger.info(f"Grade: {teacher_input.get('grade_level', 'Unknown')}")
+    if images:
+        logger.info(f"Reference images provided: {len(images)}")
     logger.info("="*70)
-    
-    prompt = get_box_generation_prompt(teacher_input)
-    
+
+    prompt = get_box_generation_prompt(teacher_input, has_images=bool(images))
+
     system_message = (
         "You are an expert elementary education curriculum designer. "
         "You generate well-structured, pedagogically sound course outlines in JSON format."
     )
-    
+
     logger.info("Calling LLM to generate outline (this may take 30-60 seconds)...")
-    outline_data = call_openai(prompt, system_message)
+    outline_data = call_openai(prompt, system_message, images=images or None)
     
     # Validate the new structure
     _validate_outline_response(outline_data)
@@ -100,15 +103,29 @@ def create_final_outline(outline_data: Dict) -> Dict:
         }
         
         for sub in section.get('subsections', []):
+            sub_id = sub.get('subsection_id', '')
             built_subsection = {
-                "id": sub.get('subsection_id', ''),
+                "id": sub_id,
                 "title": sub.get('title', ''),
                 "description": sub.get('description', ''),
                 "duration_minutes": sub.get('duration_minutes', 0),
                 "pla_pillars": sub.get('pla_pillars', []),
                 "learning_objectives": sub.get('learning_objectives', []),
                 "content_keywords": sub.get('content_keywords', []),
-                "topicBoxes": []
+                # Immediately populate one topic box from the subsection data so
+                # Firestore never starts with empty topicBoxes.
+                "topicBoxes": [{
+                    "id": f"topic-{sub_id}-initial",
+                    "title": sub.get('title', ''),
+                    "description": sub.get('description', ''),
+                    "duration_minutes": sub.get('duration_minutes', 0),
+                    "pla_pillars": sub.get('pla_pillars', []),
+                    "learning_objectives": sub.get('learning_objectives', []),
+                    "content_keywords": sub.get('content_keywords', []),
+                    "video_resources": [],
+                    "worksheets": [],
+                    "activities": []
+                }]
             }
             built_section['subsections'].append(built_subsection)
         
