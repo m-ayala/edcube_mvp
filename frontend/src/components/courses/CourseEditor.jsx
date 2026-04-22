@@ -12,7 +12,8 @@ const EditableField = ({
   style = {},
   inputStyle = {},
   accentColor = '#8B7355',
-  maxLength = null
+  maxLength = null,
+  multiline = false
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [localValue, setLocalValue] = useState(value);
@@ -64,7 +65,7 @@ const EditableField = ({
   };
 
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' && !multiline) {
       handleSave();
     } else if (e.key === 'Escape') {
       setLocalValue(value);
@@ -94,31 +95,78 @@ const EditableField = ({
         ...style
       }}
     >
-      <input
-        ref={inputRef}
-        type="text"
-        value={displayValue}
-        onChange={handleChange}
-        onKeyDown={handleKeyDown}
-        onBlur={handleSave}
-        disabled={!isEditing}
-        placeholder={placeholder}
-        style={{
-          width: hasFlex ? undefined : `${charWidth}ch`,
-          flex: hasFlex ? 1 : undefined,
-          minWidth: '60px',
-          maxWidth: '100%',
-          border: isEditing ? '2px solid #000' : 'none',
-          background: isEditing ? '#fff' : 'transparent',
-          outline: 'none',
-          cursor: isEditing ? 'text' : 'pointer',
-          padding: isEditing ? '6px 10px' : '0',
-          borderRadius: isEditing ? '4px' : '0',
-          transition: 'all 0.15s ease',
-          ...inputStyle
-        }}
-        onClick={!isEditing ? handleEdit : undefined}
-      />
+      {multiline && isEditing ? (
+        <textarea
+          ref={inputRef}
+          value={localValue}
+          onChange={handleChange}
+          onKeyDown={handleKeyDown}
+          onBlur={handleSave}
+          placeholder={placeholder}
+          rows={4}
+          style={{
+            width: '100%',
+            flex: hasFlex ? 1 : undefined,
+            minWidth: '60px',
+            border: '2px solid #000',
+            background: '#fff',
+            outline: 'none',
+            cursor: 'text',
+            padding: '6px 10px',
+            borderRadius: '4px',
+            resize: 'vertical',
+            fontFamily: 'inherit',
+            wordBreak: 'break-word',
+            whiteSpace: 'pre-wrap',
+            ...inputStyle
+          }}
+        />
+      ) : multiline && !isEditing ? (
+        <div
+          onClick={handleEdit}
+          style={{
+            width: hasFlex ? undefined : `${charWidth}ch`,
+            flex: hasFlex ? 1 : undefined,
+            minWidth: '60px',
+            maxWidth: '100%',
+            cursor: 'pointer',
+            padding: '0',
+            wordBreak: 'break-word',
+            whiteSpace: 'pre-wrap',
+            color: value ? undefined : '#9ca3af',
+            fontStyle: value ? 'normal' : 'italic',
+            ...inputStyle
+          }}
+        >
+          {value || placeholder}
+        </div>
+      ) : (
+        <input
+          ref={inputRef}
+          type="text"
+          value={displayValue}
+          onChange={handleChange}
+          onKeyDown={handleKeyDown}
+          onBlur={handleSave}
+          disabled={!isEditing}
+          placeholder={placeholder}
+          style={{
+            width: hasFlex ? undefined : `${charWidth}ch`,
+            flex: hasFlex ? 1 : undefined,
+            minWidth: '60px',
+            maxWidth: '100%',
+            border: isEditing ? '2px solid #000' : 'none',
+            background: isEditing ? '#fff' : 'transparent',
+            outline: 'none',
+            cursor: isEditing ? 'text' : 'pointer',
+            padding: isEditing ? '6px 10px' : '0',
+            borderRadius: isEditing ? '4px' : '0',
+            transition: 'all 0.15s ease',
+            ...inputStyle
+          }}
+          onClick={!isEditing ? handleEdit : undefined}
+        />
+      )}
       <button
         onMouseDown={e => e.preventDefault()}
         onClick={isEditing ? handleSave : handleEdit}
@@ -746,7 +794,8 @@ const CourseEditor = ({
                 onChange={val => actions.updateSectionDescription(section.id, val)}
                 placeholder="Add a description…"
                 accentColor="#666"
-                maxLength={200}
+                maxLength={400}
+                multiline
                 style={{ flex: 1 }}
                 inputStyle={{
                   fontSize: '14px',
@@ -872,7 +921,8 @@ const CourseEditor = ({
                                   onChange={val => actions.updateSubsectionDescription(section.id, sub.id, val)}
                                   placeholder="Add a description…"
                                   accentColor="#555"
-                                  maxLength={200}
+                                  maxLength={400}
+                                  multiline
                                   style={{ flex: 1 }}
                                   inputStyle={{
                                     fontSize: '13.5px',

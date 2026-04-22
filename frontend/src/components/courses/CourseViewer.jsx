@@ -456,7 +456,7 @@ const CourseViewer = ({
             padding: '9px 16px 9px 21px',
             borderBottom: `1px solid ${colors.sectionBorder}`
           }}>
-            <span style={{ fontSize: '14px', color: '#333' }}>
+            <span style={{ fontSize: '14px', color: '#333', display: 'block', wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>
               {section.description}
             </span>
           </div>
@@ -549,7 +549,7 @@ const CourseViewer = ({
                           padding: '7px 12px 10px 16px',
                           borderBottom: `1px solid ${colors.subsectionBorder}`
                         }}>
-                          <span style={{ fontSize: '14px', color: '#333' }}>
+                          <span style={{ fontSize: '14px', color: '#333', display: 'block', wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>
                             {sub.description}
                           </span>
                         </div>

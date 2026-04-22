@@ -66,7 +66,7 @@ CRITICAL SPECIFICITY RULES:
 - Section titles must name the specific aspect of "{topic}" being explored, NOT generic labels like "Introduction", "Core Concepts", "Advanced Topics", or "Review and Assessment"
 - Subsection titles must describe the EXACT learning activity or concept — start with an activity type when possible: "Watch:", "Experiment:", "Visual Models:", "Discussion:", "Practice:", "Read:", "Draw:", "Sort:", "Compare:", etc.
 - The subsection title should tell a teacher EXACTLY what happens during this learning block
-- Subsection descriptions must be 2-3 sentences with CONCRETE details about what students will do and learn — not vague summaries
+- Subsection descriptions must be 2-3 sentences with CONCRETE details about what students will do and learn — not vague summaries. Keep descriptions under 400 characters.
 - Learning objectives must use measurable action verbs (identify, explain, compare, demonstrate, calculate, describe, list, classify) and reference specific content from "{topic}"
 - Content keywords must be precise enough that searching YouTube for "{age_range_start}-{age_range_end} year old [keyword]" would find relevant educational videos
 - what_must_be_covered must detail the SPECIFIC facts, concepts, or skills — as if briefing a substitute teacher
@@ -115,12 +115,12 @@ OUTPUT FORMAT (strict JSON, no other text):
 {{
     "section_id": "section_1",
     "title": "string (specific chapter name tied to {topic})",
-    "description": "string (what this chapter covers with specific subtopics mentioned, 2-3 sentences)",
+    "description": "string (what this chapter covers with specific subtopics mentioned, 2-3 sentences, max 400 characters)",
     "subsections": [
     {{
         "subsection_id": "section_1_sub_1",
         "title": "string (activity-specific title, e.g. 'Watch: How Volcanoes Erupt' or 'Experiment: Building a Baking Soda Volcano')",
-        "description": "string (2-3 sentences with concrete details about what students will DO and LEARN — name specific activities, materials, examples, and vocabulary)",
+        "description": "string (2-3 sentences with concrete details about what students will DO and LEARN — name specific activities, materials, examples, and vocabulary; max 400 characters)",
         "duration_minutes": 0,
         "pla_pillars": ["Self-Knowledge", "Knowledge", "Wisdom", "Application"],
         "learning_objectives": ["string - specific, measurable goals using action verbs and referencing actual content"],
