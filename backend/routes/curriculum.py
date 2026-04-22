@@ -29,16 +29,18 @@ logger = logging.getLogger(__name__)
 
 @router.post("/generate-curriculum")
 async def generate_curriculum(
-    course_name:    str = Form(...),
-    grade_level:    str = Form(...),
-    subject:        str = Form(...),
-    topic:          str = Form(...),
-    time_duration:  str = Form(...),
-    num_worksheets: int = Form(...),
-    num_activities: int = Form(...),
-    objectives:     str = Form(""),
-    teacherUid:     str = Form(...),
-    organizationId: str = Form(...),
+    course_name:     str = Form(...),
+    age_range_start: int = Form(...),
+    age_range_end:   int = Form(...),
+    num_students:    int = Form(...),
+    subject:         str = Form(...),
+    topic:           str = Form(...),
+    time_duration:   str = Form(...),
+    num_worksheets:  int = Form(...),
+    num_activities:  int = Form(...),
+    objectives:      str = Form(""),
+    teacherUid:      str = Form(...),
+    organizationId:  str = Form(...),
     files: List[UploadFile] = File(default=[]),
 ):
     """
@@ -91,13 +93,15 @@ async def generate_curriculum(
 
             outline_data = await orchestrator.run_phase1(
                 {
-                    'grade_level':    grade_level,
-                    'subject':        subject,
-                    'topic':          topic,
-                    'duration':       time_duration,
-                    'num_worksheets': num_worksheets,
-                    'num_activities': num_activities,
-                    'objectives':     full_objectives,
+                    'age_range_start': age_range_start,
+                    'age_range_end':   age_range_end,
+                    'num_students':    num_students,
+                    'subject':         subject,
+                    'topic':           topic,
+                    'duration':        time_duration,
+                    'num_worksheets':  num_worksheets,
+                    'num_activities':  num_activities,
+                    'objectives':      full_objectives,
                 },
                 images=vision_images or None,
             )
@@ -114,13 +118,15 @@ async def generate_curriculum(
             curriculum_id = await firebase.save_curriculum(
                 teacherUid=teacherUid,
                 curriculum_data={
-                    'course_name': course_name,
-                    'grade_level': grade_level,
-                    'subject':     subject,
-                    'topic':       topic,
-                    'duration':    time_duration,
-                    'outline':     outline_data,
-                    'sections':    outline_data.get('sections', []),
+                    'course_name':     course_name,
+                    'age_range_start': age_range_start,
+                    'age_range_end':   age_range_end,
+                    'num_students':    num_students,
+                    'subject':         subject,
+                    'topic':           topic,
+                    'duration':        time_duration,
+                    'outline':         outline_data,
+                    'sections':        outline_data.get('sections', []),
                 },
                 organizationId=organizationId,
             )

@@ -55,12 +55,14 @@ class CurriculumOrchestrator:
 
             # Add total_minutes and requirements fields expected by generate_boxes
             teacher_input_formatted = {
-                'grade_level': teacher_input.get('grade_level'),
-                'subject': teacher_input.get('subject'),
-                'topic': teacher_input.get('topic'),
-                'duration': duration_str,
-                'total_minutes': total_minutes,
-                'requirements': teacher_input.get('objectives', 'None')
+                'age_range_start': teacher_input.get('age_range_start', ''),
+                'age_range_end':   teacher_input.get('age_range_end', ''),
+                'num_students':    teacher_input.get('num_students', ''),
+                'subject':         teacher_input.get('subject'),
+                'topic':           teacher_input.get('topic'),
+                'duration':        duration_str,
+                'total_minutes':   total_minutes,
+                'requirements':    teacher_input.get('objectives', 'None')
             }
 
             # Generate outline (sections + subsections)

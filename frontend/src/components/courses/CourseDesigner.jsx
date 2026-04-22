@@ -37,7 +37,9 @@ const CourseDesigner = () => {
   const fileInputRef = useRef(null);
   const [formData, setFormData] = useState({
     courseName: '',
-    class: '',
+    ageRangeStart: '',
+    ageRangeEnd: '',
+    numStudents: '',
     timeDuration: '',
     timeUnit: 'hours',
     subject: '',
@@ -120,8 +122,10 @@ const CourseDesigner = () => {
     try {
       // Build multipart/form-data so we can send files alongside form fields
       const body = new FormData();
-      body.append('course_name',    formData.courseName);
-      body.append('grade_level',    formData.class);
+      body.append('course_name',      formData.courseName);
+      body.append('age_range_start',  String(parseInt(formData.ageRangeStart)));
+      body.append('age_range_end',    String(parseInt(formData.ageRangeEnd)));
+      body.append('num_students',     String(parseInt(formData.numStudents)));
       body.append('subject',        formData.subject);
       body.append('topic',          formData.topic);
       body.append('time_duration',  `${formData.timeDuration} ${formData.timeUnit}`);
@@ -304,24 +308,60 @@ const CourseDesigner = () => {
             />
           </div>
 
-          {/* Class + Duration */}
+          {/* Student Age Range */}
+          <div style={{ marginBottom: '18px' }}>
+            <label style={labelStyle}>Student Age Range</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{ fontSize: '14px', color: '#4a5568', whiteSpace: 'nowrap' }}>From</span>
+              <select
+                name="ageRangeStart"
+                value={formData.ageRangeStart}
+                onChange={handleChange}
+                required
+                disabled={loading}
+                style={{ ...inputStyle, width: 'auto', paddingRight: '28px' }}
+              >
+                <option value="">–</option>
+                {Array.from({ length: 12 }, (_, i) => i + 4).map(age => (
+                  <option key={age} value={age}>{age}</option>
+                ))}
+              </select>
+              <span style={{ fontSize: '14px', color: '#4a5568', whiteSpace: 'nowrap' }}>to</span>
+              <select
+                name="ageRangeEnd"
+                value={formData.ageRangeEnd}
+                onChange={handleChange}
+                required
+                disabled={loading}
+                style={{ ...inputStyle, width: 'auto', paddingRight: '28px' }}
+              >
+                <option value="">–</option>
+                {Array.from({ length: 12 }, (_, i) => i + 4).map(age => (
+                  <option key={age} value={age}>{age}</option>
+                ))}
+              </select>
+              <span style={{ fontSize: '14px', color: '#4a5568', whiteSpace: 'nowrap' }}>years old</span>
+            </div>
+          </div>
+
+          {/* Number of Students + Duration */}
           <div style={{ display: 'flex', gap: '16px', marginBottom: '18px' }}>
             <div style={{ flex: 1 }}>
-              <label style={labelStyle}>Class / Grade</label>
+              <label style={labelStyle}>
+                Number of Students <span style={{ fontWeight: '400', color: '#a0aec0', fontSize: '13px' }}>(approximate is fine)</span>
+              </label>
               <select
-                name="class"
-                value={formData.class}
+                name="numStudents"
+                value={formData.numStudents}
                 onChange={handleChange}
                 required
                 disabled={loading}
                 style={inputStyle}
               >
-                <option value="">Select Class</option>
-                <option value="Class 1">Class 1</option>
-                <option value="Class 2">Class 2</option>
-                <option value="Class 3">Class 3</option>
-                <option value="Class 4">Class 4</option>
-                <option value="Class 5">Class 5</option>
+                <option value="">Select</option>
+                {Array.from({ length: 40 }, (_, i) => i + 1).map(n => (
+                  <option key={n} value={n}>{n}</option>
+                ))}
               </select>
             </div>
             <div style={{ flex: 1 }}>

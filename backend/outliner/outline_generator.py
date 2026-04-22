@@ -86,8 +86,8 @@ def create_final_outline(outline_data: Dict) -> Dict:
     logger.info("Building final outline from sections/subsections...")
     
     outline = {
-        "course_title": f"{outline_data.get('topic', '')} - {outline_data.get('grade_level', '')}",
-        "grade_level": outline_data.get('grade_level', ''),
+        "course_title": f"{outline_data.get('topic', '')} - {outline_data.get('age_range', '')}",
+        "age_range": outline_data.get('age_range', ''),
         "subject": outline_data.get('subject', ''),
         "topic": outline_data.get('topic', ''),
         "total_duration_minutes": outline_data.get('total_duration_minutes', 0),
@@ -210,7 +210,7 @@ def _validate_outline_response(outline_data: Dict) -> bool:
     Raises:
         ValueError: If validation fails
     """
-    required_top = ['topic', 'grade_level', 'sections']
+    required_top = ['topic', 'age_range', 'sections']
     validate_json_response(outline_data, required_top, "outline response")
     
     if not isinstance(outline_data['sections'], list):

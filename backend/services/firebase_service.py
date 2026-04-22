@@ -49,8 +49,10 @@ class FirebaseService:
                 'teacherUid': teacherUid,
                 'teacherEmail': curriculum_data.get('teacherEmail', ''),
                 'organizationId': organizationId,
-                'courseName': curriculum_data.get('course_name', ''),  # ← Check this
-                'class': curriculum_data.get('grade_level', ''),  # ← Check this
+                'courseName': curriculum_data.get('course_name', ''),
+                'ageRangeStart': curriculum_data.get('age_range_start', ''),
+                'ageRangeEnd': curriculum_data.get('age_range_end', ''),
+                'numStudents': curriculum_data.get('num_students', 0),
                 'subject': curriculum_data.get('subject', ''),
                 'topic': curriculum_data.get('topic', ''),
                 'timeDuration': curriculum_data.get('duration', ''),  # ← FIX: should get 'timeDuration'

@@ -17,7 +17,10 @@ def get_box_generation_prompt(teacher_input: Dict, has_images: bool = False) -> 
     Returns:
         str: Prompt for LLM
     """
-    grade_level = teacher_input['grade_level']
+    age_range_start = teacher_input.get('age_range_start', '')
+    age_range_end = teacher_input.get('age_range_end', '')
+    num_students = teacher_input.get('num_students', '')
+    age_range = f"{age_range_start}–{age_range_end} years old"
     subject = teacher_input['subject']
     topic = teacher_input['topic']
     duration = teacher_input['duration']
@@ -44,7 +47,8 @@ Incorporate all relevant details extracted from the images into the course outli
 You are an expert elementary education curriculum designer. Generate a structured course outline for the following topic. The outline must be organized into SECTIONS (logical chapters) and SUBSECTIONS (individual lessons within each chapter).
 {image_instruction}
 TEACHER INPUT:
-- Grade Level: {grade_level}
+- Student Age Range: {age_range}
+- Number of Students: {num_students}
 - Subject: {subject}
 - Topic: {topic}
 - Available Teaching Time: {duration} ({total_minutes} minutes)
@@ -58,13 +62,13 @@ WHAT SECTIONS AND SUBSECTIONS MEAN:
 - A SUBSECTION is one individual lesson inside that chapter. Each subsection is one teachable unit with its own topic box, resources, and hands-on activities.
 
 CRITICAL SPECIFICITY RULES:
-- ALL titles and descriptions must be SPECIFIC to "{topic}" for Grade {grade_level} — never use generic filler
+- ALL titles and descriptions must be SPECIFIC to "{topic}" for students aged {age_range} — never use generic filler
 - Section titles must name the specific aspect of "{topic}" being explored, NOT generic labels like "Introduction", "Core Concepts", "Advanced Topics", or "Review and Assessment"
 - Subsection titles must describe the EXACT learning activity or concept — start with an activity type when possible: "Watch:", "Experiment:", "Visual Models:", "Discussion:", "Practice:", "Read:", "Draw:", "Sort:", "Compare:", etc.
 - The subsection title should tell a teacher EXACTLY what happens during this learning block
 - Subsection descriptions must be 2-3 sentences with CONCRETE details about what students will do and learn — not vague summaries
 - Learning objectives must use measurable action verbs (identify, explain, compare, demonstrate, calculate, describe, list, classify) and reference specific content from "{topic}"
-- Content keywords must be precise enough that searching YouTube for "Grade {grade_level} [keyword]" would find relevant educational videos
+- Content keywords must be precise enough that searching YouTube for "{age_range_start}-{age_range_end} year old [keyword]" would find relevant educational videos
 - what_must_be_covered must detail the SPECIFIC facts, concepts, or skills — as if briefing a substitute teacher
 
 BAD EXAMPLES (too generic — DO NOT do this):
@@ -73,7 +77,7 @@ BAD EXAMPLES (too generic — DO NOT do this):
 - Learning objective: "Students will understand the topic" / "Students will learn key concepts"
 - Content keyword: "introduction" / "basics" / "review"
 
-GOOD EXAMPLES (for topic "The Water Cycle", Grade 3):
+GOOD EXAMPLES (for topic "The Water Cycle", ages 8–9):
 - Section: "Where Does Rain Come From? — Understanding Evaporation and Condensation"
 - Subsection: "Watch: How the Sun Turns Puddles Into Water Vapor" (10 min)
   Description: "Students watch a short video showing how heat from the sun causes water to change from liquid to invisible gas. Real-life examples include puddles drying up on a sunny day and wet clothes drying on a clothesline. Introduces vocabulary: evaporation, water vapor, heat energy."
@@ -82,7 +86,7 @@ GOOD EXAMPLES (for topic "The Water Cycle", Grade 3):
 - Learning objective: "Students will explain how heat from the sun causes water to evaporate from lakes, rivers, and oceans"
 - Content keywords: ["water cycle evaporation", "sun heats water", "water vapor for kids", "evaporation experiment grade 3"]
 
-GOOD EXAMPLES (for topic "Fractions", Grade 5):
+GOOD EXAMPLES (for topic "Fractions", ages 10–11):
 - Section: "What Are Fractions? — Dividing Wholes into Equal Parts"
 - Subsection: "Visual Models: Using Fraction Bars to Show 1/2, 1/3, and 1/4" (10 min)
   Description: "Students use fraction bar manipulatives to see how wholes divide into equal parts, comparing the size of 1/2, 1/3, and 1/4 pieces side by side. Teaches numerator (parts taken) and denominator (total equal parts)."
@@ -104,7 +108,7 @@ DESIGN RULES:
 OUTPUT FORMAT (strict JSON, no other text):
 {{
 "topic": "{topic}",
-"grade_level": "{grade_level}",
+"age_range": "{age_range}",
 "subject": "{subject}",
 "teacher_time_budget_minutes": {total_minutes},
 "sections": [
@@ -120,7 +124,7 @@ OUTPUT FORMAT (strict JSON, no other text):
         "duration_minutes": 0,
         "pla_pillars": ["Self-Knowledge", "Knowledge", "Wisdom", "Application"],
         "learning_objectives": ["string - specific, measurable goals using action verbs and referencing actual content"],
-        "content_keywords": ["string - precise terms for finding Grade {grade_level} YouTube videos and worksheets"],
+        "content_keywords": ["string - precise terms for finding YouTube videos and worksheets appropriate for ages {age_range_start}–{age_range_end}"],
         "what_must_be_covered": "string - detailed content brief as if instructing a substitute teacher: specific facts, vocabulary, examples, and activities"
     }}
     ]
@@ -130,7 +134,7 @@ OUTPUT FORMAT (strict JSON, no other text):
 
 IMPORTANT:
 - Be VERY specific in learning_objectives, content_keywords, and what_must_be_covered. These are used by an automated system to find real YouTube videos and worksheets — vague or generic keywords will find irrelevant resources and ruin the course.
-- Use age-appropriate language for grade {grade_level}
+- All content must be age-appropriate for students aged {age_range_start}–{age_range_end} years old. Calibrate vocabulary, examples, and complexity accordingly.
 - Worksheets and activities are NOT generated here — leave them out entirely
 - Address teacher's requirements: {requirements}
 

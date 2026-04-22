@@ -198,6 +198,7 @@ const CourseViewPage = () => {
   const [videosByTopic,    setVideosByTopic]    = useState({});
   const [handsOnResources, setHandsOnResources] = useState({});
   const [downloading, setDownloading] = useState(false);
+  const [activeView, setActiveView] = useState('outline');
   const docRef = useRef(null);
   const courseName = formData?.courseName || '';
 
@@ -326,14 +327,95 @@ const CourseViewPage = () => {
         </div>
       </div>
 
+      {/* ── Tab bar ──────────────────────────────────────────────────────── */}
+      <div style={{
+        position: 'sticky', top: '58px', zIndex: 8,
+        background: 'rgba(255,255,255,0.85)',
+        backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
+        borderBottom: '1px solid rgba(0,0,0,0.06)',
+        padding: '0 32px',
+        display: 'flex', gap: '0',
+      }}>
+        {[
+          { id: 'outline',     label: 'Course Outline' },
+          { id: 'course-info', label: 'Course Info' },
+        ].map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveView(tab.id)}
+            style={{
+              fontFamily: SANS, fontSize: '13px', fontWeight: activeView === tab.id ? '600' : '400',
+              padding: '12px 18px',
+              background: 'transparent', border: 'none',
+              borderBottom: activeView === tab.id ? '2px solid #111' : '2px solid transparent',
+              color: activeView === tab.id ? '#111' : '#888',
+              cursor: 'pointer', transition: 'color 0.15s',
+              marginBottom: '-1px',
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       {/* ── Document body ─────────────────────────────────────────────────── */}
       <div style={{ maxWidth: '740px', margin: '0 auto', padding: '40px 24px 100px' }}>
+
+      {/* ── Course Info view ─────────────────────────────────────────────── */}
+      {activeView === 'course-info' && (
+        <div style={{ background: '#fff', borderRadius: '16px', padding: '48px', boxShadow: '0 2px 16px rgba(0,0,0,0.07)', border: '1px solid rgba(0,0,0,0.05)' }}>
+          <h2 style={{ fontFamily: SERIF, fontSize: '28px', color: '#111', letterSpacing: '-0.4px', margin: '0 0 32px' }}>
+            Course Details
+          </h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {[
+              { label: 'Course Name',        value: formData?.courseName },
+              { label: 'Subject',            value: formData?.subject },
+              { label: 'Topic',              value: formData?.topic },
+              {
+                label: 'Student Age Range',
+                value: formData?.ageRangeStart && formData?.ageRangeEnd
+                  ? `${formData.ageRangeStart}–${formData.ageRangeEnd} years old`
+                  : null
+              },
+              {
+                label: 'Number of Students',
+                value: formData?.numStudents ? String(formData.numStudents) : null
+              },
+              {
+                label: 'Time Duration',
+                value: formData?.timeDuration
+                  ? `${formData.timeDuration}${formData?.timeUnit ? ' ' + formData.timeUnit : ''}`
+                  : null
+              },
+              { label: 'Objectives / Notes', value: formData?.objectives, multiline: true },
+            ].filter(row => row.value).map(row => (
+              <div key={row.label} style={{ display: 'flex', gap: '24px', paddingBottom: '20px', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+                <div style={{ width: '160px', flexShrink: 0, fontSize: '12px', fontWeight: '600', letterSpacing: '0.6px', textTransform: 'uppercase', color: '#999', paddingTop: '2px', fontFamily: SANS }}>
+                  {row.label}
+                </div>
+                <div style={{ flex: 1, fontSize: '15px', color: '#111', fontFamily: SANS, lineHeight: row.multiline ? '1.7' : '1.4', whiteSpace: row.multiline ? 'pre-wrap' : 'normal' }}>
+                  {row.value}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Outline view ─────────────────────────────────────────────────── */}
+      {activeView === 'outline' && (
       <div ref={docRef} style={{ background: '#fff', borderRadius: '16px', padding: '48px 48px 64px', boxShadow: '0 2px 16px rgba(0,0,0,0.07)', border: '1px solid rgba(0,0,0,0.05)' }}>
 
         {/* Eyebrow */}
-        {(formData?.subject || formData?.class) && (
+        {(formData?.subject || (formData?.ageRangeStart && formData?.ageRangeEnd)) && (
           <div style={{ fontSize: '11.5px', fontWeight: '500', letterSpacing: '0.8px', textTransform: 'uppercase', color: '#999', marginBottom: '10px', fontFamily: SANS }}>
-            {[formData?.subject, formData?.class].filter(Boolean).join(' · ')}
+            {[
+              formData?.subject,
+              formData?.ageRangeStart && formData?.ageRangeEnd
+                ? `Ages ${formData.ageRangeStart}–${formData.ageRangeEnd}`
+                : null
+            ].filter(Boolean).join(' · ')}
           </div>
         )}
 
@@ -425,6 +507,8 @@ const CourseViewPage = () => {
           );
         })}
       </div>
+      )}
+
       </div>
     </div>
   );
