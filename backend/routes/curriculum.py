@@ -565,57 +565,80 @@ class EdoChatRequest(BaseModel):
 async def chat_with_edo(request: EdoChatRequest):
     """Edo AI curriculum assistant — returns 2-3 structured suggestion blocks"""
     try:
-        course_ctx = ""
+        # --- Static block: Edo identity, rules, and stable course info ---
+        # Built first so it can be cached by OpenAI prefix caching (≥1024 tokens, identical prefix)
+        static_course_info = ""
+        dynamic_ctx = ""
+
         if request.context:
             course = request.context.get("course", {})
             selected = request.context.get("selected_item", {})
             structure = request.context.get("course_structure", [])
 
-            # Course-level info
-            grade = course.get("grade", "")
+            # Age range
+            age_start = course.get("age_range_start", "")
+            age_end = course.get("age_range_end", "")
+            if age_start and age_end:
+                age_range = f"{age_start}–{age_end} years old"
+            elif age_start:
+                age_range = f"{age_start}+ years old"
+            else:
+                age_range = "unknown age"
+
+            num_students = course.get("num_students", "")
             subject = course.get("subject", "")
             topic = course.get("topic", "")
             duration = course.get("duration", "")
-            grade_str = f"Grade {grade}" if grade else "unknown grade"
+
             subject_str = f" | Subject: {subject}" if subject else ""
             topic_str = f" | Topic: {topic}" if topic else ""
             duration_str = f" | Duration: {duration}" if duration else ""
-            course_ctx = f'Course: "{course.get("title", "Untitled")}" ({grade_str}{subject_str}{topic_str}{duration_str})\n'
-            if course.get("description"):
-                course_ctx += f'Course objectives: {course["description"]}\n'
+            students_str = f" | Class size: {num_students}" if num_students else ""
 
-            # Full course structure overview
+            static_course_info = (
+                f'Course: "{course.get("title", "Untitled")}"'
+                f' (Ages: {age_range}{subject_str}{topic_str}{duration_str}{students_str})\n'
+            )
+            if course.get("description"):
+                static_course_info += f'Course objectives: {course["description"]}\n'
+
+            # --- Dynamic block: full structure + focused item (changes every message) ---
             if structure:
-                course_ctx += '\nFull course structure:\n'
+                dynamic_ctx += 'Full course structure:\n'
                 for i, sec in enumerate(structure, 1):
                     subsecs = sec.get("subsections", [])
-                    course_ctx += f'  Section {i}: {sec["title"]}'
+                    dynamic_ctx += f'  Section {i}: {sec["title"]}'
                     if subsecs:
                         sub_names = [ss["title"] for ss in subsecs]
-                        course_ctx += f' → {", ".join(sub_names)}'
-                    course_ctx += '\n'
+                        dynamic_ctx += f' → {", ".join(sub_names)}'
+                    dynamic_ctx += '\n'
 
-            # Currently focused item
             item_type = selected.get("type", "course")
-            course_ctx += f'\nCurrently focused on ({item_type}): "{selected.get("title", "")}"\n'
+            dynamic_ctx += f'\nCurrently focused on ({item_type}): "{selected.get("title", "")}"\n'
             if selected.get("parent_section"):
-                course_ctx += f'Parent section: {selected["parent_section"]}\n'
+                dynamic_ctx += f'Parent section: {selected["parent_section"]}\n'
             if selected.get("parent_subsection"):
-                course_ctx += f'Parent subsection: {selected["parent_subsection"]}\n'
+                dynamic_ctx += f'Parent subsection: {selected["parent_subsection"]}\n'
             if selected.get("description"):
-                course_ctx += f'Description: {selected["description"]}\n'
+                dynamic_ctx += f'Description: {selected["description"]}\n'
             if selected.get("subsections"):
-                course_ctx += f'Subsections: {", ".join(selected["subsections"])}\n'
+                dynamic_ctx += f'Subsections: {", ".join(selected["subsections"])}\n'
             if selected.get("topic_boxes"):
-                course_ctx += f'Topic boxes: {", ".join(selected["topic_boxes"])}\n'
+                dynamic_ctx += f'Topic boxes: {", ".join(selected["topic_boxes"])}\n'
             if selected.get("learning_objectives"):
-                course_ctx += f'Learning objectives: {"; ".join(selected["learning_objectives"])}\n'
+                dynamic_ctx += f'Learning objectives: {"; ".join(selected["learning_objectives"])}\n'
             if selected.get("pla_pillars"):
-                course_ctx += f'PLA pillars: {", ".join(selected["pla_pillars"])}\n'
+                dynamic_ctx += f'PLA pillars: {", ".join(selected["pla_pillars"])}\n'
 
-        system_prompt = f"""You are Edo, an expert curriculum design assistant inside EdCube. You think like an experienced K-12 curriculum designer — you understand scope, sequencing, and what makes learning actually stick.
+        static_prompt = f"""You are Edo, an expert curriculum design assistant inside EdCube. You think like an experienced K-12 curriculum designer — you understand scope, sequencing, and what makes learning actually stick.
 
 Your job is to help teachers build well-structured, specific, PLA-aligned curriculum by suggesting high-quality sections, subsections, and topic boxes.
+
+CONTEXT: This is curriculum for a summer camp or afterschool program. Teachers need to balance substantive learning with fun and engagement.
+
+AGE-APPROPRIATE OUTPUT: Student age is the most important factor. Always calibrate vocabulary, examples, activity complexity, and all generated content to be appropriate for the students in this course. Use judgment — simpler concrete language for younger students, more precise terminology for older ones.
+
+ACTIVITY TYPES: When suggesting activities, start from these types and pick the best fit for the topic: Quiz, Discussion, Game, Experiment, Hands-on Building, Teamwork. Then suggest the specific activity within that type.
 
 ---
 
@@ -689,10 +712,11 @@ Videos and worksheets are generated by separate buttons — if asked, direct the
 
 ---
 
-Current course context:
-{course_ctx}
-
+Course info:
+{static_course_info}
 Respond ONLY with valid JSON. No markdown, no preamble."""
+
+        system_prompt = static_prompt + "\n\n---\n\nCurrent course context:\n" + dynamic_ctx
 
         messages = [{"role": "system", "content": system_prompt}]
         for msg in (request.conversation_history or []):

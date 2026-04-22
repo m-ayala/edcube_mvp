@@ -297,7 +297,9 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
   const buildAPIContext = () => {
     const course = {
       title: courseName || '',
-      grade: formData?.class || '',
+      age_range_start: formData?.ageRangeStart || '',
+      age_range_end: formData?.ageRangeEnd || '',
+      num_students: formData?.numStudents || '',
       subject: formData?.subject || '',
       topic: formData?.topic || '',
       duration: formData?.timeDuration || '',
