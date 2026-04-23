@@ -50,6 +50,7 @@ const CourseWorkspace = () => {
   const [showShareModal, setShowShareModal] = useState(false);
   const [isEdoOpen, setIsEdoOpen] = useState(false);
   const [trayItems, setTrayItems] = useState([]);
+  const [activeTopicContext, setActiveTopicContext] = useState(null);
 
   // ── Initialize Actions Hook ───────────────────────────────────────────
   const actions = useCourseActions({
@@ -543,6 +544,7 @@ const CourseWorkspace = () => {
                 onShare={() => setShowShareModal(true)}
                 isEdoOpen={isEdoOpen}
                 onToggleEdo={() => setIsEdoOpen(p => !p)}
+                onTopicDetailOpen={(ctx) => { setActiveTopicContext(ctx); if (ctx) setIsEdoOpen(true); }}
               />
             </div>
 
@@ -557,6 +559,9 @@ const CourseWorkspace = () => {
                 onClose={() => { setIsEdoOpen(false); setTrayItems([]); }}
                 trayItems={trayItems}
                 setTrayItems={setTrayItems}
+                videosByTopic={videosByTopic}
+                handsOnResources={handsOnResources}
+                activeTopicContext={activeTopicContext}
               />
             )}
           </DragDropContext>

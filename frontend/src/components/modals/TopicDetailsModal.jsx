@@ -1,6 +1,6 @@
 // src/components/modals/TopicDetailsModal.jsx
 import { useState } from 'react';
-import { X, Check, Trash2, Plus, Sparkles, ExternalLink } from 'lucide-react';
+import { Check, Trash2, Plus, ExternalLink } from 'lucide-react';
 import AddResourceModal from './AddResourceModal';
 
 const TopicDetailsModal = ({
@@ -103,14 +103,6 @@ const TopicDetailsModal = ({
     }
   };
 
-  const handleGenerateVideos = () => {
-    if (actions?.generateVideosFromBackend) actions.generateVideosFromBackend(topic);
-  };
-
-  const handleGenerateResource = (type) => {
-    if (actions?.generateResource) actions.generateResource(topic.id, type);
-  };
-
   /* ── Small reusable components ── */
 
   const Pill = ({ label, color }) => (
@@ -127,16 +119,6 @@ const TopicDetailsModal = ({
     </span>
   );
 
-  const Spinner = () => (
-    <div style={{
-      width: '12px', height: '12px',
-      border: '2px solid rgba(255,255,255,0.4)',
-      borderTopColor: '#fff',
-      borderRadius: '50%',
-      animation: 'tdm-spin 0.7s linear infinite',
-      flexShrink: 0
-    }} />
-  );
 
   /* ── Block card for content / worksheet / activity ── */
   const BlockCard = ({ item, actualIdx, resourceType, stripeColor }) => {
@@ -272,7 +254,7 @@ const TopicDetailsModal = ({
   );
 
   /* ── Section header ── */
-  const SectionHeader = ({ icon, title, subtitle, onAdd, onGenerate, isGenerating }) => (
+  const SectionHeader = ({ icon, title, subtitle, onAdd }) => (
     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '14px' }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
         <div style={{
@@ -291,22 +273,12 @@ const TopicDetailsModal = ({
         </div>
       </div>
       {!readOnly && (
-        <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
-          <button
-            onClick={onAdd}
-            style={{ padding: '6px 12px', backgroundColor: 'transparent', color: colors.accent, border: `1px solid ${colors.border}`, borderRadius: '6px', cursor: 'pointer', fontSize: '13.2px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px', fontFamily: 'inherit' }}
-          >
-            <Plus size={14} /> Add block
-          </button>
-          <button
-            onClick={onGenerate}
-            disabled={isGenerating}
-            style={{ padding: '6px 12px', backgroundColor: colors.accent, color: '#fff', border: 'none', borderRadius: '6px', cursor: isGenerating ? 'not-allowed' : 'pointer', fontSize: '13.2px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px', opacity: isGenerating ? 0.7 : 1, fontFamily: 'inherit' }}
-          >
-            {isGenerating ? <Spinner /> : <Sparkles size={14} />}
-            {isGenerating ? 'Generating…' : 'AI'}
-          </button>
-        </div>
+        <button
+          onClick={onAdd}
+          style={{ padding: '6px 12px', backgroundColor: 'transparent', color: colors.accent, border: `1px solid ${colors.border}`, borderRadius: '6px', cursor: 'pointer', fontSize: '13.2px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px', fontFamily: 'inherit', flexShrink: 0 }}
+        >
+          <Plus size={14} /> Add block
+        </button>
       )}
     </div>
   );
@@ -347,15 +319,15 @@ const TopicDetailsModal = ({
 
   return (
     <>
-      <style>{`@keyframes tdm-spin { to { transform: rotate(360deg); } }`}</style>
-      <div
-        style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}
-        onClick={handleClose}
-      >
-        <div
-          style={{ backgroundColor: 'white', borderRadius: '16px', padding: '32px', maxWidth: '900px', width: '100%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}
-          onClick={(e) => e.stopPropagation()}
-        >
+      <div style={{ height: '100%', overflowY: 'auto', backgroundColor: colors.bg, padding: '32px 36px 80px' }}>
+          {/* ── Back nav ── */}
+          <button
+            onClick={handleClose}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'none', border: 'none', cursor: 'pointer', padding: '0 0 20px', fontSize: '13.8px', fontWeight: '600', color: colors.textSecondary, fontFamily: 'inherit' }}
+          >
+            ← Back to course
+          </button>
+
           {/* ── Header ── */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '28px' }}>
             <div style={{ flex: 1 }}>
@@ -382,9 +354,6 @@ const TopicDetailsModal = ({
                 <h2 style={{ margin: 0, fontSize: '28.6px', fontWeight: '700', color: colors.textPrimary }}>{editedTopic.title}</h2>
               )}
             </div>
-            <button onClick={handleClose} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
-              <X size={28} style={{ color: colors.textSecondary }} />
-            </button>
           </div>
 
           {/* ── Description ── */}
@@ -494,10 +463,7 @@ const TopicDetailsModal = ({
               icon="📹"
               title="CONTENT"
               subtitle="How to deliver the content — teaching approach, videos, readings, demonstrations"
-              generatingKey={`videos-${topic.id}`}
               onAdd={() => setResourceModal({ type: 'video', mode: 'add' })}
-              onGenerate={handleGenerateVideos}
-              isGenerating={!!actions?.generatingStates?.[`videos-${topic.id}`]}
             />
 
             {/* YouTube / AI-generated video cards */}
@@ -536,8 +502,6 @@ const TopicDetailsModal = ({
               title="WORKSHEET"
               subtitle="What to include, how to structure it, differentiation ideas, and any reference materials"
               onAdd={() => setResourceModal({ type: 'worksheet', mode: 'add' })}
-              onGenerate={() => handleGenerateResource('worksheet')}
-              isGenerating={!!actions?.generatingStates?.[`worksheet-${topic.id}`]}
             />
 
             {worksheets.length === 0 ? (
@@ -570,8 +534,6 @@ const TopicDetailsModal = ({
               title="ACTIVITY"
               subtitle="How to run it — setup, grouping, step-by-step facilitation, timing, debrief prompts"
               onAdd={() => setResourceModal({ type: 'activity', mode: 'add' })}
-              onGenerate={() => handleGenerateResource('activity')}
-              isGenerating={!!actions?.generatingStates?.[`activity-${topic.id}`]}
             />
 
             {activities.length === 0 ? (
@@ -598,16 +560,8 @@ const TopicDetailsModal = ({
           </div>
 
           {/* ── Footer ── */}
-          <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', paddingTop: '20px', borderTop: `1px solid ${colors.border}` }}>
-            <button
-              onClick={handleClose}
-              style={{ padding: '10px 24px', backgroundColor: '#f3f4f6', color: colors.textPrimary, border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '15.4px', fontWeight: '600', fontFamily: 'inherit' }}
-              onMouseEnter={(e) => e.target.style.backgroundColor = '#e5e7eb'}
-              onMouseLeave={(e) => e.target.style.backgroundColor = '#f3f4f6'}
-            >
-              Close
-            </button>
-            {isEditing && (
+          {isEditing && (
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', paddingTop: '20px', borderTop: `1px solid ${colors.border}` }}>
               <button
                 onClick={handleSave}
                 style={{ padding: '10px 24px', backgroundColor: '#16a34a', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '15.4px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px', fontFamily: 'inherit' }}
@@ -616,9 +570,8 @@ const TopicDetailsModal = ({
               >
                 <Check size={16} /> Save Changes
               </button>
-            )}
-          </div>
-        </div>
+            </div>
+          )}
       </div>
 
       <AddResourceModal

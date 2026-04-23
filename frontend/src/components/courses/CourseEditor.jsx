@@ -223,6 +223,7 @@ const CourseEditor = ({
   onShare,
   isEdoOpen,
   onToggleEdo,
+  onTopicDetailOpen,
 }) => {
   const [selectedTopicForDetail, setSelectedTopicForDetail] = useState(null);
   const [hoveredTopic, setHoveredTopic] = useState(null);
@@ -273,11 +274,13 @@ const CourseEditor = ({
   // ── Topic Detail Modal Handler ────────────────────────────────────────
   const handleTopicBoxClick = (topicBox, sectionId, subsectionId) => {
     setSelectedTopicForDetail({ topicBox, sectionId, subsectionId });
+    onTopicDetailOpen?.({ type: 'topic', id: topicBox.id, title: topicBox.title, sectionId, subsectionId });
   };
 
   const handleSaveTopicDetail = (updateData) => {
     actions.updateTopicBoxFull(updateData);
     setSelectedTopicForDetail(null);
+    onTopicDetailOpen?.(null);
   };
 
   // ── Inline Components ─────────────────────────────────────────────────
@@ -1253,39 +1256,42 @@ const CourseEditor = ({
         </span>
       </div>
 
-      {/* Main content */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '24px 28px 80px', position: 'relative', zIndex: 1 }}>
-        {sections.length === 0 ? (
-          <div style={{
-            textAlign: 'center', padding: '80px 20px',
-            border: '1px solid rgba(0,0,0,0.08)', borderRadius: '16px',
-            background: '#FFFFFF'
-          }}>
-            <p style={{ fontSize: '30.8px', marginBottom: '8px' }}>📚</p>
-            <p style={{ fontSize: '22px', color: colors.textPrimary, fontWeight: '600', margin: '0 0 4px' }}>No sections yet</p>
-            <p style={{ fontSize: '14.3px', color: colors.textSecondary, margin: 0 }}>Click "+ Section" above to start building your course</p>
-          </div>
-        ) : (
-          <Droppable droppableId="all-sections" type="SECTION">
+      {/* Main content — topic detail panel OR course sections */}
+      {selectedTopicForDetail ? (
+        <TopicDetailsModal
+          topic={selectedTopicForDetail.topicBox}
+          sectionId={selectedTopicForDetail.sectionId}
+          subsectionId={selectedTopicForDetail.subsectionId}
+          onClose={() => { setSelectedTopicForDetail(null); onTopicDetailOpen?.(null); }}
+          onSave={handleSaveTopicDetail}
+          actions={actions}
+          videosByTopic={videosByTopic}
+          handsOnResources={handsOnResources}
+          currentUser={currentUser}
+        />
+      ) : (
+        <div style={{ flex: 1, overflowY: 'auto', padding: '24px 28px 80px', position: 'relative', zIndex: 1 }}>
+          {sections.length === 0 ? (
+            <div style={{
+              textAlign: 'center', padding: '80px 20px',
+              border: '1px solid rgba(0,0,0,0.08)', borderRadius: '16px',
+              background: '#FFFFFF'
+            }}>
+              <p style={{ fontSize: '30.8px', marginBottom: '8px' }}>📚</p>
+              <p style={{ fontSize: '22px', color: colors.textPrimary, fontWeight: '600', margin: '0 0 4px' }}>No sections yet</p>
+              <p style={{ fontSize: '14.3px', color: colors.textSecondary, margin: 0 }}>Click "+ Section" above to start building your course</p>
+            </div>
+          ) : (
+            <Droppable droppableId="all-sections" type="SECTION">
               {(provided) => (
-                <div
-                  ref={provided.innerRef}
-                  {...provided.droppableProps}
-                >
+                <div ref={provided.innerRef} {...provided.droppableProps}>
                   {sections.map((section, idx) => (
-                    <Draggable
-                      key={section.id}
-                      draggableId={section.id}
-                      index={idx}
-                    >
+                    <Draggable key={section.id} draggableId={section.id} index={idx}>
                       {(provided, snapshot) => (
                         <div
                           ref={provided.innerRef}
                           {...provided.draggableProps}
-                          style={{
-            ...provided.draggableProps.style,
-                            opacity: snapshot.isDragging ? 0.8 : 1
-                          }}
+                          style={{ ...provided.draggableProps.style, opacity: snapshot.isDragging ? 0.8 : 1 }}
                         >
                           {renderSectionBlock(section, idx, provided.dragHandleProps)}
                         </div>
@@ -1296,8 +1302,9 @@ const CourseEditor = ({
                 </div>
               )}
             </Droppable>
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
       {/* Modals */}
       <ConfirmDialog
@@ -1307,20 +1314,6 @@ const CourseEditor = ({
         title={actions.deleteConfirm?.title || ''}
         message={actions.deleteConfirm?.message || ''}
       />
-
-      {selectedTopicForDetail && (
-        <TopicDetailsModal
-          topic={selectedTopicForDetail.topicBox}
-          sectionId={selectedTopicForDetail.sectionId}
-          subsectionId={selectedTopicForDetail.subsectionId}
-          onClose={() => setSelectedTopicForDetail(null)}
-          onSave={handleSaveTopicDetail}
-          actions={actions}
-          videosByTopic={videosByTopic}
-          handsOnResources={handsOnResources}
-          currentUser={currentUser}
-        />
-      )}
 
     </>
   );

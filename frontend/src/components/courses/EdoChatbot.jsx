@@ -69,8 +69,9 @@ const QUICK_CHIPS = {
     { label: 'Add a subsection', action: 'add-subsection', isGenerate: true },
     { label: 'Add a topic box', action: 'add-topic', isGenerate: true },
     { label: 'Find video resources', action: 'find-videos', isGenerate: true },
-    { label: 'Generate activity', action: 'gen-activity', isGenerate: true },
-    { label: 'Generate worksheet', action: 'gen-worksheet', isGenerate: true },
+    { label: 'Suggest a content block', action: 'suggest-content', isGenerate: true },
+    { label: 'Suggest a worksheet', action: 'suggest-worksheet', isGenerate: true },
+    { label: 'Suggest an activity', action: 'suggest-activity', isGenerate: true },
   ],
 };
 
@@ -244,7 +245,7 @@ const TRAY_DROPPABLE = {
   TOPICBOX: 'edo-tray-topics',
 };
 
-const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onClose, trayItems = [], setTrayItems }) => {
+const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onClose, trayItems = [], setTrayItems, videosByTopic = {}, handsOnResources = {}, activeTopicContext = null }) => {
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [selectedContext, setSelectedContext] = useState(null);
@@ -271,6 +272,15 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
   useEffect(() => {
     setTimeout(() => inputRef.current?.focus(), 120);
   }, []);
+
+  // Sync selected context when teacher opens a topic detail panel
+  useEffect(() => {
+    if (!activeTopicContext) return;
+    setSelectedContext(activeTopicContext);
+    addTextMessage('ai-text',
+      `Now viewing **${activeTopicContext.title}**. Use the chips below to suggest a content block, worksheet, or activity — or just describe what you need.`
+    );
+  }, [activeTopicContext]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const addTextMessage = (kind, text) =>
     setMessages(prev => [...prev, { id: `${Date.now()}-${Math.random()}`, kind, text }]);
@@ -356,6 +366,10 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
           description: foundTopic?.description || '',
           learning_objectives: foundTopic?.learning_objectives || [],
           pla_pillars: foundTopic?.pla_pillars || [],
+          existing_resources: [
+            ...(videosByTopic[selectedContext.id] || []).map(v => ({ type: 'video', title: v.title })),
+            ...(handsOnResources[selectedContext.id] || []).map(r => ({ type: r.type, title: r.title })),
+          ],
         };
       }
     }
@@ -529,6 +543,22 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
           updatedData: { ...topic, learning_objectives: objectives },
         });
       }
+    } else if (['new_resource_content', 'new_resource_worksheet', 'new_resource_activity'].includes(card.apply_field)) {
+      if (ctx?.type !== 'topic') {
+        addTextMessage('ai-text', 'Please select a topic box first, then click Apply again.');
+        return;
+      }
+      const resourceType = card.apply_field === 'new_resource_content' ? 'video'
+        : card.apply_field === 'new_resource_worksheet' ? 'worksheet'
+        : 'activity';
+      actions.addManualResource(ctx.id, resourceType, {
+        title: card.label,
+        notes: card.body,
+        url: '',
+      });
+      markApplied(messageId, cardIndex);
+      addTextMessage('ai-text', `Added ${resourceType} block "${card.label}" to "${ctx.title}". ✓`);
+      return;
     }
 
     markApplied(messageId, cardIndex);
@@ -661,7 +691,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
         setIsTyping(false);
       }
 
-    } else if (chip.action === 'find-videos' || chip.action === 'gen-activity' || chip.action === 'gen-worksheet') {
+    } else if (chip.action === 'find-videos') {
       if (!selectedContext || selectedContext.type !== 'topic') {
         addTextMessage('ai-text', 'Please select a topic box from the Structure menu first!');
         return;
@@ -679,34 +709,34 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
       }
       addTextMessage('user', chip.label);
       setIsTyping(true);
-
-      if (chip.action === 'find-videos') {
-        const result = await actions.generateVideosFromBackend(foundTopic);
-        setIsTyping(false);
-        if (result?.success) {
-          addTextMessage('ai-text', `Done! Found ${result.count} video${result.count !== 1 ? 's' : ''} for "${foundTopic.title}". Open the topic box and check the Resources tab to see them.`);
-        } else {
-          addTextMessage('ai-text', `I wasn't able to find videos for "${foundTopic.title}" right now. (Error: ${result?.error || 'unknown'})`);
-        }
-
-      } else if (chip.action === 'gen-activity') {
-        const result = await actions.generateResource(foundTopic.id, 'activity');
-        setIsTyping(false);
-        if (result?.success) {
-          addTextMessage('ai-text', `Done! Generated an activity${result.title ? ` — "${result.title}"` : ''} for "${foundTopic.title}". Open the topic box and check the Resources tab.`);
-        } else {
-          addTextMessage('ai-text', `I wasn't able to generate an activity for "${foundTopic.title}" right now. (Error: ${result?.error || 'unknown'})`);
-        }
-
-      } else if (chip.action === 'gen-worksheet') {
-        const result = await actions.generateResource(foundTopic.id, 'worksheet');
-        setIsTyping(false);
-        if (result?.success) {
-          addTextMessage('ai-text', `Done! Generated a worksheet${result.title ? ` — "${result.title}"` : ''} for "${foundTopic.title}". Open the topic box and check the Resources tab.`);
-        } else {
-          addTextMessage('ai-text', `I wasn't able to generate a worksheet for "${foundTopic.title}" right now. (Error: ${result?.error || 'unknown'})`);
-        }
+      const result = await actions.generateVideosFromBackend(foundTopic);
+      setIsTyping(false);
+      if (result?.success) {
+        addTextMessage('ai-text', `Done! Found ${result.count} video${result.count !== 1 ? 's' : ''} for "${foundTopic.title}". Open the topic box and check the Resources tab to see them.`);
+      } else {
+        addTextMessage('ai-text', `I wasn't able to find videos for "${foundTopic.title}" right now. (Error: ${result?.error || 'unknown'})`);
       }
+
+    } else if (chip.action === 'suggest-content') {
+      if (!selectedContext || selectedContext.type !== 'topic') {
+        addTextMessage('ai-text', 'Please select a topic box from the Structure menu first!');
+        return;
+      }
+      await sendMessage('Suggest a content block for this topic');
+
+    } else if (chip.action === 'suggest-worksheet') {
+      if (!selectedContext || selectedContext.type !== 'topic') {
+        addTextMessage('ai-text', 'Please select a topic box from the Structure menu first!');
+        return;
+      }
+      await sendMessage('Suggest a worksheet for this topic');
+
+    } else if (chip.action === 'suggest-activity') {
+      if (!selectedContext || selectedContext.type !== 'topic') {
+        addTextMessage('ai-text', 'Please select a topic box from the Structure menu first!');
+        return;
+      }
+      await sendMessage('Suggest an activity for this topic');
 
     } else {
       addTextMessage('user', chip.label);
