@@ -1,7 +1,7 @@
 // src/components/courses/EdoChatbot.jsx
 import { useState, useRef, useEffect } from 'react';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
-import { X, Send, ChevronDown, Check, Copy, Minus, GripVertical } from 'lucide-react';
+import { X, Send, Check, Copy, Minus, GripVertical } from 'lucide-react';
 import { chatWithEdo } from '../../utils/curriculumApi';
 
 const EDO_GREEN = '#2C5F3A';
@@ -42,46 +42,17 @@ const renderFormattedText = (text) => {
   return elements;
 };
 
-const QUICK_CHIPS = {
-  course: [
-    { label: 'Add a section', action: 'add-section', isGenerate: true },
-    { label: 'Add a subsection', action: 'add-subsection', isGenerate: true },
-    { label: 'Add a topic box', action: 'add-topic', isGenerate: true },
-    { label: 'Improve course structure', action: 'chat' },
-    { label: 'Review objectives', action: 'chat' },
-  ],
-  section: [
-    { label: 'Add a section', action: 'add-section', isGenerate: true },
-    { label: 'Add subsection', action: 'add-subsection', isGenerate: true },
-    { label: 'Add a topic box', action: 'add-topic', isGenerate: true },
-    { label: 'Rewrite description', action: 'chat' },
-    { label: 'Improve structure', action: 'chat' },
-  ],
-  subsection: [
-    { label: 'Add a section', action: 'add-section', isGenerate: true },
-    { label: 'Add a subsection', action: 'add-subsection', isGenerate: true },
-    { label: 'Add a topic box', action: 'add-topic', isGenerate: true },
-    { label: 'Rewrite description', action: 'chat' },
-    { label: 'Suggest activities', action: 'chat' },
-  ],
-  topic: [
-    { label: 'Add a section', action: 'add-section', isGenerate: true },
-    { label: 'Add a subsection', action: 'add-subsection', isGenerate: true },
-    { label: 'Add a topic box', action: 'add-topic', isGenerate: true },
-    { label: 'Find video resources', action: 'find-videos', isGenerate: true },
-    { label: 'Suggest a content block', action: 'suggest-content', isGenerate: true },
-    { label: 'Suggest a worksheet', action: 'suggest-worksheet', isGenerate: true },
-    { label: 'Suggest an activity', action: 'suggest-activity', isGenerate: true },
-  ],
-};
 
 // ── Suggestion Card ────────────────────────────────────────────────────────
-// apply_field values that create new items (go to tray) vs edit existing ones (use Apply)
+// apply_field values that go to the tray (drag-and-drop or one-click apply)
 const ADD_TRAY_TYPE = {
   new_section: 'SECTION',
   new_subsection: 'SUBSECTION',
   new_topic: 'TOPICBOX',
   topic_full: 'TOPICBOX',
+  new_resource_content: 'CONTENT',
+  new_resource_worksheet: 'WORKSHEET',
+  new_resource_activity: 'ACTIVITY',
 };
 
 const SuggestionCard = ({ card, index, onApply, onApplyBlocked, applied, selectedContext, onAddToTray }) => {
@@ -249,7 +220,6 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [selectedContext, setSelectedContext] = useState(null);
-  const [isTreeOpen, setIsTreeOpen] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const messagesEndRef = useRef(null);
@@ -261,7 +231,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
     setMessages([{
       id: 'welcome',
       kind: 'ai-text',
-      text: `Hi! I'm Edo 👋 I'm here to help you design "${name}". Pick any part of your course from the structure menu, or ask me anything — I'll give you a few options to choose from.`,
+      text: `Hi! I'm Edo 👋 I'm here to help you design "${name}". Ask me anything about your course — I'll give you a few options to choose from.`,
     }]);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -277,9 +247,6 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
   useEffect(() => {
     if (!activeTopicContext) return;
     setSelectedContext(activeTopicContext);
-    addTextMessage('ai-text',
-      `Now viewing **${activeTopicContext.title}**. Use the chips below to suggest a content block, worksheet, or activity — or just describe what you need.`
-    );
   }, [activeTopicContext]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const addTextMessage = (kind, text) =>
@@ -407,10 +374,10 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
         const hasNewTopic = data.suggestions.some(c => c.apply_field === 'new_topic');
         const hasNewSubsection = data.suggestions.some(c => c.apply_field === 'new_subsection');
         if (hasNewTopic && !['subsection', 'topic'].includes(selectedContext?.type)) {
-          const hint = '👆 To enable the "Add Topic Box" buttons above, select a Subsection from the Structure menu.';
+          const hint = '👆 To enable the "Add Topic Box" buttons, open a subsection in the course editor first.';
           conclusion = conclusion ? `${conclusion}\n\n${hint}` : hint;
         } else if (hasNewSubsection && !['section', 'subsection', 'topic'].includes(selectedContext?.type)) {
-          const hint = '👆 To enable the "Add Subsection" buttons above, select a Section from the Structure menu.';
+          const hint = '👆 To enable the "Add Subsection" buttons, open a section in the course editor first.';
           conclusion = conclusion ? `${conclusion}\n\n${hint}` : hint;
         }
         addCardsMessage(data.suggestions, data.intro, conclusion, selectedContext);
@@ -460,7 +427,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
     }
 
     if (!ctx) {
-      addTextMessage('ai-text', 'Please select a section or subsection from the Structure menu, then click Apply again.');
+      addTextMessage('ai-text', 'Please open a section or subsection in the course editor first, then click Apply again.');
       return;
     }
 
@@ -544,20 +511,8 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
         });
       }
     } else if (['new_resource_content', 'new_resource_worksheet', 'new_resource_activity'].includes(card.apply_field)) {
-      if (ctx?.type !== 'topic') {
-        addTextMessage('ai-text', 'Please select a topic box first, then click Apply again.');
-        return;
-      }
-      const resourceType = card.apply_field === 'new_resource_content' ? 'video'
-        : card.apply_field === 'new_resource_worksheet' ? 'worksheet'
-        : 'activity';
-      actions.addManualResource(ctx.id, resourceType, {
-        title: card.label,
-        notes: card.body,
-        url: '',
-      });
-      markApplied(messageId, cardIndex);
-      addTextMessage('ai-text', `Added ${resourceType} block "${card.label}" to "${ctx.title}". ✓`);
+      // Resource blocks go through the tray — this path is not reachable from the UI
+      // but kept as a fallback in case applyCard is called programmatically.
       return;
     }
 
@@ -570,13 +525,13 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
     if (!card.apply_field) {
       msg = "This suggestion is informational — use the Copy button to grab the text and paste it wherever you need it.";
     } else if (card.apply_field === 'topic_full') {
-      msg = "To apply this, first select a Topic Box from the Structure menu above, then click Apply.";
+      msg = "To apply this, open a topic box first — then click Apply.";
     } else if (card.apply_field === 'new_subsection') {
-      msg = "To add a subsection, first select a Section, Subsection, or Topic from the Structure menu above, then click Apply.";
+      msg = "To add a subsection, open a topic box or subsection first — then click Apply.";
     } else if (card.apply_field === 'new_topic') {
-      msg = "To add a topic box, first select a Subsection or Topic from the Structure menu above, then click Apply.";
+      msg = "To add a topic box, open a subsection or topic first — then click Apply.";
     } else {
-      msg = "To apply this, first select a section, subsection, or topic from the Structure menu above — then click Apply on this card.";
+      msg = "To apply this, open the relevant section, subsection, or topic — then click Apply on this card.";
     }
     addTextMessage('ai-text', msg);
   };
@@ -595,169 +550,120 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
     setTrayItems(prev => [...prev, { id, type, data }]);
   };
 
-  // ── Generate chip handlers ─────────────────────────────────────────────
-  const handleChipClick = async (chip) => {
+  // ── Generate outline item handlers (Section / Subsection / Topic Box) ──
+  const handleGenerateSection = async () => {
     if (isTyping) return;
-
-    if (chip.action === 'add-section') {
-      addTextMessage('user', chip.label);
-      setIsTyping(true);
-      try {
-        const result = await actions.generateSectionsForTray({
-          level: 'sections',
-          context: {
-            course: { title: courseName, description: formData?.objectives || '', grade: formData?.class || '' },
-            existing_sections: sections.filter(s => s.type !== 'break').map(s => ({ title: s.title, description: s.description || '' })),
-          },
-          count: 1,
-        });
-        if (result?.success === false) throw new Error(result.error);
-        result.items.forEach(item => addToTray('SECTION', item));
-        addTextMessage('ai-text', `Generated ${result.items.length} section${result.items.length !== 1 ? 's' : ''}! Drag it from the tray below into your course wherever you want.`);
-      } catch {
-        addTextMessage('ai-text', 'I had trouble generating a section. Please try again.');
-      } finally {
-        setIsTyping(false);
-      }
-
-    } else if (chip.action === 'add-subsection') {
-      addTextMessage('user', chip.label);
-      setIsTyping(true);
-      const sec = selectedContext?.type === 'section' ? sections.find(s => s.id === selectedContext.id) : null;
-      try {
-        const result = await actions.generateSubsectionsForTray({
-          level: 'subsections',
-          context: {
-            course: { title: courseName, description: formData?.objectives || '', grade: formData?.class || '' },
-            ...(sec ? {
-              current_section: {
-                title: sec.title, description: sec.description || '',
-                existingSubsections: (sec.subsections || []).map(s => ({ title: s.title, description: s.description })),
-              },
-            } : {}),
-            all_section_names: sections.filter(s => s.type !== 'break').map(s => s.title),
-            all_sections: sections.filter(s => s.type !== 'break').map(s => ({
-              title: s.title, description: s.description,
-              subsections: (s.subsections || []).map(ss => ss.title),
-            })),
-          },
-          count: 1,
-        });
-        if (result?.success === false) throw new Error(result.error);
-        result.items.forEach(item => addToTray('SUBSECTION', item));
-        addTextMessage('ai-text', `Generated ${result.items.length} subsection${result.items.length !== 1 ? 's' : ''}! Drag it from the tray into any section in your course.`);
-      } catch {
-        addTextMessage('ai-text', 'I had trouble generating a subsection. Please try again.');
-      } finally {
-        setIsTyping(false);
-      }
-
-    } else if (chip.action === 'add-topic') {
-      addTextMessage('user', chip.label);
-      setIsTyping(true);
-      const parentSecId = selectedContext?.sectionId || (selectedContext?.type === 'section' ? selectedContext.id : null);
-      const subsectionId = selectedContext?.type === 'subsection' ? selectedContext.id
-        : selectedContext?.type === 'topic' ? selectedContext.subsectionId : null;
-      const parentSec = sections.find(s => s.id === parentSecId);
-      const parentSub = parentSec?.subsections?.find(ss => ss.id === subsectionId);
-      try {
-        const result = await actions.generateTopicBoxesForTray({
-          level: 'topics',
-          context: {
-            course: { title: courseName, grade: formData?.class || '', description: formData?.objectives || '' },
-            all_sections: sections.filter(s => s.type !== 'break').map(s => ({
-              title: s.title, description: s.description,
-              subsections: (s.subsections || []).map(ss => ({
-                title: ss.title, description: ss.description,
-                existingTopics: (ss.topicBoxes || []).map(t => t.title),
-              })),
-            })),
-            ...(parentSec ? { current_section: { title: parentSec.title, description: parentSec.description || '' } } : {}),
-            ...(parentSub ? {
-              subsection: {
-                title: parentSub.title, description: parentSub.description || '',
-                existingTopics: (parentSub.topicBoxes || []).map(t => ({ title: t.title, description: t.description })),
-              },
-            } : {}),
-          },
-          count: 1,
-        });
-        if (result?.success === false) throw new Error(result.error);
-        result.items.forEach(item => addToTray('TOPICBOX', item));
-        addTextMessage('ai-text', `Generated ${result.items.length} topic box${result.items.length !== 1 ? 'es' : ''}! Drag it from the tray into any subsection.`);
-      } catch (err) {
-        addTextMessage('ai-text', `I had trouble generating the topic box. ${err?.message || 'Please try again.'}`);
-      } finally {
-        setIsTyping(false);
-      }
-
-    } else if (chip.action === 'find-videos') {
-      if (!selectedContext || selectedContext.type !== 'topic') {
-        addTextMessage('ai-text', 'Please select a topic box from the Structure menu first!');
-        return;
-      }
-      let foundTopic = null;
-      outer: for (const s of sections) {
-        for (const ss of (s.subsections || [])) {
-          const t = (ss.topicBoxes || []).find(t => t.id === selectedContext.id);
-          if (t) { foundTopic = t; break outer; }
-        }
-      }
-      if (!foundTopic) {
-        addTextMessage('ai-text', "I couldn't find that topic. Try selecting it again from the Structure menu.");
-        return;
-      }
-      addTextMessage('user', chip.label);
-      setIsTyping(true);
-      const result = await actions.generateVideosFromBackend(foundTopic);
+    addTextMessage('user', 'Generate a new section');
+    setIsTyping(true);
+    try {
+      const result = await actions.generateSectionsForTray({
+        level: 'sections',
+        context: {
+          course: { title: courseName, description: formData?.objectives || '', grade: formData?.class || '' },
+          existing_sections: sections.filter(s => s.type !== 'break').map(s => ({ title: s.title, description: s.description || '' })),
+        },
+        count: 1,
+      });
+      if (result?.success === false) throw new Error(result.error);
+      result.items.forEach(item => addToTray('SECTION', item));
+      addTextMessage('ai-text', `Generated ${result.items.length} section${result.items.length !== 1 ? 's' : ''}! Drag it from the tray below into your course wherever you want.`);
+    } catch {
+      addTextMessage('ai-text', 'I had trouble generating a section. Please try again.');
+    } finally {
       setIsTyping(false);
-      if (result?.success) {
-        addTextMessage('ai-text', `Done! Found ${result.count} video${result.count !== 1 ? 's' : ''} for "${foundTopic.title}". Open the topic box and check the Resources tab to see them.`);
-      } else {
-        addTextMessage('ai-text', `I wasn't able to find videos for "${foundTopic.title}" right now. (Error: ${result?.error || 'unknown'})`);
-      }
-
-    } else if (chip.action === 'suggest-content') {
-      if (!selectedContext || selectedContext.type !== 'topic') {
-        addTextMessage('ai-text', 'Please select a topic box from the Structure menu first!');
-        return;
-      }
-      await sendMessage('Suggest a content block for this topic');
-
-    } else if (chip.action === 'suggest-worksheet') {
-      if (!selectedContext || selectedContext.type !== 'topic') {
-        addTextMessage('ai-text', 'Please select a topic box from the Structure menu first!');
-        return;
-      }
-      await sendMessage('Suggest a worksheet for this topic');
-
-    } else if (chip.action === 'suggest-activity') {
-      if (!selectedContext || selectedContext.type !== 'topic') {
-        addTextMessage('ai-text', 'Please select a topic box from the Structure menu first!');
-        return;
-      }
-      await sendMessage('Suggest an activity for this topic');
-
-    } else {
-      addTextMessage('user', chip.label);
-      await sendToAI(chip.label);
     }
   };
 
-  const handleContextSelect = (ctx) => {
-    setSelectedContext(ctx);
-    setIsTreeOpen(false);
-    const name = ctx?.title || courseName;
-    const type = ctx?.type || 'course';
-    if (type === 'topic') {
-      addTextMessage('ai-text', `Focused on topic box: "${name}". I can help you with:\n• Description — what this topic covers\n• Learning objectives — what students will be able to do\n• Videos — use the ✨ Find video resources chip\n• Activities — use the ✨ Generate activity chip\n• Worksheets — use the ✨ Generate worksheet chip\n\nWhat would you like to work on?`);
-    } else {
-      addTextMessage('ai-text', `Focused on ${type}: "${name}". What would you like help with?`);
+  const handleGenerateSubsection = async () => {
+    if (isTyping) return;
+    addTextMessage('user', 'Generate a new subsection');
+    setIsTyping(true);
+    const sec = selectedContext?.type === 'section' ? sections.find(s => s.id === selectedContext.id) : null;
+    try {
+      const result = await actions.generateSubsectionsForTray({
+        level: 'subsections',
+        context: {
+          course: { title: courseName, description: formData?.objectives || '', grade: formData?.class || '' },
+          ...(sec ? {
+            current_section: {
+              title: sec.title, description: sec.description || '',
+              existingSubsections: (sec.subsections || []).map(s => ({ title: s.title, description: s.description })),
+            },
+          } : {}),
+          all_section_names: sections.filter(s => s.type !== 'break').map(s => s.title),
+          all_sections: sections.filter(s => s.type !== 'break').map(s => ({
+            title: s.title, description: s.description,
+            subsections: (s.subsections || []).map(ss => ss.title),
+          })),
+        },
+        count: 1,
+      });
+      if (result?.success === false) throw new Error(result.error);
+      result.items.forEach(item => addToTray('SUBSECTION', item));
+      addTextMessage('ai-text', `Generated ${result.items.length} subsection${result.items.length !== 1 ? 's' : ''}! Drag it from the tray into any section in your course.`);
+    } catch {
+      addTextMessage('ai-text', 'I had trouble generating a subsection. Please try again.');
+    } finally {
+      setIsTyping(false);
     }
   };
 
-  const chips = QUICK_CHIPS[selectedContext?.type || 'course'];
-  const regularSections = sections.filter(s => s.type !== 'break');
+  const handleGenerateTopicBox = async () => {
+    if (isTyping) return;
+    addTextMessage('user', 'Generate a new topic box');
+    setIsTyping(true);
+    const parentSecId = selectedContext?.sectionId || (selectedContext?.type === 'section' ? selectedContext.id : null);
+    const subsectionId = selectedContext?.type === 'subsection' ? selectedContext.id
+      : selectedContext?.type === 'topic' ? selectedContext.subsectionId : null;
+    const parentSec = sections.find(s => s.id === parentSecId);
+    const parentSub = parentSec?.subsections?.find(ss => ss.id === subsectionId);
+    try {
+      const result = await actions.generateTopicBoxesForTray({
+        level: 'topics',
+        context: {
+          course: { title: courseName, grade: formData?.class || '', description: formData?.objectives || '' },
+          all_sections: sections.filter(s => s.type !== 'break').map(s => ({
+            title: s.title, description: s.description,
+            subsections: (s.subsections || []).map(ss => ({
+              title: ss.title, description: ss.description,
+              existingTopics: (ss.topicBoxes || []).map(t => t.title),
+            })),
+          })),
+          ...(parentSec ? { current_section: { title: parentSec.title, description: parentSec.description || '' } } : {}),
+          ...(parentSub ? {
+            subsection: {
+              title: parentSub.title, description: parentSub.description || '',
+              existingTopics: (parentSub.topicBoxes || []).map(t => ({ title: t.title, description: t.description })),
+            },
+          } : {}),
+        },
+        count: 1,
+      });
+      if (result?.success === false) throw new Error(result.error);
+      result.items.forEach(item => addToTray('TOPICBOX', item));
+      addTextMessage('ai-text', `Generated ${result.items.length} topic box${result.items.length !== 1 ? 'es' : ''}! Drag it from the tray into any subsection.`);
+    } catch (err) {
+      addTextMessage('ai-text', `I had trouble generating the topic box. ${err?.message || 'Please try again.'}`);
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
+  // ── Generate resource block handlers (Content / Worksheet / Activity) ──
+  const handleGenerateResource = async (resourceType) => {
+    if (isTyping) return;
+    if (!selectedContext || selectedContext.type !== 'topic') {
+      addTextMessage('ai-text', 'Please open a topic box in the course editor first to use these buttons.');
+      return;
+    }
+    const prompts = {
+      content: 'Suggest a content block for this topic',
+      worksheet: 'Suggest a worksheet for this topic',
+      activity: 'Suggest an activity for this topic',
+    };
+    await sendMessage(prompts[resourceType]);
+  };
+
 
   // ── Render ─────────────────────────────────────────────────────────────
 
@@ -870,8 +776,8 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
         padding: '7px 11px',
         backgroundColor: '#F5F3EE',
         borderBottom: '1px solid #E7E5E4',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        flexShrink: 0, gap: '8px', position: 'relative',
+        display: 'flex', alignItems: 'center',
+        flexShrink: 0,
       }}>
         <span style={{
           fontSize: '12.7px', color: '#78716C', fontFamily: "'DM Sans', sans-serif",
@@ -880,102 +786,6 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
           {getContextDot()}{' '}
           <span style={{ color: '#1C1917', fontWeight: '600' }}>{getContextLabel()}</span>
         </span>
-        <button
-          onClick={() => setIsTreeOpen(p => !p)}
-          style={{
-            padding: '3px 8px', backgroundColor: 'white',
-            border: '1px solid #E7E5E4', borderRadius: '5px', cursor: 'pointer',
-            fontSize: '12.1px', fontWeight: '600', color: '#78716C',
-            display: 'flex', alignItems: 'center', gap: '3px',
-            flexShrink: 0, fontFamily: "'DM Sans', sans-serif",
-          }}
-        >
-          Structure <ChevronDown size={11} />
-        </button>
-
-        {/* Tree dropdown */}
-        {isTreeOpen && (
-          <>
-            <div onClick={() => setIsTreeOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 1 }} />
-            <div style={{
-              position: 'absolute', top: '100%', right: 0,
-              backgroundColor: 'white', border: '1px solid #E7E5E4', borderRadius: '8px',
-              boxShadow: '0 4px 18px rgba(0,0,0,0.13)',
-              zIndex: 2, width: '260px', maxHeight: '300px', overflowY: 'auto', marginTop: '4px',
-            }}>
-              <button
-                onClick={() => handleContextSelect(null)}
-                style={{
-                  width: '100%', textAlign: 'left', padding: '9px 12px', border: 'none',
-                  backgroundColor: !selectedContext ? '#F0FDF4' : 'transparent',
-                  cursor: 'pointer', fontSize: '13.2px', fontWeight: '600', color: '#1C1917',
-                  display: 'flex', alignItems: 'center', gap: '7px',
-                  fontFamily: "'DM Sans', sans-serif", borderBottom: '1px solid #F5F5F4',
-                }}
-              >
-                <span>📚</span> {courseName || 'Whole Course'}
-              </button>
-
-              {regularSections.map((sec, sIdx) => (
-                <div key={sec.id}>
-                  <button
-                    onClick={() => handleContextSelect({ type: 'section', id: sec.id, title: sec.title })}
-                    style={{
-                      width: '100%', textAlign: 'left', padding: '7px 12px', border: 'none',
-                      backgroundColor: selectedContext?.id === sec.id && selectedContext?.type === 'section' ? '#F0FDF4' : 'transparent',
-                      cursor: 'pointer', fontSize: '13.2px', fontWeight: '600', color: '#1C1917',
-                      display: 'flex', alignItems: 'center', gap: '7px', fontFamily: "'DM Sans', sans-serif",
-                    }}
-                  >
-                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#52A67A', flexShrink: 0 }} />
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {sIdx + 1}. {sec.title}
-                    </span>
-                  </button>
-
-                  {(sec.subsections || []).map((sub, subIdx) => (
-                    <div key={sub.id}>
-                      <button
-                        onClick={() => handleContextSelect({ type: 'subsection', id: sub.id, title: sub.title, sectionId: sec.id })}
-                        style={{
-                          width: '100%', textAlign: 'left', padding: '6px 12px 6px 28px', border: 'none',
-                          backgroundColor: selectedContext?.id === sub.id && selectedContext?.type === 'subsection' ? '#EFF6FF' : 'transparent',
-                          cursor: 'pointer', fontSize: '12.7px', fontWeight: '500', color: '#44403C',
-                          display: 'flex', alignItems: 'center', gap: '6px', fontFamily: "'DM Sans', sans-serif",
-                        }}
-                      >
-                        <span style={{ width: '3px', height: '14px', backgroundColor: '#5B8FBD', borderRadius: '2px', flexShrink: 0 }} />
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {sIdx + 1}.{subIdx + 1} {sub.title}
-                        </span>
-                      </button>
-
-                      {(sub.topicBoxes || []).map(topic => (
-                        <button
-                          key={topic.id}
-                          onClick={() => handleContextSelect({ type: 'topic', id: topic.id, title: topic.title, subsectionId: sub.id, sectionId: sec.id })}
-                          style={{
-                            width: '100%', textAlign: 'left', padding: '5px 12px 5px 44px', border: 'none',
-                            backgroundColor: selectedContext?.id === topic.id && selectedContext?.type === 'topic' ? '#FEF9EE' : 'transparent',
-                            cursor: 'pointer', fontSize: '12.1px', fontWeight: '400', color: '#57534E',
-                            display: 'flex', alignItems: 'center', gap: '6px', fontFamily: "'DM Sans', sans-serif",
-                          }}
-                        >
-                          <span style={{ width: '6px', height: '6px', backgroundColor: '#C2547A', borderRadius: '1px', flexShrink: 0 }} />
-                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{topic.title}</span>
-                        </button>
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              ))}
-
-              {regularSections.length === 0 && (
-                <div style={{ padding: '12px', fontSize: '13.2px', color: '#9CA3AF', textAlign: 'center' }}>No sections yet</div>
-              )}
-            </div>
-          </>
-        )}
       </div>
 
       {/* Message thread */}
@@ -1056,25 +866,35 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
                       onApply={(c, i) => applyCard(msg.id, c, i, msg.generatedContext)}
                       onApplyBlocked={handleApplyBlocked}
                       onAddToTray={(c, type) => {
-                        const isTopicFull = c.apply_field === 'topic_full';
-                        const data = type === 'SECTION'
-                          ? { id: `section-${Date.now()}`, title: c.label, description: c.body, subsections: [] }
-                          : type === 'SUBSECTION'
-                          ? { id: `sub-${Date.now()}`, title: c.label, description: c.body, topicBoxes: [] }
-                          : {
-                              id: `topic-${Date.now()}`,
-                              title: c.label,
-                              description: isTopicFull ? (c.body.split(/\n\n?Objectives?:?\n/i)[0] || c.body).trim() : c.body,
-                              duration_minutes: 20,
-                              pla_pillars: [],
-                              learning_objectives: isTopicFull && c.body.includes('bjective')
-                                ? c.body.split(/\n\n?Objectives?:?\n/i)[1]?.split('\n').map(s => s.replace(/^[-•*\d.]\s*/, '').trim()).filter(Boolean) || []
-                                : [],
-                              content_keywords: [],
-                              video_resources: [],
-                              worksheets: [],
-                              activities: [],
-                            };
+                        let data;
+                        if (type === 'SECTION') {
+                          data = { id: `section-${Date.now()}`, title: c.label, description: c.body, subsections: [] };
+                        } else if (type === 'SUBSECTION') {
+                          data = { id: `sub-${Date.now()}`, title: c.label, description: c.body, topicBoxes: [] };
+                        } else if (type === 'CONTENT') {
+                          data = { id: `content-${Date.now()}`, information: c.body, links: [] };
+                        } else if (type === 'WORKSHEET') {
+                          data = { id: `ws-${Date.now()}`, title: c.label, notes: c.body, worksheetType: '', contentKeywords: '', links: [] };
+                        } else if (type === 'ACTIVITY') {
+                          data = { id: `act-${Date.now()}`, title: c.label, instructions: c.body, activityType: '', links: [] };
+                        } else {
+                          // TOPICBOX
+                          const isTopicFull = c.apply_field === 'topic_full';
+                          data = {
+                            id: `topic-${Date.now()}`,
+                            title: c.label,
+                            description: isTopicFull ? (c.body.split(/\n\n?Objectives?:?\n/i)[0] || c.body).trim() : c.body,
+                            duration_minutes: 20,
+                            pla_pillars: [],
+                            learning_objectives: isTopicFull && c.body.includes('bjective')
+                              ? c.body.split(/\n\n?Objectives?:?\n/i)[1]?.split('\n').map(s => s.replace(/^[-•*\d.]\s*/, '').trim()).filter(Boolean) || []
+                              : [],
+                            content_keywords: [],
+                            video_resources: [],
+                            worksheets: [],
+                            activities: [],
+                          };
+                        }
                         addToTray(type, data);
                         markApplied(msg.id, idx);
                       }}
@@ -1333,69 +1153,188 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
               </Droppable>
             </div>
           )}
+
+          {/* Resource blocks group (CONTENT / WORKSHEET / ACTIVITY) */}
+          {trayItems.some(i => ['CONTENT', 'WORKSHEET', 'ACTIVITY'].includes(i.type)) && (
+            <div style={{ padding: '0 10px 8px' }}>
+              <div style={{ fontSize: '9px', fontWeight: '700', color: '#6B6760', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px', fontFamily: "'DM Sans', sans-serif" }}>
+                Resource Blocks — click to add to current topic
+              </div>
+              {trayItems.filter(i => ['CONTENT', 'WORKSHEET', 'ACTIVITY'].includes(i.type)).map(item => {
+                const meta = {
+                  CONTENT:   { label: 'Content',   color: '#6B8FE8', bg: '#EAF0FF', border: '#BFD0F8', resourceType: 'content' },
+                  WORKSHEET: { label: 'Worksheet',  color: '#C47A1A', bg: '#FFF3E8', border: '#F5C98A', resourceType: 'worksheet' },
+                  ACTIVITY:  { label: 'Activity',   color: '#1E7C43', bg: '#EDFFF3', border: '#86EFAC', resourceType: 'activity' },
+                }[item.type];
+                const displayTitle = item.data.title || (item.data.information ? item.data.information.slice(0, 50) + (item.data.information.length > 50 ? '…' : '') : 'Untitled');
+                const canAddToTopic = selectedContext?.type === 'topic';
+                return (
+                  <div
+                    key={item.id}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '8px',
+                      padding: '7px 10px',
+                      backgroundColor: 'white',
+                      border: `1.5px solid ${meta.border}`,
+                      borderLeft: `4px solid ${meta.color}`,
+                      borderRadius: '8px',
+                      marginBottom: '5px',
+                    }}
+                  >
+                    <span style={{ padding: '2px 7px', backgroundColor: meta.bg, color: meta.color, borderRadius: '10px', fontSize: '10.5px', fontWeight: '700', flexShrink: 0, fontFamily: "'DM Sans', sans-serif" }}>
+                      {meta.label}
+                    </span>
+                    <span style={{ flex: 1, fontSize: '12.7px', color: '#1C1917', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: "'DM Sans', sans-serif" }}>
+                      {displayTitle}
+                    </span>
+                    {canAddToTopic ? (
+                      <button
+                        onClick={() => {
+                          actions.addManualResource(selectedContext.id, meta.resourceType, item.data);
+                          setTrayItems(prev => prev.filter(i => i.id !== item.id));
+                          addTextMessage('ai-text', `Added ${meta.label.toLowerCase()} block to "${selectedContext.title}". ✓`);
+                        }}
+                        style={{ padding: '3px 9px', backgroundColor: meta.bg, border: `1px solid ${meta.border}`, borderRadius: '5px', cursor: 'pointer', fontSize: '12.1px', fontWeight: '700', color: meta.color, whiteSpace: 'nowrap', flexShrink: 0, fontFamily: "'DM Sans', sans-serif" }}
+                      >
+                        + Add to Topic
+                      </button>
+                    ) : (
+                      <span style={{ fontSize: '11px', color: '#9CA3AF', flexShrink: 0, fontFamily: "'DM Sans', sans-serif", fontStyle: 'italic' }}>
+                        select a topic ↑
+                      </span>
+                    )}
+                    <button
+                      onClick={() => setTrayItems(prev => prev.filter(i => i.id !== item.id))}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: 0, lineHeight: 1, fontSize: '14px', flexShrink: 0 }}
+                    >×</button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
-      {/* Quick chips */}
-      <div style={{
-        padding: '6px 10px', borderTop: '1px solid #F3F4F6',
-        display: 'flex', gap: '5px', overflowX: 'auto', flexShrink: 0,
-        scrollbarWidth: 'none',
-      }}>
-        {chips.map(chip => (
-          <button
-            key={chip.label}
-            onClick={() => handleChipClick(chip)}
-            disabled={isTyping}
-            style={{
-              padding: '4px 10px',
-              backgroundColor: chip.isGenerate ? '#DCFCE7' : 'white',
-              border: `1px solid ${chip.isGenerate ? '#86EFAC' : '#E7E5E4'}`,
-              borderRadius: '20px', cursor: isTyping ? 'not-allowed' : 'pointer',
-              fontSize: '12.7px', fontWeight: '500',
-              color: chip.isGenerate ? '#166534' : '#44403C',
-              whiteSpace: 'nowrap', flexShrink: 0,
-              fontFamily: "'DM Sans', sans-serif",
-              opacity: isTyping ? 0.55 : 1, transition: 'all 0.15s',
-            }}
-          >
-            {chip.isGenerate && <span style={{ marginRight: '3px' }}>✨</span>}
-            {chip.label}
-          </button>
-        ))}
-      </div>
+
+      {/* Bottom action buttons — context-aware generate actions */}
+      {activeTopicContext ? (
+        /* Topic detail view: generate Content / Worksheet / Activity */
+        <div style={{
+          padding: '7px 10px', borderTop: '1px solid #E7E5E4',
+          display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px',
+          flexShrink: 0, backgroundColor: '#FAFAF8',
+        }}>
+          {[
+            { label: '+ Content', color: '#6B8FE8', bg: '#EAF0FF', border: '#BFD0F8', fn: () => handleGenerateResource('content') },
+            { label: '+ Worksheet', color: '#C47A1A', bg: '#FFF3E8', border: '#F5C98A', fn: () => handleGenerateResource('worksheet') },
+            { label: '+ Activity', color: '#1E7C43', bg: '#EDFFF3', border: '#86EFAC', fn: () => handleGenerateResource('activity') },
+          ].map(btn => (
+            <button
+              key={btn.label}
+              onClick={btn.fn}
+              disabled={isTyping}
+              style={{
+                padding: '7px 4px',
+                backgroundColor: btn.bg,
+                border: `1.5px solid ${btn.border}`,
+                borderRadius: '8px',
+                cursor: isTyping ? 'not-allowed' : 'pointer',
+                fontSize: '12.7px', fontWeight: '700',
+                color: btn.color,
+                fontFamily: "'DM Sans', sans-serif",
+                opacity: isTyping ? 0.55 : 1,
+                transition: 'all 0.15s',
+                textAlign: 'center',
+              }}
+            >
+              ✨ {btn.label}
+            </button>
+          ))}
+        </div>
+      ) : (
+        /* Outline view: generate Section / Subsection / Topic Box */
+        <div style={{
+          padding: '7px 10px', borderTop: '1px solid #E7E5E4',
+          display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px',
+          flexShrink: 0, backgroundColor: '#FAFAF8',
+        }}>
+          {[
+            { label: '+ Section', fn: handleGenerateSection },
+            { label: '+ Subsection', fn: handleGenerateSubsection },
+            { label: '+ Topic Box', fn: handleGenerateTopicBox },
+          ].map(btn => (
+            <button
+              key={btn.label}
+              onClick={btn.fn}
+              disabled={isTyping}
+              style={{
+                padding: '7px 4px',
+                backgroundColor: '#DCFCE7',
+                border: '1.5px solid #86EFAC',
+                borderRadius: '8px',
+                cursor: isTyping ? 'not-allowed' : 'pointer',
+                fontSize: '12.7px', fontWeight: '700',
+                color: '#166534',
+                fontFamily: "'DM Sans', sans-serif",
+                opacity: isTyping ? 0.55 : 1,
+                transition: 'all 0.15s',
+                textAlign: 'center',
+              }}
+            >
+              ✨ {btn.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Input bar */}
       <div style={{
         padding: '9px 11px', borderTop: '1px solid #E7E5E4',
-        display: 'flex', gap: '8px', alignItems: 'center',
+        display: 'flex', gap: '8px', alignItems: 'flex-end',
         flexShrink: 0, backgroundColor: 'white',
       }}>
-        <input
+        <textarea
           ref={inputRef}
-          type="text"
           value={inputText}
-          onChange={e => setInputText(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(inputText); } }}
-          placeholder="Ask Edo anything…"
+          rows={1}
+          onChange={e => {
+            setInputText(e.target.value);
+            e.target.style.height = 'auto';
+            e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+          }}
+          onKeyDown={e => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              if (inputText.trim()) {
+                e.target.style.height = 'auto';
+                sendMessage(inputText);
+              }
+            }
+          }}
+          placeholder="Ask Edo anything… (Shift+Enter for new line)"
           disabled={isTyping}
           style={{
             flex: 1, padding: '8px 12px',
-            border: '1px solid #E7E5E4', borderRadius: '22px',
+            border: '1px solid #E7E5E4', borderRadius: '16px',
             outline: 'none', fontSize: '14.3px',
             fontFamily: "'DM Sans', sans-serif",
             backgroundColor: isTyping ? '#F9F9F8' : 'white', color: '#1C1917',
+            resize: 'none', overflowY: 'auto',
+            lineHeight: '1.45', maxHeight: '120px',
           }}
         />
         <button
-          onClick={() => sendMessage(inputText)}
+          onClick={() => {
+            if (inputText.trim() && inputRef.current) inputRef.current.style.height = 'auto';
+            sendMessage(inputText);
+          }}
           disabled={!inputText.trim() || isTyping}
           style={{
             width: '34px', height: '34px', borderRadius: '50%',
             backgroundColor: inputText.trim() && !isTyping ? EDO_GREEN : '#E5E7EB',
             border: 'none', cursor: inputText.trim() && !isTyping ? 'pointer' : 'not-allowed',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            flexShrink: 0, transition: 'background-color 0.15s',
+            flexShrink: 0, transition: 'background-color 0.15s', marginBottom: '1px',
           }}
         >
           <Send size={14} color={inputText.trim() && !isTyping ? 'white' : '#9CA3AF'} />

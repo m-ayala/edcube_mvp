@@ -14,6 +14,7 @@ import CourseWorkspace from './components/courses/CourseWorkspace';
 import CourseViewPage from './components/courses/CourseViewPage';
 import TeacherProfile from './components/teacherProfile/TeacherProfile';
 import Search from './components/search/Search';
+import ContactPage from './components/pages/ContactPage';
 
 function App() {
   return (
@@ -25,6 +26,7 @@ function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
+          <Route path="/contact" element={<ContactPage />} />
 
           {/* Protected Routes — pathless layout wrapper */}
           <Route

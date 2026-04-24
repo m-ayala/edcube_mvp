@@ -644,9 +644,9 @@ const useCourseActions = ({
   // ── Manual Resource Management ───────────────────────────────────────
   const addManualResource = (topicId, resourceType, resourceData) => {
     console.log(`➕ Adding manual ${resourceType} to topic ${topicId}:`, resourceData);
-    
+
     if (resourceType === 'video') {
-      // Add to videos
+      // Legacy: add to videosByTopic as a YouTube-style card
       const currentVideos = videosByTopic[topicId] || [];
       setVideosByTopic(prev => ({
         ...prev,
@@ -657,21 +657,20 @@ const useCourseActions = ({
           thumbnailUrl: 'https://via.placeholder.com/120x90?text=Video',
           channelName: 'Manual',
           duration: 'N/A',
-          source: 'manual'
-        }]
+          source: 'manual',
+        }],
       }));
     } else {
-      // Add to hands-on resources (worksheet or activity)
+      // content, worksheet, activity — store full resourceData so all schema fields are preserved
       const currentResources = handsOnResources[topicId] || [];
       setHandsOnResources(prev => ({
         ...prev,
         [topicId]: [...currentResources, {
+          ...resourceData,
           type: resourceType,
-          title: resourceData.title,
-          url: resourceData.url,
-          description: resourceData.description || '',
-          source: 'manual'
-        }]
+          source: resourceData.source || 'manual',
+          addedAt: resourceData.addedAt || new Date().toISOString(),
+        }],
       }));
     }
   };
@@ -697,19 +696,15 @@ const useCourseActions = ({
       setVideosByTopic(prev => ({
         ...prev,
         [topicId]: (prev[topicId] || []).map((item, idx) =>
-          idx === resourceIndex
-            ? { ...item, title: updatedData.title, url: updatedData.url }
-            : item
-        )
+          idx === resourceIndex ? { ...item, ...updatedData } : item
+        ),
       }));
     } else {
       setHandsOnResources(prev => ({
         ...prev,
         [topicId]: (prev[topicId] || []).map((item, idx) =>
-          idx === resourceIndex
-            ? { ...item, title: updatedData.title, url: updatedData.url, description: updatedData.description || '' }
-            : item
-        )
+          idx === resourceIndex ? { ...item, ...updatedData } : item
+        ),
       }));
     }
   };

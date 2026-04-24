@@ -75,6 +75,12 @@ const LandingPage = () => {
             Log in
           </button>
           <button
+            onClick={() => navigate('/contact')}
+            style={{ background: 'transparent', color: '#1C1917', padding: '10px 20px', borderRadius: 100, fontSize: 14, fontWeight: 500, border: '0.5px solid #D0CAC0', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}
+          >
+            Request a demo
+          </button>
+          <button
             onClick={() => navigate('/signup')}
             style={{ background: '#1C1917', color: '#FAF8F4', padding: '10px 22px', borderRadius: 100, fontSize: 14, fontWeight: 500, border: 'none', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}
           >

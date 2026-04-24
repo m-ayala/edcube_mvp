@@ -253,6 +253,13 @@ const CourseEditor = ({
       'linear-gradient(180deg,#F7E4A0,#F2C0D4)',
     ],
     topicBorderColors: ['#ACD8F0', '#F2C0D4', '#B2E8C8', '#F7E4A0'],
+    topicTints: [
+      'rgba(172,216,240,0.14)',
+      'rgba(242,192,212,0.14)',
+      'rgba(178,232,200,0.14)',
+      'rgba(247,228,160,0.14)',
+    ],
+    topicDeepColors: ['#2A6A8A', '#7A2A4A', '#1C5C35', '#5C3A08'],
     pla: {
       'Personal Growth': '#F2C0D4',
       'Core Learning': '#ACD8F0',
@@ -272,8 +279,8 @@ const CourseEditor = ({
   const [hoveredSubsection, setHoveredSubsection] = useState(null);
 
   // ── Topic Detail Modal Handler ────────────────────────────────────────
-  const handleTopicBoxClick = (topicBox, sectionId, subsectionId) => {
-    setSelectedTopicForDetail({ topicBox, sectionId, subsectionId });
+  const handleTopicBoxClick = (topicBox, sectionId, subsectionId, topicIdx = 0) => {
+    setSelectedTopicForDetail({ topicBox, sectionId, subsectionId, topicIdx });
     onTopicDetailOpen?.({ type: 'topic', id: topicBox.id, title: topicBox.title, sectionId, subsectionId });
   };
 
@@ -491,6 +498,7 @@ const CourseEditor = ({
     };
 
     const topicAccentColor = colors.topicBorderColors[topicIdx % 4];
+    const topicTint = colors.topicTints[topicIdx % 4];
 
     return (
       <div
@@ -511,7 +519,7 @@ const CourseEditor = ({
             <div style={{
               display: 'flex',
               alignItems: 'center',
-              background: '#F9F9F9',
+              background: topicTint,
               borderBottom: '1px solid rgba(0,0,0,0.07)',
               paddingLeft: '2px',
               paddingRight: '6px',
@@ -560,7 +568,7 @@ const CourseEditor = ({
 
               {/* Edit button */}
               <button
-                onClick={e => { e.stopPropagation(); handleTopicBoxClick(topicBox, sectionId, subsectionId); }}
+                onClick={e => { e.stopPropagation(); handleTopicBoxClick(topicBox, sectionId, subsectionId, topicIdx); }}
                 style={{
                   padding: '3px 9px', background: '#FFFFFF', color: '#333',
                   border: '1px solid rgba(0,0,0,0.1)', borderRadius: '5px',
@@ -592,7 +600,7 @@ const CourseEditor = ({
             {/* ── Tab Content ── */}
             {activeTab === 'topic' && (
               <div
-                onClick={() => handleTopicBoxClick(topicBox, sectionId, subsectionId)}
+                onClick={() => handleTopicBoxClick(topicBox, sectionId, subsectionId, topicIdx)}
                 style={{ padding: '13px 16px', cursor: 'pointer' }}
               >
                 <h4 style={{ margin: '0 0 7px', fontSize: '15px', fontWeight: '600', color: '#111', fontFamily: "'DM Sans', sans-serif" }}>
@@ -632,7 +640,7 @@ const CourseEditor = ({
               gap: '4px',
               padding: '5px 10px',
               borderTop: '1px solid rgba(0,0,0,0.05)',
-              background: '#F9F9F9',
+              background: topicTint,
               justifyContent: 'flex-end'
             }}>
             <button
@@ -845,11 +853,6 @@ const CourseEditor = ({
                   {(section.subsections || []).map((sub, subIdx) => {
                     const isSubCollapsed = actions.collapsedSubsections[sub.id];
 
-                    // Aggregate unique PLA pillars from this subsection's topic boxes
-                    const subPillarSet = new Set();
-                    (sub.topicBoxes || []).forEach(t => (t.pla_pillars || []).forEach(p => subPillarSet.add(p)));
-                    const subPillars = Array.from(subPillarSet).slice(0, 2);
-
                     return (
                       <Draggable
                         key={sub.id}
@@ -935,21 +938,6 @@ const CourseEditor = ({
                                     fontStyle: sub.description ? 'normal' : 'italic'
                                   }}
                                 />
-                                {/* PLA pillar tags */}
-                                {subPillars.length > 0 && (
-                                  <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
-                                    {subPillars.map(pillar => (
-                                      <span key={pillar} style={{
-                                        fontSize: '11.6px', fontWeight: '500',
-                                        padding: '2px 9px', borderRadius: '20px',
-                                        backgroundColor: colors.pla[pillar] || '#F5F5F4',
-                                        color: colors.plaText[pillar] || colors.textSecondary
-                                      }}>
-                                        {pillar}
-                                      </span>
-                                    ))}
-                                  </div>
-                                )}
                               </div>
 
                               {/* Hover-only action buttons */}
@@ -1089,7 +1077,7 @@ const CourseEditor = ({
   `}</style>
       {/* Top Bar */}
       <div style={{
-        padding: '0 20px', height: '60px',
+        padding: '0 28px', height: '68px',
         display: 'flex', alignItems: 'center', gap: '8px',
         background: '#FFFFFF',
         borderBottom: '1px solid rgba(0,0,0,0.08)',
@@ -1102,8 +1090,8 @@ const CourseEditor = ({
           color: '#111', whiteSpace: 'nowrap', flexShrink: 0, transition: 'background 0.15s'
         }}>← Course View</button>
 
-        {/* Centre: course title + grade */}
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', minWidth: 0 }}>
+        {/* Centre: course title */}
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 0 }}>
           <EditableField
             value={courseName}
             onChange={val => setCourseName(val)}
@@ -1118,16 +1106,6 @@ const CourseEditor = ({
               letterSpacing: '-0.3px'
             }}
           />
-          <>
-            <span style={{ color: '#888', fontSize: '15.4px' }}>·</span>
-            <EditableField
-              value={courseClass ? `Grade ${courseClass}` : ''}
-              onChange={val => setCourseClass(val.replace(/^grade\s*/i, '').trim())}
-              placeholder="Grade"
-              accentColor="#666"
-              inputStyle={{ fontSize: '13px', fontWeight: '500', color: '#111' }}
-            />
-          </>
         </div>
 
         {/* Undo */}
@@ -1223,38 +1201,6 @@ const CourseEditor = ({
         )}
       </div>
 
-      {/* Action bar */}
-      <div style={{
-        padding: '9px 24px',
-        background: '#FAFAFA',
-        borderBottom: '1px solid rgba(0,0,0,0.07)',
-        display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'space-between',
-        flexShrink: 0
-      }}>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          <button onClick={actions.addSection} style={{
-            fontFamily: "'DM Sans', sans-serif", fontSize: '14px', color: '#333',
-            background: '#FFFFFF', border: '1px dashed rgba(0,0,0,0.2)',
-            borderRadius: '7px', padding: '5px 14px', cursor: 'pointer',
-            display: 'flex', alignItems: 'center', gap: '4px', transition: 'background 0.15s'
-          }}>
-            <Plus size={13} /> Section
-          </button>
-
-          <button onClick={onAddBreak} style={{
-            fontFamily: "'DM Sans', sans-serif", fontSize: '14px', color: '#333',
-            background: '#FFFFFF', border: '1px dashed rgba(0,0,0,0.2)',
-            borderRadius: '7px', padding: '5px 14px', cursor: 'pointer',
-            display: 'flex', alignItems: 'center', gap: '4px', transition: 'background 0.15s'
-          }}>⏸ Break</button>
-        </div>
-
-        <span style={{ fontSize: '13px', color: '#555' }}>
-          {sections.filter(s => s.type !== 'break').length} section{sections.filter(s => s.type !== 'break').length !== 1 ? 's' : ''} ·{' '}
-          {sections.reduce((acc, s) => acc + (s.subsections?.length || 0), 0)} subsections ·{' '}
-          {sections.reduce((acc, s) => acc + (s.subsections?.reduce((total, sub) => total + (sub.topicBoxes?.length || 0), 0) || 0), 0)} topic boxes
-        </span>
-      </div>
 
       {/* Main content — topic detail panel OR course sections */}
       {selectedTopicForDetail ? (
@@ -1268,6 +1214,8 @@ const CourseEditor = ({
           videosByTopic={videosByTopic}
           handsOnResources={handsOnResources}
           currentUser={currentUser}
+          accentColor={colors.topicBorderColors[(selectedTopicForDetail.topicIdx || 0) % 4]}
+          accentDeepColor={colors.topicDeepColors[(selectedTopicForDetail.topicIdx || 0) % 4]}
         />
       ) : (
         <div style={{ flex: 1, overflowY: 'auto', padding: '24px 28px 80px', position: 'relative', zIndex: 1 }}>

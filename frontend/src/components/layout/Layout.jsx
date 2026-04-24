@@ -39,7 +39,8 @@ const Layout = () => {
       width: '100vw',
       overflow: 'hidden',
       position: 'relative',
-      backgroundColor: '#FAFAF9'
+      background: 'linear-gradient(135deg, rgba(178,232,200,0.45) 0%, rgba(172,216,240,0.35) 35%, rgba(242,192,212,0.35) 65%, rgba(247,228,160,0.40) 100%)',
+      backgroundColor: '#F0EDE8'
     }}>
       <div ref={blobsRef} className="blobs-bg" />
       <Sidebar />

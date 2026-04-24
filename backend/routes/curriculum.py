@@ -699,20 +699,55 @@ When focused on a TOPIC BOX — always use "topic_full" UNLESS the teacher is as
   NEVER use "description", "objectives", "new_subsection", "new_section", or "new_topic" for a topic box.
 
 When the teacher asks for a resource block while focused on a TOPIC BOX:
-  "new_resource_content"   → a Content block (video, reading, or teaching approach)
-  "new_resource_worksheet" → a Worksheet block
-  "new_resource_activity"  → an Activity block
+  "new_resource_content"   → a Content block (teaching explanation + delivery approach)
+  "new_resource_worksheet" → a Worksheet block (student exercise)
+  "new_resource_activity"  → an Activity block (hands-on engagement)
 
-  label: concise block title (e.g. "Fraction War Card Game")
-  body:  2-3 sentence teaching notes — HOW to deliver/run it.
-         Concrete: mention setup, grouping, timing, key questions, or delivery approach.
-         NO generic filler. Age-appropriate language.
+  CONTENT BLOCK — body format (ALWAYS use this exact structure):
+    Use these section headers verbatim, adapted to the specific concept. Each header on its own line followed by content:
+
+    **What is [concept name]?**
+    A clear, age-appropriate definition in 1-2 sentences. Use simple words for young students.
+
+    **Key parts / components:**
+    - [Part or element 1]
+    - [Part or element 2]
+    - [Part or element 3]
+    (3-5 bullet points covering the main components, vocabulary, or sub-concepts)
+
+    **How to teach it:**
+    Step-by-step delivery approach — what to show first, what analogy to use, how to check understanding. 2-3 sentences.
+
+    **Things to consider:**
+    Tips, common misconceptions students have, or differentiation ideas. 1-2 sentences.
+
+    **Example:**
+    One concrete, specific example the teacher can use in class. Make it relatable to the course age group.
+
+    Rules for content blocks:
+    - Always include all 5 sections. Adapt the header wording to the concept (e.g. "Key robot parts:" not "Key parts:").
+    - Keep language age-appropriate. Simpler for younger students, more precise for older.
+    - No URLs — teacher adds links separately.
+    label: short descriptive title (e.g. "What Is a Robot?")
+
+  WORKSHEET BLOCK — body format:
+    Line 1: Type: [fill in the blanks | name the images | drawing | matching | multiple choice | essay writing]
+      — pick the type most appropriate for the course age range (e.g. no essay writing for under 7s)
+    Line 2: Keywords: [2-5 keyword phrases the worksheet covers, e.g. "robot parts, sensors, movement"]
+    Line 3-4: Brief description of what the worksheet asks students to do.
+    label: worksheet title (e.g. "Robot Parts Labelling Sheet")
+
+  ACTIVITY BLOCK — body format:
+    Line 1: Type: [quiz | discussion | experiment | teamwork | hands-on]
+    Line 2-4: Step-by-step teacher instructions — setup, grouping, what students do, timing, debrief question.
+    Be concrete and specific. Age-appropriate. No URLs — teacher adds links separately.
+    label: activity title (e.g. "Build-a-Robot Relay Race")
 
   Rules:
-  - Only use these when the teacher explicitly asks for a resource, worksheet, activity, or content block
+  - Only use these when the teacher explicitly asks for a resource, worksheet, activity, or content block, OR when they click the generate buttons for content/worksheet/activity
   - Generate 2-3 meaningfully different options per request
   - Check existing_resources in the context — never repeat a title that already exists
-  - Do not include URLs in the body — URL is optional and left for the teacher to add
+  - Always pick age-appropriate worksheet types (no essay writing for students under 7)
 
 When focused on a SECTION or SUBSECTION:
   "description" → body = rewritten description paragraph
