@@ -956,3 +956,125 @@ Generate 7-9 chips total."""
     except Exception as e:
         logger.error(f"Edo chips error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Chip generation failed: {str(e)}")
+
+
+# ── Block Link Generation ──────────────────────────────────────────────────────
+
+class GenerateBlockLinksRequest(BaseModel):
+    blockType: str  # "content" | "worksheet" | "activity"
+    blockTitle: Optional[str] = ""
+    blockContent: Optional[str] = ""
+    topicTitle: Optional[str] = ""
+    topicDescription: Optional[str] = ""
+    gradeLevel: Optional[str] = ""
+    subject: Optional[str] = ""
+    teacherUid: Optional[str] = None
+
+
+@router.post("/curriculum/generate-block-links")
+async def generate_block_links(request: GenerateBlockLinksRequest):
+    """
+    Generate relevant resource links for a block using existing video/worksheet generators.
+    - content blocks  → YouTube video links via the video generator (video_id → youtube.com/watch?v=...)
+    - worksheet blocks → worksheet source URLs via worksheet generator (source_url)
+    - activity blocks  → YouTube demo/tutorial video links via the video generator
+    Returns { "links": [{ "url", "label", "type" }] }
+    """
+    try:
+        import asyncio
+        from populator.video_generator import generate_videos_for_section
+        from hands_on.worksheet_generator import generate_worksheets_for_section
+
+        block_title = (request.blockTitle or request.topicTitle or "").strip()
+
+        # Build a rich description from block content so the generators have
+        # more than just the title to work with.
+        raw_content = (request.blockContent or "").strip()
+        # Strip markdown-style headers (e.g. **Header**) and bullets for cleaner text
+        import re
+        clean_content = re.sub(r'\*\*(.+?)\*\*', r'\1', raw_content)
+        clean_content = re.sub(r'^[-•]\s+', '', clean_content, flags=re.MULTILINE)
+        content_snippet = clean_content[:400].strip()
+
+        # Combine topic description + block content into a meaningful description
+        description_parts = []
+        if request.topicDescription:
+            description_parts.append(request.topicDescription.strip())
+        if content_snippet:
+            description_parts.append(content_snippet)
+        full_description = " ".join(description_parts)
+
+        # Section dict compatible with both generators.
+        # IMPORTANT: content_keywords inside components.instruction feed directly into
+        # calculate_content_coverage's LLM prompt as "required content the video must cover".
+        # Only put real topical keywords there — NOT meta-tags like "STEAM" or "educational video",
+        # which the LLM penalises videos for not explicitly covering.
+        section = {
+            "id": f"block-{block_title[:20]}",
+            "title": block_title or "Untitled",
+            "description": full_description,
+            "learning_objectives": [block_title] if block_title else [],
+            "content_keywords": [],
+            "duration_minutes": 20,
+            "components": {
+                "instruction": {
+                    "learning_objectives": [block_title] if block_title else [],
+                    "content_keywords": [],  # intentionally empty — block title + description are enough
+                }
+            },
+        }
+
+        logger.info(
+            f"[generate-block-links] blockType={request.blockType!r} "
+            f"title={block_title!r} grade={request.gradeLevel!r} "
+            f"descLen={len(full_description)}"
+        )
+
+        grade_level = request.gradeLevel or "5"
+        links: list = []
+
+        loop = asyncio.get_event_loop()
+
+        if request.blockType == "worksheet":
+            user_prompt = f"{block_title} worksheet" if block_title else "worksheet"
+            enriched = await loop.run_in_executor(
+                None,
+                generate_worksheets_for_section,
+                section,
+                grade_level,
+                user_prompt,
+                2,
+            )
+            for ws in enriched.get("worksheet_options", []):
+                src = ws.get("source_url", "").strip()
+                if src:
+                    links.append({
+                        "url": src,
+                        "label": ws.get("worksheet_title", "Worksheet"),
+                        "type": "worksheet",
+                    })
+
+        else:
+            # content and activity both use video generator for YouTube links
+            enriched = await loop.run_in_executor(
+                None,
+                generate_videos_for_section,
+                section,
+                grade_level,
+                "",  # teacher_comments
+            )
+            for vid in enriched.get("video_resources", []):
+                vid_id = vid.get("videoId", "").strip()  # camelCase matches youtube_handler output
+                if vid_id:
+                    links.append({
+                        "url": f"https://www.youtube.com/watch?v={vid_id}",
+                        "label": vid.get("title", "Video"),
+                        "type": "video",
+                    })
+
+        return {"links": links}
+
+    except Exception as e:
+        logger.error(f"Block link generation error: {e}", exc_info=True)
+        # Return empty gracefully so the frontend never crashes
+        return {"links": []}

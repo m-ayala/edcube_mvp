@@ -14,6 +14,7 @@ import useAutosave from './useAutosave';
 import BreakModal from '../modals/BreakModal';
 import ShareCourseModal from '../modals/ShareCourseModal';
 import { getOwnProfile } from '../../services/teacherService';
+import { generateBlockLinks } from '../../utils/curriculumApi';
 
 const CourseWorkspace = () => {
   const { currentUser } = useAuth();
@@ -50,6 +51,7 @@ const CourseWorkspace = () => {
   const [showShareModal, setShowShareModal] = useState(false);
   const [isEdoOpen, setIsEdoOpen] = useState(false);
   const [trayItems, setTrayItems] = useState([]);
+  const [linkGenJobs, setLinkGenJobs] = useState({}); // { [blockId]: 'generating'|'done'|'error' }
 
   // ── Page Navigation ───────────────────────────────────────────────────
   const [navPage, setNavPage] = useState('outline'); // 'outline'|'subsection'|'topic'|'block'
@@ -75,6 +77,36 @@ const CourseWorkspace = () => {
     else if (navPage === 'topic') { setNavPage('subsection'); setNavPath(p => ({ ...p, topicId: null })); }
     else if (navPage === 'subsection') { setNavPage('outline'); setNavPath({ sectionId: null, subsectionId: null, topicId: null, blockId: null }); }
     setTrayItems([]);
+  };
+
+  const generateLinksForBlock = async (blockId, topicId, blockData) => {
+    console.log('[generateLinksForBlock] called', { blockId, topicId, blockType: blockData?.type });
+    setLinkGenJobs(prev => ({ ...prev, [blockId]: 'generating' }));
+    try {
+      const { links: generated } = await generateBlockLinks({
+        blockType: blockData.type || 'content',
+        blockTitle: blockData.title || '',
+        blockContent: blockData.content || '',
+        topicTitle: activeTopic?.title || '',
+        topicDescription: activeTopic?.description || '',
+        gradeLevel: formData?.class || '',
+        subject: formData?.subject || '',
+        teacherUid: currentUser?.uid || null,
+      });
+      if (generated?.length > 0) {
+        const existing = (handsOnResources[topicId] || [])
+          .find(b => b.id === blockId)?.links || [];
+        const merged = [
+          ...existing,
+          ...generated.map(l => ({ id: `link-${Date.now()}-${Math.random().toString(36).slice(2)}`, ...l })),
+        ];
+        actions.updateBlock(topicId, blockId, { links: merged });
+      }
+      setLinkGenJobs(prev => ({ ...prev, [blockId]: 'done' }));
+    } catch (err) {
+      console.error('Link generation failed:', err);
+      setLinkGenJobs(prev => ({ ...prev, [blockId]: 'error' }));
+    }
   };
 
   // Derived active objects from navigation path
@@ -562,6 +594,7 @@ const CourseWorkspace = () => {
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <style>{`
             @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+            @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
           `}</style>
 
           {/* ── Persistent workspace top bar ── */}
@@ -623,6 +656,23 @@ const CourseWorkspace = () => {
               )}
               {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'error' ? '✕ Error' : '✓ Saved'}
             </div>
+
+            {/* Link generation background indicator */}
+            {Object.values(linkGenJobs).some(s => s === 'generating') && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: '5px',
+                padding: '5px 11px', borderRadius: '8px',
+                background: '#F0F4FF', border: '1px solid rgba(99,102,241,0.25)',
+                color: '#4338CA', fontSize: '13px', fontWeight: '500',
+                fontFamily: "'DM Sans', sans-serif", whiteSpace: 'nowrap', flexShrink: 0,
+              }}>
+                <span style={{
+                  animation: 'pulse 1.5s ease-in-out infinite', display: 'inline-block',
+                  width: '7px', height: '7px', borderRadius: '50%', background: '#6366F1',
+                }} />
+                Generating links…
+              </div>
+            )}
 
             {/* Public / Private toggle */}
             <div
@@ -772,6 +822,9 @@ const CourseWorkspace = () => {
                   subsectionId={navPath.subsectionId}
                   onBack={navigateBack}
                   actions={actions}
+                  currentUser={currentUser}
+                  onGenerateLinks={generateLinksForBlock}
+                  linkGenStatus={linkGenJobs[navPath.blockId]}
                 />
               )}
             </div>

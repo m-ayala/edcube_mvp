@@ -42,46 +42,50 @@ def filter_and_rank_videos(
     filtered_videos = []
     
     for video in videos:
+        vid_id = video.get('videoId', '')
+        vid_title = video.get('title', 'Unknown')
+        vid_url = f"https://www.youtube.com/watch?v={vid_id}" if vid_id else "no-url"
+
         # Skip if missing critical data
-        if not video.get('videoId'):
-            logger.warning(f"❌ REJECTED: Missing videoId")
+        if not vid_id:
+            logger.warning(f"❌ REJECTED (no videoId): '{vid_title}'")
             continue
-        
+
         # Filter 1: Content coverage check
         coverage = video.get('content_coverage', {})
-        if coverage.get('coverage_percentage', 0) < PopulatorConfig.MIN_CONTENT_COVERAGE_PERCENTAGE:
-            logger.warning(f"❌ REJECTED: Coverage too low")
-            logger.debug(
-                f"Rejected: '{video.get('title')}' - "
-                f"coverage {coverage.get('coverage_percentage', 0)}%"
+        cov_pct = coverage.get('coverage_percentage', 0)
+        if cov_pct < PopulatorConfig.MIN_CONTENT_COVERAGE_PERCENTAGE:
+            logger.warning(
+                f"❌ REJECTED (coverage {cov_pct}% < {PopulatorConfig.MIN_CONTENT_COVERAGE_PERCENTAGE}%): "
+                f"'{vid_title}' — {vid_url}"
             )
             continue
-        
+
         # Filter 2: Redundancy check
         redundancy = video.get('redundancy_analysis', {})
         if redundancy.get('is_redundant', False):
-            logger.warning(f"❌ REJECTED: Too redundant")
-            logger.debug(
-                f"Rejected: '{video.get('title')}' - "
-                f"redundant ({redundancy.get('overlap_percentage', 0)}%)"
+            overlap = redundancy.get('overlap_percentage', 0)
+            logger.warning(
+                f"❌ REJECTED (redundant {overlap}% overlap): "
+                f"'{vid_title}' — {vid_url}"
             )
             continue
-        
+
         # Filter 3: Duration check (flexible, just avoid extremes)
         if not _passes_duration_filter(video, grade_level):
-            logger.warning(f"❌ REJECTED: Duration out of range (2-30 min)")
-            logger.debug(
-                f"Rejected: '{video.get('title')}' - "
-                f"duration {video.get('durationSeconds', 0)}s"
+            duration_s = video.get('durationSeconds', 0)
+            logger.warning(
+                f"❌ REJECTED (duration {duration_s}s out of 120–3600s range): "
+                f"'{vid_title}' — {vid_url}"
             )
             continue
-        
+
         # Filter 4: Basic quality check (views and engagement)
         if not _passes_quality_filter(video):
-            logger.warning(f"❌ REJECTED: Quality check failed")
-            logger.debug(
-                f"Rejected: '{video.get('title')}' - "
-                f"low quality/engagement"
+            view_count = video.get('viewCount', 0)
+            logger.warning(
+                f"❌ REJECTED (only {view_count:,} views, need ≥500): "
+                f"'{vid_title}' — {vid_url}"
             )
             continue
         
@@ -139,8 +143,8 @@ def _passes_quality_filter(video: Dict) -> bool:
     """
     view_count = video.get('viewCount', 0)
     
-    # Require at least 100 views (very lenient)
-    if view_count < 5000:
+    # Require at least 500 views (very lenient)
+    if view_count < 500:
         return False
     
     return True

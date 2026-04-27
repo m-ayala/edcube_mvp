@@ -108,9 +108,10 @@ def generate_videos_for_section(
     
     # Iterative search with content validation
     selected_videos = []
+    all_analyzed_videos = []  # Fallback pool: every video analyzed, even rejected ones
     iteration = 0
     previous_coverage = 0
-    
+
     while (iteration < PopulatorConfig.MAX_SEARCH_ITERATIONS):
         iteration += 1
         logger.info(f"--- Search Iteration {iteration}/{PopulatorConfig.MAX_SEARCH_ITERATIONS} ---")
@@ -178,13 +179,19 @@ def generate_videos_for_section(
             redundancy_analysis = detect_redundancy(video['topics_covered'], selected_videos)
             video['redundancy_analysis'] = redundancy_analysis
         
+        # Keep every analyzed video in the fallback pool (ranked by coverage)
+        for v in videos:
+            cov = v.get('content_coverage', {}).get('coverage_percentage', 0)
+            v['_fallback_coverage'] = cov
+        all_analyzed_videos.extend(videos)
+
         # Filter and rank videos
         logger.info(f"Filtering and ranking videos...")
         filtered_videos = filter_and_rank_videos(videos, section, grade_level, selected_videos)
-        
+
         if not filtered_videos:
             logger.warning(f"⚠️  No videos passed filters in iteration {iteration}")
-            
+
             # Don't give up - continue to next iteration unless we've exhausted all attempts
             if iteration >= PopulatorConfig.MAX_SEARCH_ITERATIONS:
                 logger.error("❌ No videos passed filters after all iterations")
@@ -207,12 +214,20 @@ def generate_videos_for_section(
             selected_videos.append(video)
         
         logger.info(f"Selected {len(new_selections)} video(s) this iteration (total: {len(selected_videos)})")
-        
+
         # Calculate current coverage
         current_coverage = _calculate_section_coverage(selected_videos)
         logger.info(f"Content coverage: {current_coverage}%")
-        
-        # Check for convergence
+
+        # Early stop: if we have at least one video with ≥70% coverage, no need to iterate further
+        best_coverage = max(
+            (v.get('content_coverage', {}).get('coverage_percentage', 0) for v in selected_videos),
+            default=0
+        )
+        if best_coverage >= 70:
+            logger.info(f"✅ High-quality match found ({best_coverage}% coverage) — stopping early")
+            break
+
         # Check for convergence
         if len(selected_videos) >= PopulatorConfig.YOUTUBE_MAX_VIDEOS_PER_SECTION:
             logger.info("✅ Reached maximum number of videos")
@@ -226,6 +241,17 @@ def generate_videos_for_section(
                 break
             previous_coverage = current_coverage
     
+    # Fallback: if nothing passed all filters, return the most relevant candidate
+    if not selected_videos and all_analyzed_videos:
+        best = max(all_analyzed_videos, key=lambda v: v.get('_fallback_coverage', 0))
+        best['why_selected'] = _generate_selection_rationale(best, section)
+        best['_fallback_used'] = True
+        logger.warning(
+            f"⚠️  Using fallback video '{best.get('title', '?')}' "
+            f"(coverage {best.get('_fallback_coverage', 0)}%) — no video passed all filters"
+        )
+        selected_videos = [best]
+
     # Store results in section
     section['video_resources'] = selected_videos
     section['content_coverage_status'] = {

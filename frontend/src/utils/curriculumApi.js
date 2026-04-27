@@ -117,3 +117,37 @@ export const generateCurriculumContent = async ({
     throw error;
   }
 };
+
+/**
+ * Generate relevant links for a block using the backend video/worksheet/activity generators.
+ * - content blocks → YouTube video links via video generator
+ * - worksheet blocks → worksheet source URLs via worksheet generator
+ * - activity blocks → YouTube demo/tutorial video links via video generator
+ */
+export const generateBlockLinks = async ({
+  blockType,
+  blockTitle,
+  blockContent = '',
+  topicTitle = '',
+  topicDescription = '',
+  gradeLevel = '',
+  subject = '',
+  teacherUid = null,
+}) => {
+  const response = await fetch(`${API_BASE_URL}/curriculum/generate-block-links`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      blockType,
+      blockTitle,
+      blockContent,
+      topicTitle,
+      topicDescription,
+      gradeLevel,
+      subject,
+      teacherUid,
+    }),
+  });
+  if (!response.ok) throw new Error('Link generation failed');
+  return await response.json(); // { links: [{ url, label, type }] }
+};
