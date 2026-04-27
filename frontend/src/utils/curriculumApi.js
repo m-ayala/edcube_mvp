@@ -41,6 +41,40 @@ export const chatWithEdo = async ({
 };
 
 /**
+ * Generate context-specific quick-chips for Edo block generation
+ */
+export const generateEdoChips = async ({
+  blockType,
+  courseTitle,
+  topicTitle,
+  topicDescription = null,
+  subsectionTitle = null,
+  ageRange = null,
+  taxonomyHints = [],
+}) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/curriculum/chips`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        block_type: blockType,
+        course_title: courseTitle,
+        topic_title: topicTitle,
+        topic_description: topicDescription,
+        subsection_title: subsectionTitle,
+        age_range: ageRange,
+        taxonomy_hints: taxonomyHints,
+      }),
+    });
+    if (!response.ok) throw new Error('Chip generation failed');
+    return await response.json();
+  } catch (error) {
+    console.error('Edo chips error:', error);
+    throw error;
+  }
+};
+
+/**
  * Generate curriculum content at any level
  * @param {Object} params - Generation parameters
  * @param {string} params.level - "sections" | "subsections" | "topics"

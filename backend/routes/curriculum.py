@@ -891,3 +891,68 @@ Respond ONLY with valid JSON. No markdown, no preamble."""
     except Exception as e:
         logger.error(f"Edo chat error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Chat failed: {str(e)}")
+
+
+# ============================================================================
+# EDO CHIP GENERATION ENDPOINT
+# ============================================================================
+
+class EdoChipsRequest(BaseModel):
+    block_type: str  # "content" | "worksheet" | "activity"
+    course_title: str
+    topic_title: str
+    topic_description: Optional[str] = None
+    subsection_title: Optional[str] = None
+    age_range: Optional[str] = None
+    taxonomy_hints: Optional[List[str]] = []  # subcategory names from blockCategories
+
+@router.post("/curriculum/chips")
+async def generate_edo_chips(request: EdoChipsRequest):
+    """Generate context-specific quick-chips for Edo block generation, tailored to the topic."""
+    try:
+        block_label = {"content": "content block", "worksheet": "worksheet", "activity": "activity"}.get(request.block_type, "block")
+        taxonomy = ", ".join(request.taxonomy_hints) if request.taxonomy_hints else ""
+
+        prompt = f"""You are helping a teacher build a {block_label} for a topic called "{request.topic_title}" in a course called "{request.course_title}".
+{f'Subsection: {request.subsection_title}' if request.subsection_title else ''}
+{f'Topic description: {request.topic_description}' if request.topic_description else ''}
+{f'Student age range: {request.age_range}' if request.age_range else ''}
+
+Your job is to generate 7-9 short, specific chip labels that represent the most useful and relevant things a teacher might want to generate a {block_label} about for THIS specific topic.
+
+These chips will appear as clickable buttons. Each chip should be:
+- Short (2-5 words max)
+- Specific to the topic (e.g. for "3D Printing Basics": "What is a 3D Printer?", "Parts of a 3D Printer", "Types of 3D Printing" — NOT generic things like "Teamwork" or "Metacognition")
+- Something a teacher would actually want to generate content about
+- Concrete and actionable — readable at a glance on a small button
+
+For context, here are some general educational subcategory directions you can draw from or adapt to the topic (only use the ones that make sense):
+{taxonomy}
+
+For a {block_label} on "{request.topic_title}", what would be the most useful, topic-specific chips?
+
+Respond ONLY with a JSON object in this exact format, no markdown:
+{{"chips": ["chip label 1", "chip label 2", "chip label 3", ...]}}
+
+Generate 7-9 chips total."""
+
+        response = await generation_service.client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.6,
+            max_tokens=300,
+            response_format={"type": "json_object"}
+        )
+
+        raw = response.choices[0].message.content
+        parsed = json.loads(raw)
+        chips = parsed.get("chips", [])
+        if not isinstance(chips, list):
+            chips = []
+        # Sanitise: strings only, trim, max 50 chars each
+        chips = [str(c).strip()[:50] for c in chips if c][:10]
+        return {"chips": chips}
+
+    except Exception as e:
+        logger.error(f"Edo chips error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Chip generation failed: {str(e)}")

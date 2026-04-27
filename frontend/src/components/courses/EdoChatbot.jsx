@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
 import { X, Send, Check, Copy, Minus, GripVertical } from 'lucide-react';
-import { chatWithEdo } from '../../utils/curriculumApi';
+import { chatWithEdo, generateEdoChips } from '../../utils/curriculumApi';
 import { BLOCK_CATEGORIES } from '../../constants/blockCategories';
 
 const EDO_GREEN = '#2C5F3A';
@@ -185,6 +185,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
   const [isTyping, setIsTyping] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [selectedBlockType, setSelectedBlockType] = useState(null); // null | 'content' | 'worksheet' | 'activity'
+  const [dynamicChips, setDynamicChips] = useState(null); // null=idle, 'loading', or string[]
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -209,7 +210,44 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
   // Reset subcategory drill-down when page changes
   useEffect(() => {
     setSelectedBlockType(null);
+    setDynamicChips(null);
   }, [currentPage?.page]);
+
+  // Fetch AI-generated chips whenever the teacher picks a block type
+  useEffect(() => {
+    if (!selectedBlockType || currentPage?.page !== 'topic') {
+      setDynamicChips(null);
+      return;
+    }
+    const sec = sections.find(s => s.id === currentPage?.sectionId);
+    const sub = sec?.subsections?.find(ss => ss.id === currentPage?.subsectionId);
+    const topic = sub?.topicBoxes?.find(t => t.id === currentPage?.topicId);
+
+    // Collect flat taxonomy hints for this block type
+    const hints = BLOCK_CATEGORIES
+      .filter(cat => cat.allowedTypes.includes(selectedBlockType))
+      .flatMap(cat => cat.clusters ? cat.clusters.flatMap(c => c.subcategories) : cat.subcategories);
+
+    const ageRange = (formData?.ageRangeStart && formData?.ageRangeEnd)
+      ? `${formData.ageRangeStart}–${formData.ageRangeEnd}`
+      : null;
+
+    setDynamicChips('loading');
+    generateEdoChips({
+      blockType: selectedBlockType,
+      courseTitle: courseName || '',
+      topicTitle: topic?.title || currentPage?.topicTitle || '',
+      topicDescription: topic?.description || null,
+      subsectionTitle: sub?.title || null,
+      ageRange,
+      taxonomyHints: hints,
+    }).then(data => {
+      setDynamicChips(data.chips || []);
+    }).catch(() => {
+      setDynamicChips([]); // fall back gracefully
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedBlockType]);
 
   // Reset chat history when navigating to a different topic or subsection
   // (not when drilling down into a block and back — same topicId)
@@ -502,7 +540,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
     const typeLabels = { content: 'content block', worksheet: 'worksheet', activity: 'activity' };
     const typeLabel = typeLabels[blockType] || 'block';
     const message = subcategory
-      ? `Generate a ${typeLabel} STRICTLY about "${subcategory}" for this topic. Focus ONLY on "${subcategory}" content — do NOT include sections from other subcategories (e.g. if generating Definitions, do not add Key Parts or How to teach it). Be thorough and detailed within this subcategory.`
+      ? `Generate a ${typeLabel} specifically about "${subcategory}" for this topic. Focus the entire block on this specific angle — be thorough and detailed.`
       : `Generate a ${typeLabel} for this topic`;
     await sendMessage(message);
   };
@@ -1145,15 +1183,6 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
           activity:  { label: 'Activity', color: '#1E7C43', bg: '#EDFFF3', border: '#86EFAC' },
         };
         const meta = TYPE_META[selectedBlockType];
-        // Gather all subcategories for this block type, grouped by category (with colors)
-        const subcategoryGroups = BLOCK_CATEGORIES
-          .filter(cat => cat.allowedTypes.includes(selectedBlockType))
-          .map(cat => ({
-            color: cat.color,
-            subs: cat.clusters
-              ? cat.clusters.flatMap(c => c.subcategories)
-              : cat.subcategories,
-          }));
 
         return (
           <div style={{ borderTop: '1px solid #E7E5E4', flexShrink: 0, backgroundColor: '#FAFAF8' }}>
@@ -1195,26 +1224,30 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
               </button>
             </div>
 
-            {/* Subcategory chips scrollable area */}
+            {/* Dynamic chips scrollable area */}
             <div style={{
               padding: '6px 10px 8px',
               maxHeight: '130px', overflowY: 'auto',
               display: 'flex', flexWrap: 'wrap', gap: '5px',
               scrollbarWidth: 'thin', scrollbarColor: '#E8E6E1 transparent',
             }}>
-              {subcategoryGroups.map(({ color, subs }) =>
-                subs.map(sub => (
+              {dynamicChips === 'loading' ? (
+                <span style={{ fontSize: '12px', color: '#9CA3AF', fontFamily: "'DM Sans', sans-serif", padding: '4px 2px' }}>
+                  Generating suggestions…
+                </span>
+              ) : Array.isArray(dynamicChips) && dynamicChips.length > 0 ? (
+                dynamicChips.map(chip => (
                   <button
-                    key={sub}
-                    onClick={() => handleGenerateBlock(selectedBlockType, sub)}
+                    key={chip}
+                    onClick={() => handleGenerateBlock(selectedBlockType, chip)}
                     disabled={isTyping}
                     style={{
                       padding: '4px 10px',
-                      backgroundColor: color.bg,
-                      border: `1px solid ${color.border}`,
+                      backgroundColor: meta.bg,
+                      border: `1px solid ${meta.border}`,
                       borderRadius: '20px',
                       cursor: isTyping ? 'not-allowed' : 'pointer',
-                      fontSize: '12px', fontWeight: '600', color: color.text,
+                      fontSize: '12px', fontWeight: '600', color: meta.color,
                       fontFamily: "'DM Sans', sans-serif",
                       opacity: isTyping ? 0.55 : 1,
                       transition: 'all 0.12s',
@@ -1223,10 +1256,10 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
                     onMouseEnter={e => { if (!isTyping) e.currentTarget.style.opacity = '0.75'; }}
                     onMouseLeave={e => { e.currentTarget.style.opacity = isTyping ? '0.55' : '1'; }}
                   >
-                    {sub}
+                    {chip}
                   </button>
                 ))
-              )}
+              ) : null}
             </div>
           </div>
         );
