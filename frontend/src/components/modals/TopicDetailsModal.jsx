@@ -7,6 +7,17 @@ const TopicDetailsModal = ({
   topic,
   sectionId,
   subsectionId,
+  // Page mode props
+  onBack,
+  onNavigateToBlock,
+  sectionTitle,
+  subsectionTitle,
+  sectionNumber,
+  subsectionNumber,
+  topicNumber,
+  trayBlocks,
+  onAddBlockFromTray,
+  // Kept for backward compat
   onClose,
   onSave,
   actions,
@@ -60,15 +71,17 @@ const TopicDetailsModal = ({
   };
 
   const handleSave = () => {
-    onSave({ sectionId, subsectionId, topicId: topic.id, updatedData: editedTopic });
+    if (actions?.updateTopicBoxFull) {
+      actions.updateTopicBoxFull({ sectionId, subsectionId, topicId: topic.id, updatedData: editedTopic });
+    } else {
+      onSave?.({ sectionId, subsectionId, topicId: topic.id, updatedData: editedTopic });
+    }
     setIsEditing(false);
   };
 
   const handleClose = () => {
-    if (!readOnly) {
-      onSave({ sectionId, subsectionId, topicId: topic.id, updatedData: editedTopic });
-    }
-    onClose();
+    if (!readOnly) handleSave();
+    (onBack || onClose)?.();
   };
 
   const handleAddObjective = () => {
@@ -223,7 +236,9 @@ const TopicDetailsModal = ({
     const editBtn = !readOnly && (
       <div style={{ display: 'flex', gap: '4px', marginLeft: '12px', flexShrink: 0 }}>
         <button
-          onClick={() => setResourceModal({ type: resourceType, mode: 'edit', index: actualIdx, initialData: initialDataForEdit })}
+          onClick={() => onNavigateToBlock
+            ? onNavigateToBlock(sectionId, subsectionId, topic.id, item.id)
+            : setResourceModal({ type: resourceType, mode: 'edit', index: actualIdx, initialData: initialDataForEdit })}
           style={{ padding: '3px 9px', backgroundColor: '#fff', color: colors.textSecondary, border: `1px solid ${colors.border}`, borderRadius: '5px', cursor: 'pointer', fontSize: '12.1px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '3px', fontFamily: 'inherit' }}
         >✏️ Edit</button>
         <button
@@ -367,6 +382,13 @@ const TopicDetailsModal = ({
 
 
 
+  // Helper: add a new empty block and navigate to it
+  const handleAddBlock = (type) => {
+    const newId = `block-${Date.now()}`;
+    actions?.addBlock?.(topic.id, { id: newId, type, title: '', content: '' });
+    onNavigateToBlock?.(sectionId, subsectionId, topic.id, newId);
+  };
+
   return (
     <>
       {/* ── Pastel gradient backdrop ── */}
@@ -377,15 +399,48 @@ const TopicDetailsModal = ({
         padding: '0 28px 60px',
       }}>
 
-        {/* ── Back nav ── */}
-        <button
-          onClick={handleClose}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#fff', border: '1px solid rgba(0,0,0,0.1)', borderRadius: '8px', cursor: 'pointer', padding: '8px 14px', margin: '16px 0', fontSize: '13.8px', fontWeight: '600', color: '#444', fontFamily: 'inherit', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}
-          onMouseEnter={e => e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.13)'}
-          onMouseLeave={e => e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.08)'}
-        >
-          ← Back to course
-        </button>
+        {/* ── Page top bar ── */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 0 8px' }}>
+          {/* Breadcrumb / back */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+            <button
+              onClick={handleClose}
+              style={{ background: '#fff', border: '1px solid rgba(0,0,0,0.1)', borderRadius: '8px', cursor: 'pointer', padding: '6px 12px', fontSize: '13px', fontWeight: '600', color: '#444', fontFamily: 'inherit' }}
+            >
+              ← {subsectionTitle || 'Subsection'}
+            </button>
+            {sectionNumber && subsectionNumber && topicNumber && (
+              <span style={{ fontSize: '13px', color: '#888' }}>
+                {sectionNumber}.{subsectionNumber}.{topicNumber} · {topic.title}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* ── Tray: pending block drafts from Edo ── */}
+        {(trayBlocks || []).length > 0 && (
+          <div style={{ marginBottom: '16px', padding: '12px 16px', background: 'rgba(247,228,160,0.15)', border: '1px solid rgba(180,150,30,0.2)', borderRadius: '10px' }}>
+            <p style={{ margin: '0 0 8px', fontSize: '12px', fontWeight: '700', color: '#5C460A', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Edo Tray — Block Drafts
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {trayBlocks.map(item => (
+                <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', background: '#FFF', borderRadius: '7px', padding: '8px 12px', border: '1px solid rgba(0,0,0,0.08)' }}>
+                  <div>
+                    <p style={{ margin: 0, fontSize: '14px', fontWeight: '600', color: '#111' }}>{item.data?.title || 'Untitled Block'}</p>
+                    <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#888' }}>{item.data?.type} · {item.data?.subcategory || item.data?.category || ''}</p>
+                  </div>
+                  <button
+                    onClick={() => onAddBlockFromTray?.(item)}
+                    style={{ fontFamily: "'DM Sans', sans-serif", fontSize: '12.5px', fontWeight: '600', padding: '5px 12px', borderRadius: '7px', cursor: 'pointer', background: '#111', color: '#FFF', border: 'none', whiteSpace: 'nowrap' }}
+                  >
+                    + Add
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* ══ CARD 1: Topic info ══ */}
         <div style={{ backgroundColor: '#fff', borderRadius: '16px', boxShadow: '0 4px 24px rgba(0,0,0,0.10)', overflow: 'hidden', marginBottom: '16px' }}>
@@ -513,7 +568,7 @@ const TopicDetailsModal = ({
               icon="📖"
               title="CONTENT"
               subtitle="Age-appropriate subject information and how the teacher can deliver it — theory, analogies, key concepts"
-              onAdd={() => setResourceModal({ type: 'content', mode: 'add' })}
+              onAdd={() => onNavigateToBlock ? handleAddBlock('content') : setResourceModal({ type: 'content', mode: 'add' })}
             />
             {videos.map((video, idx) => (
               <VideoCard key={`vid-${idx}`} video={video} idx={idx} />
@@ -533,7 +588,7 @@ const TopicDetailsModal = ({
               icon="📄"
               title="WORKSHEET"
               subtitle="What to include, how to structure it, differentiation ideas, and any reference materials"
-              onAdd={() => setResourceModal({ type: 'worksheet', mode: 'add' })}
+              onAdd={() => onNavigateToBlock ? handleAddBlock('worksheet') : setResourceModal({ type: 'worksheet', mode: 'add' })}
             />
             {worksheets.map((ws) => {
               const actualIdx = allResources.indexOf(ws);
@@ -550,7 +605,7 @@ const TopicDetailsModal = ({
               icon="🎯"
               title="ACTIVITY"
               subtitle="How to run it — setup, grouping, step-by-step facilitation, timing, debrief prompts"
-              onAdd={() => setResourceModal({ type: 'activity', mode: 'add' })}
+              onAdd={() => onNavigateToBlock ? handleAddBlock('activity') : setResourceModal({ type: 'activity', mode: 'add' })}
             />
             {activities.map((act) => {
               const actualIdx = allResources.indexOf(act);

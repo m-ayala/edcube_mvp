@@ -1,11 +1,10 @@
 // src/components/courses/CourseEditor.jsx
 import { Droppable, Draggable } from '@hello-pangea/dnd';
-import { GripVertical, Edit2, Check, Trash2, Plus, PlayCircle, FileText, Zap, Sparkles } from 'lucide-react';
+import { GripVertical, Edit2, Check, Trash2, Plus } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
-import TopicDetailsModal from '../modals/TopicDetailsModal';
 
 // Extracted outside CourseEditor so React keeps stable identity across renders
-const EditableField = ({
+export const EditableField = ({
   value,
   onChange,
   placeholder = 'Click to edit',
@@ -201,8 +200,6 @@ const EditableField = ({
 };
 
 const CourseEditor = ({
-  courseName,
-  setCourseName,
   courseClass,
   setCourseClass,
   sections,
@@ -212,22 +209,10 @@ const CourseEditor = ({
   formData,
   currentUser,
   actions,
-  saveStatus,
-  onUndo,
-  canUndo,
   onAddBreak,
   navigate,
-  onBack,
-  isPublic,
-  onToggleVisibility,
-  onShare,
-  isEdoOpen,
-  onToggleEdo,
-  onTopicDetailOpen,
+  onNavigateToSubsection,
 }) => {
-  const [selectedTopicForDetail, setSelectedTopicForDetail] = useState(null);
-  const [hoveredTopic, setHoveredTopic] = useState(null);
-  const [activeTabByTopic, setActiveTabByTopic] = useState({});
 
   // ── Colors ────────────────────────────────────────────────────────────
   const colors = {
@@ -278,35 +263,7 @@ const CourseEditor = ({
   const [hoveredSection, setHoveredSection] = useState(null);
   const [hoveredSubsection, setHoveredSubsection] = useState(null);
 
-  // ── Topic Detail Modal Handler ────────────────────────────────────────
-  const handleTopicBoxClick = (topicBox, sectionId, subsectionId, topicIdx = 0) => {
-    setSelectedTopicForDetail({ topicBox, sectionId, subsectionId, topicIdx });
-    onTopicDetailOpen?.({ type: 'topic', id: topicBox.id, title: topicBox.title, sectionId, subsectionId });
-  };
-
-  const handleSaveTopicDetail = (updateData) => {
-    actions.updateTopicBoxFull(updateData);
-    setSelectedTopicForDetail(null);
-    onTopicDetailOpen?.(null);
-  };
-
   // ── Inline Components ─────────────────────────────────────────────────
-  
-  const Pill = ({ label, color }) => (
-    <span style={{
-      display: 'inline-block',
-      padding: '4px 10px',
-      borderRadius: '12px',
-      fontSize: '12.1px',
-      fontWeight: '500',
-      backgroundColor: color?.bg || colors.pillBg,
-      color: color?.text || colors.pillText
-    }}>
-      {label}
-    </span>
-  );
-
-
   const ConfirmDialog = ({ isOpen, onConfirm, onCancel, title, message }) => {
     if (!isOpen) return null;
     
@@ -364,305 +321,6 @@ const CourseEditor = ({
             >
               Delete
             </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // ── Topic Box Row (render function, NOT a component — avoids remount on parent re-render) ──
-  const renderTopicBoxRow = (topicBox, sectionId, subsectionId, dragHandleProps, topicIdx = 0) => {
-    const videos = videosByTopic[topicBox.id] || [];
-    const allResources = handsOnResources[topicBox.id] || [];
-    const worksheets = allResources.filter(r => r.type === 'worksheet');
-    const activities = allResources.filter(r => r.type === 'activity');
-
-    const activeTab = activeTabByTopic[topicBox.id] || 'topic';
-    const setActiveTab = (tab) => setActiveTabByTopic(prev => ({ ...prev, [topicBox.id]: tab }));
-
-    const tabs = [
-      { id: 'topic', label: 'Topic' },
-      { id: 'videos', label: videos.length > 0 ? `Videos (${videos.length})` : 'Videos' },
-      { id: 'activities', label: activities.length > 0 ? `Activities (${activities.length})` : 'Activities' },
-      { id: 'worksheets', label: worksheets.length > 0 ? `Worksheets (${worksheets.length})` : 'Worksheets' },
-    ];
-
-    const getYouTubeThumbnail = (url) => {
-      try {
-        const urlObj = new URL(url);
-        let videoId = null;
-        if (urlObj.hostname.includes('youtube.com')) {
-          videoId = urlObj.searchParams.get('v');
-        } else if (urlObj.hostname.includes('youtu.be')) {
-          videoId = urlObj.pathname.slice(1).split('?')[0];
-        }
-        if (videoId) return `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
-      } catch {}
-      return null;
-    };
-
-    const renderResourceCards = (resources, type) => {
-      if (resources.length === 0) {
-        return (
-          <div style={{ padding: '14px 16px', color: '#444', fontSize: '15px', fontStyle: 'italic' }}>
-            No {type} added yet — click Edit to add some.
-          </div>
-        );
-      }
-      return (
-        <div style={{
-          display: 'flex',
-          gap: '10px',
-          overflowX: 'auto',
-          padding: '12px 16px',
-          scrollbarWidth: 'thin',
-          scrollbarColor: '#E8E6E1 transparent'
-        }}>
-          {resources.map((resource, idx) => {
-            const thumbnail = type === 'video' ? getYouTubeThumbnail(resource.url) : null;
-            const placeholderIcon = type === 'video'
-              ? <PlayCircle size={22} style={{ color: '#666' }} />
-              : type === 'worksheet'
-                ? <FileText size={22} style={{ color: '#666' }} />
-                : <Zap size={22} style={{ color: '#666' }} />;
-            const placeholderBg = type === 'video' ? '#E8E6E1' : type === 'worksheet' ? '#E4EEE4' : '#E8E4EE';
-
-            return (
-              <a
-                key={idx}
-                href={resource.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={e => e.stopPropagation()}
-                title={resource.title}
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  width: '130px',
-                  flexShrink: 0,
-                  border: '1px solid #E8E6E1',
-                  borderRadius: '8px',
-                  overflow: 'hidden',
-                  textDecoration: 'none',
-                  backgroundColor: '#fff',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-                  transition: 'box-shadow 0.2s, transform 0.15s'
-                }}
-                onMouseEnter={e => {
-                  e.currentTarget.style.boxShadow = '0 4px 10px rgba(0,0,0,0.14)';
-                  e.currentTarget.style.transform = 'translateY(-1px)';
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.06)';
-                  e.currentTarget.style.transform = 'translateY(0)';
-                }}
-              >
-                {thumbnail ? (
-                  <img
-                    src={thumbnail}
-                    alt={resource.title}
-                    style={{ width: '100%', height: '72px', objectFit: 'cover' }}
-                  />
-                ) : (
-                  <div style={{
-                    width: '100%',
-                    height: '72px',
-                    backgroundColor: placeholderBg,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}>
-                    {placeholderIcon}
-                  </div>
-                )}
-                <div style={{ padding: '6px 8px' }}>
-                  <p style={{
-                    margin: 0,
-                    fontSize: '13px',
-                    fontWeight: '600',
-                    color: '#111',
-                    lineHeight: '1.4',
-                    overflow: 'hidden',
-                    display: '-webkit-box',
-                    WebkitLineClamp: 2,
-                    WebkitBoxOrient: 'vertical'
-                  }}>
-                    {resource.title}
-                  </p>
-                </div>
-              </a>
-            );
-          })}
-        </div>
-      );
-    };
-
-    const topicAccentColor = colors.topicBorderColors[topicIdx % 4];
-    const topicTint = colors.topicTints[topicIdx % 4];
-
-    return (
-      <div
-        onMouseEnter={() => setHoveredTopic(topicBox.id)}
-        onMouseLeave={() => setHoveredTopic(null)}
-      >
-        <div style={{
-          border: '1px solid rgba(0,0,0,0.09)',
-          borderLeft: `3px solid ${topicAccentColor}`,
-          borderRadius: '0 8px 8px 0',
-          background: '#FFFFFF',
-          boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
-          overflow: 'hidden',
-        }}>
-
-          <div style={{ flex: 1, minWidth: 0 }}>
-            {/* ── Folder Tab Bar ── */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              background: topicTint,
-              borderBottom: '1px solid rgba(0,0,0,0.07)',
-              paddingLeft: '2px',
-              paddingRight: '6px',
-              gap: '0'
-            }}>
-              {/* Drag handle */}
-              <div
-                {...dragHandleProps}
-                onClick={e => e.stopPropagation()}
-                style={{
-                  cursor: 'grab', display: 'flex', alignItems: 'center',
-                  padding: '8px 6px 8px 4px', flexShrink: 0,
-                  color: '#999', fontSize: '13.2px'
-                }}
-              >
-                <GripVertical size={13} style={{ color: '#999' }} />
-              </div>
-
-              {/* Tabs */}
-              {tabs.map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={e => { e.stopPropagation(); setActiveTab(tab.id); }}
-                  style={{
-                    padding: '8px 10px',
-                    border: 'none',
-                    borderBottom: activeTab === tab.id ? `2px solid ${topicAccentColor}` : '2px solid transparent',
-                    marginBottom: '-1px',
-                    backgroundColor: 'transparent',
-                    cursor: 'pointer',
-                    fontSize: '13.2px',
-                    fontWeight: activeTab === tab.id ? '600' : '400',
-                    color: activeTab === tab.id ? '#111' : '#555',
-                    transition: 'all 0.15s',
-                    whiteSpace: 'nowrap',
-                    flexShrink: 0,
-                    fontFamily: "'DM Sans', sans-serif"
-                  }}
-                >
-                  {tab.label}
-                </button>
-              ))}
-
-              {/* Spacer */}
-              <div style={{ flex: 1 }} />
-
-              {/* Edit button */}
-              <button
-                onClick={e => { e.stopPropagation(); handleTopicBoxClick(topicBox, sectionId, subsectionId, topicIdx); }}
-                style={{
-                  padding: '3px 9px', background: '#FFFFFF', color: '#333',
-                  border: '1px solid rgba(0,0,0,0.1)', borderRadius: '5px',
-                  cursor: 'pointer', fontSize: '12.1px', fontWeight: '500',
-                  display: 'flex', alignItems: 'center', gap: '4px', marginRight: '6px', flexShrink: 0,
-                  fontFamily: "'DM Sans', sans-serif"
-                }}
-                title="Edit topic"
-              >
-                <Edit2 size={11} /> Edit
-              </button>
-
-              {/* Delete button — hover-only */}
-              <button
-                onClick={e => { e.stopPropagation(); actions.confirmDeleteTopicBox(sectionId, subsectionId, topicBox.id); }}
-                style={{
-                  background: 'none', border: 'none', cursor: 'pointer', padding: '4px',
-                  display: 'flex', alignItems: 'center', color: '#F87171', flexShrink: 0,
-                  opacity: hoveredTopic === topicBox.id ? 1 : 0,
-                  pointerEvents: hoveredTopic === topicBox.id ? 'auto' : 'none',
-                  transition: 'opacity 0.15s'
-                }}
-                title="Delete topic box"
-              >
-                <Trash2 size={13} />
-              </button>
-            </div>
-
-            {/* ── Tab Content ── */}
-            {activeTab === 'topic' && (
-              <div
-                onClick={() => handleTopicBoxClick(topicBox, sectionId, subsectionId, topicIdx)}
-                style={{ padding: '13px 16px', cursor: 'pointer' }}
-              >
-                <h4 style={{ margin: '0 0 7px', fontSize: '15px', fontWeight: '600', color: '#111', fontFamily: "'DM Sans', sans-serif" }}>
-                  {topicBox.title}
-                </h4>
-
-                {(topicBox.learning_objectives || []).length > 0 && (
-                  <ul style={{ margin: '0 0 10px', padding: 0, listStyle: 'none', fontSize: '14px', color: '#111', lineHeight: '1.5' }}>
-                    {topicBox.learning_objectives.slice(0, 3).map((obj, i) => (
-                      <li key={i} style={{ marginBottom: '2.5px', paddingLeft: '13px', position: 'relative' }}>
-                        <span style={{ position: 'absolute', left: 0, top: '9px', width: '4px', height: '4px', borderRadius: '50%', background: '#D1D5DB', display: 'inline-block' }} />
-                        {obj}
-                      </li>
-                    ))}
-                    {topicBox.learning_objectives.length > 3 && (
-                      <li style={{ color: '#555', fontStyle: 'italic', paddingLeft: '13px' }}>
-                        +{topicBox.learning_objectives.length - 3} more…
-                      </li>
-                    )}
-                  </ul>
-                )}
-
-                {/* Duration */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', color: '#444' }}>
-                  ⏱ {topicBox.duration_minutes || 0} min
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'videos' && renderResourceCards(videos, 'video')}
-            {activeTab === 'activities' && renderResourceCards(activities, 'activity')}
-            {activeTab === 'worksheets' && renderResourceCards(worksheets, 'worksheet')}
-
-            {/* ── Bottom Action Strip ── */}
-            <div style={{
-              display: 'flex',
-              gap: '4px',
-              padding: '5px 10px',
-              borderTop: '1px solid rgba(0,0,0,0.05)',
-              background: topicTint,
-              justifyContent: 'flex-end'
-            }}>
-            <button
-              onClick={e => { e.stopPropagation(); actions.addTopicBox(sectionId, subsectionId); }}
-              style={{
-                padding: '3px 8px',
-                background: '#FFFFFF',
-                color: '#333',
-                border: '1px solid rgba(0,0,0,0.12)',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '11px',
-                fontWeight: '600',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '3px'
-              }}
-              title="Add new topic box"
-            >
-              <Plus size={10} /> Topic
-            </button>
-          </div>
           </div>
         </div>
       </div>
@@ -973,73 +631,26 @@ const CourseEditor = ({
                               </div>
                             </div>
 
-                            {/* Subsection content */}
-                            {!isSubCollapsed && (
-                              <div style={{ padding: '12px 14px 12px 44px' }}>
-                                {/* Topic Boxes Droppable */}
-                                <Droppable droppableId={`topicboxes-${sub.id}`} type="TOPICBOX">
-                                  {(provided) => (
-                                    <div
-                                      ref={provided.innerRef}
-                                      {...provided.droppableProps}
-                                      style={{ minHeight: '20px' }}
-                                    >
-                                      {(sub.topicBoxes || []).length === 0 ? (
-                                        <div style={{
-                                          textAlign: 'center',
-                                          padding: '20px 0',
-                                          color: '#444',
-                                          fontSize: '14px',
-                                          marginBottom: '12px'
-                                        }}>
-                                          <p style={{ margin: '0 0 10px' }}>No topic boxes yet</p>
-                                          <button
-                                            onClick={() => actions.addTopicBox(section.id, sub.id)}
-                                            style={{
-                                              background: 'transparent',
-                                              border: '1px dashed rgba(0,0,0,0.2)',
-                                              borderRadius: '6px',
-                                              padding: '5px 20px',
-                                              cursor: 'pointer',
-                                              fontSize: '14px',
-                                              color: '#444',
-                                              fontFamily: "'DM Sans', sans-serif",
-                                              display: 'inline-block'
-                                            }}
-                                          >
-                                            + Add Topic
-                                          </button>
-                                        </div>
-                                      ) : (
-                                        (sub.topicBoxes || []).map((topic, topicIdx) => (
-                                          <Draggable
-                                            key={topic.id}
-                                            draggableId={topic.id}
-                                            index={topicIdx}
-                                          >
-                                            {(provided, snapshot) => (
-                                              <div
-                                                ref={provided.innerRef}
-                                                {...provided.draggableProps}
-                                                style={{
-                                                  ...provided.draggableProps.style,
-                                                  marginLeft: '28px',
-                                                  marginBottom: '8px',
-                                                  opacity: snapshot.isDragging ? 0.9 : 1
-                                                }}
-                                              >
-                                                {renderTopicBoxRow(topic, section.id, sub.id, provided.dragHandleProps, topicIdx)}
-                                              </div>
-                                            )}
-                                          </Draggable>
-                                        ))
-                                      )}
-                                      {provided.placeholder}
-                                    </div>
-                                  )}
-                                </Droppable>
-                              </div>
-                            )}
+                            {/* Open subsection page */}
+                            <div style={{
+                              padding: '8px 14px 10px 44px',
+                              display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+                            }}>
+                              <span style={{ fontSize: '12px', color: '#888' }}>
+                                {(sub.topicBoxes || []).length} topic{(sub.topicBoxes || []).length !== 1 ? 's' : ''}
+                              </span>
+                              <button
+                                onClick={() => onNavigateToSubsection?.(section.id, sub.id)}
+                                style={{
+                                  fontFamily: "'DM Sans', sans-serif", fontSize: '12.5px', fontWeight: '600',
+                                  padding: '4px 12px', borderRadius: '7px', cursor: 'pointer',
+                                  background: '#111', color: '#FFF', border: 'none',
+                                  display: 'inline-flex', alignItems: 'center', gap: '5px'
+                                }}
+                              >
+                                Open →
+                              </button>
+                            </div>
                           </div>
                         )}
                       </Draggable>
@@ -1071,188 +682,41 @@ const CourseEditor = ({
   // ── RENDER ────────────────────────────────────────────────────────────
   return (
     <>
-      <style>{`
-    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-    @keyframes spin { to { transform: rotate(360deg); } }
-  `}</style>
-      {/* Top Bar */}
-      <div style={{
-        padding: '0 28px', height: '68px',
-        display: 'flex', alignItems: 'center', gap: '8px',
-        background: '#FFFFFF',
-        borderBottom: '1px solid rgba(0,0,0,0.08)',
-        flexShrink: 0, position: 'sticky', top: 0, zIndex: 9
-      }}>
-        <button onClick={() => onBack ? onBack() : navigate('/my-courses')} style={{
-          fontFamily: "'DM Sans', sans-serif", fontSize: '13.8px', fontWeight: '500',
-          padding: '6px 13px', borderRadius: '8px', cursor: 'pointer',
-          background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.12)',
-          color: '#111', whiteSpace: 'nowrap', flexShrink: 0, transition: 'background 0.15s'
-        }}>← Course View</button>
-
-        {/* Centre: course title */}
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 0 }}>
-          <EditableField
-            value={courseName}
-            onChange={val => setCourseName(val)}
-            placeholder="Course name"
-            accentColor="#666"
-            maxLength={60}
-            style={{ display: 'flex', alignItems: 'center' }}
-            inputStyle={{
-              fontFamily: "'DM Serif Display', serif",
-              fontSize: '20.9px',
-              color: '#111',
-              letterSpacing: '-0.3px'
-            }}
-          />
-        </div>
-
-        {/* Undo */}
-        <button onClick={onUndo} disabled={!canUndo} style={{
-          fontFamily: "'DM Sans', sans-serif", fontSize: '13.8px', fontWeight: '500',
-          padding: '6px 13px', borderRadius: '8px', cursor: !canUndo ? 'not-allowed' : 'pointer',
-          background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.12)',
-          color: !canUndo ? '#999' : '#111', whiteSpace: 'nowrap', flexShrink: 0
-        }}>↶ Undo</button>
-
-        {/* Save status */}
-        <div style={{
-          fontFamily: "'DM Sans', sans-serif", fontSize: '13.8px', fontWeight: '500',
-          padding: '6px 13px', borderRadius: '8px',
-          background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.12)',
-          color: saveStatus === 'saving' ? '#6B7280' : '#1C5C35',
-          whiteSpace: 'nowrap', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '5px'
-        }}>
-          {saveStatus === 'saving' && (
-            <span style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: '#9CA3AF', display: 'inline-block', animation: 'pulse 1.5s ease-in-out infinite', flexShrink: 0 }} />
-          )}
-          {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'error' ? '✕ Error' : '✓ Saved'}
-        </div>
-
-        {/* Private / Public toggle */}
-        <div
-          onClick={onToggleVisibility}
-          style={{
-            display: 'flex', alignItems: 'center', gap: '7px', cursor: 'pointer',
-            padding: '5px 11px', borderRadius: '8px',
-            background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.12)',
-            whiteSpace: 'nowrap', flexShrink: 0, transition: 'background 0.15s',
-            fontFamily: "'DM Sans', sans-serif", fontSize: '13.8px', fontWeight: '500', color: '#111'
-          }}
-        >
+      {/* Course Outline — sections and subsections only */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '24px 28px 80px', position: 'relative', zIndex: 1 }}>
+        {sections.length === 0 ? (
           <div style={{
-            width: '28px', height: '16px', borderRadius: '8px',
-            background: isPublic ? '#86EFAC' : '#D1D5DB',
-            position: 'relative', transition: 'background 0.2s', flexShrink: 0
+            textAlign: 'center', padding: '80px 20px',
+            border: '1px solid rgba(0,0,0,0.08)', borderRadius: '16px',
+            background: '#FFFFFF'
           }}>
-            <div style={{
-              position: 'absolute', top: '2px',
-              left: isPublic ? '14px' : '2px',
-              width: '12px', height: '12px', borderRadius: '50%',
-              background: 'white', transition: 'left 0.2s',
-              boxShadow: '0 1px 2px rgba(0,0,0,0.15)'
-            }} />
+            <p style={{ fontSize: '30.8px', marginBottom: '8px' }}>📚</p>
+            <p style={{ fontSize: '22px', color: colors.textPrimary, fontWeight: '600', margin: '0 0 4px' }}>No sections yet</p>
+            <p style={{ fontSize: '14.3px', color: colors.textSecondary, margin: 0 }}>Click "+ Section" above to start building your course</p>
           </div>
-          <span>{isPublic ? 'Public' : 'Private'}</span>
-        </div>
-
-        {/* Share */}
-        {onShare && (
-          <button
-            onClick={onShare}
-            style={{
-              fontFamily: "'DM Sans', sans-serif", fontSize: '13.8px', fontWeight: '500',
-              padding: '6px 13px', borderRadius: '8px', cursor: 'pointer',
-              background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.12)',
-              color: '#111', whiteSpace: 'nowrap', flexShrink: 0, transition: 'background 0.15s',
-              display: 'flex', alignItems: 'center', gap: '5px'
-            }}
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
-              <polyline points="16 6 12 2 8 6"/>
-              <line x1="12" y1="2" x2="12" y2="15"/>
-            </svg>
-            Share
-          </button>
-        )}
-
-        {/* Divider */}
-        <div style={{ width: '1px', height: '22px', background: 'rgba(0,0,0,0.08)', flexShrink: 0 }} />
-
-        {/* Edo — amber tint */}
-        {onToggleEdo && (
-          <button
-            onClick={onToggleEdo}
-            title={isEdoOpen ? 'Close Edo AI' : 'Open Edo AI'}
-            style={{
-              fontFamily: "'DM Sans', sans-serif", fontSize: '13.8px', fontWeight: '500',
-              padding: '6px 13px', borderRadius: '8px', cursor: 'pointer',
-              background: isEdoOpen ? 'rgba(247,228,160,0.85)' : 'rgba(247,228,160,0.6)',
-              border: '1px solid rgba(180,150,30,0.25)',
-              color: '#5C460A', whiteSpace: 'nowrap', flexShrink: 0, transition: 'background 0.15s',
-              display: 'flex', alignItems: 'center', gap: '5px'
-            }}
-          >
-            <Sparkles size={12} />
-            Edo
-          </button>
+        ) : (
+          <Droppable droppableId="all-sections" type="SECTION">
+            {(provided) => (
+              <div ref={provided.innerRef} {...provided.droppableProps}>
+                {sections.map((section, idx) => (
+                  <Draggable key={section.id} draggableId={section.id} index={idx}>
+                    {(provided, snapshot) => (
+                      <div
+                        ref={provided.innerRef}
+                        {...provided.draggableProps}
+                        style={{ ...provided.draggableProps.style, opacity: snapshot.isDragging ? 0.8 : 1 }}
+                      >
+                        {renderSectionBlock(section, idx, provided.dragHandleProps)}
+                      </div>
+                    )}
+                  </Draggable>
+                ))}
+                {provided.placeholder}
+              </div>
+            )}
+          </Droppable>
         )}
       </div>
-
-
-      {/* Main content — topic detail panel OR course sections */}
-      {selectedTopicForDetail ? (
-        <TopicDetailsModal
-          topic={selectedTopicForDetail.topicBox}
-          sectionId={selectedTopicForDetail.sectionId}
-          subsectionId={selectedTopicForDetail.subsectionId}
-          onClose={() => { setSelectedTopicForDetail(null); onTopicDetailOpen?.(null); }}
-          onSave={handleSaveTopicDetail}
-          actions={actions}
-          videosByTopic={videosByTopic}
-          handsOnResources={handsOnResources}
-          currentUser={currentUser}
-          accentColor={colors.topicBorderColors[(selectedTopicForDetail.topicIdx || 0) % 4]}
-          accentDeepColor={colors.topicDeepColors[(selectedTopicForDetail.topicIdx || 0) % 4]}
-        />
-      ) : (
-        <div style={{ flex: 1, overflowY: 'auto', padding: '24px 28px 80px', position: 'relative', zIndex: 1 }}>
-          {sections.length === 0 ? (
-            <div style={{
-              textAlign: 'center', padding: '80px 20px',
-              border: '1px solid rgba(0,0,0,0.08)', borderRadius: '16px',
-              background: '#FFFFFF'
-            }}>
-              <p style={{ fontSize: '30.8px', marginBottom: '8px' }}>📚</p>
-              <p style={{ fontSize: '22px', color: colors.textPrimary, fontWeight: '600', margin: '0 0 4px' }}>No sections yet</p>
-              <p style={{ fontSize: '14.3px', color: colors.textSecondary, margin: 0 }}>Click "+ Section" above to start building your course</p>
-            </div>
-          ) : (
-            <Droppable droppableId="all-sections" type="SECTION">
-              {(provided) => (
-                <div ref={provided.innerRef} {...provided.droppableProps}>
-                  {sections.map((section, idx) => (
-                    <Draggable key={section.id} draggableId={section.id} index={idx}>
-                      {(provided, snapshot) => (
-                        <div
-                          ref={provided.innerRef}
-                          {...provided.draggableProps}
-                          style={{ ...provided.draggableProps.style, opacity: snapshot.isDragging ? 0.8 : 1 }}
-                        >
-                          {renderSectionBlock(section, idx, provided.dragHandleProps)}
-                        </div>
-                      )}
-                    </Draggable>
-                  ))}
-                  {provided.placeholder}
-                </div>
-              )}
-            </Droppable>
-          )}
-        </div>
-      )}
 
       {/* Modals */}
       <ConfirmDialog

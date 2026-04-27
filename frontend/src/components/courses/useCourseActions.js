@@ -739,6 +739,35 @@ const useCourseActions = ({
     }));
   };
 
+  // ── Block CRUD (handsOnResources, id-based) ───────────────────────────
+  const addBlock = (topicId, blockData) => {
+    const block = {
+      ...blockData,
+      id: blockData.id || `block-${Date.now()}`,
+      addedAt: blockData.addedAt || new Date().toISOString(),
+    };
+    setHandsOnResources(prev => ({
+      ...prev,
+      [topicId]: [...(prev[topicId] || []), block],
+    }));
+  };
+
+  const removeBlock = (topicId, blockId) => {
+    setHandsOnResources(prev => ({
+      ...prev,
+      [topicId]: (prev[topicId] || []).filter(b => b.id !== blockId),
+    }));
+  };
+
+  const updateBlock = (topicId, blockId, updatedFields) => {
+    setHandsOnResources(prev => ({
+      ...prev,
+      [topicId]: (prev[topicId] || []).map(b =>
+        b.id === blockId ? { ...b, ...updatedFields } : b
+      ),
+    }));
+  };
+
   // ── Return All Actions ────────────────────────────────────────────────
   return {
     // Section
@@ -789,6 +818,11 @@ const useCourseActions = ({
     insertSubsectionAt,
     insertTopicBoxAt,
     
+    // Block CRUD (id-based)
+    addBlock,
+    removeBlock,
+    updateBlock,
+
     // Resources
     generateVideosFromBackend,
     generateResource,
