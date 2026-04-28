@@ -28,9 +28,12 @@ class ShareCourseRequest(BaseModel):
 @router.get("/")
 async def get_notifications(current_user: dict = Depends(verify_firebase_token)):
     """Return all notifications for the authenticated user, newest first."""
-    uid = current_user["uid"]
-    notifs = await firebase.get_notifications(uid)
-    return {"notifications": notifs}
+    try:
+        uid = current_user["uid"]
+        notifs = await firebase.get_notifications(uid)
+        return {"notifications": notifs}
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 @router.post("/share")

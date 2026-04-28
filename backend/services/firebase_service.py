@@ -508,6 +508,8 @@ class FirebaseService:
         notifs = []
         for doc in docs:
             data = doc.to_dict()
+            if data is None:
+                continue
             data['id'] = doc.id
             notifs.append(data)
         notifs.sort(key=lambda n: n.get('createdAt', ''), reverse=True)

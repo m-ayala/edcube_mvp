@@ -206,19 +206,24 @@ const TopicDetailsModal = ({
     if (allLinks.length === 0) return null;
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', marginTop: '10px' }}>
-        {allLinks.map((url, i) => url ? (
-          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 10px', backgroundColor: colors.accentLight, borderRadius: '7px' }}>
-            <span style={{ fontSize: '12px', flexShrink: 0 }}>🔗</span>
-            <a
-              href={url}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ fontSize: '12.7px', fontWeight: '600', color: colors.accent, textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: '3px', flex: 1 }}
-            >
-              {url.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]}… <ExternalLink size={11} />
-            </a>
-          </div>
-        ) : null)}
+        {allLinks.map((item, i) => {
+          const urlStr = typeof item === 'string' ? item : item?.url;
+          const label = typeof item === 'string' ? null : item?.label;
+          if (!urlStr) return null;
+          return (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 10px', backgroundColor: colors.accentLight, borderRadius: '7px' }}>
+              <span style={{ fontSize: '12px', flexShrink: 0 }}>🔗</span>
+              <a
+                href={urlStr}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ fontSize: '12.7px', fontWeight: '600', color: colors.accent, textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: '3px', flex: 1 }}
+              >
+                {label || urlStr.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]}… <ExternalLink size={11} />
+              </a>
+            </div>
+          );
+        })}
       </div>
     );
   };

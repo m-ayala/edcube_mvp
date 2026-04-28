@@ -227,6 +227,7 @@ const CourseWorkspace = () => {
             loadedVideos[topic.id] = topic.video_resources;
           }
           const resources = [
+            ...(topic.content_blocks || []),
             ...(topic.worksheets || []),
             ...(topic.activities || [])
           ];
@@ -334,6 +335,7 @@ const CourseWorkspace = () => {
         topicBoxes: (sub.topicBoxes || []).map(topic => ({
           ...topic,
           video_resources: videosByTopic[topic.id] || topic.video_resources || [],
+          content_blocks: handsOnResources[topic.id]?.filter(r => r.type === 'content') || topic.content_blocks || [],
           worksheets: handsOnResources[topic.id]?.filter(r => r.type === 'worksheet') || topic.worksheets || [],
           activities: handsOnResources[topic.id]?.filter(r => r.type === 'activity') || topic.activities || []
         }))
@@ -369,7 +371,7 @@ const CourseWorkspace = () => {
 
     const result = await response.json();
     if (!result.success) {
-      throw new Error(result.error || 'Unknown error');
+      throw new Error(result.error || result.detail || 'Unknown error');
     }
 
     // Capture the new courseId for subsequent saves
