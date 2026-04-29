@@ -58,7 +58,7 @@ const ADD_TRAY_TYPE = {
   objectives: 'FIELD_EDIT',
 };
 
-const SuggestionCard = ({ card, index, applied, onAddToTray }) => {
+const SuggestionCard = ({ card, index, applied, onAddToTray, hideTray = false }) => {
   const [copied, setCopied] = useState(false);
   const [addedToTray, setAddedToTray] = useState(false);
 
@@ -144,7 +144,7 @@ const SuggestionCard = ({ card, index, applied, onAddToTray }) => {
           {copied ? 'Copied' : 'Copy'}
         </button>
 
-        {trayType && (
+        {trayType && !hideTray && (
           <button
             onClick={handleAddToTray}
             disabled={isInTray}
@@ -655,6 +655,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
                       card={card}
                       index={idx}
                       applied={(msg.appliedCards || new Set()).has(idx)}
+                      hideTray={currentPage?.page === 'block'}
                       onAddToTray={(c, type) => {
                         let data;
                         if (type === 'SECTION') {

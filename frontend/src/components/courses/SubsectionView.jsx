@@ -1,6 +1,7 @@
 // src/components/courses/SubsectionView.jsx
 import { useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, GripVertical } from 'lucide-react';
+import { Droppable, Draggable } from '@hello-pangea/dnd';
 
 const BLOCK_TYPE_STYLES = {
   content:   { bg: '#EAF0FF', border: '#BFD0FF', text: '#2A4A9A', badgeBg: '#6B8FE8', label: 'Content' },
@@ -412,95 +413,120 @@ const SubsectionView = ({
             </div>
           </div>
         ) : (
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
-            gap: '14px',
-          }}>
-            {blocks.map(block => {
-              const s = BLOCK_TYPE_STYLES[block.type] || BLOCK_TYPE_STYLES.content;
-              const isHovered = hoveredBlock === block.id;
-              return (
-                <div
-                  key={block.id}
-                  onClick={() => onNavigateToBlock?.(sectionId, subsection.id, block.id)}
-                  onMouseEnter={() => setHoveredBlock(block.id)}
-                  onMouseLeave={() => setHoveredBlock(null)}
-                  style={{
-                    aspectRatio: '1 / 1',
-                    background: s.bg,
-                    border: `1.5px solid ${s.border}`,
-                    borderRadius: '12px',
-                    padding: '14px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-between',
-                    boxShadow: isHovered ? '0 4px 14px rgba(0,0,0,0.12)' : '0 1px 4px rgba(0,0,0,0.06)',
-                    transition: 'box-shadow 0.15s, transform 0.1s',
-                    transform: isHovered ? 'translateY(-2px)' : 'none',
-                    position: 'relative',
-                    overflow: 'hidden',
-                  }}
-                >
-                  {/* Type badge */}
-                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-                    <span style={{
-                      display: 'inline-block', padding: '3px 8px',
-                      background: s.badgeBg, color: 'white',
-                      borderRadius: '6px', fontSize: '10px', fontWeight: '700',
-                      textTransform: 'uppercase', letterSpacing: '0.04em',
-                      fontFamily: "'DM Sans', sans-serif",
-                    }}>
-                      {s.label}
-                    </span>
-                    <button
-                      onClick={e => { e.stopPropagation(); actions.removeBlock(subsection.id, block.id); }}
-                      style={{
-                        background: 'none', border: 'none', cursor: 'pointer',
-                        color: s.text, padding: '2px',
-                        opacity: isHovered ? 0.7 : 0,
-                        transition: 'opacity 0.15s',
-                        display: 'flex', alignItems: 'center',
-                      }}
-                      title="Delete block"
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
+          <Droppable droppableId={`blocks-${subsection.id}`} type="BLOCK" direction="horizontal">
+            {(provided) => (
+              <div
+                ref={provided.innerRef}
+                {...provided.droppableProps}
+                style={{ display: 'flex', flexWrap: 'wrap', gap: '14px' }}
+              >
+                {blocks.map((block, idx) => {
+                  const s = BLOCK_TYPE_STYLES[block.type] || BLOCK_TYPE_STYLES.content;
+                  const isHovered = hoveredBlock === block.id;
+                  return (
+                    <Draggable key={block.id} draggableId={block.id} index={idx}>
+                      {(provided, snapshot) => (
+                        <div
+                          ref={provided.innerRef}
+                          {...provided.draggableProps}
+                          onMouseEnter={() => setHoveredBlock(block.id)}
+                          onMouseLeave={() => setHoveredBlock(null)}
+                          onClick={() => onNavigateToBlock?.(sectionId, subsection.id, block.id)}
+                          style={{
+                            ...provided.draggableProps.style,
+                            width: '160px',
+                            aspectRatio: '1 / 1',
+                            background: s.bg,
+                            border: `1.5px solid ${s.border}`,
+                            borderRadius: '12px',
+                            padding: '14px',
+                            cursor: snapshot.isDragging ? 'grabbing' : 'pointer',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'space-between',
+                            boxShadow: snapshot.isDragging ? '0 8px 20px rgba(0,0,0,0.15)' : isHovered ? '0 4px 14px rgba(0,0,0,0.12)' : '0 1px 4px rgba(0,0,0,0.06)',
+                            transform: snapshot.isDragging
+                              ? `${provided.draggableProps.style?.transform || ''} rotate(2deg)`
+                              : isHovered
+                                ? 'translateY(-2px)'
+                                : provided.draggableProps.style?.transform || 'none',
+                            position: 'relative',
+                            overflow: 'hidden',
+                            opacity: snapshot.isDragging ? 0.9 : 1,
+                          }}
+                        >
+                          {/* Drag handle */}
+                          <div
+                            {...provided.dragHandleProps}
+                            onClick={e => e.stopPropagation()}
+                            style={{
+                              position: 'absolute', top: '6px', left: '6px',
+                              cursor: 'grab', opacity: isHovered ? 0.45 : 0,
+                              transition: 'opacity 0.15s',
+                              display: 'flex', alignItems: 'center',
+                            }}
+                          >
+                            <GripVertical size={12} color={s.text} />
+                          </div>
 
-                  {/* Title */}
-                  <div>
-                    <p style={{
-                      margin: '0 0 4px', fontSize: '14px', fontWeight: '600',
-                      color: s.text, fontFamily: "'DM Sans', sans-serif",
-                      lineHeight: '1.35',
-                      overflow: 'hidden',
-                      display: '-webkit-box',
-                      WebkitLineClamp: 3,
-                      WebkitBoxOrient: 'vertical',
-                    }}>
-                      {block.title || <span style={{ fontStyle: 'italic', opacity: 0.6 }}>Untitled</span>}
-                    </p>
-                    {block.category && (
-                      <p style={{ margin: 0, fontSize: '11px', color: s.text, opacity: 0.65, fontFamily: "'DM Sans', sans-serif" }}>
-                        {block.subcategory || block.category}
-                      </p>
-                    )}
-                  </div>
+                          {/* Type badge + delete */}
+                          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                            <span style={{
+                              display: 'inline-block', padding: '3px 8px',
+                              background: s.badgeBg, color: 'white',
+                              borderRadius: '6px', fontSize: '10px', fontWeight: '700',
+                              textTransform: 'uppercase', letterSpacing: '0.04em',
+                              fontFamily: "'DM Sans', sans-serif",
+                            }}>
+                              {s.label}
+                            </span>
+                            <button
+                              onClick={e => { e.stopPropagation(); actions.removeBlock(subsection.id, block.id); }}
+                              style={{
+                                background: 'none', border: 'none', cursor: 'pointer',
+                                color: s.text, padding: '2px',
+                                opacity: isHovered ? 0.7 : 0,
+                                transition: 'opacity 0.15s',
+                                display: 'flex', alignItems: 'center',
+                              }}
+                              title="Delete block"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
 
-                  {/* Open arrow */}
-                  <div style={{
-                    fontSize: '11px', fontWeight: '600', color: s.text,
-                    opacity: isHovered ? 1 : 0.45, transition: 'opacity 0.15s',
-                    textAlign: 'right',
-                  }}>
-                    Open →
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                          {/* Title */}
+                          <div>
+                            <p style={{
+                              margin: '0 0 4px', fontSize: '14px', fontWeight: '600',
+                              color: s.text, fontFamily: "'DM Sans', sans-serif",
+                              lineHeight: '1.35',
+                              overflow: 'hidden',
+                              display: '-webkit-box',
+                              WebkitLineClamp: 3,
+                              WebkitBoxOrient: 'vertical',
+                            }}>
+                              {block.title || <span style={{ fontStyle: 'italic', opacity: 0.6 }}>Untitled</span>}
+                            </p>
+                          </div>
+
+                          {/* Open arrow */}
+                          <div style={{
+                            fontSize: '11px', fontWeight: '600', color: s.text,
+                            opacity: isHovered ? 1 : 0.45, transition: 'opacity 0.15s',
+                            textAlign: 'right',
+                          }}>
+                            Open →
+                          </div>
+                        </div>
+                      )}
+                    </Draggable>
+                  );
+                })}
+                {provided.placeholder}
+              </div>
+            )}
+          </Droppable>
         )}
       </div>
     </div>

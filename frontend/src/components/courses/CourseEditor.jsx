@@ -543,6 +543,12 @@ const CourseEditor = ({
                             <div style={{
                               display: 'flex', alignItems: 'center', gap: '10px', padding: '11px 14px',
                             }}>
+                              {/* Subsection color bar */}
+                              <div style={{
+                                width: '3px', height: '28px', borderRadius: '2px', flexShrink: 0,
+                                background: colors.sectionGradients[index % 4],
+                              }} />
+
                               {/* Drag handle */}
                               <div
                                 {...provided.dragHandleProps}

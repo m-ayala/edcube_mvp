@@ -186,8 +186,17 @@ const BlockView = ({
 
   const isGenerating = linkGenStatus === 'generating';
 
+  const BLOB_BG = `
+    radial-gradient(circle at 15% 20%,  rgba(178,232,200,0.22)  0%, transparent 40%),
+    radial-gradient(circle at 85% 8%,   rgba(172,216,240,0.22)  0%, transparent 38%),
+    radial-gradient(circle at 50% 85%,  rgba(242,192,212,0.18)  0%, transparent 42%),
+    radial-gradient(circle at 90% 60%,  rgba(247,228,160,0.18)  0%, transparent 35%),
+    radial-gradient(circle at 20% 65%,  rgba(172,216,240,0.15)  0%, transparent 35%),
+    #FAFAF9
+  `;
+
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#FAFAF9', overflow: 'hidden' }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: BLOB_BG, overflow: 'hidden' }}>
 
       {/* ── Top bar ── */}
       <div style={{
@@ -195,20 +204,17 @@ const BlockView = ({
         padding: '10px 24px', background: '#FFFFFF',
         borderBottom: '1px solid rgba(0,0,0,0.08)', flexShrink: 0,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', fontSize: '13px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', fontSize: '13px' }}>
           <button
             onClick={onBack}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#555', fontFamily: "'DM Sans', sans-serif", fontSize: '13px', fontWeight: '600', padding: '4px 0' }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#555', fontFamily: "'DM Sans', sans-serif", fontSize: '15px', fontWeight: '500', padding: '4px 0', lineHeight: 1 }}
           >
-            ← {subsectionTitle || 'Subsection'}
+            ←
           </button>
           {sectionTitle && subsectionTitle && (
-            <>
-              <span style={{ color: '#BBB' }}>·</span>
-              <span style={{ color: '#AAA' }}>
-                {sectionTitle} › {subsectionTitle} › <strong style={{ color: '#555' }}>{localTitle || 'Untitled Block'}</strong>
-              </span>
-            </>
+            <span style={{ color: '#777', fontSize: '13px' }}>
+              {sectionTitle} <span style={{ color: '#BBB' }}>›</span> {subsectionTitle} <span style={{ color: '#BBB' }}>›</span> <strong style={{ color: '#444', fontWeight: '600' }}>{localTitle || 'Untitled Block'}</strong>
+            </span>
           )}
         </div>
       </div>
@@ -217,10 +223,10 @@ const BlockView = ({
       <div style={{ flex: 1, overflowY: 'auto', padding: '24px 28px 60px' }}>
 
         {/* Block metadata card */}
-        <div style={{ background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.08)', borderRadius: '12px', padding: '20px 24px', marginBottom: '20px', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
+        <div style={{ background: 'rgba(255,255,255,0.88)', border: '1.5px solid rgba(255,255,255,0.95)', borderRadius: '12px', padding: '20px 24px', marginBottom: '20px', boxShadow: '0 2px 12px rgba(0,0,0,0.07)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}>
 
-          {/* Type badge + meta row */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
+          {/* Type badge */}
+          <div style={{ marginBottom: '16px' }}>
             <span style={{
               padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '700',
               background: typeStyle.bg, color: typeStyle.text, border: `1px solid ${typeStyle.border}`,
@@ -228,22 +234,6 @@ const BlockView = ({
             }}>
               {typeStyle.label}
             </span>
-
-            <select value={localCategory} onChange={e => handleCategoryChange(e.target.value)} style={inputStyle}>
-              <option value="">— Category —</option>
-              {categoryOptions.map(cat => (
-                <option key={cat.id} value={cat.id}>{cat.label}</option>
-              ))}
-            </select>
-
-            {subcategoryOptions.length > 0 && (
-              <select value={localSubcategory} onChange={e => handleSubcategoryChange(e.target.value)} style={inputStyle}>
-                <option value="">— Subcategory —</option>
-                {subcategoryOptions.map(sub => (
-                  <option key={sub} value={sub}>{sub}</option>
-                ))}
-              </select>
-            )}
           </div>
 
           {/* Title */}
@@ -267,7 +257,7 @@ const BlockView = ({
         </div>
 
         {/* Content area */}
-        <div style={{ background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.08)', borderRadius: '12px', padding: '20px 24px', marginBottom: '20px', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
+        <div style={{ background: 'rgba(255,255,255,0.88)', border: '1.5px solid rgba(255,255,255,0.95)', borderRadius: '12px', padding: '20px 24px', marginBottom: '20px', boxShadow: '0 2px 12px rgba(0,0,0,0.07)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
             <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#999', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
               Content

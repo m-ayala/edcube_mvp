@@ -480,6 +480,16 @@ const CourseWorkspace = () => {
           s.id === sectionId ? { ...s, subsections: reorderedSubsections } : s
         ));
       }
+      return;
+    }
+
+    if (type === 'BLOCK') {
+      const subsectionId = source.droppableId.replace('blocks-', '');
+      const currentBlocks = [...(handsOnResources[subsectionId] || [])];
+      const [movedBlock] = currentBlocks.splice(source.index, 1);
+      currentBlocks.splice(destination.index, 0, movedBlock);
+      setHandsOnResources(prev => ({ ...prev, [subsectionId]: currentBlocks }));
+      return;
     }
   };
 
