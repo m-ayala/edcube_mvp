@@ -1,13 +1,11 @@
 // src/components/courses/CourseViewer.jsx
 // Read-only viewer for courses — no editing, no drag-and-drop
 import { useState } from 'react';
-import { ArrowLeft, Edit2, PlayCircle, FileText, Zap, PencilLine, Download } from 'lucide-react';
-import TopicDetailsModal from '../modals/TopicDetailsModal';
+import { ArrowLeft, PencilLine, Download } from 'lucide-react';
 
 const CourseViewer = ({
   courseName,
   sections,
-  videosByTopic,
   handsOnResources,
   ownerName,
   isOwner,
@@ -16,7 +14,6 @@ const CourseViewer = ({
   onEditAsCollaborator,
   navigate
 }) => {
-  const [selectedTopic, setSelectedTopic] = useState(null);
   const [collapsedSections, setCollapsedSections] = useState({});
   const [collapsedSubsections, setCollapsedSubsections] = useState({});
 
@@ -44,39 +41,30 @@ const CourseViewer = ({
       (section.subsections || []).forEach((sub, subIdx) => {
         lines.push(`  ${sIdx + 1}.${subIdx + 1} ${sub.title}`);
         if (sub.description) lines.push(`  ${sub.description}`);
+        if (sub.duration_minutes) lines.push(`  Duration: ${sub.duration_minutes} min`);
+        if ((sub.learning_objectives || []).length > 0) {
+          lines.push('  Learning Objectives:');
+          sub.learning_objectives.forEach(obj => lines.push(`    - ${obj}`));
+        }
+
+        const blocks = handsOnResources[sub.id] || [];
+        const contentBlocks = blocks.filter(b => b.type === 'content');
+        const worksheets = blocks.filter(b => b.type === 'worksheet');
+        const activities = blocks.filter(b => b.type === 'activity');
+
+        if (contentBlocks.length > 0) {
+          lines.push('  Content:');
+          contentBlocks.forEach(b => lines.push(`    - ${b.title}${b.url ? ': ' + b.url : ''}`));
+        }
+        if (worksheets.length > 0) {
+          lines.push('  Worksheets:');
+          worksheets.forEach(b => lines.push(`    - ${b.title}${b.url ? ': ' + b.url : ''}`));
+        }
+        if (activities.length > 0) {
+          lines.push('  Activities:');
+          activities.forEach(b => lines.push(`    - ${b.title}${b.url ? ': ' + b.url : ''}`));
+        }
         lines.push('');
-
-        (sub.topicBoxes || []).forEach(topic => {
-          lines.push(`    TOPIC: ${topic.title}`);
-          lines.push(`    Duration: ${topic.duration_minutes || 0} min`);
-          if ((topic.pla_pillars || []).length > 0) {
-            lines.push(`    PLA Pillars: ${topic.pla_pillars.join(', ')}`);
-          }
-          if ((topic.learning_objectives || []).length > 0) {
-            lines.push('    Learning Objectives:');
-            topic.learning_objectives.forEach(obj => lines.push(`      - ${obj}`));
-          }
-
-          const videos = videosByTopic[topic.id] || [];
-          if (videos.length > 0) {
-            lines.push('    Videos:');
-            videos.forEach(v => lines.push(`      - ${v.title}: ${v.url}`));
-          }
-
-          const allRes = handsOnResources[topic.id] || [];
-          const worksheets = allRes.filter(r => r.type === 'worksheet');
-          const activities = allRes.filter(r => r.type === 'activity');
-          if (worksheets.length > 0) {
-            lines.push('    Worksheets:');
-            worksheets.forEach(w => lines.push(`      - ${w.title}: ${w.url}`));
-          }
-          if (activities.length > 0) {
-            lines.push('    Activities:');
-            activities.forEach(a => lines.push(`      - ${a.title}: ${a.url}`));
-          }
-
-          lines.push('');
-        });
       });
     });
 
@@ -91,290 +79,27 @@ const CourseViewer = ({
     URL.revokeObjectURL(url);
   };
 
+  // ── Block type config ────────────────────────────────────────────────
+  const blockConfig = {
+    content:   { label: 'Content',   bg: '#EAF0FF', color: '#6B8FE8' },
+    worksheet: { label: 'Worksheet', bg: '#FFF3E8', color: '#E8A55C' },
+    activity:  { label: 'Activity',  bg: '#EDFFF3', color: '#5CC97C' },
+  };
+
   // ── Colors — matches CourseEditor exactly ─────────────────────────────
   const colors = {
     bg: '#F7F5F0',
     card: '#FFFFFF',
     sectionBorder: '#E7E5E4',
     sectionBg: '#FFFFFF',
-    sectionStripe: '#52A67A',       // Green left stripe
+    sectionStripe: '#52A67A',
     subsectionBg: '#FFFFFF',
     subsectionBorder: '#E7E5E4',
-    subsectionStripe: '#5B8FBD',    // Blue left stripe
-    topicBg: '#FFFFFF',
-    topicBorder: '#E7E5E4',
-    topicStripe: '#C2547A',         // Pink/red left stripe
+    subsectionStripe: '#5B8FBD',
     textPrimary: '#111',
     textSecondary: '#111',
     pillBg: '#F5F5F4',
     pillText: '#333',
-    pla: {
-      'Personal Growth': '#FEF3C7',
-      'Core Learning': '#E0F2FE',
-      'Critical Thinking': '#FDF4FF',
-      'Application & Impact': '#F0FDF4'
-    },
-    plaText: {
-      'Personal Growth': '#92400E',
-      'Core Learning': '#0369A1',
-      'Critical Thinking': '#7E22CE',
-      'Application & Impact': '#166534'
-    }
-  };
-
-  // ── Topic Box (read-only) ────────────────────────────────────────────
-  const TopicBoxCard = ({ topicBox }) => {
-    const [activeTab, setActiveTab] = useState('topic');
-    const [hovered, setHovered] = useState(false);
-
-    const videos = videosByTopic[topicBox.id] || [];
-    const allResources = handsOnResources[topicBox.id] || [];
-    const worksheets = allResources.filter(r => r.type === 'worksheet');
-    const activities = allResources.filter(r => r.type === 'activity');
-
-    const tabs = [
-      { id: 'topic', label: 'Topic' },
-      { id: 'videos', label: videos.length > 0 ? `Videos (${videos.length})` : 'Videos' },
-      { id: 'activities', label: activities.length > 0 ? `Activities (${activities.length})` : 'Activities' },
-      { id: 'worksheets', label: worksheets.length > 0 ? `Worksheets (${worksheets.length})` : 'Worksheets' },
-    ];
-
-    const getYouTubeThumbnail = (url) => {
-      try {
-        const urlObj = new URL(url);
-        let videoId = null;
-        if (urlObj.hostname.includes('youtube.com')) {
-          videoId = urlObj.searchParams.get('v');
-        } else if (urlObj.hostname.includes('youtu.be')) {
-          videoId = urlObj.pathname.slice(1).split('?')[0];
-        }
-        if (videoId) return `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
-      } catch {}
-      return null;
-    };
-
-    const renderResourceCards = (resources, type) => {
-      if (resources.length === 0) {
-        return (
-          <div style={{ padding: '14px 16px', color: '#444', fontSize: '14px', fontStyle: 'italic' }}>
-            No {type} added for this topic.
-          </div>
-        );
-      }
-      return (
-        <div style={{
-          display: 'flex',
-          gap: '10px',
-          overflowX: 'auto',
-          padding: '12px 16px',
-          scrollbarWidth: 'thin',
-          scrollbarColor: '#E8E6E1 transparent'
-        }}>
-          {resources.map((resource, idx) => {
-            const thumbnail = type === 'video' ? getYouTubeThumbnail(resource.url) : null;
-            const placeholderIcon = type === 'video'
-              ? <PlayCircle size={22} style={{ color: '#666' }} />
-              : type === 'worksheet'
-                ? <FileText size={22} style={{ color: '#666' }} />
-                : <Zap size={22} style={{ color: '#666' }} />;
-            const placeholderBg = type === 'video' ? '#E8E6E1' : type === 'worksheet' ? '#E4EEE4' : '#E8E4EE';
-
-            return (
-              <a
-                key={idx}
-                href={resource.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={e => e.stopPropagation()}
-                title={resource.title}
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  width: '130px',
-                  flexShrink: 0,
-                  border: `1px solid ${colors.topicBorder}`,
-                  borderRadius: '8px',
-                  overflow: 'hidden',
-                  textDecoration: 'none',
-                  backgroundColor: '#fff',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-                  transition: 'box-shadow 0.2s, transform 0.15s'
-                }}
-                onMouseEnter={e => {
-                  e.currentTarget.style.boxShadow = '0 4px 10px rgba(0,0,0,0.14)';
-                  e.currentTarget.style.transform = 'translateY(-1px)';
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.06)';
-                  e.currentTarget.style.transform = 'translateY(0)';
-                }}
-              >
-                {thumbnail ? (
-                  <img
-                    src={thumbnail}
-                    alt={resource.title}
-                    style={{ width: '100%', height: '72px', objectFit: 'cover' }}
-                  />
-                ) : (
-                  <div style={{
-                    width: '100%',
-                    height: '72px',
-                    backgroundColor: placeholderBg,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}>
-                    {placeholderIcon}
-                  </div>
-                )}
-                <div style={{ padding: '6px 8px' }}>
-                  <p style={{
-                    margin: 0,
-                    fontSize: '12.1px',
-                    fontWeight: '600',
-                    color: colors.textPrimary,
-                    lineHeight: '1.4',
-                    overflow: 'hidden',
-                    display: '-webkit-box',
-                    WebkitLineClamp: 2,
-                    WebkitBoxOrient: 'vertical'
-                  }}>
-                    {resource.title}
-                  </p>
-                </div>
-              </a>
-            );
-          })}
-        </div>
-      );
-    };
-
-    return (
-      <div
-        style={{ marginBottom: '10px' }}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-      >
-        <div style={{
-          border: `1px solid ${colors.topicBorder}`,
-          borderRadius: '10px',
-          backgroundColor: colors.topicBg,
-          boxShadow: hovered ? '0 4px 12px rgba(0,0,0,0.10)' : '0 1px 3px rgba(0,0,0,0.05)',
-          overflow: 'hidden',
-          transition: 'box-shadow 0.2s',
-          display: 'flex'
-        }}>
-          {/* Pink/red left stripe */}
-          <div style={{ width: '4px', backgroundColor: colors.topicStripe, flexShrink: 0 }} />
-
-          <div style={{ flex: 1, minWidth: 0 }}>
-            {/* ── Folder Tab Bar ── */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              backgroundColor: '#FAFAF9',
-              borderBottom: `1px solid ${colors.topicBorder}`,
-              paddingLeft: '2px',
-              paddingRight: '6px'
-            }}>
-              {tabs.map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={e => { e.stopPropagation(); setActiveTab(tab.id); }}
-                  style={{
-                    padding: '8px 11px',
-                    border: 'none',
-                    borderBottom: activeTab === tab.id ? `2px solid ${colors.topicStripe}` : '2px solid transparent',
-                    backgroundColor: 'transparent',
-                    cursor: 'pointer',
-                    fontSize: '13px',
-                    fontWeight: activeTab === tab.id ? '600' : '400',
-                    color: activeTab === tab.id ? colors.topicStripe : '#555',
-                    transition: 'all 0.15s',
-                    whiteSpace: 'nowrap',
-                    fontFamily: "'DM Sans', sans-serif"
-                  }}
-                >
-                  {tab.label}
-                </button>
-              ))}
-
-              <div style={{ flex: 1 }} />
-
-              {/* View details button */}
-              <button
-                onClick={e => { e.stopPropagation(); setSelectedTopic(topicBox); }}
-                style={{
-                  padding: '4px 9px',
-                  backgroundColor: '#fff',
-                  color: '#333',
-                  border: `1px solid ${colors.topicBorder}`,
-                  borderRadius: '5px',
-                  cursor: 'pointer',
-                  fontSize: '12.1px',
-                  fontWeight: '600',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  flexShrink: 0,
-                  fontFamily: "'DM Sans', sans-serif"
-                }}
-                title="View topic details"
-              >
-                <Edit2 size={11} /> Details
-              </button>
-            </div>
-
-            {/* ── Tab Content ── */}
-            {activeTab === 'topic' && (
-              <div
-                onClick={() => setSelectedTopic(topicBox)}
-                style={{ padding: '13px 16px', cursor: 'pointer' }}
-              >
-                <h4 style={{ margin: '0 0 7px', fontSize: '16px', fontWeight: '600', color: '#111' }}>
-                  {topicBox.title}
-                </h4>
-
-                {(topicBox.learning_objectives || []).length > 0 && (
-                  <ul style={{ margin: '0 0 10px', paddingLeft: '18px', fontSize: '14px', color: '#111', lineHeight: '1.6' }}>
-                    {topicBox.learning_objectives.slice(0, 3).map((obj, i) => (
-                      <li key={i} style={{ marginBottom: '3px' }}>{obj}</li>
-                    ))}
-                    {topicBox.learning_objectives.length > 3 && (
-                      <li style={{ color: '#555', fontStyle: 'italic' }}>
-                        +{topicBox.learning_objectives.length - 3} more…
-                      </li>
-                    )}
-                  </ul>
-                )}
-
-                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                  <span style={{
-                    fontSize: '13px', padding: '3px 8px', borderRadius: '4px',
-                    backgroundColor: colors.pillBg, color: '#333'
-                  }}>
-                    🕐 {topicBox.duration_minutes || 0} min
-                  </span>
-                  {(topicBox.pla_pillars || []).map((pillar, idx) => (
-                    <span key={idx} style={{
-                      fontSize: '13px', padding: '3px 8px', borderRadius: '4px',
-                      backgroundColor: colors.pla[pillar] || colors.pillBg,
-                      color: colors.plaText[pillar] || '#333'
-                    }}>
-                      {pillar}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'videos' && renderResourceCards(videos, 'video')}
-            {activeTab === 'activities' && renderResourceCards(activities, 'activity')}
-            {activeTab === 'worksheets' && renderResourceCards(worksheets, 'worksheet')}
-          </div>
-        </div>
-      </div>
-    );
   };
 
   // ── Section (read-only) ──────────────────────────────────────────────
@@ -411,7 +136,6 @@ const CourseViewer = ({
           alignItems: 'center',
           borderBottom: isCollapsed ? 'none' : `1px solid ${colors.sectionBorder}`
         }}>
-          {/* Green left stripe */}
           <div style={{
             width: '5px',
             alignSelf: 'stretch',
@@ -476,11 +200,7 @@ const CourseViewer = ({
             ) : (
               (section.subsections || []).map((sub, subIdx) => {
                 const isSubCollapsed = collapsedSubsections[sub.id];
-
-                // Aggregate unique PLA pillars from this subsection's topic boxes
-                const subPillarSet = new Set();
-                (sub.topicBoxes || []).forEach(t => (t.pla_pillars || []).forEach(p => subPillarSet.add(p)));
-                const subPillars = Array.from(subPillarSet).slice(0, 2);
+                const blocks = handsOnResources[sub.id] || [];
 
                 return (
                   <div key={sub.id} style={{ marginBottom: '10px' }}>
@@ -496,7 +216,6 @@ const CourseViewer = ({
                         alignItems: 'center',
                         borderBottom: isSubCollapsed ? 'none' : `1px solid ${colors.subsectionBorder}`
                       }}>
-                        {/* Blue left stripe */}
                         <div style={{
                           width: '4px', alignSelf: 'stretch',
                           backgroundColor: colors.subsectionStripe, flexShrink: 0
@@ -528,49 +247,127 @@ const CourseViewer = ({
                             {sub.title}
                           </span>
 
-                          {/* PLA pillar tags from sub's topics */}
-                          {subPillars.map(pillar => (
-                            <span key={pillar} style={{
-                              fontSize: '11px', fontWeight: '500', flexShrink: 0,
-                              padding: '2px 7px', borderRadius: '4px',
-                              backgroundColor: colors.pla[pillar] || colors.pillBg,
-                              color: colors.plaText[pillar] || colors.textSecondary
+                          {sub.duration_minutes > 0 && (
+                            <span style={{
+                              fontSize: '12px', color: '#666', flexShrink: 0,
+                              backgroundColor: colors.pillBg, padding: '2px 8px', borderRadius: '4px'
                             }}>
-                              {pillar}
+                              🕐 {sub.duration_minutes} min
                             </span>
-                          ))}
+                          )}
+
+                          <span style={{
+                            fontSize: '12px', color: '#888', flexShrink: 0
+                          }}>
+                            {blocks.length} block{blocks.length !== 1 ? 's' : ''}
+                          </span>
                         </div>
                       </div>
 
-                      {/* Subsection description */}
-                      {!isSubCollapsed && sub.description && (
-                        <div style={{
-                          backgroundColor: '#FAFAF9',
-                          padding: '7px 12px 10px 16px',
-                          borderBottom: `1px solid ${colors.subsectionBorder}`
-                        }}>
-                          <span style={{ fontSize: '14px', color: '#333', display: 'block', wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>
-                            {sub.description}
-                          </span>
-                        </div>
-                      )}
-
-                      {/* Topic boxes */}
                       {!isSubCollapsed && (
-                        <div style={{ padding: '12px' }}>
-                          {(sub.topicBoxes || []).length === 0 ? (
-                            <div style={{
-                              textAlign: 'center', padding: '24px 20px',
-                              border: '1px dashed #e5e7eb', borderRadius: '8px',
-                              backgroundColor: '#fafafa',
-                              color: colors.textSecondary, fontSize: '14.3px'
+                        <div style={{ padding: '12px 14px' }}>
+                          {/* Subsection description */}
+                          {sub.description && (
+                            <p style={{
+                              margin: '0 0 10px', fontSize: '14px', color: '#333',
+                              wordBreak: 'break-word', whiteSpace: 'pre-wrap', lineHeight: '1.5'
                             }}>
-                              No topic boxes in this subsection
+                              {sub.description}
+                            </p>
+                          )}
+
+                          {/* Learning objectives */}
+                          {(sub.learning_objectives || []).length > 0 && (
+                            <div style={{ marginBottom: '12px' }}>
+                              <p style={{ margin: '0 0 6px', fontSize: '12px', fontWeight: '700', color: '#555', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                Learning Objectives
+                              </p>
+                              <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '13.5px', color: '#333', lineHeight: '1.6' }}>
+                                {sub.learning_objectives.map((obj, i) => (
+                                  <li key={i}>{obj}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {/* Blocks grid */}
+                          {blocks.length === 0 ? (
+                            <div style={{
+                              textAlign: 'center', padding: '20px',
+                              border: '1px dashed #e5e7eb', borderRadius: '8px',
+                              backgroundColor: '#fafafa', color: '#888', fontSize: '13px'
+                            }}>
+                              No blocks in this subsection
                             </div>
                           ) : (
-                            (sub.topicBoxes || []).map(topic => (
-                              <TopicBoxCard key={topic.id} topicBox={topic} />
-                            ))
+                            <div style={{
+                              display: 'grid',
+                              gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
+                              gap: '10px'
+                            }}>
+                              {blocks.map(block => {
+                                const cfg = blockConfig[block.type] || blockConfig.content;
+                                const BlockWrapper = block.url ? 'a' : 'div';
+                                const linkProps = block.url
+                                  ? { href: block.url, target: '_blank', rel: 'noopener noreferrer', onClick: e => e.stopPropagation() }
+                                  : {};
+                                return (
+                                  <BlockWrapper
+                                    key={block.id}
+                                    {...linkProps}
+                                    style={{
+                                      aspectRatio: '1/1',
+                                      backgroundColor: cfg.bg,
+                                      border: `1.5px solid ${cfg.color}33`,
+                                      borderRadius: '10px',
+                                      padding: '12px',
+                                      display: 'flex',
+                                      flexDirection: 'column',
+                                      justifyContent: 'space-between',
+                                      cursor: block.url ? 'pointer' : 'default',
+                                      textDecoration: 'none',
+                                      boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                                      transition: 'box-shadow 0.15s, transform 0.15s'
+                                    }}
+                                    onMouseEnter={e => {
+                                      e.currentTarget.style.boxShadow = '0 4px 10px rgba(0,0,0,0.1)';
+                                      e.currentTarget.style.transform = 'translateY(-1px)';
+                                    }}
+                                    onMouseLeave={e => {
+                                      e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.05)';
+                                      e.currentTarget.style.transform = 'translateY(0)';
+                                    }}
+                                  >
+                                    <div>
+                                      <span style={{
+                                        fontSize: '10.5px', fontWeight: '700', textTransform: 'uppercase',
+                                        letterSpacing: '0.5px', color: cfg.color,
+                                        backgroundColor: `${cfg.color}22`,
+                                        padding: '2px 6px', borderRadius: '4px',
+                                        display: 'inline-block', marginBottom: '8px'
+                                      }}>
+                                        {cfg.label}
+                                      </span>
+                                      <p style={{
+                                        margin: 0, fontSize: '13px', fontWeight: '600',
+                                        color: '#111', lineHeight: '1.35',
+                                        overflow: 'hidden',
+                                        display: '-webkit-box',
+                                        WebkitLineClamp: 3,
+                                        WebkitBoxOrient: 'vertical'
+                                      }}>
+                                        {block.title}
+                                      </p>
+                                    </div>
+                                    {block.url && (
+                                      <span style={{ fontSize: '11px', color: cfg.color, fontWeight: '600' }}>
+                                        Open →
+                                      </span>
+                                    )}
+                                  </BlockWrapper>
+                                );
+                              })}
+                            </div>
                           )}
                         </div>
                       )}
@@ -588,9 +385,7 @@ const CourseViewer = ({
   // ── Stats ────────────────────────────────────────────────────────────
   const sectionCount = sections.filter(s => s.type !== 'break').length;
   const subsectionCount = sections.reduce((acc, s) => acc + (s.subsections?.length || 0), 0);
-  const topicCount = sections.reduce((acc, s) =>
-    acc + (s.subsections?.reduce((t, sub) => t + (sub.topicBoxes?.length || 0), 0) || 0), 0
-  );
+  const blockCount = Object.values(handsOnResources || {}).reduce((acc, arr) => acc + (arr?.length || 0), 0);
 
   // ── Render ───────────────────────────────────────────────────────────
   return (
@@ -708,7 +503,7 @@ const CourseViewer = ({
         <span style={{ fontSize: '14px', color: '#444' }}>
           {sectionCount} section{sectionCount !== 1 ? 's' : ''} {'\u2022'}{' '}
           {subsectionCount} subsection{subsectionCount !== 1 ? 's' : ''} {'\u2022'}{' '}
-          {topicCount} topic box{topicCount !== 1 ? 'es' : ''}
+          {blockCount} block{blockCount !== 1 ? 's' : ''}
         </span>
       </div>
 
@@ -730,15 +525,6 @@ const CourseViewer = ({
           ))
         )}
       </div>
-
-      {/* Topic detail modal (view-only) */}
-      {selectedTopic && (
-        <TopicDetailsModal
-          topic={selectedTopic}
-          onClose={() => setSelectedTopic(null)}
-          readOnly
-        />
-      )}
     </>
   );
 };

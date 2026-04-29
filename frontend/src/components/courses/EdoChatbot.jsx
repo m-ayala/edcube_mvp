@@ -49,8 +49,6 @@ const renderFormattedText = (text) => {
 const ADD_TRAY_TYPE = {
   new_section: 'SECTION',
   new_subsection: 'SUBSECTION',
-  new_topic: 'TOPICBOX',
-  topic_full: 'TOPICBOX',
   new_resource_content: 'BLOCK',
   new_resource_worksheet: 'BLOCK',
   new_resource_activity: 'BLOCK',
@@ -215,13 +213,12 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
 
   // Fetch AI-generated chips whenever the teacher picks a block type
   useEffect(() => {
-    if (!selectedBlockType || currentPage?.page !== 'topic') {
+    if (!selectedBlockType || currentPage?.page !== 'subsection') {
       setDynamicChips(null);
       return;
     }
     const sec = sections.find(s => s.id === currentPage?.sectionId);
     const sub = sec?.subsections?.find(ss => ss.id === currentPage?.subsectionId);
-    const topic = sub?.topicBoxes?.find(t => t.id === currentPage?.topicId);
 
     // Collect flat taxonomy hints for this block type
     const hints = BLOCK_CATEGORIES
@@ -236,8 +233,8 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
     generateEdoChips({
       blockType: selectedBlockType,
       courseTitle: courseName || '',
-      topicTitle: topic?.title || currentPage?.topicTitle || '',
-      topicDescription: topic?.description || null,
+      topicTitle: sub?.title || currentPage?.subsectionTitle || '',
+      topicDescription: sub?.description || null,
       subsectionTitle: sub?.title || null,
       ageRange,
       taxonomyHints: hints,
@@ -249,11 +246,10 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedBlockType]);
 
-  // Reset chat history when navigating to a different topic or subsection
-  // (not when drilling down into a block and back — same topicId)
+  // Reset chat history when navigating to a different subsection
   useEffect(() => {
     if (!currentPage) return;
-    const subject = currentPage.topicId || currentPage.subsectionId || currentPage.sectionId;
+    const subject = currentPage.subsectionId || currentPage.sectionId;
     if (!subject) return;
     const name = courseName || 'your course';
     setMessages([{
@@ -263,7 +259,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
     }]);
     setSelectedBlockType(null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage?.topicId, currentPage?.subsectionId]);
+  }, [currentPage?.subsectionId]);
 
   const addTextMessage = (kind, text) =>
     setMessages(prev => [...prev, { id: `${Date.now()}-${Math.random()}`, kind, text }]);
@@ -274,7 +270,6 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
   const getContextLabel = () => {
     if (!currentPage) return courseName || 'Your Course';
     if (currentPage.page === 'subsection') return `Subsection: ${currentPage.subsectionTitle || ''}`;
-    if (currentPage.page === 'topic') return `Topic: ${currentPage.topicTitle || ''}`;
     if (currentPage.page === 'block') return `Block: ${currentPage.blockTitle || ''}`;
     return courseName || 'Course Outline';
   };
@@ -282,7 +277,6 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
   const getContextDot = () => {
     if (!currentPage || currentPage.page === 'outline') return '📚';
     if (currentPage.page === 'subsection') return '🔵';
-    if (currentPage.page === 'topic') return '🟣';
     if (currentPage.page === 'block') return '🟠';
     return '📚';
   };
@@ -304,7 +298,8 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
       title: s.title,
       subsections: (s.subsections || []).map(ss => ({
         title: ss.title,
-        topic_boxes: (ss.topicBoxes || []).map(t => t.title),
+        description: ss.description || '',
+        learning_objectives: ss.learning_objectives || [],
       })),
     }));
 
@@ -320,27 +315,15 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
           parent_section: sec?.title || '',
           title: sub?.title || '',
           description: sub?.description || '',
-          topic_boxes: (sub?.topicBoxes || []).map(t => t.title),
-        };
-      } else if (currentPage.page === 'topic' && currentPage.topicId) {
-        const sec = sections.find(s => s.id === currentPage.sectionId);
-        const sub = sec?.subsections?.find(ss => ss.id === currentPage.subsectionId);
-        const topic = sub?.topicBoxes?.find(t => t.id === currentPage.topicId);
-        selected_item = {
-          type: 'topic',
-          parent_section: sec?.title || '',
-          parent_subsection: sub?.title || '',
-          title: topic?.title || '',
-          description: topic?.description || '',
-          learning_objectives: topic?.learning_objectives || [],
-          pla_pillars: topic?.pla_pillars || [],
-          existing_blocks: (handsOnResources[currentPage.topicId] || []).map(b => ({ type: b.type, title: b.title })),
+          learning_objectives: sub?.learning_objectives || [],
+          duration_minutes: sub?.duration_minutes || 20,
+          existing_blocks: (handsOnResources[currentPage.subsectionId] || []).map(b => ({ type: b.type, title: b.title })),
         };
       } else if (currentPage.page === 'block' && currentPage.blockId) {
-        const block = (handsOnResources[currentPage.topicId] || []).find(b => b.id === currentPage.blockId);
+        const block = (handsOnResources[currentPage.subsectionId] || []).find(b => b.id === currentPage.blockId);
         selected_item = {
           type: 'block',
-          parent_topic: currentPage.topicTitle || '',
+          parent_subsection: currentPage.subsectionTitle || '',
           title: block?.title || '',
           block_type: block?.type || '',
           category: block?.category || '',
@@ -400,34 +383,18 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
   const applyFromTray = (item) => {
     const { apply_field, body } = item.data;
     if (apply_field === 'block_content' && currentPage?.page === 'block') {
-      actions.updateBlock?.(currentPage.topicId, currentPage.blockId, { content: body });
+      actions.updateBlock?.(currentPage.subsectionId, currentPage.blockId, { content: body });
       addTextMessage('ai-text', 'Block content updated. ✓');
     } else if (apply_field === 'title' && currentPage?.subsectionId) {
       actions.updateSubsectionTitle(currentPage.sectionId, currentPage.subsectionId, body);
       addTextMessage('ai-text', 'Title applied. ✓');
-    } else if (apply_field === 'description' && currentPage?.subsectionId && currentPage.page === 'subsection') {
+    } else if (apply_field === 'description' && currentPage?.subsectionId) {
       actions.updateSubsectionDescription(currentPage.sectionId, currentPage.subsectionId, body);
       addTextMessage('ai-text', 'Description applied. ✓');
-    } else if (currentPage?.topicId) {
-      const sec = sections.find(s => s.id === currentPage.sectionId);
-      const sub = sec?.subsections?.find(ss => ss.id === currentPage.subsectionId);
-      const topic = sub?.topicBoxes?.find(t => t.id === currentPage.topicId);
-      if (!topic) return;
-      if (apply_field === 'topic_full') {
-        const objMatch = body.match(/\n\n?Objectives?:?\n/i);
-        const description = objMatch ? body.slice(0, objMatch.index).trim() : body.trim();
-        const objectivesText = objMatch ? body.slice(objMatch.index + objMatch[0].length) : '';
-        const objectives = objectivesText.split('\n').map(s => s.replace(/^[-•*\d.]\s*/, '').trim()).filter(Boolean);
-        actions.updateTopicBoxFull({ sectionId: currentPage.sectionId, subsectionId: currentPage.subsectionId, topicId: currentPage.topicId, updatedData: { ...topic, description, learning_objectives: objectives } });
-        addTextMessage('ai-text', 'Topic updated. ✓');
-      } else if (apply_field === 'description') {
-        actions.updateTopicBoxFull({ sectionId: currentPage.sectionId, subsectionId: currentPage.subsectionId, topicId: currentPage.topicId, updatedData: { ...topic, description: body } });
-        addTextMessage('ai-text', 'Description applied. ✓');
-      } else if (apply_field === 'objectives') {
-        const objectives = body.split('\n').map(s => s.replace(/^[-•*\d.]\s*/, '').trim()).filter(Boolean);
-        actions.updateTopicBoxFull({ sectionId: currentPage.sectionId, subsectionId: currentPage.subsectionId, topicId: currentPage.topicId, updatedData: { ...topic, learning_objectives: objectives } });
-        addTextMessage('ai-text', 'Objectives applied. ✓');
-      }
+    } else if (apply_field === 'objectives' && currentPage?.subsectionId) {
+      const objectives = body.split('\n').map(s => s.replace(/^[-•*\d.]\s*/, '').trim()).filter(Boolean);
+      actions.updateSubsectionFull(currentPage.sectionId, currentPage.subsectionId, { learning_objectives: objectives });
+      addTextMessage('ai-text', 'Objectives applied. ✓');
     }
   };
 
@@ -496,44 +463,6 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
     }
   };
 
-  const handleGenerateTopicBox = async () => {
-    if (isTyping) return;
-    addTextMessage('user', 'Generate a new topic box');
-    setIsTyping(true);
-    const parentSec = sections.find(s => s.id === currentPage?.sectionId);
-    const parentSub = parentSec?.subsections?.find(ss => ss.id === currentPage?.subsectionId);
-    try {
-      const result = await actions.generateTopicBoxesForTray({
-        level: 'topics',
-        context: {
-          course: { title: courseName, grade: formData?.class || '', description: formData?.objectives || '' },
-          all_sections: sections.filter(s => s.type !== 'break').map(s => ({
-            title: s.title, description: s.description,
-            subsections: (s.subsections || []).map(ss => ({
-              title: ss.title, description: ss.description,
-              existingTopics: (ss.topicBoxes || []).map(t => t.title),
-            })),
-          })),
-          ...(parentSec ? { current_section: { title: parentSec.title, description: parentSec.description || '' } } : {}),
-          ...(parentSub ? {
-            subsection: {
-              title: parentSub.title, description: parentSub.description || '',
-              existingTopics: (parentSub.topicBoxes || []).map(t => ({ title: t.title, description: t.description })),
-            },
-          } : {}),
-        },
-        count: 1,
-      });
-      if (result?.success === false) throw new Error(result.error);
-      result.items.forEach(item => addToTray('TOPICBOX', item));
-      addTextMessage('ai-text', `Generated ${result.items.length} topic box${result.items.length !== 1 ? 'es' : ''}! Use the "Add" button in the tray to add it.`);
-    } catch (err) {
-      addTextMessage('ai-text', `I had trouble generating the topic box. ${err?.message || 'Please try again.'}`);
-    } finally {
-      setIsTyping(false);
-    }
-  };
-
   const handleGenerateBlock = async (blockType, subcategory = null) => {
     if (isTyping) return;
     setSelectedBlockType(null);
@@ -586,8 +515,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
   const page = currentPage?.page || 'outline';
   const visibleTrayItems =
     page === 'outline' ? trayItems.filter(i => ['SECTION', 'SUBSECTION'].includes(i.type)) :
-    page === 'subsection' ? trayItems.filter(i => ['TOPICBOX', 'FIELD_EDIT'].includes(i.type)) :
-    page === 'topic' ? trayItems.filter(i => ['BLOCK', 'FIELD_EDIT'].includes(i.type)) :
+    page === 'subsection' ? trayItems.filter(i => ['BLOCK', 'FIELD_EDIT'].includes(i.type)) :
     page === 'block' ? trayItems.filter(i => i.type === 'BLOCK_EDIT') :
     [];
 
@@ -732,31 +660,14 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
                         if (type === 'SECTION') {
                           data = { id: `section-${Date.now()}`, title: c.label, description: c.body, subsections: [] };
                         } else if (type === 'SUBSECTION') {
-                          data = { id: `sub-${Date.now()}`, title: c.label, description: c.body, topicBoxes: [] };
+                          data = { id: `sub-${Date.now()}`, title: c.label, description: c.body, learning_objectives: [], duration_minutes: 20 };
                         } else if (type === 'BLOCK') {
                           const blockType =
                             c.apply_field === 'new_resource_content' ? 'content' :
                             c.apply_field === 'new_resource_worksheet' ? 'worksheet' : 'activity';
                           data = { id: `block-${Date.now()}`, type: blockType, title: c.label, content: c.body };
-                        } else if (type === 'BLOCK_EDIT' || type === 'FIELD_EDIT') {
-                          data = { label: c.label, body: c.body, apply_field: c.apply_field };
                         } else {
-                          // TOPICBOX
-                          const isTopicFull = c.apply_field === 'topic_full';
-                          data = {
-                            id: `topic-${Date.now()}`,
-                            title: c.label,
-                            description: isTopicFull ? (c.body.split(/\n\n?Objectives?:?\n/i)[0] || c.body).trim() : c.body,
-                            duration_minutes: 20,
-                            pla_pillars: [],
-                            learning_objectives: isTopicFull && c.body.includes('bjective')
-                              ? c.body.split(/\n\n?Objectives?:?\n/i)[1]?.split('\n').map(s => s.replace(/^[-•*\d.]\s*/, '').trim()).filter(Boolean) || []
-                              : [],
-                            content_keywords: [],
-                            video_resources: [],
-                            worksheets: [],
-                            activities: [],
-                          };
+                          data = { label: c.label, body: c.body, apply_field: c.apply_field };
                         }
                         addToTray(type, data);
                         markApplied(msg.id, idx);
@@ -822,8 +733,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
               letterSpacing: '0.6px', color: '#E8761A', fontFamily: "'DM Sans', sans-serif",
             }}>
               {page === 'outline' ? 'Generated — Drag into Course' :
-               page === 'subsection' ? 'Generated Topics & Edits' :
-               page === 'topic' ? 'Generated Blocks & Edits' :
+               page === 'subsection' ? 'Generated Blocks & Edits' :
                page === 'block' ? 'Block Enhancements' :
                'Generated Items'}
             </span>
@@ -947,43 +857,50 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
             </div>
           )}
 
-          {/* Subsection page: Topic Boxes (button-based add) */}
-          {page === 'subsection' && visibleTrayItems.some(i => i.type === 'TOPICBOX') && (
+          {/* Subsection page: Block items (button-based add) */}
+          {page === 'subsection' && visibleTrayItems.some(i => i.type === 'BLOCK') && (
             <div style={{ padding: '0 10px 8px' }}>
-              {visibleTrayItems.filter(i => i.type === 'TOPICBOX').map(item => (
-                <div key={item.id} style={{
-                  display: 'flex', alignItems: 'center', gap: '8px',
-                  padding: '7px 10px', backgroundColor: 'white',
-                  border: '1.5px solid #E879F9', borderLeft: '4px solid #A21CAF',
-                  borderRadius: '8px', marginBottom: '5px',
-                }}>
-                  <span style={{ padding: '2px 7px', backgroundColor: '#FAE8FF', color: '#86198F', borderRadius: '10px', fontSize: '10.5px', fontWeight: '700', flexShrink: 0, fontFamily: "'DM Sans', sans-serif" }}>
-                    Topic
-                  </span>
-                  <span style={{ flex: 1, fontSize: '12.7px', color: '#1C1917', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: "'DM Sans', sans-serif" }}>
-                    {item.data.title || 'Untitled'}
-                  </span>
-                  <button
-                    onClick={() => {
-                      actions.addTopicBoxWithContent?.(currentPage?.sectionId, currentPage?.subsectionId, item.data.title, item.data.description);
-                      setTrayItems(prev => prev.filter(i => i.id !== item.id));
-                      addTextMessage('ai-text', `Added topic "${item.data.title}" to subsection. ✓`);
-                    }}
-                    style={{ padding: '3px 9px', backgroundColor: '#FAE8FF', border: '1px solid #E879F9', borderRadius: '5px', cursor: 'pointer', fontSize: '12.1px', fontWeight: '700', color: '#86198F', whiteSpace: 'nowrap', flexShrink: 0, fontFamily: "'DM Sans', sans-serif" }}
-                  >
-                    + Add
-                  </button>
-                  <button
-                    onClick={() => setTrayItems(prev => prev.filter(i => i.id !== item.id))}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: 0, lineHeight: 1, fontSize: '14px', flexShrink: 0 }}
-                  >×</button>
-                </div>
-              ))}
+              {visibleTrayItems.filter(i => i.type === 'BLOCK').map(item => {
+                const meta = {
+                  content:   { label: 'Content',   color: '#6B8FE8', bg: '#EAF0FF', border: '#BFD0F8' },
+                  worksheet: { label: 'Worksheet',  color: '#C47A1A', bg: '#FFF3E8', border: '#F5C98A' },
+                  activity:  { label: 'Activity',   color: '#1E7C43', bg: '#EDFFF3', border: '#86EFAC' },
+                }[item.data.type] || { label: 'Block', color: '#555', bg: '#F5F5F5', border: '#DDD' };
+                return (
+                  <div key={item.id} style={{
+                    display: 'flex', alignItems: 'center', gap: '8px',
+                    padding: '7px 10px', backgroundColor: 'white',
+                    border: `1.5px solid ${meta.border}`, borderLeft: `4px solid ${meta.color}`,
+                    borderRadius: '8px', marginBottom: '5px',
+                  }}>
+                    <span style={{ padding: '2px 7px', backgroundColor: meta.bg, color: meta.color, borderRadius: '10px', fontSize: '10.5px', fontWeight: '700', flexShrink: 0, fontFamily: "'DM Sans', sans-serif" }}>
+                      {meta.label}
+                    </span>
+                    <span style={{ flex: 1, fontSize: '12.7px', color: '#1C1917', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: "'DM Sans', sans-serif" }}>
+                      {item.data.title || 'Untitled'}
+                    </span>
+                    <button
+                      onClick={() => {
+                        actions.addBlock?.(currentPage?.subsectionId, item.data);
+                        setTrayItems(prev => prev.filter(i => i.id !== item.id));
+                        addTextMessage('ai-text', `Added ${meta.label.toLowerCase()} block to subsection. ✓`);
+                      }}
+                      style={{ padding: '3px 9px', backgroundColor: meta.bg, border: `1px solid ${meta.border}`, borderRadius: '5px', cursor: 'pointer', fontSize: '12.1px', fontWeight: '700', color: meta.color, whiteSpace: 'nowrap', flexShrink: 0, fontFamily: "'DM Sans', sans-serif" }}
+                    >
+                      + Add
+                    </button>
+                    <button
+                      onClick={() => setTrayItems(prev => prev.filter(i => i.id !== item.id))}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: 0, lineHeight: 1, fontSize: '14px', flexShrink: 0 }}
+                    >×</button>
+                  </div>
+                );
+              })}
             </div>
           )}
 
-          {/* FIELD_EDIT items (subsection + topic pages) */}
-          {['subsection', 'topic'].includes(page) && visibleTrayItems.some(i => i.type === 'FIELD_EDIT') && (
+          {/* FIELD_EDIT items (subsection page) */}
+          {page === 'subsection' && visibleTrayItems.some(i => i.type === 'FIELD_EDIT') && (
             <div style={{ padding: '0 10px 8px' }}>
               {visibleTrayItems.filter(i => i.type === 'FIELD_EDIT').map(item => (
                 <div key={item.id} style={{
@@ -1050,47 +967,6 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
             </div>
           )}
 
-          {/* Topic page: Block items (button-based add) */}
-          {page === 'topic' && visibleTrayItems.some(i => i.type === 'BLOCK') && (
-            <div style={{ padding: '0 10px 8px' }}>
-              {visibleTrayItems.filter(i => i.type === 'BLOCK').map(item => {
-                const meta = {
-                  content:   { label: 'Content',   color: '#6B8FE8', bg: '#EAF0FF', border: '#BFD0F8' },
-                  worksheet: { label: 'Worksheet',  color: '#C47A1A', bg: '#FFF3E8', border: '#F5C98A' },
-                  activity:  { label: 'Activity',   color: '#1E7C43', bg: '#EDFFF3', border: '#86EFAC' },
-                }[item.data.type] || { label: 'Block', color: '#555', bg: '#F5F5F5', border: '#DDD' };
-                return (
-                  <div key={item.id} style={{
-                    display: 'flex', alignItems: 'center', gap: '8px',
-                    padding: '7px 10px', backgroundColor: 'white',
-                    border: `1.5px solid ${meta.border}`, borderLeft: `4px solid ${meta.color}`,
-                    borderRadius: '8px', marginBottom: '5px',
-                  }}>
-                    <span style={{ padding: '2px 7px', backgroundColor: meta.bg, color: meta.color, borderRadius: '10px', fontSize: '10.5px', fontWeight: '700', flexShrink: 0, fontFamily: "'DM Sans', sans-serif" }}>
-                      {meta.label}
-                    </span>
-                    <span style={{ flex: 1, fontSize: '12.7px', color: '#1C1917', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: "'DM Sans', sans-serif" }}>
-                      {item.data.title || 'Untitled'}
-                    </span>
-                    <button
-                      onClick={() => {
-                        actions.addBlock?.(currentPage?.topicId, item.data);
-                        setTrayItems(prev => prev.filter(i => i.id !== item.id));
-                        addTextMessage('ai-text', `Added ${meta.label.toLowerCase()} block to topic. ✓`);
-                      }}
-                      style={{ padding: '3px 9px', backgroundColor: meta.bg, border: `1px solid ${meta.border}`, borderRadius: '5px', cursor: 'pointer', fontSize: '12.1px', fontWeight: '700', color: meta.color, whiteSpace: 'nowrap', flexShrink: 0, fontFamily: "'DM Sans', sans-serif" }}
-                    >
-                      + Add
-                    </button>
-                    <button
-                      onClick={() => setTrayItems(prev => prev.filter(i => i.id !== item.id))}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: 0, lineHeight: 1, fontSize: '14px', flexShrink: 0 }}
-                    >×</button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
         </div>
       )}
 
@@ -1124,29 +1000,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
         </div>
       )}
 
-      {page === 'subsection' && (
-        <div style={{
-          padding: '7px 10px', borderTop: '1px solid #E7E5E4',
-          flexShrink: 0, backgroundColor: '#FAFAF8',
-        }}>
-          <button
-            onClick={handleGenerateTopicBox}
-            disabled={isTyping}
-            style={{
-              width: '100%', padding: '7px 4px', backgroundColor: '#FAE8FF',
-              border: '1.5px solid #E879F9', borderRadius: '8px',
-              cursor: isTyping ? 'not-allowed' : 'pointer',
-              fontSize: '12.7px', fontWeight: '700', color: '#86198F',
-              fontFamily: "'DM Sans', sans-serif",
-              opacity: isTyping ? 0.55 : 1, transition: 'all 0.15s', textAlign: 'center',
-            }}
-          >
-            ✨ + Topic Box
-          </button>
-        </div>
-      )}
-
-      {page === 'topic' && !selectedBlockType && (
+      {page === 'subsection' && !selectedBlockType && (
         <div style={{
           padding: '7px 10px', borderTop: '1px solid #E7E5E4',
           display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px',
@@ -1176,7 +1030,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
         </div>
       )}
 
-      {page === 'topic' && selectedBlockType && (() => {
+      {page === 'subsection' && selectedBlockType && (() => {
         const TYPE_META = {
           content:   { label: 'Content', color: '#6B8FE8', bg: '#EAF0FF', border: '#BFD0F8' },
           worksheet: { label: 'Worksheet', color: '#C47A1A', bg: '#FFF3E8', border: '#F5C98A' },

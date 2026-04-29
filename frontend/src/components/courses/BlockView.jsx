@@ -200,15 +200,15 @@ const BlockView = ({
             onClick={onBack}
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#555', fontFamily: "'DM Sans', sans-serif", fontSize: '13px', fontWeight: '600', padding: '4px 0' }}
           >
-            ← {topicTitle || 'Topic'}
+            ← {subsectionTitle || 'Subsection'}
           </button>
           {sectionTitle && subsectionTitle && (
-            <span style={{ color: '#BBB' }}>·</span>
-          )}
-          {topicTitle && (
-            <span style={{ color: '#AAA' }}>
-              {sectionTitle} › {subsectionTitle} › {topicTitle} › <strong style={{ color: '#555' }}>{localTitle || 'Untitled Block'}</strong>
-            </span>
+            <>
+              <span style={{ color: '#BBB' }}>·</span>
+              <span style={{ color: '#AAA' }}>
+                {sectionTitle} › {subsectionTitle} › <strong style={{ color: '#555' }}>{localTitle || 'Untitled Block'}</strong>
+              </span>
+            </>
           )}
         </div>
       </div>

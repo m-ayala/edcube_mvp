@@ -637,7 +637,7 @@ const CourseEditor = ({
                               display: 'flex', alignItems: 'center', justifyContent: 'space-between'
                             }}>
                               <span style={{ fontSize: '12px', color: '#888' }}>
-                                {(sub.topicBoxes || []).length} topic{(sub.topicBoxes || []).length !== 1 ? 's' : ''}
+                                {(handsOnResources[sub.id] || []).length} block{(handsOnResources[sub.id] || []).length !== 1 ? 's' : ''}
                               </span>
                               <button
                                 onClick={() => onNavigateToSubsection?.(section.id, sub.id)}

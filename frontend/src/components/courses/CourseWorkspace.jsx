@@ -6,7 +6,6 @@ import { useAuth } from '../../contexts/AuthContext';
 import CourseEditor, { EditableField } from './CourseEditor';
 import CourseViewer from './CourseViewer';
 import SubsectionView from './SubsectionView';
-import TopicDetailsModal from '../modals/TopicDetailsModal';
 import BlockView from './BlockView';
 import EdoChatbot from './EdoChatbot';
 import useCourseActions from './useCourseActions';
@@ -24,7 +23,6 @@ const CourseWorkspace = () => {
   const {
     formData,
     sections: incomingSections,
-    isEditing,
     curriculumId: initialCurriculumId,
     isPublic: incomingIsPublic,
     readOnly: incomingReadOnly,
@@ -54,53 +52,60 @@ const CourseWorkspace = () => {
   const [linkGenJobs, setLinkGenJobs] = useState({}); // { [blockId]: 'generating'|'done'|'error' }
 
   // ── Page Navigation ───────────────────────────────────────────────────
-  const [navPage, setNavPage] = useState('outline'); // 'outline'|'subsection'|'topic'|'block'
-  const [navPath, setNavPath] = useState({ sectionId: null, subsectionId: null, topicId: null, blockId: null });
+  // navPage: 'outline' | 'subsection' | 'block'
+  const [navPage, setNavPage] = useState('outline');
+  const [navPath, setNavPath] = useState({ sectionId: null, subsectionId: null, blockId: null });
 
   const navigateToSubsection = (sectionId, subsectionId) => {
     setNavPage('subsection');
-    setNavPath({ sectionId, subsectionId, topicId: null, blockId: null });
+    setNavPath({ sectionId, subsectionId, blockId: null });
     setTrayItems([]);
   };
-  const navigateToTopic = (sectionId, subsectionId, topicId) => {
-    setNavPage('topic');
-    setNavPath({ sectionId, subsectionId, topicId, blockId: null });
-    setTrayItems([]);
-  };
-  const navigateToBlock = (sectionId, subsectionId, topicId, blockId) => {
+  const navigateToBlock = (sectionId, subsectionId, blockId) => {
     setNavPage('block');
-    setNavPath({ sectionId, subsectionId, topicId, blockId });
+    setNavPath({ sectionId, subsectionId, blockId });
     setTrayItems([]);
   };
   const navigateBack = () => {
-    if (navPage === 'block') { setNavPage('topic'); setNavPath(p => ({ ...p, blockId: null })); }
-    else if (navPage === 'topic') { setNavPage('subsection'); setNavPath(p => ({ ...p, topicId: null })); }
-    else if (navPage === 'subsection') { setNavPage('outline'); setNavPath({ sectionId: null, subsectionId: null, topicId: null, blockId: null }); }
+    if (navPage === 'block') {
+      setNavPage('subsection');
+      setNavPath(p => ({ ...p, blockId: null }));
+    } else if (navPage === 'subsection') {
+      setNavPage('outline');
+      setNavPath({ sectionId: null, subsectionId: null, blockId: null });
+    }
     setTrayItems([]);
   };
 
-  const generateLinksForBlock = async (blockId, topicId, blockData) => {
-    console.log('[generateLinksForBlock] called', { blockId, topicId, blockType: blockData?.type });
+  // Derived active objects from navigation path
+  const activeSection = sections.find(s => s.id === navPath.sectionId) || null;
+  const activeSubsection = activeSection?.subsections?.find(ss => ss.id === navPath.subsectionId) || null;
+  const sectionIndex = activeSection ? sections.indexOf(activeSection) : -1;
+  const subsectionIndex = activeSubsection ? (activeSection?.subsections?.indexOf(activeSubsection) ?? -1) : -1;
+  const activeBlock = (handsOnResources[navPath.subsectionId] || []).find(b => b.id === navPath.blockId) || null;
+
+  const generateLinksForBlock = async (blockId, subsectionId, blockData) => {
+    console.log('[generateLinksForBlock] called', { blockId, subsectionId, blockType: blockData?.type });
     setLinkGenJobs(prev => ({ ...prev, [blockId]: 'generating' }));
     try {
       const { links: generated } = await generateBlockLinks({
         blockType: blockData.type || 'content',
         blockTitle: blockData.title || '',
         blockContent: blockData.content || '',
-        topicTitle: activeTopic?.title || '',
-        topicDescription: activeTopic?.description || '',
+        topicTitle: activeSubsection?.title || '',
+        topicDescription: activeSubsection?.description || '',
         gradeLevel: formData?.class || '',
         subject: formData?.subject || '',
         teacherUid: currentUser?.uid || null,
       });
       if (generated?.length > 0) {
-        const existing = (handsOnResources[topicId] || [])
+        const existing = (handsOnResources[subsectionId] || [])
           .find(b => b.id === blockId)?.links || [];
         const merged = [
           ...existing,
           ...generated.map(l => ({ id: `link-${Date.now()}-${Math.random().toString(36).slice(2)}`, ...l })),
         ];
-        actions.updateBlock(topicId, blockId, { links: merged });
+        actions.updateBlock(subsectionId, blockId, { links: merged });
       }
       setLinkGenJobs(prev => ({ ...prev, [blockId]: 'done' }));
     } catch (err) {
@@ -109,31 +114,20 @@ const CourseWorkspace = () => {
     }
   };
 
-  // Derived active objects from navigation path
-  const activeSection = sections.find(s => s.id === navPath.sectionId) || null;
-  const activeSubsection = activeSection?.subsections?.find(ss => ss.id === navPath.subsectionId) || null;
-  const sectionIndex = activeSection ? sections.indexOf(activeSection) : -1;
-  const subsectionIndex = activeSubsection ? (activeSection?.subsections?.indexOf(activeSubsection) ?? -1) : -1;
-  const activeTopic = activeSubsection?.topicBoxes?.find(t => t.id === navPath.topicId) || null;
-  const topicIndex = activeTopic ? (activeSubsection?.topicBoxes?.indexOf(activeTopic) ?? -1) : -1;
-  const activeBlock = (handsOnResources[navPath.topicId] || []).find(b => b.id === navPath.blockId) || null;
-
-  // Derived Edo context from navigation state (replaces activeTopicContext)
+  // Derived Edo context from navigation state
   const currentPageContext = useMemo(() => {
     const sec = sections.find(s => s.id === navPath.sectionId);
     const sub = sec?.subsections?.find(ss => ss.id === navPath.subsectionId);
-    const topic = sub?.topicBoxes?.find(t => t.id === navPath.topicId);
-    const block = (handsOnResources[navPath.topicId] || []).find(b => b.id === navPath.blockId);
+    const block = (handsOnResources[navPath.subsectionId] || []).find(b => b.id === navPath.blockId);
     return {
       page: navPage,
       sectionId: navPath.sectionId, sectionTitle: sec?.title,
       subsectionId: navPath.subsectionId, subsectionTitle: sub?.title,
-      topicId: navPath.topicId, topicTitle: topic?.title,
       blockId: navPath.blockId, blockTitle: block?.title,
     };
   }, [navPage, navPath, sections, handsOnResources]);
 
-  // ── Initialize Actions Hook ───────────────────────────────────────────
+  // ── Initialize Actions Hook ────────────────────────────────���──────────
   const actions = useCourseActions({
     sections,
     setSections,
@@ -161,80 +155,77 @@ const CourseWorkspace = () => {
     fetchProfile();
   }, [currentUser]);
 
-  // ── Mount: Transform data + hydrate caches ────────────────────────────
+  // ── Mount: Transform old data (topicBoxes) → new flat structure ───────
   useEffect(() => {
     console.log('📦 CourseWorkspace loaded');
 
-    // Transform old structure to new
+    // Flatten old topicBoxes into subsection-level structure
     const transformedSections = sections.map(section => {
       if (section.type === 'break') return section;
-
       return {
         ...section,
         subsections: (section.subsections || []).map(sub => {
-          // Only preserve topicBoxes if they are actually populated.
-          // An empty array [] is truthy but means no boxes — fall through to rebuild.
-          if (sub.topicBoxes && Array.isArray(sub.topicBoxes) && sub.topicBoxes.length > 0) {
-            return sub;
-          }
-
-          const hasResources =
-            (sub.video_resources && sub.video_resources.length > 0) ||
-            (sub.worksheets && sub.worksheets.length > 0) ||
-            (sub.activities && sub.activities.length > 0) ||
-            (sub.learning_objectives && sub.learning_objectives.length > 0);
-
-          if (hasResources) {
+          const topicBoxes = sub.topicBoxes || [];
+          // Already migrated — just ensure required fields
+          if (topicBoxes.length === 0) {
             return {
               id: sub.id,
               title: sub.title,
-              description: sub.description,
-              topicBoxes: [{
-                id: `topic-${sub.id}-migrated`,
-                title: sub.title,
-                description: sub.description || '',
-                duration_minutes: sub.duration_minutes || 20,
-                pla_pillars: sub.pla_pillars || [],
-                learning_objectives: sub.learning_objectives || [],
-                content_keywords: sub.content_keywords || [],
-                video_resources: sub.video_resources || [],
-                worksheets: sub.worksheets || [],
-                activities: sub.activities || []
-              }]
-            };
-          } else {
-            return {
-              id: sub.id,
-              title: sub.title,
-              description: sub.description,
-              topicBoxes: []
+              description: sub.description || '',
+              learning_objectives: sub.learning_objectives || [],
+              duration_minutes: sub.duration_minutes ?? 20,
             };
           }
+          // Migrate: pull metadata from first topic box
+          const first = topicBoxes[0];
+          return {
+            id: sub.id,
+            title: sub.title,
+            description: sub.description || first.description || '',
+            learning_objectives: sub.learning_objectives?.length
+              ? sub.learning_objectives
+              : (first.learning_objectives || []),
+            duration_minutes: sub.duration_minutes ?? first.duration_minutes ?? 20,
+          };
         })
       };
     });
 
     setSections(transformedSections);
 
-    // Hydrate video + hands-on caches
+    // Hydrate handsOnResources and videos by subsectionId
+    // (flattening any old topicBox resources up to the subsection)
     const loadedVideos = {};
     const loadedHandsOn = {};
 
-    transformedSections.forEach(section => {
+    sections.forEach(section => {
       (section.subsections || []).forEach(sub => {
+        const allResources = [];
+
+        // From old topicBoxes
         (sub.topicBoxes || []).forEach(topic => {
-          if (topic.video_resources && topic.video_resources.length > 0) {
-            loadedVideos[topic.id] = topic.video_resources;
-          }
           const resources = [
-            ...(topic.content_blocks || []),
-            ...(topic.worksheets || []),
-            ...(topic.activities || [])
+            ...(topic.content_blocks || []).map(r => ({ ...r, type: r.type || 'content' })),
+            ...(topic.worksheets || []).map(r => ({ ...r, type: 'worksheet' })),
+            ...(topic.activities || []).map(r => ({ ...r, type: 'activity' })),
           ];
-          if (resources.length > 0) {
-            loadedHandsOn[topic.id] = resources;
+          allResources.push(...resources);
+          if ((topic.video_resources || []).length > 0) {
+            loadedVideos[sub.id] = [...(loadedVideos[sub.id] || []), ...topic.video_resources];
           }
         });
+
+        // From subsection-level (already migrated format)
+        const subResources = [
+          ...(sub.content_blocks || []).map(r => ({ ...r, type: r.type || 'content' })),
+          ...(sub.worksheets || []).map(r => ({ ...r, type: 'worksheet' })),
+          ...(sub.activities || []).map(r => ({ ...r, type: 'activity' })),
+        ];
+        allResources.push(...subResources);
+
+        if (allResources.length > 0) {
+          loadedHandsOn[sub.id] = allResources;
+        }
       });
     });
 
@@ -246,26 +237,23 @@ const CourseWorkspace = () => {
       console.log('📝 Loaded hands-on:', loadedHandsOn);
       setHandsOnResources(loadedHandsOn);
     }
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── History ───────────────────────────────────────────────────────────
   const isUndoingRef = useRef(false);
   const historyMountedRef = useRef(false);
 
-  // Skip mount hydration, then start tracking history
   useEffect(() => {
     const id = setTimeout(() => { historyMountedRef.current = true; }, 1200);
     return () => clearTimeout(id);
   }, []);
 
-  // Auto-snapshot on every state change (skips undo-triggered and mount changes)
   useEffect(() => {
     if (!historyMountedRef.current) return;
     if (isUndoingRef.current) {
       isUndoingRef.current = false;
       return;
     }
-
     setHistory(prev => {
       const trimmed = prev.slice(0, historyIndex + 1);
       return [...trimmed, { sections, handsOnResources, videosByTopic }];
@@ -301,7 +289,6 @@ const CourseWorkspace = () => {
       alert('Please save the course first before changing visibility.');
       return;
     }
-
     try {
       const newIsPublic = !isPublic;
       const response = await fetch(
@@ -331,14 +318,15 @@ const CourseWorkspace = () => {
     const sectionsForSave = sections.map(section => ({
       ...section,
       subsections: (section.subsections || []).map(sub => ({
-        ...sub,
-        topicBoxes: (sub.topicBoxes || []).map(topic => ({
-          ...topic,
-          video_resources: videosByTopic[topic.id] || topic.video_resources || [],
-          content_blocks: handsOnResources[topic.id]?.filter(r => r.type === 'content') || topic.content_blocks || [],
-          worksheets: handsOnResources[topic.id]?.filter(r => r.type === 'worksheet') || topic.worksheets || [],
-          activities: handsOnResources[topic.id]?.filter(r => r.type === 'activity') || topic.activities || []
-        }))
+        id: sub.id,
+        title: sub.title,
+        description: sub.description || '',
+        learning_objectives: sub.learning_objectives || [],
+        duration_minutes: sub.duration_minutes ?? 20,
+        content_blocks: (handsOnResources[sub.id] || []).filter(r => r.type === 'content'),
+        worksheets: (handsOnResources[sub.id] || []).filter(r => r.type === 'worksheet'),
+        activities: (handsOnResources[sub.id] || []).filter(r => r.type === 'activity'),
+        video_resources: videosByTopic[sub.id] || [],
       }))
     }));
 
@@ -374,18 +362,29 @@ const CourseWorkspace = () => {
       throw new Error(result.error || result.detail || 'Unknown error');
     }
 
-    // Capture the new courseId for subsequent saves
     if (!hasExistingId && result.courseId) {
       setCurriculumId(result.courseId);
     }
   };
+
+  // ── Embed blocks into sections for navigation state ─────────────────
+  const sectionsWithBlocks = () => sections.map(section => ({
+    ...section,
+    subsections: (section.subsections || []).map(sub => ({
+      ...sub,
+      content_blocks: (handsOnResources[sub.id] || []).filter(r => r.type === 'content'),
+      worksheets:     (handsOnResources[sub.id] || []).filter(r => r.type === 'worksheet'),
+      activities:     (handsOnResources[sub.id] || []).filter(r => r.type === 'activity'),
+      video_resources: videosByTopic[sub.id] || [],
+    }))
+  }));
 
   // ── Back to Course View ───────────────────────────────────────────────
   const handleBack = () => {
     navigate('/course-view', {
       state: {
         formData,
-        sections,
+        sections: sectionsWithBlocks(),
         curriculumId,
         isPublic,
         isOwner,
@@ -395,12 +394,11 @@ const CourseWorkspace = () => {
     });
   };
 
-  // ── Edit in Workspace (from view mode) ───────────────────────────────
   const handleEditInWorkspace = () => {
     navigate('/course-workspace', {
       state: {
         formData,
-        sections,
+        sections: sectionsWithBlocks(),
         isEditing: true,
         curriculumId,
         isPublic,
@@ -410,12 +408,11 @@ const CourseWorkspace = () => {
     });
   };
 
-  // ── Edit as Collaborator (from view mode) ────────────────────────────
   const handleEditAsCollaborator = () => {
     navigate('/course-workspace', {
       state: {
         formData,
-        sections,
+        sections: sectionsWithBlocks(),
         isEditing: true,
         curriculumId,
         isPublic,
@@ -434,7 +431,7 @@ const CourseWorkspace = () => {
     enabled: !!organizationId && !!currentUser && !readOnly
   });
 
-  // ── Drag and Drop ─────────────────────────────────────────────────────
+  // ── Drag and Drop ──────────────────────────────��──────────────────────
   const handleDragEnd = (result) => {
     const { source, destination, draggableId, type } = result;
 
@@ -457,20 +454,6 @@ const CourseWorkspace = () => {
       if (type === 'SUBSECTION' && destination.droppableId.startsWith('subsections-')) {
         const sectionId = destination.droppableId.replace('subsections-', '');
         actions.insertSubsectionAt(sectionId, trayItem.data, destination.index);
-        setTrayItems(prev => prev.filter(i => i.id !== draggableId));
-        return;
-      }
-      if (type === 'TOPICBOX' && destination.droppableId.startsWith('topicboxes-')) {
-        const subsectionId = destination.droppableId.replace('topicboxes-', '');
-        let parentSectionId = null;
-        for (const s of sections) {
-          if ((s.subsections || []).some(ss => ss.id === subsectionId)) {
-            parentSectionId = s.id;
-            break;
-          }
-        }
-        if (!parentSectionId) return;
-        actions.insertTopicBoxAt(parentSectionId, subsectionId, trayItem.data, destination.index);
         setTrayItems(prev => prev.filter(i => i.id !== draggableId));
         return;
       }
@@ -497,93 +480,16 @@ const CourseWorkspace = () => {
           s.id === sectionId ? { ...s, subsections: reorderedSubsections } : s
         ));
       }
-      return;
-    }
-
-    if (type === 'TOPICBOX') {
-      const sourceSubId = source.droppableId.replace('topicboxes-', '');
-      const destSubId = destination.droppableId.replace('topicboxes-', '');
-
-      let sourceSection = null, sourceSub = null, sourceTopicBox = null;
-      for (const section of sections) {
-        const sub = (section.subsections || []).find(s => s.id === sourceSubId);
-        if (sub) { sourceSection = section; sourceSub = sub; sourceTopicBox = sub.topicBoxes[source.index]; break; }
-      }
-      let destSection = null, destSub = null;
-      for (const section of sections) {
-        const sub = (section.subsections || []).find(s => s.id === destSubId);
-        if (sub) { destSection = section; destSub = sub; break; }
-      }
-      if (!sourceSection || !sourceSub || !sourceTopicBox || !destSection || !destSub) return;
-
-      if (sourceSubId === destSubId) {
-        setSections(sections.map(section => {
-          if (section.id !== sourceSection.id) return section;
-          return {
-            ...section,
-            subsections: section.subsections.map(sub => {
-              if (sub.id !== sourceSubId) return sub;
-              const reorderedTopicBoxes = Array.from(sub.topicBoxes);
-              const [moved] = reorderedTopicBoxes.splice(source.index, 1);
-              reorderedTopicBoxes.splice(destination.index, 0, moved);
-              return { ...sub, topicBoxes: reorderedTopicBoxes };
-            })
-          };
-        }));
-      } else if (sourceSection.id === destSection.id) {
-        setSections(sections.map(section => {
-          if (section.id !== sourceSection.id) return section;
-          return {
-            ...section,
-            subsections: section.subsections.map(sub => {
-              if (sub.id === sourceSubId) return { ...sub, topicBoxes: sub.topicBoxes.filter((_, idx) => idx !== source.index) };
-              if (sub.id === destSubId) {
-                const newTopicBoxes = [...sub.topicBoxes];
-                newTopicBoxes.splice(destination.index, 0, sourceTopicBox);
-                return { ...sub, topicBoxes: newTopicBoxes };
-              }
-              return sub;
-            })
-          };
-        }));
-      } else {
-        setSections(sections.map(section => {
-          if (section.id === sourceSection.id) {
-            return {
-              ...section,
-              subsections: section.subsections.map(sub => {
-                if (sub.id === sourceSubId) return { ...sub, topicBoxes: sub.topicBoxes.filter((_, idx) => idx !== source.index) };
-                return sub;
-              })
-            };
-          }
-          if (section.id === destSection.id) {
-            return {
-              ...section,
-              subsections: section.subsections.map(sub => {
-                if (sub.id === destSubId) {
-                  const newTopicBoxes = [...sub.topicBoxes];
-                  newTopicBoxes.splice(destination.index, 0, sourceTopicBox);
-                  return { ...sub, topicBoxes: newTopicBoxes };
-                }
-                return sub;
-              })
-            };
-          }
-          return section;
-        }));
-      }
     }
   };
 
-  // ── Render ────────────────────────────────────────────────────────────
+  // ── Render ──────────────────────────────────────────────────────────���─
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
       {readOnly ? (
         <CourseViewer
           courseName={courseName}
           sections={sections}
-          videosByTopic={videosByTopic}
           handsOnResources={handsOnResources}
           ownerName={incomingOwnerName}
           isOwner={isOwner}
@@ -618,7 +524,6 @@ const CourseWorkspace = () => {
               ← Course View
             </button>
 
-            {/* Centre: editable course title */}
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 0 }}>
               <EditableField
                 value={courseName}
@@ -631,7 +536,6 @@ const CourseWorkspace = () => {
               />
             </div>
 
-            {/* Undo */}
             <button
               onClick={undo}
               disabled={historyIndex <= 0}
@@ -645,7 +549,6 @@ const CourseWorkspace = () => {
               ↶ Undo
             </button>
 
-            {/* Save status */}
             <div style={{
               fontFamily: "'DM Sans', sans-serif", fontSize: '13.8px', fontWeight: '500',
               padding: '6px 13px', borderRadius: '8px',
@@ -659,7 +562,6 @@ const CourseWorkspace = () => {
               {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'error' ? '✕ Error' : '✓ Saved'}
             </div>
 
-            {/* Link generation background indicator */}
             {Object.values(linkGenJobs).some(s => s === 'generating') && (
               <div style={{
                 display: 'flex', alignItems: 'center', gap: '5px',
@@ -676,7 +578,6 @@ const CourseWorkspace = () => {
               </div>
             )}
 
-            {/* Public / Private toggle */}
             <div
               onClick={handleToggleVisibility}
               style={{
@@ -703,7 +604,6 @@ const CourseWorkspace = () => {
               <span>{isPublic ? 'Public' : 'Private'}</span>
             </div>
 
-            {/* Share */}
             <button
               onClick={() => setShowShareModal(true)}
               style={{
@@ -722,10 +622,8 @@ const CourseWorkspace = () => {
               Share
             </button>
 
-            {/* Divider */}
             <div style={{ width: '1px', height: '22px', background: 'rgba(0,0,0,0.08)', flexShrink: 0 }} />
 
-            {/* Edo toggle */}
             <button
               onClick={() => setIsEdoOpen(p => !p)}
               title={isEdoOpen ? 'Close Edo AI' : 'Open Edo AI'}
@@ -745,7 +643,6 @@ const CourseWorkspace = () => {
           {/* ── Page + Edo row ── */}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'row', overflow: 'hidden' }}>
           <DragDropContext onDragEnd={handleDragEnd}>
-            {/* Page column — shrinks to make room for Edo */}
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
 
               {/* ── Course Outline Page ── */}
@@ -774,39 +671,13 @@ const CourseWorkspace = () => {
                   sectionTitle={activeSection?.title}
                   sectionNumber={sectionIndex + 1}
                   subsectionNumber={subsectionIndex + 1}
-                  videosByTopic={videosByTopic}
                   handsOnResources={handsOnResources}
                   actions={actions}
-                  onBack={navigateBack}
-                  onNavigateToTopic={navigateToTopic}
-                  trayTopics={trayItems.filter(i => i.type === 'TOPICBOX')}
-                  onAddTopicFromTray={(item) => {
-                    actions.addTopicBoxWithContent(navPath.sectionId, navPath.subsectionId, item.data.title, item.data.description, item.data.learning_objectives);
-                    setTrayItems(prev => prev.filter(i => i.id !== item.id));
-                  }}
-                />
-              )}
-
-              {/* ── Topic Page ── */}
-              {navPage === 'topic' && activeTopic && (
-                <TopicDetailsModal
-                  topic={activeTopic}
-                  sectionId={navPath.sectionId}
-                  subsectionId={navPath.subsectionId}
-                  sectionTitle={activeSection?.title}
-                  subsectionTitle={activeSubsection?.title}
-                  sectionNumber={sectionIndex + 1}
-                  subsectionNumber={subsectionIndex + 1}
-                  topicNumber={topicIndex + 1}
                   onBack={navigateBack}
                   onNavigateToBlock={navigateToBlock}
-                  actions={actions}
-                  videosByTopic={videosByTopic}
-                  handsOnResources={handsOnResources}
-                  currentUser={currentUser}
                   trayBlocks={trayItems.filter(i => i.type === 'BLOCK')}
                   onAddBlockFromTray={(item) => {
-                    actions.addBlock(navPath.topicId, item.data);
+                    actions.addBlock(navPath.subsectionId, item.data);
                     setTrayItems(prev => prev.filter(i => i.id !== item.id));
                   }}
                 />
@@ -816,8 +687,8 @@ const CourseWorkspace = () => {
               {navPage === 'block' && activeBlock && (
                 <BlockView
                   block={activeBlock}
-                  topicId={navPath.topicId}
-                  topicTitle={activeTopic?.title}
+                  topicId={navPath.subsectionId}
+                  topicTitle={null}
                   subsectionTitle={activeSubsection?.title}
                   sectionTitle={activeSection?.title}
                   sectionId={navPath.sectionId}
@@ -847,7 +718,7 @@ const CourseWorkspace = () => {
               />
             )}
           </DragDropContext>
-          </div>{/* end Page + Edo row */}
+          </div>
 
           {/* Modals */}
           {showBreakModal && (

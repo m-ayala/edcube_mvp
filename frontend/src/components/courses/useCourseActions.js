@@ -64,7 +64,8 @@ const useCourseActions = ({
           id: `sub-${Date.now()}-${idx}`,
           title: `Subsection ${idx}`,
           description: '',
-          topicBoxes: []
+          learning_objectives: [],
+          duration_minutes: 20,
         }]
       };
     }));
@@ -94,6 +95,18 @@ const useCourseActions = ({
     }));
   };
 
+  const updateSubsectionFull = (sectionId, subId, updatedData) => {
+    setSections(prev => prev.map(section => {
+      if (section.id !== sectionId) return section;
+      return {
+        ...section,
+        subsections: (section.subsections || []).map(sub =>
+          sub.id === subId ? { ...sub, ...updatedData } : sub
+        )
+      };
+    }));
+  };
+
   const addSubsectionWithContent = (sectionId, title, description) => {
     setSections(prev => prev.map(section => {
       if (section.id !== sectionId) return section;
@@ -104,58 +117,11 @@ const useCourseActions = ({
           id: `sub-${Date.now()}-${idx}`,
           title,
           description,
-          topicBoxes: []
+          learning_objectives: [],
+          duration_minutes: 20,
         }]
       };
     }));
-  };
-
-  const addTopicBoxWithContent = (sectionId, subsectionId, title, description) => {
-    // Validate inside the functional update so we always check against the latest state (prev),
-    // not the potentially-stale closure value of `sections`.
-    setSections(prev => {
-      const targetSection = prev.find(s => s.id === sectionId);
-      if (!targetSection) {
-        console.warn(`[Edo] addTopicBoxWithContent: section "${sectionId}" not found`, prev.map(s => s.id));
-        return prev; // no-op
-      }
-      const targetSub = (targetSection.subsections || []).find(ss => ss.id === subsectionId);
-      if (!targetSub) {
-        console.warn(`[Edo] addTopicBoxWithContent: subsection "${subsectionId}" not found`, (targetSection.subsections || []).map(ss => ss.id));
-        return prev; // no-op
-      }
-      return prev.map(section => {
-        if (section.id !== sectionId) return section;
-        return {
-          ...section,
-          subsections: (section.subsections || []).map(sub => {
-            if (sub.id !== subsectionId) return sub;
-            const idx = (sub.topicBoxes || []).length + 1;
-            return {
-              ...sub,
-              topicBoxes: [...(sub.topicBoxes || []), {
-                id: `topic-${Date.now()}-${idx}`,
-                title,
-                description,
-                duration_minutes: 20,
-                pla_pillars: [],
-                learning_objectives: [],
-                content_keywords: [],
-                video_resources: [],
-                worksheets: [],
-                activities: []
-              }]
-            };
-          })
-        };
-      });
-    });
-
-    // Auto-expand so the user can see the new topic box.
-    // Always expand optimistically — if IDs were wrong the no-op is harmless.
-    setCollapsedSections(prev => ({ ...prev, [sectionId]: false }));
-    setCollapsedSubsections(prev => ({ ...prev, [subsectionId]: false }));
-    return true;
   };
 
   const removeSubsection = (sectionId, subId) => {
@@ -168,80 +134,11 @@ const useCourseActions = ({
     }));
   };
 
-  // ── Topic Box CRUD ────────────────────────────────────────────────────
-  const addTopicBox = (sectionId, subsectionId) => {
-    setSections(prev => prev.map(section => {
-      if (section.id !== sectionId) return section;
-
-      return {
-        ...section,
-        subsections: (section.subsections || []).map(sub => {
-          if (sub.id !== subsectionId) return sub;
-
-          const idx = (sub.topicBoxes || []).length + 1;
-          return {
-            ...sub,
-            topicBoxes: [...(sub.topicBoxes || []), {
-              id: `topic-${Date.now()}-${idx}`,
-              title: `Topic ${idx}`,
-              description: '',
-              duration_minutes: 20,
-              pla_pillars: [],
-              learning_objectives: [],
-              content_keywords: [],
-              video_resources: [],
-              worksheets: [],
-              activities: []
-            }]
-          };
-        })
-      };
-    }));
-  };
-
-  const updateTopicBoxTitle = (sectionId, subsectionId, topicBoxId, newTitle) => {
-    setSections(prev => prev.map(section => {
-      if (section.id !== sectionId) return section;
-
-      return {
-        ...section,
-        subsections: (section.subsections || []).map(sub => {
-          if (sub.id !== subsectionId) return sub;
-
-          return {
-            ...sub,
-            topicBoxes: (sub.topicBoxes || []).map(topic =>
-              topic.id === topicBoxId ? { ...topic, title: newTitle } : topic
-            )
-          };
-        })
-      };
-    }));
-  };
-
-  const removeTopicBox = (sectionId, subsectionId, topicBoxId) => {
-    setSections(prev => prev.map(section => {
-      if (section.id !== sectionId) return section;
-
-      return {
-        ...section,
-        subsections: (section.subsections || []).map(sub => {
-          if (sub.id !== subsectionId) return sub;
-
-          return {
-            ...sub,
-            topicBoxes: (sub.topicBoxes || []).filter(t => t.id !== topicBoxId)
-          };
-        })
-      };
-    }));
-  };
-
   // ── Collapse Toggles ──────────────────────────────────────────────────
   const toggleSection = (sectionId) => {
     setCollapsedSections(prev => ({ ...prev, [sectionId]: !prev[sectionId] }));
   };
-  
+
   const toggleSubsection = (subId) => {
     setCollapsedSubsections(prev => ({ ...prev, [subId]: !prev[subId] }));
   };
@@ -253,7 +150,7 @@ const useCourseActions = ({
       type: 'section',
       id: sectionId,
       title: 'Delete Section?',
-      message: `Are you sure you want to delete "${section?.title || 'this section'}"? This will also delete all subsections and topic boxes within it.`
+      message: `Are you sure you want to delete "${section?.title || 'this section'}"? This will also delete all subsections and blocks within it.`
     });
   };
 
@@ -265,32 +162,19 @@ const useCourseActions = ({
       id: subId,
       sectionId: sectionId,
       title: 'Delete Subsection?',
-      message: `Are you sure you want to delete "${subsection?.title || 'this subsection'}"? This will also delete all topic boxes within it.`
-    });
-  };
-
-  const confirmDeleteTopicBox = (sectionId, subsectionId, topicBoxId) => {
-    setDeleteConfirm({
-      type: 'topicBox',
-      id: topicBoxId,
-      sectionId: sectionId,
-      subsectionId: subsectionId,
-      title: 'Delete Topic Box?',
-      message: `Are you sure you want to delete this topic box? This will also delete all resources within it.`
+      message: `Are you sure you want to delete "${subsection?.title || 'this subsection'}"? This will also delete all blocks within it.`
     });
   };
 
   const handleConfirmDelete = () => {
     if (!deleteConfirm) return;
-    
+
     if (deleteConfirm.type === 'section') {
       removeSection(deleteConfirm.id);
     } else if (deleteConfirm.type === 'subsection') {
       removeSubsection(deleteConfirm.sectionId, deleteConfirm.id);
-    } else if (deleteConfirm.type === 'topicBox') {
-      removeTopicBox(deleteConfirm.sectionId, deleteConfirm.subsectionId, deleteConfirm.id);
     }
-    
+
     setDeleteConfirm(null);
   };
 
@@ -310,23 +194,6 @@ const useCourseActions = ({
       subs.splice(Math.min(Math.max(0, index), subs.length), 0, subsection);
       return { ...s, subsections: subs };
     }));
-  };
-
-  const insertTopicBoxAt = (sectionId, subsectionId, topicBox, index) => {
-    setSections(prev => prev.map(s => {
-      if (s.id !== sectionId) return s;
-      return {
-        ...s,
-        subsections: (s.subsections || []).map(sub => {
-          if (sub.id !== subsectionId) return sub;
-          const boxes = [...(sub.topicBoxes || [])];
-          boxes.splice(Math.min(Math.max(0, index), boxes.length), 0, topicBox);
-          return { ...sub, topicBoxes: boxes };
-        })
-      };
-    }));
-    setCollapsedSections(prev => ({ ...prev, [sectionId]: false }));
-    setCollapsedSubsections(prev => ({ ...prev, [subsectionId]: false }));
   };
 
   // ── AI Generation ─────────────────────────────────────────────────────
@@ -380,8 +247,9 @@ const useCourseActions = ({
           const newSubsections = result.items.map(item => ({
             id: item.id,
             title: item.title,
-            description: item.description,
-            topicBoxes: []
+            description: item.description || '',
+            learning_objectives: item.learning_objectives || [],
+            duration_minutes: item.duration_minutes || 20,
           }));
 
           return {
@@ -399,69 +267,6 @@ const useCourseActions = ({
       return { success: false, error: error.message };
     } finally {
       setGenerating(`subsections-${sectionId}`, false);
-    }
-  };
-
-  const handleGenerateTopicBoxes = async (sectionId, subsectionId, { level, context, userGuidance, count }) => {
-    setGenerating(`topics-${sectionId}-${subsectionId}`, true);
-    try {
-      const result = await generateCurriculumContent({
-        level,
-        context,
-        userGuidance,
-        count,
-        teacherUid: currentUser.uid
-      });
-
-      if (result.success && result.items && result.items.length > 0) {
-        // Validate and update inside the functional update so we always use latest state.
-        const newTopicBoxes = result.items.map((item, i) => ({
-          id: item.id || `topic-${Date.now()}-${i + 1}`,
-          title: item.title,
-          description: item.description,
-          duration_minutes: item.duration_minutes || 20,
-          pla_pillars: item.pla_pillars || [],
-          learning_objectives: item.learning_objectives || [],
-          content_keywords: item.content_keywords || [],
-          video_resources: [],
-          worksheets: [],
-          activities: []
-        }));
-
-        setSections(prev => {
-          const hasSection = prev.some(s => s.id === sectionId);
-          if (!hasSection) {
-            console.warn(`[Edo] handleGenerateTopicBoxes: section "${sectionId}" not found in latest state`);
-            return prev;
-          }
-          return prev.map(section => {
-            if (section.id !== sectionId) return section;
-            return {
-              ...section,
-              subsections: (section.subsections || []).map(sub => {
-                if (sub.id !== subsectionId) return sub;
-                return {
-                  ...sub,
-                  topicBoxes: [...(sub.topicBoxes || []), ...newTopicBoxes]
-                };
-              })
-            };
-          });
-        });
-
-        // Auto-expand so the user sees the new topic boxes
-        setCollapsedSections(prev => ({ ...prev, [sectionId]: false }));
-        setCollapsedSubsections(prev => ({ ...prev, [subsectionId]: false }));
-
-        console.log(`✅ Generated ${result.items.length} topic boxes for subsection ${subsectionId}`);
-        return { success: true, count: result.items.length };
-      }
-      return { success: false, error: 'No items returned' };
-    } catch (error) {
-      console.error('Failed to generate topic boxes:', error);
-      return { success: false, error: error.message };
-    } finally {
-      setGenerating(`topics-${sectionId}-${subsectionId}`, false);
     }
   };
 
@@ -503,8 +308,9 @@ const useCourseActions = ({
           items: result.items.map(item => ({
             id: item.id || `sub-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
             title: item.title,
-            description: item.description,
-            topicBoxes: []
+            description: item.description || '',
+            learning_objectives: item.learning_objectives || [],
+            duration_minutes: item.duration_minutes || 20,
           }))
         };
       }
@@ -516,59 +322,27 @@ const useCourseActions = ({
     }
   };
 
-  const generateTopicBoxesForTray = async ({ level, context, count }) => {
-    setGenerating('topics-tray', true);
-    try {
-      const result = await generateCurriculumContent({
-        level, context, count, teacherUid: currentUser.uid
-      });
-      if (result.success && result.items) {
-        return {
-          success: true,
-          items: result.items.map((item, i) => ({
-            id: item.id || `topic-${Date.now()}-${i + 1}`,
-            title: item.title,
-            description: item.description,
-            duration_minutes: item.duration_minutes || 20,
-            pla_pillars: item.pla_pillars || [],
-            learning_objectives: item.learning_objectives || [],
-            content_keywords: item.content_keywords || [],
-            video_resources: [],
-            worksheets: [],
-            activities: []
-          }))
-        };
-      }
-      return { success: false, error: 'No items returned' };
-    } catch (error) {
-      return { success: false, error: error.message };
-    } finally {
-      setGenerating('topics-tray', false);
-    }
-  };
-
   // ── Video Generation ──────────────────────────────────────────────────
-  const generateVideosFromBackend = async (topicBox) => {
-    setGenerating(`videos-${topicBox.id}`, true);
+  const generateVideosFromBackend = async (subsection) => {
+    setGenerating(`videos-${subsection.id}`, true);
     try {
-      console.log('🎬 Generating videos for:', topicBox.title);
+      console.log('🎬 Generating videos for:', subsection.title);
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/generate-videos`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          topicId: topicBox.id,
-          topicTitle: topicBox.title,
+          topicId: subsection.id,
+          topicTitle: subsection.title,
           topicData: {
-            title: topicBox.title,
-            duration: `${topicBox.duration_minutes || 20} min`,
-            description: topicBox.description || '',
-            learningObjectives: topicBox.learning_objectives || [],
-            subtopics: topicBox.content_keywords || [],
+            title: subsection.title,
+            duration: `${subsection.duration_minutes || 20} min`,
+            description: subsection.description || '',
+            learningObjectives: subsection.learning_objectives || [],
             subject: formData?.subject || '',
             courseName: formData?.courseName || '',
             courseTopic: formData?.topic || ''
           },
-          sectionId: topicBox.id,
+          sectionId: subsection.id,
           gradeLevel: formData.class,
           courseId: curriculumId || 'new-course'
         })
@@ -580,7 +354,7 @@ const useCourseActions = ({
         return { success: false, error: detail };
       }
       if (result.success) {
-        setVideosByTopic(prev => ({ ...prev, [topicBox.id]: result.videos }));
+        setVideosByTopic(prev => ({ ...prev, [subsection.id]: result.videos }));
         console.log('✅ Videos received:', result.videos.length);
         return { success: true, count: result.videos.length };
       } else {
@@ -590,37 +364,33 @@ const useCourseActions = ({
       console.error('❌ Error:', error);
       return { success: false, error: error.message || 'Network error' };
     } finally {
-      setGenerating(`videos-${topicBox.id}`, false);
+      setGenerating(`videos-${subsection.id}`, false);
     }
   };
 
   // ── Hands-On Resource Generation ──────────────────────────────────────
-  const generateResource = async (topicBoxId, resourceType) => {
-    // Find the topic box
-    let topicBox = null;
+  const generateResource = async (subsectionId, resourceType) => {
+    let subsection = null;
     for (const section of sections) {
-      for (const sub of section.subsections || []) {
-        topicBox = (sub.topicBoxes || []).find(t => t.id === topicBoxId);
-        if (topicBox) break;
-      }
-      if (topicBox) break;
+      subsection = (section.subsections || []).find(s => s.id === subsectionId);
+      if (subsection) break;
     }
 
-    if (!topicBox) return;
+    if (!subsection) return;
 
-    setGenerating(`${resourceType}-${topicBoxId}`, true);
+    setGenerating(`${resourceType}-${subsectionId}`, true);
     try {
-      console.log(`🔨 Generating ${resourceType} for:`, topicBox.title);
+      console.log(`🔨 Generating ${resourceType} for:`, subsection.title);
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/generate-resource`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          topicId: topicBoxId,
+          topicId: subsectionId,
           resourceType,
           gradeLevel: formData.class,
-          topicTitle: topicBox.title,
-          topicDescription: topicBox.description || '',
-          learningObjectives: topicBox.learning_objectives || []
+          topicTitle: subsection.title,
+          topicDescription: subsection.description || '',
+          learningObjectives: subsection.learning_objectives || []
         })
       });
       const resource = await response.json();
@@ -630,27 +400,26 @@ const useCourseActions = ({
       console.log(`✅ ${resourceType} generated:`, resource);
       setHandsOnResources(prev => ({
         ...prev,
-        [topicBoxId]: [...(prev[topicBoxId] || []), resource]
+        [subsectionId]: [...(prev[subsectionId] || []), resource]
       }));
       return { success: true, title: resource.title };
     } catch (error) {
       console.error(`Error generating ${resourceType}:`, error);
       return { success: false, error: error.message || 'Unknown error' };
     } finally {
-      setGenerating(`${resourceType}-${topicBoxId}`, false);
+      setGenerating(`${resourceType}-${subsectionId}`, false);
     }
   };
 
   // ── Manual Resource Management ───────────────────────────────────────
-  const addManualResource = (topicId, resourceType, resourceData) => {
-    console.log(`➕ Adding manual ${resourceType} to topic ${topicId}:`, resourceData);
+  const addManualResource = (subsectionId, resourceType, resourceData) => {
+    console.log(`➕ Adding manual ${resourceType} to subsection ${subsectionId}:`, resourceData);
 
     if (resourceType === 'video') {
-      // Legacy: add to videosByTopic as a YouTube-style card
-      const currentVideos = videosByTopic[topicId] || [];
+      const currentVideos = videosByTopic[subsectionId] || [];
       setVideosByTopic(prev => ({
         ...prev,
-        [topicId]: [...currentVideos, {
+        [subsectionId]: [...currentVideos, {
           videoId: `manual-${Date.now()}`,
           title: resourceData.title,
           url: resourceData.url,
@@ -661,11 +430,10 @@ const useCourseActions = ({
         }],
       }));
     } else {
-      // content, worksheet, activity — store full resourceData so all schema fields are preserved
-      const currentResources = handsOnResources[topicId] || [];
+      const currentResources = handsOnResources[subsectionId] || [];
       setHandsOnResources(prev => ({
         ...prev,
-        [topicId]: [...currentResources, {
+        [subsectionId]: [...currentResources, {
           ...resourceData,
           type: resourceType,
           source: resourceData.source || 'manual',
@@ -675,72 +443,42 @@ const useCourseActions = ({
     }
   };
 
-  const removeResource = (topicId, resourceType, resourceIndex) => {
+  const removeResource = (subsectionId, resourceType, resourceIndex) => {
     if (resourceType === 'video') {
-      const currentVideos = videosByTopic[topicId] || [];
+      const currentVideos = videosByTopic[subsectionId] || [];
       setVideosByTopic(prev => ({
         ...prev,
-        [topicId]: currentVideos.filter((_, idx) => idx !== resourceIndex)
+        [subsectionId]: currentVideos.filter((_, idx) => idx !== resourceIndex)
       }));
     } else {
-      const currentResources = handsOnResources[topicId] || [];
+      const currentResources = handsOnResources[subsectionId] || [];
       setHandsOnResources(prev => ({
         ...prev,
-        [topicId]: currentResources.filter((_, idx) => idx !== resourceIndex)
+        [subsectionId]: currentResources.filter((_, idx) => idx !== resourceIndex)
       }));
     }
   };
 
-  const updateResource = (topicId, resourceType, resourceIndex, updatedData) => {
+  const updateResource = (subsectionId, resourceType, resourceIndex, updatedData) => {
     if (resourceType === 'video') {
       setVideosByTopic(prev => ({
         ...prev,
-        [topicId]: (prev[topicId] || []).map((item, idx) =>
+        [subsectionId]: (prev[subsectionId] || []).map((item, idx) =>
           idx === resourceIndex ? { ...item, ...updatedData } : item
         ),
       }));
     } else {
       setHandsOnResources(prev => ({
         ...prev,
-        [topicId]: (prev[topicId] || []).map((item, idx) =>
+        [subsectionId]: (prev[subsectionId] || []).map((item, idx) =>
           idx === resourceIndex ? { ...item, ...updatedData } : item
         ),
       }));
     }
   };
 
-  const updateTopicBoxFull = ({ sectionId, subsectionId, topicId, updatedData }) => {
-    console.log('📝 Updating full topic box:', topicId, updatedData);
-    
-    setSections(prev => prev.map(section => {
-      if (section.id !== sectionId) return section;
-
-      return {
-        ...section,
-        subsections: (section.subsections || []).map(sub => {
-          if (sub.id !== subsectionId) return sub;
-
-          return {
-            ...sub,
-            topicBoxes: (sub.topicBoxes || []).map(topic =>
-              topic.id === topicId ? {
-                ...topic,
-                title: updatedData.title,
-                description: updatedData.description,
-                duration_minutes: updatedData.duration_minutes,
-                learning_objectives: updatedData.learning_objectives,
-                content_keywords: updatedData.content_keywords,
-                pla_pillars: updatedData.pla_pillars
-              } : topic
-            )
-          };
-        })
-      };
-    }));
-  };
-
-  // ── Block CRUD (handsOnResources, id-based) ───────────────────────────
-  const addBlock = (topicId, blockData) => {
+  // ── Block CRUD (handsOnResources, id-based, keyed by subsectionId) ────
+  const addBlock = (subsectionId, blockData) => {
     const block = {
       ...blockData,
       id: blockData.id || `block-${Date.now()}`,
@@ -748,21 +486,21 @@ const useCourseActions = ({
     };
     setHandsOnResources(prev => ({
       ...prev,
-      [topicId]: [...(prev[topicId] || []), block],
+      [subsectionId]: [...(prev[subsectionId] || []), block],
     }));
   };
 
-  const removeBlock = (topicId, blockId) => {
+  const removeBlock = (subsectionId, blockId) => {
     setHandsOnResources(prev => ({
       ...prev,
-      [topicId]: (prev[topicId] || []).filter(b => b.id !== blockId),
+      [subsectionId]: (prev[subsectionId] || []).filter(b => b.id !== blockId),
     }));
   };
 
-  const updateBlock = (topicId, blockId, updatedFields) => {
+  const updateBlock = (subsectionId, blockId, updatedFields) => {
     setHandsOnResources(prev => ({
       ...prev,
-      [topicId]: (prev[topicId] || []).map(b =>
+      [subsectionId]: (prev[subsectionId] || []).map(b =>
         b.id === blockId ? { ...b, ...updatedFields } : b
       ),
     }));
@@ -782,43 +520,33 @@ const useCourseActions = ({
     addSubsectionWithContent,
     updateSubsectionTitle,
     updateSubsectionDescription,
+    updateSubsectionFull,
     removeSubsection,
-    
-    // TopicBox
-    addTopicBox,
-    addTopicBoxWithContent,
-    updateTopicBoxTitle,
-    removeTopicBox,
-    updateTopicBoxFull,
-    
+
     // Toggles
     toggleSection,
     toggleSubsection,
     collapsedSections,
     collapsedSubsections,
-    
+
     // Delete
     confirmDeleteSection,
     confirmDeleteSubsection,
-    confirmDeleteTopicBox,
     handleConfirmDelete,
     deleteConfirm,
     setDeleteConfirm,
-    
+
     // AI
     handleGenerateSections,
     handleGenerateSubsections,
-    handleGenerateTopicBoxes,
     generateSectionsForTray,
     generateSubsectionsForTray,
-    generateTopicBoxesForTray,
 
     // Insert-at-index (for tray drops)
     insertSectionAt,
     insertSubsectionAt,
-    insertTopicBoxAt,
-    
-    // Block CRUD (id-based)
+
+    // Block CRUD (id-based, keyed by subsectionId)
     addBlock,
     removeBlock,
     updateBlock,
@@ -829,7 +557,7 @@ const useCourseActions = ({
     addManualResource,
     removeResource,
     updateResource,
-    
+
     // State setters (for modals)
     setVideosByTopic,
     setHandsOnResources,
