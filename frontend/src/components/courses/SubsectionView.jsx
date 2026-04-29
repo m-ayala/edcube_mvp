@@ -94,24 +94,25 @@ const SubsectionView = ({
   };
 
   return (
-    <div style={{ flex: 1, overflowY: 'auto', padding: '24px 28px 80px', position: 'relative', zIndex: 1 }}>
+    <div style={{ flex: 1, overflowY: 'auto', padding: '24px 48px 80px', position: 'relative', zIndex: 1 }}>
+      <div style={{ maxWidth: '860px', margin: '0 auto' }}>
 
       {/* ── Top bar ── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
         <button
           onClick={onBack}
           style={{
             fontFamily: "'DM Sans', sans-serif", fontSize: '13.8px', fontWeight: '500',
-            padding: '6px 13px', borderRadius: '8px', cursor: 'pointer',
+            padding: '8px 20px', borderRadius: '8px', cursor: 'pointer',
             background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.12)',
-            color: '#111', whiteSpace: 'nowrap',
+            color: '#111', whiteSpace: 'nowrap', flexShrink: 0,
           }}
         >
-          ← Outline
+          ←
         </button>
-        {sectionNumber && sectionTitle && (
+        {sectionTitle && (
           <span style={{ color: '#555', fontSize: '13px', fontWeight: '500' }}>
-            Section {sectionNumber}: {sectionTitle}
+            {sectionTitle} <span style={{ color: '#BBB' }}>›</span> <strong style={{ color: '#333', fontWeight: '600' }}>{subsection.title || 'Untitled Subsection'}</strong>
           </span>
         )}
       </div>
@@ -528,6 +529,7 @@ const SubsectionView = ({
             )}
           </Droppable>
         )}
+      </div>
       </div>
     </div>
   );

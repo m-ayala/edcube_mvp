@@ -1,7 +1,6 @@
 // src/components/courses/BlockView.jsx
 import { useState, useEffect } from 'react';
-import { BLOCK_CATEGORIES, getSubcategoriesForType } from '../../constants/blockCategories';
-import { ExternalLink, Trash2, Plus, Edit3, Eye, Sparkles, Loader2, Library, Check, X, Pencil } from 'lucide-react';
+import { ExternalLink, Trash2, Plus, Sparkles, Loader2, Library, Check, X, Pencil } from 'lucide-react';
 import { getLibraryFolders } from '../../firebase/dbService';
 
 const TYPE_COLORS = {
@@ -26,8 +25,9 @@ const BlockView = ({
 }) => {
   const [localTitle, setLocalTitle] = useState(block?.title || '');
   const [localContent, setLocalContent] = useState(block?.content || '');
-  const [localCategory, setLocalCategory] = useState(block?.category || '');
-  const [localSubcategory, setLocalSubcategory] = useState(block?.subcategory || '');
+  const [localCategory] = useState(block?.category || '');
+  const [localSubcategory] = useState(block?.subcategory || '');
+  const [editingTitle, setEditingTitle] = useState(false);
   const [isEditingContent, setIsEditingContent] = useState(false);
   const [links, setLinks] = useState(block?.links || []);
   const [newLinkUrl, setNewLinkUrl] = useState('');
@@ -49,9 +49,8 @@ const BlockView = ({
   useEffect(() => {
     setLocalTitle(block?.title || '');
     setLocalContent(block?.content || '');
-    setLocalCategory(block?.category || '');
-    setLocalSubcategory(block?.subcategory || '');
     setLinks(block?.links || []);
+    setEditingTitle(false);
     setIsEditingContent(false);
   }, [block?.id]);
 
@@ -63,10 +62,6 @@ const BlockView = ({
   const blockType = block?.type || 'content';
   const typeStyle = TYPE_COLORS[blockType] || TYPE_COLORS.content;
 
-  const categoryOptions = BLOCK_CATEGORIES.filter(c => c.allowedTypes.includes(blockType));
-  const subcategoryGroups = getSubcategoriesForType(blockType).find(g => g.categoryId === localCategory);
-  const subcategoryOptions = subcategoryGroups?.subcategories || [];
-
   const save = (overrides = {}) => {
     actions?.updateBlock?.(topicId, block.id, {
       title: localTitle,
@@ -76,18 +71,6 @@ const BlockView = ({
       links,
       ...overrides,
     });
-  };
-
-  const handleCategoryChange = (catId) => {
-    setLocalCategory(catId);
-    const firstSub = getSubcategoriesForType(blockType).find(g => g.categoryId === catId)?.subcategories?.[0] || '';
-    setLocalSubcategory(firstSub);
-    actions?.updateBlock?.(topicId, block.id, { category: catId, subcategory: firstSub });
-  };
-
-  const handleSubcategoryChange = (sub) => {
-    setLocalSubcategory(sub);
-    actions?.updateBlock?.(topicId, block.id, { subcategory: sub });
   };
 
   const handleAddLink = () => {
@@ -152,20 +135,8 @@ const BlockView = ({
     setShowLibraryPicker(false);
   };
 
-  const inputStyle = {
-    fontFamily: "'DM Sans', sans-serif",
-    border: '1px solid rgba(0,0,0,0.15)',
-    borderRadius: '7px',
-    padding: '7px 12px',
-    fontSize: '13.5px',
-    color: '#111',
-    background: '#FAFAFA',
-    outline: 'none',
-    cursor: 'pointer',
-  };
-
   const renderContentPreview = (text) => {
-    if (!text) return <span style={{ color: '#AAA', fontStyle: 'italic' }}>No content yet — click Edit to add content.</span>;
+    if (!text) return <span style={{ color: '#AAA', fontStyle: 'italic' }}>Add content…</span>;
     return text.split('\n').map((line, i) => {
       const isBold = line.match(/^\*\*(.+)\*\*$/);
       if (isBold) return <p key={i} style={{ margin: '12px 0 4px', fontWeight: '700', fontSize: '14px', color: '#222' }}>{isBold[1]}</p>;
@@ -186,124 +157,90 @@ const BlockView = ({
 
   const isGenerating = linkGenStatus === 'generating';
 
-  const BLOB_BG = `
-    radial-gradient(circle at 15% 20%,  rgba(178,232,200,0.22)  0%, transparent 40%),
-    radial-gradient(circle at 85% 8%,   rgba(172,216,240,0.22)  0%, transparent 38%),
-    radial-gradient(circle at 50% 85%,  rgba(242,192,212,0.18)  0%, transparent 42%),
-    radial-gradient(circle at 90% 60%,  rgba(247,228,160,0.18)  0%, transparent 35%),
-    radial-gradient(circle at 20% 65%,  rgba(172,216,240,0.15)  0%, transparent 35%),
-    #FAFAF9
-  `;
-
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: BLOB_BG, overflow: 'hidden' }}>
+    <div style={{ flex: 1, overflowY: 'auto', padding: '24px 48px 80px', position: 'relative', zIndex: 1 }}>
+      <div style={{ maxWidth: '860px', margin: '0 auto' }}>
 
       {/* ── Top bar ── */}
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '10px 24px', background: '#FFFFFF',
-        borderBottom: '1px solid rgba(0,0,0,0.08)', flexShrink: 0,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', fontSize: '13px' }}>
-          <button
-            onClick={onBack}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#555', fontFamily: "'DM Sans', sans-serif", fontSize: '15px', fontWeight: '500', padding: '4px 0', lineHeight: 1 }}
-          >
-            ←
-          </button>
-          {sectionTitle && subsectionTitle && (
-            <span style={{ color: '#777', fontSize: '13px' }}>
-              {sectionTitle} <span style={{ color: '#BBB' }}>›</span> {subsectionTitle} <span style={{ color: '#BBB' }}>›</span> <strong style={{ color: '#444', fontWeight: '600' }}>{localTitle || 'Untitled Block'}</strong>
-            </span>
-          )}
-        </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
+        <button
+          onClick={onBack}
+          style={{
+            fontFamily: "'DM Sans', sans-serif", fontSize: '13.8px', fontWeight: '500',
+            padding: '8px 20px', borderRadius: '8px', cursor: 'pointer',
+            background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.12)',
+            color: '#111', whiteSpace: 'nowrap', flexShrink: 0,
+          }}
+        >
+          ←
+        </button>
+        {sectionTitle && subsectionTitle && (
+          <span style={{ color: '#555', fontSize: '13px', fontWeight: '500' }}>
+            {sectionTitle} <span style={{ color: '#BBB' }}>›</span> {subsectionTitle} <span style={{ color: '#BBB' }}>›</span> <strong style={{ color: '#333', fontWeight: '600' }}>{localTitle || 'Untitled Block'}</strong>
+          </span>
+        )}
       </div>
 
-      {/* ── Body ── */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '24px 28px 60px' }}>
+        {/* Block info card */}
+        <div style={{ background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.08)', borderRadius: '12px', padding: '20px 24px', marginBottom: '24px', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
 
-        {/* Block metadata card */}
-        <div style={{ background: 'rgba(255,255,255,0.88)', border: '1.5px solid rgba(255,255,255,0.95)', borderRadius: '12px', padding: '20px 24px', marginBottom: '20px', boxShadow: '0 2px 12px rgba(0,0,0,0.07)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}>
+          {/* Type label */}
+          <p style={{ margin: '0 0 4px', fontSize: '12px', fontWeight: '600', color: typeStyle.text, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            {typeStyle.label}
+          </p>
 
-          {/* Type badge */}
-          <div style={{ marginBottom: '16px' }}>
-            <span style={{
-              padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '700',
-              background: typeStyle.bg, color: typeStyle.text, border: `1px solid ${typeStyle.border}`,
-              textTransform: 'uppercase', letterSpacing: '0.05em',
-            }}>
-              {typeStyle.label}
-            </span>
-          </div>
-
-          {/* Title */}
-          <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#999', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>
-            Block Title
-          </label>
-          <input
-            type="text"
-            value={localTitle}
-            onChange={e => setLocalTitle(e.target.value)}
-            onBlur={() => save()}
-            placeholder="Enter block title…"
-            maxLength={120}
-            style={{
-              width: '100%', boxSizing: 'border-box',
-              fontFamily: "'DM Sans', sans-serif", fontSize: '18px', fontWeight: '700', color: '#111',
-              border: '1.5px solid rgba(0,0,0,0.12)', borderRadius: '8px',
-              padding: '10px 14px', outline: 'none', background: '#FAFAFA',
-            }}
-          />
+          {/* Title — click to edit */}
+          {editingTitle ? (
+            <input
+              autoFocus
+              value={localTitle}
+              onChange={e => setLocalTitle(e.target.value)}
+              onBlur={() => { setEditingTitle(false); save(); }}
+              onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { setLocalTitle(block?.title || ''); setEditingTitle(false); } }}
+              maxLength={120}
+              style={{
+                fontSize: '22px', fontWeight: '700', color: '#111', fontFamily: "'DM Sans', sans-serif",
+                border: '2px solid #111', borderRadius: '6px', padding: '4px 8px',
+                width: '100%', outline: 'none', background: '#FAFAFA', boxSizing: 'border-box',
+              }}
+            />
+          ) : (
+            <h2
+              onClick={() => setEditingTitle(true)}
+              title="Click to edit title"
+              style={{
+                margin: 0, fontSize: '22px', fontWeight: '700', color: '#111',
+                fontFamily: "'DM Sans', sans-serif", lineHeight: '1.3', cursor: 'text',
+                borderRadius: '4px', padding: '2px 4px', marginLeft: '-4px',
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = '#F5F3EE'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >
+              {localTitle || <span style={{ color: '#AAA', fontStyle: 'italic', fontWeight: '400' }}>Untitled Block</span>}
+            </h2>
+          )}
         </div>
 
-        {/* Content area */}
-        <div style={{ background: 'rgba(255,255,255,0.88)', border: '1.5px solid rgba(255,255,255,0.95)', borderRadius: '12px', padding: '20px 24px', marginBottom: '20px', boxShadow: '0 2px 12px rgba(0,0,0,0.07)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-            <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#999', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              Content
-              {blockType === 'content' && !isEditingContent && (
-                <span style={{ marginLeft: '8px', fontWeight: '400', color: '#BBB', textTransform: 'none', fontSize: '11px' }}>
-                  **Header** format
-                </span>
-              )}
-            </label>
-            <button
-              onClick={() => {
-                if (isEditingContent) save();
-                setIsEditingContent(p => !p);
-              }}
-              style={{
-                display: 'flex', alignItems: 'center', gap: '5px',
-                padding: '5px 12px', borderRadius: '7px', cursor: 'pointer',
-                fontSize: '12.7px', fontWeight: '600',
-                background: isEditingContent ? '#111' : '#F5F3EE',
-                color: isEditingContent ? '#FFF' : '#555',
-                border: isEditingContent ? 'none' : '1px solid rgba(0,0,0,0.12)',
-                fontFamily: "'DM Sans', sans-serif",
-                transition: 'all 0.15s',
-              }}
-            >
-              {isEditingContent ? <><Eye size={13} /> Done</> : <><Edit3 size={13} /> Edit</>}
-            </button>
-          </div>
-
+        {/* Content card */}
+        <div style={{ background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.08)', borderRadius: '12px', padding: '20px 24px', marginBottom: '24px', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
           {isEditingContent ? (
             <textarea
               autoFocus
               value={localContent}
               onChange={e => setLocalContent(e.target.value)}
-              onBlur={() => save()}
+              onBlur={() => { setIsEditingContent(false); save(); }}
+              onKeyDown={e => { if (e.key === 'Escape') { setLocalContent(block?.content || ''); setIsEditingContent(false); } }}
               placeholder={
                 blockType === 'content'
-                  ? '**What is X?**\nWrite a clear, age-appropriate explanation here…\n\n**Key Parts**\n- Part 1\n- Part 2\n\n**How to teach it**\nDescribe the teaching approach…\n\n**Things to consider**\nAny notes for the teacher…\n\n**Example**\nA concrete example…'
+                  ? '**What is X?**\nWrite a clear, age-appropriate explanation here…\n\n**Key Parts**\n- Part 1\n- Part 2\n\n**How to teach it**\nDescribe the teaching approach…\n\n**Example**\nA concrete example…'
                   : blockType === 'worksheet'
                     ? 'Describe the worksheet: type, what students do, key prompts or questions…'
                     : 'Describe the activity: setup, grouping, step-by-step facilitation, timing, debrief…'
               }
               style={{
                 width: '100%', boxSizing: 'border-box',
-                fontFamily: "'DM Mono', 'Courier New', monospace", fontSize: '13.5px', color: '#222',
-                lineHeight: '1.7', border: '1.5px solid #111', borderRadius: '8px',
+                fontFamily: "'DM Sans', sans-serif", fontSize: '13.5px', color: '#222',
+                lineHeight: '1.7', border: '2px solid #111', borderRadius: '6px',
                 padding: '14px 16px', outline: 'none', resize: 'vertical',
                 background: '#FAFAFA', minHeight: '320px',
               }}
@@ -313,11 +250,12 @@ const BlockView = ({
               onClick={() => setIsEditingContent(true)}
               title="Click to edit"
               style={{
-                minHeight: '120px', padding: '14px 16px',
-                border: '1.5px solid rgba(0,0,0,0.08)', borderRadius: '8px',
-                background: '#FAFAFA', cursor: 'text',
+                minHeight: '120px', cursor: 'text',
                 fontFamily: "'DM Sans', sans-serif",
+                borderRadius: '4px', padding: '2px 4px', marginLeft: '-4px',
               }}
+              onMouseEnter={e => e.currentTarget.style.background = '#F5F3EE'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
             >
               {renderContentPreview(localContent)}
             </div>
