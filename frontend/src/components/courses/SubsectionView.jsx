@@ -1,5 +1,5 @@
 // src/components/courses/SubsectionView.jsx
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Trash2, GripVertical } from 'lucide-react';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
 
@@ -33,6 +33,12 @@ const SubsectionView = ({
   const [localObjectives, setLocalObjectives] = useState(subsection.learning_objectives || []);
   const [newObjective, setNewObjective] = useState('');
   const [hoveredBlock, setHoveredBlock] = useState(null);
+
+  // Sync local state from props when parent state changes (e.g. after undo)
+  useEffect(() => { if (!editingTitle) setLocalTitle(subsection.title || ''); }, [subsection.title, editingTitle]);
+  useEffect(() => { if (!editingDesc) setLocalDesc(subsection.description || ''); }, [subsection.description, editingDesc]);
+  useEffect(() => { if (!editingDuration) setLocalDuration(subsection.duration_minutes ?? 20); }, [subsection.duration_minutes, editingDuration]);
+  useEffect(() => { if (!editingObjectives) setLocalObjectives(subsection.learning_objectives || []); }, [subsection.learning_objectives, editingObjectives]);
 
   const blocks = handsOnResources?.[subsection.id] || [];
 
