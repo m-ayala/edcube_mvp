@@ -34,6 +34,7 @@ const PLA_STYLES = {
 
 const BADGE_STYLES = {
   video:     { bg: '#EDE9F8', color: '#4B3899', label: 'Video' },
+  content:   { bg: '#EAF0FF', color: '#3B5FBB', label: 'Content' },
   worksheet: { bg: '#EAF3DE', color: '#27500A', label: 'Worksheet' },
   activity:  { bg: '#FAEEDA', color: '#633806', label: 'Activity' },
 };
@@ -110,23 +111,14 @@ const ResourceItem = ({ resource, type }) => {
 };
 
 // ── Lesson row (subsection) ───────────────────────────────────────────────────
-const LessonRow = ({ sub, gradient, videosByTopic, handsOnResources, isLast }) => {
-  // Aggregate from all topic boxes in this subsection
-  const allVideos = [];
-  const allWorksheets = [];
-  const allActivities = [];
-  const allPillars = new Set();
+const LessonRow = ({ sub, gradient, handsOnResources, isLast }) => {
+  const blocks = handsOnResources[sub.id] || [];
+  const allVideos     = sub.video_resources || [];
+  const allWorksheets = blocks.filter(b => b.type === 'worksheet');
+  const allActivities = blocks.filter(b => b.type === 'activity');
+  const allContent    = blocks.filter(b => b.type === 'content');
 
-  (sub.topicBoxes || []).forEach(topic => {
-    (videosByTopic[topic.id] || []).forEach(v => allVideos.push(v));
-    (handsOnResources[topic.id] || []).forEach(r => {
-      if (r.type === 'worksheet') allWorksheets.push(r);
-      else allActivities.push(r);
-    });
-    (topic.pla_pillars || []).forEach(p => allPillars.add(p));
-  });
-
-  const hasResources = allVideos.length > 0 || allWorksheets.length > 0 || allActivities.length > 0;
+  const hasResources = allVideos.length > 0 || allContent.length > 0 || allWorksheets.length > 0 || allActivities.length > 0;
 
   return (
     <div style={{
@@ -143,33 +135,34 @@ const LessonRow = ({ sub, gradient, videosByTopic, handsOnResources, isLast }) =
         <div style={{ fontSize: '15.5px', fontWeight: '500', color: '#111', marginBottom: '5px', lineHeight: '1.35', fontFamily: SANS }}>
           {sub.title}
         </div>
+
         {sub.description && (
           <div style={{ fontSize: '13.5px', color: '#666', lineHeight: '1.65', marginBottom: '12px', fontFamily: SANS }}>
             {sub.description}
           </div>
         )}
 
-        {/* PLA tags */}
-        {allPillars.size > 0 && (
-          <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', marginBottom: hasResources ? '16px' : 0 }}>
-            {[...allPillars].map(p => {
-              const s = PLA_STYLES[p] || { bg: '#F5F5F4', color: '#78716C' };
-              return (
-                <span key={p} style={{ fontSize: '10.5px', fontWeight: '500', fontFamily: SANS, padding: '2px 9px', borderRadius: '20px', background: s.bg, color: s.color }}>
-                  {p}
-                </span>
-              );
-            })}
+        {sub.duration_minutes > 0 && (
+          <div style={{ fontSize: '12px', color: '#AAA', marginBottom: hasResources ? '14px' : 0, fontFamily: SANS }}>
+            🕐 {sub.duration_minutes} min
           </div>
         )}
 
-        {/* Resources */}
+        {/* Learning objectives */}
+        {(sub.learning_objectives || []).length > 0 && (
+          <ul style={{ margin: '0 0 14px', paddingLeft: '18px', fontSize: '13px', color: '#555', lineHeight: '1.65', fontFamily: SANS }}>
+            {sub.learning_objectives.map((obj, i) => <li key={i}>{obj}</li>)}
+          </ul>
+        )}
+
+        {/* Blocks / Resources */}
         {hasResources && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <div style={{ fontSize: '10.5px', fontWeight: '600', letterSpacing: '0.8px', textTransform: 'uppercase', color: '#C0BAB0', marginBottom: '4px', fontFamily: SANS }}>
               Resources
             </div>
             {allVideos.map((v, i)     => <ResourceItem key={`v${i}`} resource={v} type="video"     />)}
+            {allContent.map((c, i)    => <ResourceItem key={`c${i}`} resource={c} type="content"   />)}
             {allWorksheets.map((w, i) => <ResourceItem key={`w${i}`} resource={w} type="worksheet" />)}
             {allActivities.map((a, i) => <ResourceItem key={`a${i}`} resource={a} type="activity"  />)}
           </div>
@@ -195,27 +188,25 @@ const CourseViewPage = () => {
   } = location.state || {};
 
   const [sections]             = useState(incomingSections);
-  const [videosByTopic,    setVideosByTopic]    = useState({});
   const [handsOnResources, setHandsOnResources] = useState({});
   const [downloading, setDownloading] = useState(false);
   const [activeView, setActiveView] = useState('outline');
   const docRef = useRef(null);
   const courseName = formData?.courseName || '';
 
-  // Hydrate resource caches from embedded topic data
+  // Hydrate resource cache from subsection-level blocks
   useEffect(() => {
-    const vids = {};
-    const ho   = {};
+    const ho = {};
     sections.forEach(section => {
       (section.subsections || []).forEach(sub => {
-        (sub.topicBoxes || []).forEach(topic => {
-          if (topic.video_resources?.length) vids[topic.id] = topic.video_resources;
-          const res = [...(topic.worksheets || []), ...(topic.activities || [])];
-          if (res.length) ho[topic.id] = res;
-        });
+        const blocks = [
+          ...(sub.content_blocks || []).map(b => ({ ...b, type: 'content' })),
+          ...(sub.worksheets     || []).map(b => ({ ...b, type: 'worksheet' })),
+          ...(sub.activities     || []).map(b => ({ ...b, type: 'activity' })),
+        ];
+        if (blocks.length > 0) ho[sub.id] = blocks;
       });
     });
-    setVideosByTopic(vids);
     setHandsOnResources(ho);
   }, []);
 
@@ -249,8 +240,7 @@ const CourseViewPage = () => {
   const sectionCount = sections.filter(s => s.type !== 'break').length;
   const lessonCount  = sections.reduce((a, s) => a + (s.subsections?.length || 0), 0);
   const totalMins    = sections.reduce((a, s) =>
-    a + (s.subsections?.reduce((t, sub) =>
-      t + (sub.topicBoxes?.reduce((m, tp) => m + (tp.duration_minutes || 0), 0) || 0), 0) || 0), 0);
+    a + (s.subsections?.reduce((t, sub) => t + (sub.duration_minutes || 0), 0) || 0), 0);
   const durationLabel = totalMins < 60
     ? `${totalMins} min`
     : totalMins % 60 === 0
@@ -497,7 +487,6 @@ const CourseViewPage = () => {
                     key={sub.id}
                     sub={sub}
                     gradient={gradient}
-                    videosByTopic={videosByTopic}
                     handsOnResources={handsOnResources}
                     isLast={isLast}
                   />

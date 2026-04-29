@@ -509,7 +509,7 @@ const CourseEditor = ({
                     </div>
                   )}
                   {(section.subsections || []).map((sub, subIdx) => {
-                    const isSubCollapsed = actions.collapsedSubsections[sub.id];
+                    const blockCount = (handsOnResources[sub.id] || []).length;
 
                     return (
                       <Draggable
@@ -523,6 +523,7 @@ const CourseEditor = ({
                             {...provided.draggableProps}
                             onMouseEnter={() => setHoveredSubsection(sub.id)}
                             onMouseLeave={() => setHoveredSubsection(null)}
+                            onClick={() => onNavigateToSubsection?.(section.id, sub.id)}
                             style={{
                               ...provided.draggableProps.style,
                               marginLeft: '24px',
@@ -531,125 +532,70 @@ const CourseEditor = ({
                               borderRadius: '9px',
                               background: '#FFFFFF',
                               overflow: 'hidden',
-                              boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+                              boxShadow: hoveredSubsection === sub.id
+                                ? '0 2px 8px rgba(0,0,0,0.10)'
+                                : '0 1px 4px rgba(0,0,0,0.05)',
                               opacity: snapshot.isDragging ? 0.85 : 1,
+                              cursor: 'pointer',
+                              transition: 'box-shadow 0.15s',
                             }}
                           >
-                            {/* Subsection header — vertical text layout */}
                             <div style={{
-                              display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '11px 14px',
-                              borderBottom: isSubCollapsed ? 'none' : '1px solid rgba(0,0,0,0.05)',
-                              cursor: 'pointer', transition: 'background 0.15s'
+                              display: 'flex', alignItems: 'center', gap: '10px', padding: '11px 14px',
                             }}>
                               {/* Drag handle */}
-                              <div {...provided.dragHandleProps} style={{ cursor: 'grab', display: 'flex', alignItems: 'center', flexShrink: 0, paddingTop: '2px' }}>
+                              <div
+                                {...provided.dragHandleProps}
+                                onClick={e => e.stopPropagation()}
+                                style={{ cursor: 'grab', display: 'flex', alignItems: 'center', flexShrink: 0 }}
+                              >
                                 <GripVertical size={13} style={{ color: '#999' }} />
                               </div>
 
-                              {/* Collapse chevron */}
-                              <button
-                                onClick={() => actions.toggleSubsection(sub.id)}
-                                style={{
-                                  background: 'none', border: 'none', cursor: 'pointer',
-                                  color: '#555', fontSize: '14.3px', padding: '2px 4px',
-                                  flexShrink: 0, transition: 'transform 0.2s',
-                                  transform: isSubCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)'
-                                }}
-                              >
-                                ▾
-                              </button>
-
                               {/* Sub number */}
-                              <div style={{ fontSize: '13px', fontWeight: '500', color: '#555', minWidth: '20px', paddingTop: '2px', flexShrink: 0 }}>
+                              <div style={{ fontSize: '13px', fontWeight: '500', color: '#555', minWidth: '20px', flexShrink: 0 }}>
                                 {index + 1}.{subIdx + 1}
                               </div>
 
-                              {/* Vertical text block */}
-                              <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                                <EditableField
-                                  value={sub.title}
-                                  onChange={val => actions.updateSubsectionTitle(section.id, sub.id, val)}
-                                  placeholder="Subsection title"
-                                  accentColor="#666"
-                                  maxLength={80}
-                                  style={{ flex: 1 }}
-                                  inputStyle={{
-                                    fontSize: '15px',
-                                    fontWeight: '600',
-                                    color: '#111',
-                                    lineHeight: '1.35'
-                                  }}
-                                />
-                                <EditableField
-                                  value={sub.description}
-                                  onChange={val => actions.updateSubsectionDescription(section.id, sub.id, val)}
-                                  placeholder="Add a description…"
-                                  accentColor="#555"
-                                  maxLength={400}
-                                  multiline
-                                  style={{ flex: 1 }}
-                                  inputStyle={{
-                                    fontSize: '13.5px',
-                                    color: '#333',
-                                    fontWeight: '400',
-                                    lineHeight: '1.4',
-                                    fontStyle: sub.description ? 'normal' : 'italic'
-                                  }}
-                                />
+                              {/* Title + description (read-only) */}
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: '15px', fontWeight: '600', color: '#111', lineHeight: '1.35' }}>
+                                  {sub.title || 'Untitled subsection'}
+                                </div>
+                                {sub.description && (
+                                  <div style={{
+                                    fontSize: '13px', color: '#555', lineHeight: '1.4', marginTop: '3px',
+                                    overflow: 'hidden', display: '-webkit-box',
+                                    WebkitLineClamp: 2, WebkitBoxOrient: 'vertical'
+                                  }}>
+                                    {sub.description}
+                                  </div>
+                                )}
                               </div>
 
-                              {/* Hover-only action buttons */}
-                              <div style={{
-                                display: 'flex', gap: '4px', alignItems: 'center',
-                                opacity: hoveredSubsection === sub.id ? 1 : 0,
-                                transition: 'opacity 0.15s',
-                                pointerEvents: hoveredSubsection === sub.id ? 'auto' : 'none'
-                              }}>
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); actions.addSubsection(section.id); }}
-                                  style={{
-                                    padding: '3px 8px', background: '#FFFFFF', color: '#333',
-                                    border: '1px solid rgba(0,0,0,0.1)', borderRadius: '4px',
-                                    cursor: 'pointer', fontSize: '11px', fontWeight: '600',
-                                    display: 'flex', alignItems: 'center', gap: '3px',
-                                    fontFamily: "'DM Sans', sans-serif"
-                                  }}
-                                  title="Add subsection"
-                                >
-                                  <Plus size={10} /> Sub
-                                </button>
-                                <button
-                                  onClick={() => actions.confirmDeleteSubsection(section.id, sub.id)}
-                                  style={{
-                                    background: 'none', border: 'none', cursor: 'pointer', padding: '3px 5px',
-                                    display: 'flex', alignItems: 'center', color: '#F87171', borderRadius: '5px'
-                                  }}
-                                  title="Delete subsection"
-                                >
-                                  <Trash2 size={13} />
-                                </button>
-                              </div>
-                            </div>
-
-                            {/* Open subsection page */}
-                            <div style={{
-                              padding: '8px 14px 10px 44px',
-                              display: 'flex', alignItems: 'center', justifyContent: 'space-between'
-                            }}>
-                              <span style={{ fontSize: '12px', color: '#888' }}>
-                                {(handsOnResources[sub.id] || []).length} block{(handsOnResources[sub.id] || []).length !== 1 ? 's' : ''}
+                              {/* Block count */}
+                              <span style={{ fontSize: '12px', color: '#888', flexShrink: 0 }}>
+                                {blockCount} block{blockCount !== 1 ? 's' : ''}
                               </span>
+
+                              {/* Delete — hover only */}
                               <button
-                                onClick={() => onNavigateToSubsection?.(section.id, sub.id)}
+                                onClick={e => { e.stopPropagation(); actions.confirmDeleteSubsection(section.id, sub.id); }}
                                 style={{
-                                  fontFamily: "'DM Sans', sans-serif", fontSize: '12.5px', fontWeight: '600',
-                                  padding: '4px 12px', borderRadius: '7px', cursor: 'pointer',
-                                  background: '#111', color: '#FFF', border: 'none',
-                                  display: 'inline-flex', alignItems: 'center', gap: '5px'
+                                  background: 'none', border: 'none', cursor: 'pointer', padding: '3px 5px',
+                                  display: 'flex', alignItems: 'center', color: '#F87171', borderRadius: '5px',
+                                  flexShrink: 0,
+                                  opacity: hoveredSubsection === sub.id ? 1 : 0,
+                                  transition: 'opacity 0.15s',
+                                  pointerEvents: hoveredSubsection === sub.id ? 'auto' : 'none',
                                 }}
+                                title="Delete subsection"
                               >
-                                Open →
+                                <Trash2 size={13} />
                               </button>
+
+                              {/* Arrow */}
+                              <span style={{ color: '#bbb', fontSize: '14px', flexShrink: 0 }}>›</span>
                             </div>
                           </div>
                         )}
@@ -683,7 +629,8 @@ const CourseEditor = ({
   return (
     <>
       {/* Course Outline — sections and subsections only */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '24px 28px 80px', position: 'relative', zIndex: 1 }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '24px 48px 80px', position: 'relative', zIndex: 1 }}>
+        <div style={{ maxWidth: '860px', margin: '0 auto' }}>
         {sections.length === 0 ? (
           <div style={{
             textAlign: 'center', padding: '80px 20px',
@@ -716,6 +663,7 @@ const CourseEditor = ({
             )}
           </Droppable>
         )}
+        </div>
       </div>
 
       {/* Modals */}

@@ -86,18 +86,12 @@ const TeacherProfile = () => {
         id: sub.id,
         title: sub.title,
         description: sub.description || '',
-        topicBoxes: (sub.topicBoxes || []).map(topic => ({
-          id: topic.id,
-          title: topic.title,
-          description: topic.description || '',
-          duration_minutes: topic.duration_minutes || 20,
-          pla_pillars: topic.pla_pillars || [],
-          learning_objectives: topic.learning_objectives || [],
-          content_keywords: topic.content_keywords || [],
-          video_resources: topic.video_resources || [],
-          worksheets: topic.worksheets || [],
-          activities: topic.activities || []
-        }))
+        learning_objectives: sub.learning_objectives || [],
+        duration_minutes: sub.duration_minutes ?? 20,
+        content_blocks: sub.content_blocks || [],
+        worksheets: sub.worksheets || [],
+        activities: sub.activities || [],
+        video_resources: sub.video_resources || [],
       }))
     }));
 
@@ -218,18 +212,12 @@ const TeacherProfile = () => {
                     id: sub.id,
                     title: sub.title,
                     description: sub.description || '',
-                    topicBoxes: (sub.topicBoxes || []).map(topic => ({
-                      id: topic.id,
-                      title: topic.title,
-                      description: topic.description || '',
-                      duration_minutes: topic.duration_minutes || 20,
-                      pla_pillars: topic.pla_pillars || [],
-                      learning_objectives: topic.learning_objectives || [],
-                      content_keywords: topic.content_keywords || [],
-                      video_resources: topic.video_resources || [],
-                      worksheets: topic.worksheets || [],
-                      activities: topic.activities || []
-                    }))
+                    learning_objectives: sub.learning_objectives || [],
+                    duration_minutes: sub.duration_minutes ?? 20,
+                    content_blocks: sub.content_blocks || [],
+                    worksheets: sub.worksheets || [],
+                    activities: sub.activities || [],
+                    video_resources: sub.video_resources || [],
                   }))
                 }));
                 navigate('/course-view', {
