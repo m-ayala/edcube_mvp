@@ -118,7 +118,7 @@ def generate_worksheets_for_section(
                 result = future.result(timeout=HandsOnConfig.TIMEOUT_SECONDS)
                 if result:
                     all_worksheets.append(result)
-                    logger.debug(f"Analyzed: {result.get('worksheet_title', 'Unknown')}")
+                    logger.info(f"[analyze] OK: {result.get('worksheet_title', 'Unknown')} src={result.get('source_url','')[:60]}")
             except Exception as e:
                 logger.error(f"Error analyzing worksheet image: {e}")
     

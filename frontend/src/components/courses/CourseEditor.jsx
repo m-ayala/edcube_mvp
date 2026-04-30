@@ -523,26 +523,29 @@ const CourseEditor = ({
                             {...provided.draggableProps}
                             onMouseEnter={() => setHoveredSubsection(sub.id)}
                             onMouseLeave={() => setHoveredSubsection(null)}
-                            onClick={() => onNavigateToSubsection?.(section.id, sub.id)}
                             style={{
                               ...provided.draggableProps.style,
                               marginLeft: '24px',
                               marginBottom: '10px',
-                              border: '1px solid rgba(0,0,0,0.08)',
                               borderRadius: '9px',
-                              background: '#FFFFFF',
-                              overflow: 'hidden',
-                              boxShadow: hoveredSubsection === sub.id
-                                ? '0 2px 8px rgba(0,0,0,0.10)'
-                                : '0 1px 4px rgba(0,0,0,0.05)',
-                              opacity: snapshot.isDragging ? 0.85 : 1,
-                              cursor: 'pointer',
-                              transition: 'box-shadow 0.15s',
                             }}
                           >
-                            <div style={{
-                              display: 'flex', alignItems: 'center', gap: '10px', padding: '11px 14px',
-                            }}>
+                            <div
+                              onClick={() => onNavigateToSubsection?.(section.id, sub.id)}
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: '10px', padding: '11px 14px',
+                                border: '1px solid rgba(0,0,0,0.08)',
+                                borderRadius: '9px',
+                                background: '#FFFFFF',
+                                overflow: 'hidden',
+                                boxShadow: hoveredSubsection === sub.id
+                                  ? '0 2px 8px rgba(0,0,0,0.10)'
+                                  : '0 1px 4px rgba(0,0,0,0.05)',
+                                opacity: snapshot.isDragging ? 0.85 : 1,
+                                cursor: 'pointer',
+                                transition: 'box-shadow 0.15s',
+                              }}
+                            >
                               {/* Subsection color bar */}
                               <div style={{
                                 width: '3px', height: '28px', borderRadius: '2px', flexShrink: 0,

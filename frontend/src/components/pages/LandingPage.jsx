@@ -136,15 +136,24 @@ const LandingPage = () => {
           >
             Start for free
           </button>
-          <button
-            onClick={() => {/* open demo video */}}
-            style={{ background: '#fff', color: '#1C1917', padding: '13px 28px', borderRadius: 100, fontSize: 15, fontWeight: 500, border: '0.5px solid #D0CAC0', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif", display: 'flex', alignItems: 'center', gap: 8 }}
-          >
-            <span className="play-icon" />
-            Watch demo
-          </button>
         </div>
       </section>
+
+      {/* DEMO VIDEO */}
+      <div style={{ padding: '0 48px 80px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        <h2 style={{ fontFamily: "'Sora', sans-serif", fontSize: 28, fontWeight: 700, letterSpacing: '-0.6px', color: '#1C1917', marginBottom: 24 }}>
+          Watch the demo video here!
+        </h2>
+        <video
+          src="/demo_vid.mp4"
+          controls
+          style={{
+            width: '100%', maxWidth: 900, borderRadius: 20,
+            border: '0.5px solid #E5E0D8',
+            boxShadow: '0 8px 40px rgba(28,25,23,0.10)'
+          }}
+        />
+      </div>
 
       {/* SECTION LABEL */}
       <div style={{ textAlign: 'center', padding: '80px 48px 24px' }}>

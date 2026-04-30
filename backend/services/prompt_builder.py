@@ -161,7 +161,7 @@ Return ONLY valid JSON in this exact format:
     ) -> str:
         """Build prompt for generating subsections within a section"""
         course = context.get('course', {})
-        section = context.get('current_section', {})
+        section = context.get('current_section') or {}
         all_section_names = context.get('all_section_names', [])
         existing_subsections = section.get('existingSubsections', [])
         other_sections = context.get('other_sections', [])
@@ -261,8 +261,8 @@ Return ONLY valid JSON in this exact format:
     ) -> str:
         """Build prompt for generating topic boxes within a subsection"""
         course = context.get('course', {})
-        section = context.get('current_section', {})
-        subsection = context.get('subsection', {})
+        section = context.get('current_section') or {}
+        subsection = context.get('subsection') or {}
         existing_topics = subsection.get('existingTopics', [])
         other_sections = context.get('other_sections', [])
         sibling_subsections = context.get('sibling_subsections', [])

@@ -1,5 +1,5 @@
 // src/components/courses/BlockView.jsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ExternalLink, Trash2, Plus, Sparkles, Loader2, Library, Check, X, Pencil } from 'lucide-react';
 import { getLibraryFolders } from '../../firebase/dbService';
 
@@ -44,6 +44,19 @@ const BlockView = ({
   const [libraryFolders, setLibraryFolders] = useState([]);
   const [libraryLoading, setLibraryLoading] = useState(false);
   const [expandedLibFolders, setExpandedLibFolders] = useState({});
+  const libraryRef = useRef(null);
+
+  // Close library picker on outside click (avoids fixed backdrop blocking scroll)
+  useEffect(() => {
+    if (!showLibraryPicker) return;
+    const handleOutside = (e) => {
+      if (libraryRef.current && !libraryRef.current.contains(e.target)) {
+        setShowLibraryPicker(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, [showLibraryPicker]);
 
   // Sync if block prop changes (e.g. on navigation)
   useEffect(() => {
@@ -156,6 +169,8 @@ const BlockView = ({
   };
 
   const isGenerating = linkGenStatus === 'generating';
+  const genEmpty = linkGenStatus === 'empty';
+  const genError = linkGenStatus === 'error';
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: '24px 48px 80px', position: 'relative', zIndex: 1 }}>
@@ -284,7 +299,8 @@ const BlockView = ({
               {/* AI Generate */}
               <button
                 onClick={() => {
-                  console.log('[Generate click]', { blockId: block?.id, topicId, hasHandler: !!onGenerateLinks, isGenerating });
+                  console.log('[Generate click] block:', block);
+                  console.log('[Generate click] topicId:', topicId, 'hasHandler:', !!onGenerateLinks, 'isGenerating:', isGenerating);
                   onGenerateLinks?.(block.id, topicId, block);
                 }}
                 disabled={isGenerating || !onGenerateLinks}
@@ -303,21 +319,19 @@ const BlockView = ({
                 }
               </button>
             </div>
+            {(genEmpty || genError) && (
+              <p style={{ margin: '6px 0 0', fontSize: '12px', color: genError ? '#B91C1C' : '#888', fontFamily: "'DM Sans', sans-serif" }}>
+                {genError ? 'Generation failed. Try again.' : 'No results found. Try adding a title or description to this block first.'}
+              </p>
+            )}
           </div>
 
           {/* Library picker panel */}
           {showLibraryPicker && (
-            <>
-              {/* Transparent backdrop to dismiss */}
-              <div
-                onClick={() => setShowLibraryPicker(false)}
-                style={{ position: 'fixed', inset: 0, zIndex: 0 }}
-              />
-              <div style={{
-                position: 'relative', zIndex: 1,
-                background: '#F9FAFB', border: '1px solid rgba(0,0,0,0.1)', borderRadius: '8px',
-                marginBottom: '12px', maxHeight: '220px', overflowY: 'auto',
-              }}>
+            <div ref={libraryRef} style={{
+              background: '#F9FAFB', border: '1px solid rgba(0,0,0,0.1)', borderRadius: '8px',
+              marginBottom: '12px', maxHeight: '220px', overflowY: 'auto',
+            }}>
                 {libraryLoading && (
                   <p style={{ margin: 0, padding: '12px 14px', fontSize: '13px', color: '#999', fontFamily: "'DM Sans', sans-serif" }}>
                     Loading library…
@@ -368,8 +382,7 @@ const BlockView = ({
                     ))}
                   </div>
                 ))}
-              </div>
-            </>
+            </div>
           )}
 
           {/* Existing links */}

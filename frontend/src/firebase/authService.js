@@ -12,14 +12,20 @@ import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from './config';
 
 /**
+ * Supported organizations.
+ * To add a new org: append an entry here and add its domain to DOMAIN_ORG_MAP.
+ * Organizations must contact EdCube to be added.
+ */
+export const ORGS = [
+  { id: 'icc', name: 'India Community Center', domain: 'indiacc.org' },
+];
+
+/**
  * Maps email domains to organization IDs.
  * Add a new entry here to onboard a new organization.
- *
- * 'gmail.com': 'icc'  ← temporary for local testing; remove before production
  */
 export const DOMAIN_ORG_MAP = {
   'indiacc.org': 'icc',
-  'gmail.com':   'icc',  // TODO: remove after testing
 };
 
 /**

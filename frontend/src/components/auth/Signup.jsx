@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { signupTeacher, getOrgFromEmail, DOMAIN_ORG_MAP } from '../../firebase/authService';
+import { signupTeacher, getOrgFromEmail, ORGS } from '../../firebase/authService';
 
 const Signup = () => {
   const [formData, setFormData] = useState({
     displayName: '',
+    organization: '',
     email: '',
     password: '',
     confirmPassword: ''
@@ -36,9 +37,22 @@ const Signup = () => {
       return;
     }
 
+    if (!formData.organization) {
+      setError('Please select your organization.');
+      setLoading(false);
+      return;
+    }
+
+    const selectedOrg = ORGS.find(o => o.id === formData.organization);
+    const emailDomain = formData.email.split('@')[1]?.toLowerCase();
+    if (!selectedOrg || emailDomain !== selectedOrg.domain) {
+      setError(`Your email must end in @${selectedOrg?.domain} to sign up as ${selectedOrg?.name}.`);
+      setLoading(false);
+      return;
+    }
+
     if (!getOrgFromEmail(formData.email)) {
-      const allowed = Object.keys(DOMAIN_ORG_MAP).map(d => `@${d}`).join(', ');
-      setError(`Email domain not allowed. Accepted: ${allowed}`);
+      setError('Email domain not recognized. Please contact EdCube to have your organization added.');
       setLoading(false);
       return;
     }
@@ -53,8 +67,6 @@ const Signup = () => {
       setLoading(false);
     }
   };
-
-  const detectedOrg = getOrgFromEmail(formData.email);
 
   return (
     <div style={{
@@ -82,6 +94,17 @@ const Signup = () => {
         }
         .su-submit:hover { opacity: 0.85; }
         .su-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .su-select {
+          width: 100%; padding: 11px 14px; background: #FAF8F4;
+          border: 1px solid #E5E0D8; border-radius: 10px;
+          font-family: 'DM Sans', sans-serif; font-size: 15.4px;
+          color: #1C1917; outline: none; box-sizing: border-box;
+          transition: border-color 0.18s; appearance: none;
+          background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L6 6L11 1' stroke='%23A89F94' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+          background-repeat: no-repeat; background-position: right 14px center; cursor: pointer;
+        }
+        .su-select:focus { border-color: #1C1917; background-color: #fff; }
 
         .su-back {
           display: inline-flex; align-items: center; gap: 6px;
@@ -142,6 +165,9 @@ const Signup = () => {
               }}>✓</div>
               <p style={{ fontSize: 15, fontWeight: 600, color: '#1C1917', margin: '0 0 6px' }}>Account created!</p>
               <p style={{ fontSize: 13, color: '#6B6459', margin: 0, lineHeight: 1.6 }}>{success}</p>
+              <p style={{ fontSize: 13, color: '#C05A2A', marginTop: 10, fontWeight: 500, lineHeight: 1.5 }}>
+                Can't find the email? Please check your <strong>spam or junk folder</strong> — verification emails sometimes land there.
+              </p>
               <p style={{ fontSize: 12, color: '#A89F94', marginTop: 8 }}>Redirecting you shortly…</p>
             </div>
           ) : (
@@ -170,15 +196,27 @@ const Signup = () => {
 
               <div style={{ marginBottom: 16 }}>
                 <label style={{ display: 'block', fontSize: 11, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: '#A89F94', marginBottom: 6 }}>
+                  Organization
+                </label>
+                <select className="su-select" name="organization"
+                  value={formData.organization} onChange={handleChange} required>
+                  <option value="">Select your organization…</option>
+                  {ORGS.map(org => (
+                    <option key={org.id} value={org.id}>{org.name}</option>
+                  ))}
+                </select>
+                <p style={{ fontSize: 11, color: '#A89F94', marginTop: 5 }}>
+                  Don't see your organization?{' '}
+                  <a href="/contact" style={{ color: '#1C1917', fontWeight: 500 }}>Contact us</a> to get added.
+                </p>
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: '#A89F94', marginBottom: 6 }}>
                   Email
                 </label>
                 <input className="su-input" type="email" name="email" placeholder="you@yourschool.org"
                   value={formData.email} onChange={handleChange} required />
-                {detectedOrg && (
-                  <p style={{ fontSize: 11, color: '#2E7A43', marginTop: 5, fontWeight: 500 }}>
-                    ✓ Organisation: {detectedOrg}
-                  </p>
-                )}
               </div>
 
               <div style={{ marginBottom: 16 }}>
@@ -210,9 +248,6 @@ const Signup = () => {
             </form>
           )}
 
-          <p style={{ textAlign: 'center', fontSize: 12, color: '#C4BDB4', marginTop: 20 }}>
-            Accepted domains: {Object.keys(DOMAIN_ORG_MAP).map(d => `@${d}`).join(', ')}
-          </p>
         </div>
       </div>
     </div>

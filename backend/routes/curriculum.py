@@ -1036,7 +1036,16 @@ async def generate_block_links(request: GenerateBlockLinksRequest):
         loop = asyncio.get_event_loop()
 
         if request.blockType == "worksheet":
-            user_prompt = f"{block_title} worksheet" if block_title else "worksheet"
+            # Extract keywords line from blockContent (format: "Keywords: a, b, c")
+            keywords_from_content = ""
+            for line in (request.blockContent or "").splitlines():
+                if line.lower().startswith("keywords:"):
+                    keywords_from_content = line.split(":", 1)[-1].strip()
+                    break
+            if keywords_from_content:
+                user_prompt = f'"{block_title}" {keywords_from_content} worksheet'
+            else:
+                user_prompt = f'"{block_title}" worksheet'
             enriched = await loop.run_in_executor(
                 None,
                 generate_worksheets_for_section,
@@ -1072,9 +1081,9 @@ async def generate_block_links(request: GenerateBlockLinksRequest):
                         "type": "video",
                     })
 
+        logger.info(f"[generate-block-links] returning {len(links)} link(s): {[l.get('url','')[:60] for l in links]}")
         return {"links": links}
 
     except Exception as e:
         logger.error(f"Block link generation error: {e}", exc_info=True)
-        # Return empty gracefully so the frontend never crashes
         return {"links": []}

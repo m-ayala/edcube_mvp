@@ -85,10 +85,11 @@ const CourseWorkspace = () => {
   const activeBlock = (handsOnResources[navPath.subsectionId] || []).find(b => b.id === navPath.blockId) || null;
 
   const generateLinksForBlock = async (blockId, subsectionId, blockData) => {
-    console.log('[generateLinksForBlock] called', { blockId, subsectionId, blockType: blockData?.type });
+    console.log('[generateLinksForBlock] START', { blockId, subsectionId, blockType: blockData?.type });
     setLinkGenJobs(prev => ({ ...prev, [blockId]: 'generating' }));
+    console.log('[generateLinksForBlock] state set to generating');
     try {
-      const { links: generated } = await generateBlockLinks({
+      const payload = {
         blockType: blockData.type || 'content',
         blockTitle: blockData.title || '',
         blockContent: blockData.content || '',
@@ -97,7 +98,18 @@ const CourseWorkspace = () => {
         gradeLevel: formData?.class || '',
         subject: formData?.subject || '',
         teacherUid: currentUser?.uid || null,
-      });
+      };
+      console.log('[generateLinksForBlock] sending payload to backend:', payload);
+      let raw;
+      try {
+        raw = await generateBlockLinks(payload);
+        console.log('[generateLinksForBlock] raw response from backend:', raw);
+      } catch (fetchErr) {
+        console.error('[generateLinksForBlock] fetch/parse error:', fetchErr);
+        throw fetchErr;
+      }
+      const { links: generated } = raw;
+      console.log('[generateLinksForBlock] links count:', generated?.length, 'links:', generated);
       if (generated?.length > 0) {
         const existing = (handsOnResources[subsectionId] || [])
           .find(b => b.id === blockId)?.links || [];
@@ -106,8 +118,10 @@ const CourseWorkspace = () => {
           ...generated.map(l => ({ id: `link-${Date.now()}-${Math.random().toString(36).slice(2)}`, ...l })),
         ];
         actions.updateBlock(subsectionId, blockId, { links: merged });
+        setLinkGenJobs(prev => ({ ...prev, [blockId]: 'done' }));
+      } else {
+        setLinkGenJobs(prev => ({ ...prev, [blockId]: 'empty' }));
       }
-      setLinkGenJobs(prev => ({ ...prev, [blockId]: 'done' }));
     } catch (err) {
       console.error('Link generation failed:', err);
       setLinkGenJobs(prev => ({ ...prev, [blockId]: 'error' }));

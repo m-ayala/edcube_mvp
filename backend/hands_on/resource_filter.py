@@ -74,7 +74,7 @@ class ResourceFilter:
             
             # Basic quality checks
             if not self._is_quality_worksheet(worksheet):
-                logger.debug(f"Skipping low-quality worksheet: {worksheet.get('worksheet_title', 'Unknown')}")
+                logger.info(f"[filter] REJECTED low-quality: {worksheet.get('worksheet_title', 'Unknown')} visual={worksheet.get('visual_quality')} edu={worksheet.get('educational_value')} age_ok={worksheet.get('is_age_appropriate')}")
                 continue
             
             # Check relevance using LLM
@@ -91,8 +91,8 @@ class ResourceFilter:
                 worksheet['overall_score'] = self._calculate_worksheet_score(worksheet, relevance_data)
                 filtered_worksheets.append(worksheet)
             else:
-                logger.debug(
-                    f"Worksheet not suitable: {worksheet.get('worksheet_title', 'Unknown')} - "
+                logger.info(
+                    f"[filter] REJECTED not suitable: {worksheet.get('worksheet_title', 'Unknown')} - "
                     f"{relevance_data.get('reasoning', '')}"
                 )
         
