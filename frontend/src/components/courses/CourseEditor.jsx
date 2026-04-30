@@ -566,20 +566,11 @@ const CourseEditor = ({
                                 {index + 1}.{subIdx + 1}
                               </div>
 
-                              {/* Title + description (read-only) */}
+                              {/* Title (read-only) */}
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ fontSize: '15px', fontWeight: '600', color: '#111', lineHeight: '1.35' }}>
                                   {sub.title || 'Untitled subsection'}
                                 </div>
-                                {sub.description && (
-                                  <div style={{
-                                    fontSize: '13px', color: '#555', lineHeight: '1.4', marginTop: '3px',
-                                    overflow: 'hidden', display: '-webkit-box',
-                                    WebkitLineClamp: 2, WebkitBoxOrient: 'vertical'
-                                  }}>
-                                    {sub.description}
-                                  </div>
-                                )}
                               </div>
 
                               {/* Block count */}

@@ -184,6 +184,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
   const [isMinimized, setIsMinimized] = useState(false);
   const [selectedBlockType, setSelectedBlockType] = useState(null); // null | 'content' | 'worksheet' | 'activity'
   const [dynamicChips, setDynamicChips] = useState(null); // null=idle, 'loading', or string[]
+  const [subsectionSectionPicker, setSubsectionSectionPicker] = useState(false); // picking section before subsection gen
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -209,6 +210,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
   useEffect(() => {
     setSelectedBlockType(null);
     setDynamicChips(null);
+    setSubsectionSectionPicker(false);
   }, [currentPage?.page]);
 
   // Fetch AI-generated chips whenever the teacher picks a block type
@@ -436,18 +438,23 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
     }
   };
 
-  const handleGenerateSubsection = async () => {
+  const handleGenerateSubsection = async (targetSection) => {
     if (isTyping) return;
-    addTextMessage('user', 'Generate a new subsection');
+    setSubsectionSectionPicker(false);
+    addTextMessage('user', `Generate a new subsection for "${targetSection.title}"`);
     setIsTyping(true);
     try {
       const result = await actions.generateSubsectionsForTray({
         level: 'subsections',
         context: {
           course: { title: courseName, description: formData?.objectives || '', grade: formData?.class || '' },
-          all_section_names: sections.filter(s => s.type !== 'break').map(s => s.title),
+          target_section: {
+            title: targetSection.title,
+            description: targetSection.description || '',
+            existing_subsections: (targetSection.subsections || []).map(ss => ss.title),
+          },
           all_sections: sections.filter(s => s.type !== 'break').map(s => ({
-            title: s.title, description: s.description,
+            title: s.title, description: s.description || '',
             subsections: (s.subsections || []).map(ss => ss.title),
           })),
         },
@@ -455,7 +462,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
       });
       if (result?.success === false) throw new Error(result.error);
       result.items.forEach(item => addToTray('SUBSECTION', item));
-      addTextMessage('ai-text', `Generated ${result.items.length} subsection${result.items.length !== 1 ? 's' : ''}! Drag it from the tray into any section.`);
+      addTextMessage('ai-text', `Generated ${result.items.length} subsection${result.items.length !== 1 ? 's' : ''} for "${targetSection.title}"! Drag it from the tray into that section.`);
     } catch {
       addTextMessage('ai-text', 'I had trouble generating a subsection. Please try again.');
     } finally {
@@ -972,32 +979,100 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
       )}
 
       {/* Bottom quick chips — page-aware */}
-      {page === 'outline' && (
+      {page === 'outline' && !subsectionSectionPicker && (
         <div style={{
           padding: '7px 10px', borderTop: '1px solid #E7E5E4',
           display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px',
           flexShrink: 0, backgroundColor: '#FAFAF8',
         }}>
-          {[
-            { label: '+ Section', fn: handleGenerateSection },
-            { label: '+ Subsection', fn: handleGenerateSubsection },
-          ].map(btn => (
+          <button
+            onClick={handleGenerateSection}
+            disabled={isTyping}
+            style={{
+              padding: '7px 4px', backgroundColor: '#DCFCE7',
+              border: '1.5px solid #86EFAC', borderRadius: '8px',
+              cursor: isTyping ? 'not-allowed' : 'pointer',
+              fontSize: '12.7px', fontWeight: '700', color: '#166534',
+              fontFamily: "'DM Sans', sans-serif",
+              opacity: isTyping ? 0.55 : 1, transition: 'all 0.15s', textAlign: 'center',
+            }}
+          >
+            ✨ + Section
+          </button>
+          <button
+            onClick={() => setSubsectionSectionPicker(true)}
+            disabled={isTyping}
+            style={{
+              padding: '7px 4px', backgroundColor: '#DCFCE7',
+              border: '1.5px solid #86EFAC', borderRadius: '8px',
+              cursor: isTyping ? 'not-allowed' : 'pointer',
+              fontSize: '12.7px', fontWeight: '700', color: '#166534',
+              fontFamily: "'DM Sans', sans-serif",
+              opacity: isTyping ? 0.55 : 1, transition: 'all 0.15s', textAlign: 'center',
+            }}
+          >
+            ✨ + Subsection
+          </button>
+        </div>
+      )}
+
+      {page === 'outline' && subsectionSectionPicker && (
+        <div style={{ borderTop: '1px solid #E7E5E4', flexShrink: 0, backgroundColor: '#FAFAF8' }}>
+          {/* Header row */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '8px',
+            padding: '6px 10px 4px', borderBottom: '1px solid #F0EDE8',
+          }}>
             <button
-              key={btn.label}
-              onClick={btn.fn}
-              disabled={isTyping}
+              onClick={() => setSubsectionSectionPicker(false)}
               style={{
-                padding: '7px 4px', backgroundColor: '#DCFCE7',
-                border: '1.5px solid #86EFAC', borderRadius: '8px',
-                cursor: isTyping ? 'not-allowed' : 'pointer',
-                fontSize: '12.7px', fontWeight: '700', color: '#166534',
-                fontFamily: "'DM Sans', sans-serif",
-                opacity: isTyping ? 0.55 : 1, transition: 'all 0.15s', textAlign: 'center',
+                background: 'none', border: 'none', cursor: 'pointer',
+                fontSize: '12px', color: '#888', fontFamily: "'DM Sans', sans-serif",
+                padding: '2px 4px', flexShrink: 0,
               }}
             >
-              ✨ {btn.label}
+              ←
             </button>
-          ))}
+            <span style={{
+              fontSize: '11px', fontWeight: '700', color: '#166534',
+              fontFamily: "'DM Sans', sans-serif", textTransform: 'uppercase', letterSpacing: '0.4px',
+            }}>
+              Pick a section
+            </span>
+          </div>
+          {/* Section chips */}
+          <div style={{
+            padding: '6px 10px 8px',
+            maxHeight: '130px', overflowY: 'auto',
+            display: 'flex', flexWrap: 'wrap', gap: '5px',
+            scrollbarWidth: 'thin', scrollbarColor: '#E8E6E1 transparent',
+          }}>
+            {sections.filter(s => s.type !== 'break').length === 0 ? (
+              <span style={{ fontSize: '12px', color: '#9CA3AF', fontFamily: "'DM Sans', sans-serif", padding: '4px 2px' }}>
+                No sections yet — add a section first.
+              </span>
+            ) : sections.filter(s => s.type !== 'break').map(section => (
+              <button
+                key={section.id}
+                onClick={() => handleGenerateSubsection(section)}
+                disabled={isTyping}
+                style={{
+                  padding: '4px 10px',
+                  backgroundColor: '#DCFCE7',
+                  border: '1px solid #86EFAC',
+                  borderRadius: '20px',
+                  cursor: isTyping ? 'not-allowed' : 'pointer',
+                  fontSize: '12px', fontWeight: '600', color: '#166534',
+                  fontFamily: "'DM Sans', sans-serif",
+                  opacity: isTyping ? 0.55 : 1,
+                  whiteSpace: 'nowrap', maxWidth: '150px',
+                  overflow: 'hidden', textOverflow: 'ellipsis',
+                }}
+              >
+                {section.title || 'Untitled Section'}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
