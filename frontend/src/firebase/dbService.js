@@ -194,6 +194,43 @@ export const renameLibraryFolder = async (teacherUid, folderId, newName) => {
   });
 };
 
+// ─── Course Folders ───────────────────────────────────────────────────────────
+
+export const getCourseFolders = async (teacherUid) => {
+  const q = query(
+    collection(db, 'teachers', teacherUid, 'courseFolders'),
+    orderBy('createdAt', 'asc')
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+};
+
+export const createCourseFolder = async (teacherUid, name, parentId = null) => {
+  const ref = doc(collection(db, 'teachers', teacherUid, 'courseFolders'));
+  await setDoc(ref, { name, courseIds: [], parentId, createdAt: serverTimestamp() });
+  return { id: ref.id, name, courseIds: [], parentId };
+};
+
+export const deleteCourseFolder = async (teacherUid, folderId) => {
+  await deleteDoc(doc(db, 'teachers', teacherUid, 'courseFolders', folderId));
+};
+
+export const renameCourseFolder = async (teacherUid, folderId, newName) => {
+  await updateDoc(doc(db, 'teachers', teacherUid, 'courseFolders', folderId), { name: newName });
+};
+
+export const addCourseToFolder = async (teacherUid, folderId, courseId) => {
+  await updateDoc(doc(db, 'teachers', teacherUid, 'courseFolders', folderId), {
+    courseIds: arrayUnion(courseId)
+  });
+};
+
+export const removeCourseFromFolder = async (teacherUid, folderId, courseId) => {
+  await updateDoc(doc(db, 'teachers', teacherUid, 'courseFolders', folderId), {
+    courseIds: arrayRemove(courseId)
+  });
+};
+
 // ─── Teacher Profile ───────────────────────────────────────────────────────────
 
 /**

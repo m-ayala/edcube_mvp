@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { Paperclip, X, FileText, FileSpreadsheet, Image, Presentation } from 'lucide-react';
 import { getOwnProfile } from '../../services/teacherService';
@@ -29,6 +29,8 @@ const getExt = (filename) => filename.split('.').pop().toLowerCase();
 const CourseDesigner = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const { targetFolderId } = location.state || {};
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState({ message: '', progress: 0 });
   const [organizationId, setOrganizationId] = useState(null);
@@ -214,7 +216,7 @@ const CourseDesigner = () => {
       }
 
       navigate('/course-workspace', {
-        state: { formData, sections, isEditing: true, curriculumId }
+        state: { formData, sections, isEditing: true, curriculumId, targetFolderId }
       });
 
     } catch (error) {

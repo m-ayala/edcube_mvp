@@ -1,12 +1,21 @@
 import { useState } from 'react';
-import { Eye, EyeOff, Trash2 } from 'lucide-react';
+import { Eye, EyeOff, Trash2, X } from 'lucide-react';
 
 const CARD_COLORS = ['#B2E8C8', '#ACD8F0', '#F2C0D4', '#F7E4A0'];
 
-// Pick a consistent color per course name
 const cardColor = (name = '') => CARD_COLORS[name.charCodeAt(0) % CARD_COLORS.length];
 
-const CourseCard = ({ curriculum, onCardClick, onDelete, onToggleVisibility }) => {
+const CourseCard = ({
+  curriculum,
+  onCardClick,
+  onDelete,
+  onToggleVisibility,
+  draggable: isDraggable,
+  onDragStart,
+  onDragEnd,
+  isDragging,
+  onRemoveFromFolder,
+}) => {
   const [hovered, setHovered] = useState(false);
 
   const handleDelete = (e) => {
@@ -24,10 +33,14 @@ const CourseCard = ({ curriculum, onCardClick, onDelete, onToggleVisibility }) =
 
   return (
     <div
+      draggable={!!isDraggable}
+      onDragStart={isDraggable ? (e) => { e.dataTransfer.effectAllowed = 'move'; onDragStart?.(); } : undefined}
+      onDragEnd={onDragEnd}
       onClick={() => onCardClick(curriculum)}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
+        position: 'relative',
         display: 'flex',
         flexDirection: 'column',
         borderRadius: '12px',
@@ -38,11 +51,27 @@ const CourseCard = ({ curriculum, onCardClick, onDelete, onToggleVisibility }) =
         boxShadow: hovered
           ? '0 6px 24px rgba(0,0,0,0.10)'
           : '0 1px 4px rgba(0,0,0,0.05)',
-        cursor: 'pointer',
-        transition: 'box-shadow 0.18s',
+        cursor: isDraggable ? 'grab' : 'pointer',
+        transition: 'box-shadow 0.18s, opacity 0.18s',
         overflow: 'hidden',
+        opacity: isDragging ? 0.45 : 1,
       }}
     >
+      {onRemoveFromFolder && hovered && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onRemoveFromFolder(); }}
+          title="Remove from folder"
+          style={{
+            position: 'absolute', top: '8px', right: '8px', zIndex: 2,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            width: '22px', height: '22px',
+            background: 'rgba(255,255,255,0.95)', border: '1px solid rgba(0,0,0,0.12)',
+            borderRadius: '50%', cursor: 'pointer', color: '#6B7280',
+          }}
+        >
+          <X size={12} />
+        </button>
+      )}
       {/* Coloured top strip */}
       <div style={{ height: '6px', background: accent }} />
 

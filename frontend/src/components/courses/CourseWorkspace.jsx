@@ -14,6 +14,7 @@ import BreakModal from '../modals/BreakModal';
 import ShareCourseModal from '../modals/ShareCourseModal';
 import { getOwnProfile } from '../../services/teacherService';
 import { generateBlockLinks } from '../../utils/curriculumApi';
+import { addCourseToFolder } from '../../firebase/dbService';
 
 const CourseWorkspace = () => {
   const { currentUser } = useAuth();
@@ -29,6 +30,7 @@ const CourseWorkspace = () => {
     ownerName: incomingOwnerName,
     isOwner: incomingIsOwner,
     isCollaborator: incomingIsCollaborator,
+    targetFolderId,
   } = location.state || {};
 
   const [curriculumId, setCurriculumId] = useState(initialCurriculumId);
@@ -378,6 +380,9 @@ const CourseWorkspace = () => {
 
     if (!hasExistingId && result.courseId) {
       setCurriculumId(result.courseId);
+      if (targetFolderId) {
+        await addCourseToFolder(currentUser.uid, targetFolderId, result.courseId);
+      }
     }
   };
 
