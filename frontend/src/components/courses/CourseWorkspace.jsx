@@ -15,6 +15,7 @@ import ShareCourseModal from '../modals/ShareCourseModal';
 import { getOwnProfile } from '../../services/teacherService';
 import { generateBlockLinks } from '../../utils/curriculumApi';
 import { addCourseToFolder } from '../../firebase/dbService';
+import { trackCourseCreated, trackCourseUpdated, trackPublicCourseViewed } from '../../firebase/analytics';
 
 const CourseWorkspace = () => {
   const { currentUser } = useAuth();
@@ -180,6 +181,9 @@ const CourseWorkspace = () => {
   // ── Mount: Transform old data (topicBoxes) → new flat structure ───────
   useEffect(() => {
     console.log('📦 CourseWorkspace loaded');
+    if (readOnly && !isOwner && initialCurriculumId) {
+      trackPublicCourseViewed({ course_id: initialCurriculumId, subject: courseSubject, grade: courseClass });
+    }
 
     // Flatten old topicBoxes into subsection-level structure
     const transformedSections = sections.map(section => {
@@ -391,6 +395,11 @@ const CourseWorkspace = () => {
       if (targetFolderId) {
         await addCourseToFolder(currentUser.uid, targetFolderId, result.courseId);
       }
+      const totalDuration = sectionsForSave.reduce((acc, s) =>
+        acc + (s.subsections || []).reduce((a, ss) => a + (ss.duration_minutes || 0), 0), 0);
+      trackCourseCreated({ subject: courseSubject, grade: courseClass, sections_count: sections.length, duration_minutes: totalDuration });
+    } else if (hasExistingId) {
+      trackCourseUpdated({ course_id: curriculumId, sections_count: sections.length });
     }
   };
 
@@ -523,11 +532,24 @@ const CourseWorkspace = () => {
     }
 
     if (type === 'BLOCK') {
-      const subsectionId = source.droppableId.replace('blocks-', '');
-      const currentBlocks = [...(handsOnResources[subsectionId] || [])];
-      const [movedBlock] = currentBlocks.splice(source.index, 1);
-      currentBlocks.splice(destination.index, 0, movedBlock);
-      setHandsOnResources(prev => ({ ...prev, [subsectionId]: currentBlocks }));
+      const sourceSubId = source.droppableId.replace('blocks-', '');
+      const destSubId = destination.droppableId.replace('blocks-', '');
+      if (sourceSubId === destSubId) {
+        const currentBlocks = [...(handsOnResources[sourceSubId] || [])];
+        const [movedBlock] = currentBlocks.splice(source.index, 1);
+        currentBlocks.splice(destination.index, 0, movedBlock);
+        setHandsOnResources(prev => ({ ...prev, [sourceSubId]: currentBlocks }));
+      } else {
+        const sourceBlocks = [...(handsOnResources[sourceSubId] || [])];
+        const destBlocks = [...(handsOnResources[destSubId] || [])];
+        const [movedBlock] = sourceBlocks.splice(source.index, 1);
+        destBlocks.splice(destination.index, 0, movedBlock);
+        setHandsOnResources(prev => ({
+          ...prev,
+          [sourceSubId]: sourceBlocks,
+          [destSubId]: destBlocks,
+        }));
+      }
       return;
     }
   };

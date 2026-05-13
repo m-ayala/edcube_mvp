@@ -509,14 +509,15 @@ const CourseEditor = ({
                     </div>
                   )}
                   {(section.subsections || []).map((sub, subIdx) => {
-                    const blockCount = (handsOnResources[sub.id] || []).length;
+                    const subBlocks = handsOnResources[sub.id] || [];
+                    const blockTypeStyle = {
+                      content:   { bg: 'rgba(59,95,187,0.10)',  dot: '#3B5FBB' },
+                      worksheet: { bg: 'rgba(176,90,26,0.10)',  dot: '#B05A1A' },
+                      activity:  { bg: 'rgba(26,122,64,0.10)',  dot: '#1A7A40' },
+                    };
 
                     return (
-                      <Draggable
-                        key={sub.id}
-                        draggableId={sub.id}
-                        index={subIdx}
-                      >
+                      <Draggable key={sub.id} draggableId={sub.id} index={subIdx}>
                         {(provided, snapshot) => (
                           <div
                             ref={provided.innerRef}
@@ -528,31 +529,26 @@ const CourseEditor = ({
                               marginLeft: '24px',
                               marginBottom: '10px',
                               borderRadius: '9px',
+                              border: '1px solid rgba(0,0,0,0.08)',
+                              background: '#FFFFFF',
+                              overflow: 'hidden',
+                              boxShadow: hoveredSubsection === sub.id
+                                ? '0 2px 8px rgba(0,0,0,0.10)'
+                                : '0 1px 4px rgba(0,0,0,0.05)',
+                              opacity: snapshot.isDragging ? 0.85 : 1,
+                              transition: 'box-shadow 0.15s',
                             }}
                           >
+                            {/* Header row — clickable to navigate */}
                             <div
                               onClick={() => onNavigateToSubsection?.(section.id, sub.id)}
                               style={{
                                 display: 'flex', alignItems: 'center', gap: '10px', padding: '11px 14px',
-                                border: '1px solid rgba(0,0,0,0.08)',
-                                borderRadius: '9px',
-                                background: '#FFFFFF',
-                                overflow: 'hidden',
-                                boxShadow: hoveredSubsection === sub.id
-                                  ? '0 2px 8px rgba(0,0,0,0.10)'
-                                  : '0 1px 4px rgba(0,0,0,0.05)',
-                                opacity: snapshot.isDragging ? 0.85 : 1,
                                 cursor: 'pointer',
-                                transition: 'box-shadow 0.15s',
+                                borderBottom: subBlocks.length > 0 ? '1px solid rgba(0,0,0,0.05)' : 'none',
                               }}
                             >
-                              {/* Subsection color bar */}
-                              <div style={{
-                                width: '3px', height: '28px', borderRadius: '2px', flexShrink: 0,
-                                background: colors.sectionGradients[index % 4],
-                              }} />
-
-                              {/* Drag handle */}
+                              <div style={{ width: '3px', height: '28px', borderRadius: '2px', flexShrink: 0, background: colors.sectionGradients[index % 4] }} />
                               <div
                                 {...provided.dragHandleProps}
                                 onClick={e => e.stopPropagation()}
@@ -560,31 +556,24 @@ const CourseEditor = ({
                               >
                                 <GripVertical size={13} style={{ color: '#999' }} />
                               </div>
-
-                              {/* Sub number */}
                               <div style={{ fontSize: '13px', fontWeight: '500', color: '#555', minWidth: '20px', flexShrink: 0 }}>
                                 {index + 1}.{subIdx + 1}
                               </div>
-
-                              {/* Title (read-only) */}
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ fontSize: '15px', fontWeight: '600', color: '#111', lineHeight: '1.35' }}>
                                   {sub.title || 'Untitled subsection'}
                                 </div>
                               </div>
-
-                              {/* Block count */}
-                              <span style={{ fontSize: '12px', color: '#888', flexShrink: 0 }}>
-                                {blockCount} block{blockCount !== 1 ? 's' : ''}
-                              </span>
-
-                              {/* Delete — hover only */}
+                              {subBlocks.length > 0 && (
+                                <span style={{ fontSize: '11px', color: '#999', flexShrink: 0, background: '#F5F5F4', padding: '2px 7px', borderRadius: '6px' }}>
+                                  {subBlocks.length} block{subBlocks.length !== 1 ? 's' : ''}
+                                </span>
+                              )}
                               <button
                                 onClick={e => { e.stopPropagation(); actions.confirmDeleteSubsection(section.id, sub.id); }}
                                 style={{
                                   background: 'none', border: 'none', cursor: 'pointer', padding: '3px 5px',
-                                  display: 'flex', alignItems: 'center', color: '#F87171', borderRadius: '5px',
-                                  flexShrink: 0,
+                                  display: 'flex', alignItems: 'center', color: '#F87171', borderRadius: '5px', flexShrink: 0,
                                   opacity: hoveredSubsection === sub.id ? 1 : 0,
                                   transition: 'opacity 0.15s',
                                   pointerEvents: hoveredSubsection === sub.id ? 'auto' : 'none',
@@ -593,10 +582,66 @@ const CourseEditor = ({
                               >
                                 <Trash2 size={13} />
                               </button>
-
-                              {/* Arrow */}
                               <span style={{ color: '#bbb', fontSize: '14px', flexShrink: 0 }}>›</span>
                             </div>
+
+                            {/* Block list — drag target */}
+                            <Droppable droppableId={`blocks-${sub.id}`} type="BLOCK">
+                              {(blockProv, blockSnap) => (
+                                <div
+                                  ref={blockProv.innerRef}
+                                  {...blockProv.droppableProps}
+                                  style={{
+                                    padding: '6px 14px',
+                                    minHeight: '34px',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '4px',
+                                    background: blockSnap.isDraggingOver ? 'rgba(172,216,240,0.13)' : 'transparent',
+                                    transition: 'background 0.15s',
+                                  }}
+                                >
+                                  {subBlocks.length === 0 && !blockSnap.isDraggingOver && (
+                                    <div style={{ fontSize: '11.5px', color: '#CCC', fontStyle: 'italic', padding: '4px 0', fontFamily: "'DM Sans', sans-serif" }}>
+                                      No blocks — drag one here
+                                    </div>
+                                  )}
+                                  {subBlocks.map((block, blockIdx) => {
+                                    const bStyle = blockTypeStyle[block.type] || blockTypeStyle.content;
+                                    return (
+                                      <Draggable key={block.id} draggableId={block.id} index={blockIdx}>
+                                        {(bProv, bSnap) => (
+                                          <div
+                                            ref={bProv.innerRef}
+                                            {...bProv.draggableProps}
+                                            {...bProv.dragHandleProps}
+                                            style={{
+                                              ...bProv.draggableProps.style,
+                                              display: 'flex',
+                                              alignItems: 'center',
+                                              gap: '7px',
+                                              padding: '5px 8px',
+                                              borderRadius: '6px',
+                                              background: bSnap.isDragging ? bStyle.bg : 'rgba(0,0,0,0.03)',
+                                              border: `1px solid ${bSnap.isDragging ? bStyle.dot + '40' : 'rgba(0,0,0,0.06)'}`,
+                                              cursor: 'grab',
+                                              opacity: bSnap.isDragging ? 0.85 : 1,
+                                            }}
+                                          >
+                                            <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: bStyle.dot, flexShrink: 0 }} />
+                                            <span style={{ fontSize: '12px', color: '#444', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: "'DM Sans', sans-serif" }}>
+                                              {block.title || 'Untitled block'}
+                                            </span>
+                                            <GripVertical size={11} style={{ color: '#CCC', flexShrink: 0 }} />
+                                          </div>
+                                        )}
+                                      </Draggable>
+                                    );
+                                  })}
+                                  {blockProv.placeholder}
+                                </div>
+                              )}
+                            </Droppable>
                           </div>
                         )}
                       </Draggable>

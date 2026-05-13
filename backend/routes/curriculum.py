@@ -389,21 +389,15 @@ async def update_course(course_data: dict, teacherUid: str):
             if not collab or collab.get('accessType') != 'collaborate':
                 raise HTTPException(status_code=404, detail="Course not found or unauthorized")
         
-        # Prepare update data (keep the same courseId)
-        update_data = {
-            'courseName': course_data.get('courseName'),
-            'class': course_data.get('class'),
-            'subject': course_data.get('subject'),
-            'topic': course_data.get('topic'),
-            'timeDuration': course_data.get('timeDuration'),
-            'objectives': course_data.get('objectives', ''),
-            'sections': course_data.get('sections', []),
-            'outline': course_data.get('outline', {}),
-            'generatedTopics': course_data.get('generatedTopics', []),
-            'handsOnResources': course_data.get('handsOnResources', {}),
-            'courseDescription': course_data.get('courseDescription', ''),
-            'synopsis': course_data.get('synopsis', ''),
-        }
+        # Prepare update data — only include fields present in the request.
+        # Using .get() with defaults would overwrite sections/outline with [] or {}
+        # when a partial save (e.g. saveField({ subject: '...' })) is sent.
+        allowed_fields = [
+            'courseName', 'class', 'subject', 'topic', 'timeDuration',
+            'objectives', 'sections', 'outline', 'generatedTopics',
+            'handsOnResources', 'courseDescription', 'synopsis',
+        ]
+        update_data = {k: course_data[k] for k in allowed_fields if k in course_data}
         
         # Update in Firebase (this will use the existing document)
         await firebase.update_curriculum(course_id, update_data)

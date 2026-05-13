@@ -1,6 +1,7 @@
 // src/components/courses/useCourseActions.js
 import { useState } from 'react';
 import { generateCurriculumContent } from '../../utils/curriculumApi';
+import { trackResourceAdded } from '../../firebase/analytics';
 
 const useCourseActions = ({
   sections,
@@ -488,6 +489,7 @@ const useCourseActions = ({
       ...prev,
       [subsectionId]: [...(prev[subsectionId] || []), block],
     }));
+    trackResourceAdded({ resource_type: block.type, section_id: subsectionId, source: block.source || 'manual' });
   };
 
   const removeBlock = (subsectionId, blockId) => {

@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { Paperclip, X, FileText, FileSpreadsheet, Image, Presentation } from 'lucide-react';
 import { getOwnProfile } from '../../services/teacherService';
+import { trackAiOutlineGenerated } from '../../firebase/analytics';
 
 // Map file extension → icon + label
 const FILE_TYPE_META = {
@@ -215,6 +216,7 @@ const CourseDesigner = () => {
         }));
       }
 
+      trackAiOutlineGenerated({ subject: formData.subject, grade: formData.ageRangeStart, sections_count: sections.length });
       navigate('/course-workspace', {
         state: { formData, sections, isEditing: true, curriculumId, targetFolderId }
       });
