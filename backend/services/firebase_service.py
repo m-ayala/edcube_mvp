@@ -4,26 +4,50 @@ Handles all Firestore database operations for curricula
 """
 
 import os
+import asyncio
+import uuid
+import urllib.parse
 from typing import Dict, List, Optional
 import firebase_admin
-from firebase_admin import credentials, firestore
+from firebase_admin import credentials, firestore, storage as fb_storage
 from datetime import datetime
 from schemas.curriculum_schema import CurriculumFields as F
-import uuid
+
+STORAGE_BUCKET = 'edcube-8fe7d.firebasestorage.app'
 
 
 class FirebaseService:
     """Service for Firebase Firestore operations"""
-    
+
     def __init__(self):
         """Initialize Firebase Admin SDK"""
         # Initialize Firebase if not already done
         if not firebase_admin._apps:
             # Use Application Default Credentials (from gcloud auth)
             firebase_admin.initialize_app()
-        
+
         self.db = firestore.client()
         self.curricula_collection = self.db.collection('curricula')
+        self.bucket = fb_storage.bucket(STORAGE_BUCKET)
+
+    async def upload_file(self, data: bytes, path: str, content_type: str) -> str:
+        """Upload bytes to Firebase Storage and return a permanent download URL."""
+        loop = asyncio.get_event_loop()
+        bucket = self.bucket
+
+        def _upload():
+            blob = bucket.blob(path)
+            download_token = str(uuid.uuid4())
+            blob.upload_from_string(data, content_type=content_type)
+            blob.metadata = {'firebaseStorageDownloadTokens': download_token}
+            blob.patch()
+            encoded = urllib.parse.quote(path, safe='')
+            return (
+                f"https://firebasestorage.googleapis.com/v0/b/{bucket.name}"
+                f"/o/{encoded}?alt=media&token={download_token}"
+            )
+
+        return await loop.run_in_executor(None, _upload)
 
     async def _get_user_org(self, uid: str) -> Optional[str]:
         """Get a user's organization ID from their teacher profile."""

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { updateOwnProfile } from '../../utils/teacherService';
+import { uploadProfilePicture } from '../../firebase/storageService';
 import ChangePasswordModal from './ChangePasswordModal';
 import MultiSelectDropdown from './MultiSelectDropdown';
 import './EditProfileModal.css';
@@ -22,6 +23,8 @@ const EditProfileModal = ({ isOpen, onClose, currentProfile, onProfileUpdated })
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [uploadingPicture, setUploadingPicture] = useState(false);
+  const [pictureError, setPictureError] = useState('');
 
   // Predefined options
   const subjectOptions = [
@@ -70,6 +73,22 @@ const EditProfileModal = ({ isOpen, onClose, currentProfile, onProfileUpdated })
       ...prev,
       grades_taught: selectedGrades
     }));
+  };
+
+  const handleProfilePictureChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPictureError('');
+    setUploadingPicture(true);
+    try {
+      const url = await uploadProfilePicture(file, currentUser.uid);
+      setFormData(prev => ({ ...prev, profile_picture_url: url }));
+    } catch (err) {
+      setPictureError(err.message || 'Upload failed. Try a smaller image.');
+    } finally {
+      setUploadingPicture(false);
+      e.target.value = '';
+    }
   };
 
   const handleSave = async (e) => {
@@ -162,18 +181,29 @@ const EditProfileModal = ({ isOpen, onClose, currentProfile, onProfileUpdated })
               </small>
             </div>
 
-            {/* Profile Picture URL */}
+            {/* Profile Picture Upload */}
             <div className="form-group">
-              <label htmlFor="profile_picture_url">Profile Picture URL</label>
+              <label>Profile Picture</label>
+              {formData.profile_picture_url && (
+                <img
+                  src={formData.profile_picture_url}
+                  alt="Profile preview"
+                  style={{ display: 'block', width: 72, height: 72, borderRadius: '50%', objectFit: 'cover', marginBottom: 10 }}
+                />
+              )}
               <input
-                type="url"
-                id="profile_picture_url"
-                name="profile_picture_url"
-                value={formData.profile_picture_url}
-                onChange={handleChange}
-                placeholder="https://example.com/your-photo.jpg"
+                type="file"
+                id="profile_picture_file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                style={{ display: 'none' }}
+                onChange={handleProfilePictureChange}
+                disabled={uploadingPicture}
               />
-              <small className="field-hint">Paste a link to your profile picture</small>
+              <label htmlFor="profile_picture_file" className="btn-upload-picture">
+                {uploadingPicture ? 'Uploading…' : formData.profile_picture_url ? 'Change photo' : 'Choose photo'}
+              </label>
+              {pictureError && <small style={{ display: 'block', color: '#d32f2f', marginTop: 6 }}>{pictureError}</small>}
+              <small className="field-hint">JPG, PNG, WebP or GIF · max 5 MB</small>
             </div>
 
             {/* Subjects Taught - NEW COMPONENT */}

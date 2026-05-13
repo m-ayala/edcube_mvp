@@ -1,0 +1,15 @@
+[
+  {
+    "origin": [
+      "http://localhost:5173",
+      "http://localhost:5174",
+      "https://edcubeai.web.app",
+      "https://edcubeai.firebaseapp.com",
+      "https://edcube-8fe7d.web.app",
+      "https://edcube-8fe7d.firebaseapp.com"
+    ],
+    "method": ["GET", "POST", "PUT", "DELETE", "HEAD"],
+    "header": ["*"],
+    "maxAgeSeconds": 3600
+  }
+]

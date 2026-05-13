@@ -129,6 +129,26 @@
   font-style: italic;
 }
 
+/* Profile Picture Upload Button */
+.btn-upload-picture {
+  display: inline-block;
+  padding: 9px 18px;
+  background-color: transparent;
+  color: #8b7355;
+  border: 1px solid #8b7355;
+  border-radius: 8px;
+  font-size: 15.4px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.btn-upload-picture:hover {
+  background-color: #8b7355;
+  color: white;
+}
+
 /* Change Password Button */
 .change-password-btn {
   padding: 10px 16px;

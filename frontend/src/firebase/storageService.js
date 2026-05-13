@@ -1,62 +1,43 @@
 // frontend/src/firebase/storageService.js
+// Uploads go through the FastAPI backend to avoid Firebase Storage CORS issues.
 
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import app from './config';
+import { auth } from './config';
 
-const storage = getStorage(app);
+const API_BASE = import.meta.env.VITE_API_BASE_URL;
 
-/**
- * Upload profile picture to Firebase Storage
- * @param {File} file - Image file from input
- * @param {string} userId - User's UID
- * @returns {Promise<string>} - Download URL of uploaded image
- */
-export const uploadProfilePicture = async (file, userId) => {
-  try {
-    // Validate file type
-    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-    if (!validTypes.includes(file.type)) {
-      throw new Error('Please upload a valid image file (JPG, PNG, GIF, or WebP)');
-    }
-
-    // Validate file size (max 5MB)
-    const maxSize = 5 * 1024 * 1024; // 5MB in bytes
-    if (file.size > maxSize) {
-      throw new Error('Image size must be less than 5MB');
-    }
-
-    // Create a unique filename
-    const timestamp = Date.now();
-    const filename = `profile_pictures/${userId}/${timestamp}_${file.name}`;
-
-    // Create storage reference
-    const storageRef = ref(storage, filename);
-
-    // Upload file
-    console.log('Uploading profile picture...');
-    const snapshot = await uploadBytes(storageRef, file);
-
-    // Get download URL
-    const downloadURL = await getDownloadURL(snapshot.ref);
-    console.log('✅ Profile picture uploaded successfully:', downloadURL);
-
-    return downloadURL;
-  } catch (error) {
-    console.error('Error uploading profile picture:', error);
-    throw error;
-  }
-};
+const VALID_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+const MAX_SIZE = 5 * 1024 * 1024; // 5 MB
 
 /**
- * Delete old profile picture (optional - for cleanup)
- * @param {string} imageUrl - URL of image to delete
+ * Upload profile picture via backend → Firebase Storage.
+ * @param {File} file
+ * @param {string} _userId - unused (auth token identifies the user server-side)
+ * @returns {Promise<string>} permanent download URL
  */
-export const deleteProfilePicture = async (imageUrl) => {
-  try {
-    // Extract path from URL and delete
-    // This is optional - you can implement if needed
-    console.log('Delete function not implemented yet');
-  } catch (error) {
-    console.error('Error deleting profile picture:', error);
+export const uploadProfilePicture = async (file, _userId) => {
+  if (!VALID_IMAGE_TYPES.includes(file.type)) {
+    throw new Error('Please upload a valid image file (JPG, PNG, GIF, or WebP)');
   }
+  if (file.size > MAX_SIZE) {
+    throw new Error('Image size must be less than 5 MB');
+  }
+
+  const token = await auth.currentUser.getIdToken();
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const res = await fetch(`${API_BASE}/api/upload/profile-picture`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Upload failed. Please try again.');
+  }
+
+  const { url } = await res.json();
+  return url;
 };

@@ -10,6 +10,7 @@ load_dotenv()
 
 import uvicorn
 from routes.file_upload import router as file_upload_router
+from routes.uploads import router as uploads_router
 import os
 from routes import curriculum, resources, topics, teachers, contact, notifications
 
@@ -40,6 +41,7 @@ app.include_router(file_upload_router, prefix="/api", tags=["file_upload"])
 app.include_router(teachers.router, tags=["teachers"])
 app.include_router(contact.router, prefix="/api", tags=["contact"])
 app.include_router(notifications.router, tags=["notifications"])
+app.include_router(uploads_router, tags=["uploads"])
 
 @app.get("/")
 async def root():
