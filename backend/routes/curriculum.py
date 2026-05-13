@@ -401,6 +401,8 @@ async def update_course(course_data: dict, teacherUid: str):
             'outline': course_data.get('outline', {}),
             'generatedTopics': course_data.get('generatedTopics', []),
             'handsOnResources': course_data.get('handsOnResources', {}),
+            'courseDescription': course_data.get('courseDescription', ''),
+            'synopsis': course_data.get('synopsis', ''),
         }
         
         # Update in Firebase (this will use the existing document)
@@ -1128,3 +1130,93 @@ async def generate_block_links(request: GenerateBlockLinksRequest):
     except Exception as e:
         logger.error(f"Block link generation error: {e}", exc_info=True)
         return {"links": []}
+
+
+# ============================================================================
+# SYNOPSIS GENERATION
+# ============================================================================
+
+class SynopsisBlock(BaseModel):
+    sectionTitle: str
+    subsectionTitle: str
+    blockType: str  # "content" | "worksheet" | "activity"
+    blockTitle: str
+    blockContent: Optional[str] = ""
+
+
+class GenerateSynopsisRequest(BaseModel):
+    courseName: str
+    subject: Optional[str] = ""
+    classLevel: Optional[str] = ""
+    teacherUid: Optional[str] = None
+    selectedBlocks: List[SynopsisBlock]
+
+
+@router.post("/curriculum/generate-synopsis")
+async def generate_synopsis(request: GenerateSynopsisRequest):
+    """
+    Generate a parent-facing narrative synopsis of a completed course.
+    The teacher selects which blocks (content/worksheet/activity) were completed,
+    and this returns a 3–5 paragraph friendly summary for parents.
+    """
+    try:
+        if not request.selectedBlocks:
+            raise HTTPException(status_code=400, detail="At least one block must be selected")
+
+        # Group blocks by section then subsection for a structured narrative
+        from collections import defaultdict
+        grouped: dict = defaultdict(lambda: defaultdict(list))
+        for blk in request.selectedBlocks:
+            grouped[blk.sectionTitle][blk.subsectionTitle].append(blk)
+
+        # Build a structured summary for the prompt
+        structure_lines = []
+        for section_title, subsections in grouped.items():
+            structure_lines.append(f"\nSection: {section_title}")
+            for sub_title, blocks in subsections.items():
+                structure_lines.append(f"  Lesson: {sub_title}")
+                for b in blocks:
+                    type_label = {"content": "Content", "worksheet": "Worksheet", "activity": "Activity"}.get(b.blockType, b.blockType.title())
+                    structure_lines.append(f"    [{type_label}] {b.blockTitle}")
+
+        structure_text = "\n".join(structure_lines)
+
+        age_info = f" for students aged {request.classLevel}" if request.classLevel else ""
+        subject_info = f" in {request.subject}" if request.subject else ""
+
+        system_prompt = (
+            "You are an educational curriculum assistant writing professional course documentation. "
+            "Write in a clear, informative, and professional tone. Refer to learners as 'students' throughout. "
+            "Do not use bullet points or headers — write flowing paragraphs."
+        )
+
+        user_prompt = (
+            f"Write a detailed synopsis for the course \"{request.courseName}\"{subject_info}{age_info}. "
+            f"The following lessons and activities were completed:\n{structure_text}\n\n"
+            f"Write 3–5 paragraphs that:\n"
+            f"1. Open with a concise overview of what the course covered and its learning goals\n"
+            f"2. Describe the key lessons and concepts students engaged with in each section\n"
+            f"3. Highlight the worksheets and hands-on activities that were completed (mention them by name)\n"
+            f"4. Close with the skills and knowledge students have developed through this course\n\n"
+            f"Write in a professional, neutral tone suitable for any reader. Always use 'students', never 'children' or 'kids'."
+        )
+
+        response = await generation_service.client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.7,
+            max_tokens=1000,
+        )
+
+        synopsis_text = response.choices[0].message.content.strip()
+        logger.info(f"[generate-synopsis] Generated synopsis ({len(synopsis_text)} chars) for course '{request.courseName}'")
+        return {"success": True, "synopsis": synopsis_text}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Synopsis generation error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))

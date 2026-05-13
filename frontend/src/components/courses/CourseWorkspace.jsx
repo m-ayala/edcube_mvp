@@ -38,6 +38,12 @@ const CourseWorkspace = () => {
   // ── Core State ────────────────────────────────────────────────────────
   const [courseName, setCourseName] = useState(formData?.courseName || '');
   const [courseClass, setCourseClass] = useState(formData?.class || '');
+  const [courseSubject, setCourseSubject] = useState(formData?.subject || '');
+  const [courseTopic, setCourseTopic] = useState(formData?.topic || '');
+  const [courseTimeDuration, setCourseTimeDuration] = useState(formData?.timeDuration || '');
+  const [courseObjectives, setCourseObjectives] = useState(formData?.objectives || '');
+  const [courseDescription, setCourseDescription] = useState(formData?.courseDescription || '');
+  const [synopsis, setSynopsis] = useState(formData?.synopsis || '');
   const [sections, setSections] = useState(incomingSections || []);
   const [showBreakModal, setShowBreakModal] = useState(false);
   const [history, setHistory] = useState([]);
@@ -349,10 +355,12 @@ const CourseWorkspace = () => {
     const courseData = {
       courseName,
       class: courseClass,
-      subject: formData?.subject || '',
-      topic: formData?.topic || '',
-      timeDuration: formData?.timeDuration || '',
-      objectives: formData?.objectives || '',
+      subject: courseSubject,
+      topic: courseTopic,
+      timeDuration: courseTimeDuration,
+      objectives: courseObjectives,
+      courseDescription,
+      synopsis,
       sections: sectionsForSave,
       outline: { sections: sectionsForSave }
     };
@@ -399,10 +407,22 @@ const CourseWorkspace = () => {
   }));
 
   // ── Back to Course View ───────────────────────────────────────────────
+  const updatedFormData = () => ({
+    ...formData,
+    courseName,
+    class: courseClass,
+    subject: courseSubject,
+    topic: courseTopic,
+    timeDuration: courseTimeDuration,
+    objectives: courseObjectives,
+    courseDescription,
+    synopsis,
+  });
+
   const handleBack = () => {
     navigate('/course-view', {
       state: {
-        formData,
+        formData: updatedFormData(),
         sections: sectionsWithBlocks(),
         curriculumId,
         isPublic,
@@ -416,7 +436,7 @@ const CourseWorkspace = () => {
   const handleEditInWorkspace = () => {
     navigate('/course-workspace', {
       state: {
-        formData,
+        formData: updatedFormData(),
         sections: sectionsWithBlocks(),
         isEditing: true,
         curriculumId,
@@ -430,7 +450,7 @@ const CourseWorkspace = () => {
   const handleEditAsCollaborator = () => {
     navigate('/course-workspace', {
       state: {
-        formData,
+        formData: updatedFormData(),
         sections: sectionsWithBlocks(),
         isEditing: true,
         curriculumId,

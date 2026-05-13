@@ -151,3 +151,28 @@ export const generateBlockLinks = async ({
   if (!response.ok) throw new Error('Link generation failed');
   return await response.json(); // { links: [{ url, label, type }] }
 };
+
+/**
+ * Generate a parent-facing narrative synopsis of a completed course.
+ * @param {Object} params
+ * @param {string} params.courseName
+ * @param {string} params.subject
+ * @param {string} params.classLevel
+ * @param {string} params.teacherUid
+ * @param {Array}  params.selectedBlocks - [{ sectionTitle, subsectionTitle, blockType, blockTitle, blockContent }]
+ */
+export const generateSynopsis = async ({
+  courseName,
+  subject = '',
+  classLevel = '',
+  teacherUid = null,
+  selectedBlocks = [],
+}) => {
+  const response = await fetch(`${API_BASE_URL}/curriculum/generate-synopsis`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ courseName, subject, classLevel, teacherUid, selectedBlocks }),
+  });
+  if (!response.ok) throw new Error('Synopsis generation failed');
+  return await response.json(); // { success: true, synopsis: string }
+};
