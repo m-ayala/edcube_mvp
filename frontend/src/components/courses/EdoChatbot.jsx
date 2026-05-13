@@ -8,12 +8,24 @@ import { BLOCK_CATEGORIES } from '../../constants/blockCategories';
 const EDO_GREEN = '#2C5F3A';
 const EDO_ORANGE = '#E8761A';
 
-// Render text with bullet points as <ul> lists and paragraphs as separate blocks
+// Render inline bold: splits on **text** markers and wraps in <strong>
+const renderInline = (text, keyPrefix) => {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={`${keyPrefix}-b${i}`}>{part.slice(2, -2)}</strong>;
+    }
+    return part;
+  });
+};
+
+// Render text with bullet points as <ul>, numbered lines as <ol>, bold via **, paragraphs as blocks
 const renderFormattedText = (text) => {
   if (!text) return null;
   const lines = text.split('\n');
   const elements = [];
   let bulletGroup = [];
+  let numberedGroup = [];
   let key = 0;
 
   const flushBullets = () => {
@@ -21,25 +33,45 @@ const renderFormattedText = (text) => {
     elements.push(
       <ul key={key++} style={{ margin: '4px 0 4px 0', paddingLeft: '18px', listStyleType: 'disc' }}>
         {bulletGroup.map((b, i) => (
-          <li key={i} style={{ marginBottom: '3px' }}>{b}</li>
+          <li key={i} style={{ marginBottom: '3px' }}>{renderInline(b, `ul-${key}-${i}`)}</li>
         ))}
       </ul>
     );
     bulletGroup = [];
   };
 
+  const flushNumbered = () => {
+    if (numberedGroup.length === 0) return;
+    elements.push(
+      <ol key={key++} style={{ margin: '4px 0 4px 0', paddingLeft: '20px' }}>
+        {numberedGroup.map((n, i) => (
+          <li key={i} style={{ marginBottom: '3px' }}>{renderInline(n, `ol-${key}-${i}`)}</li>
+        ))}
+      </ol>
+    );
+    numberedGroup = [];
+  };
+
   for (const line of lines) {
     const trimmed = line.trim();
-    if (trimmed.startsWith('•') || trimmed.startsWith('-') || trimmed.startsWith('*')) {
+    const numberedMatch = trimmed.match(/^\d+\.\s+(.*)/);
+    if (trimmed.startsWith('•') || (trimmed.startsWith('-') && !trimmed.startsWith('--')) || (trimmed.startsWith('*') && !trimmed.startsWith('**'))) {
+      flushNumbered();
       bulletGroup.push(trimmed.replace(/^[•\-*]\s*/, ''));
+    } else if (numberedMatch) {
+      flushBullets();
+      numberedGroup.push(numberedMatch[1]);
     } else if (trimmed === '') {
       flushBullets();
+      flushNumbered();
     } else {
       flushBullets();
-      elements.push(<span key={key++} style={{ display: 'block', marginBottom: '4px' }}>{trimmed}</span>);
+      flushNumbered();
+      elements.push(<span key={key++} style={{ display: 'block', marginBottom: '4px' }}>{renderInline(trimmed, `p-${key}`)}</span>);
     }
   }
   flushBullets();
+  flushNumbered();
   return elements;
 };
 
@@ -185,6 +217,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
   const [selectedBlockType, setSelectedBlockType] = useState(null); // null | 'content' | 'worksheet' | 'activity'
   const [dynamicChips, setDynamicChips] = useState(null); // null=idle, 'loading', or string[]
   const [subsectionSectionPicker, setSubsectionSectionPicker] = useState(false); // picking section before subsection gen
+  const [copiedEditId, setCopiedEditId] = useState(null);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -194,7 +227,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
     setMessages([{
       id: 'welcome',
       kind: 'ai-text',
-      text: `Hi! I'm Edo 👋 I'm here to help you design "${name}". Ask me anything about your course — I'll give you a few options to choose from.`,
+      text: `Hi! I'm Edo 👋 I'm here to help you build "${name}". Ask me anything — let's think through it together.`,
     }]);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -257,7 +290,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
     setMessages([{
       id: 'welcome',
       kind: 'ai-text',
-      text: `Hi! I'm Edo 👋 I'm here to help you design "${name}". Ask me anything about your course — I'll give you a few options to choose from.`,
+      text: `Hi! I'm Edo 👋 I'm here to help you build "${name}". Ask me anything — let's think through it together.`,
     }]);
     setSelectedBlockType(null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -268,6 +301,9 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
 
   const addCardsMessage = (cards, intro, conclusion) =>
     setMessages(prev => [...prev, { id: `${Date.now()}-${Math.random()}`, kind: 'ai-cards', cards, intro: intro || '', conclusion: conclusion || '', appliedCards: new Set() }]);
+
+  const addEditMessage = (label, text) =>
+    setMessages(prev => [...prev, { id: `${Date.now()}-${Math.random()}`, kind: 'ai-edit', label: label || 'Edited text', text: text || '' }]);
 
   const getContextLabel = () => {
     if (!currentPage) return courseName || 'Your Course';
@@ -346,9 +382,19 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
         history.push({ role: 'user', content: m.text });
       } else if (m.kind === 'ai-text') {
         history.push({ role: 'assistant', content: m.text });
+      } else if (m.kind === 'ai-edit') {
+        history.push({ role: 'assistant', content: `${m.label}:\n${m.text}` });
+      } else if (m.kind === 'ai-cards') {
+        const parts = [];
+        if (m.intro) parts.push(m.intro);
+        (m.cards || []).forEach((c, i) => {
+          parts.push(`Option ${i + 1} — ${c.label}:\n${c.body}`);
+        });
+        if (m.conclusion) parts.push(m.conclusion);
+        history.push({ role: 'assistant', content: parts.join('\n\n') });
       }
     }
-    return history.slice(-10);
+    return history.slice(-20);
   };
 
   const sendToAI = async (userText) => {
@@ -362,6 +408,8 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
       });
       if (data.type === 'conversation') {
         addTextMessage('ai-text', data.message || "I'm not sure how to help with that — could you tell me more?");
+      } else if (data.type === 'edit') {
+        addEditMessage(data.label, data.text);
       } else if (data.type === 'cards' && data.suggestions?.length > 0) {
         addCardsMessage(data.suggestions, data.intro, data.conclusion || '');
       } else {
@@ -630,6 +678,63 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
                   border: '1px solid #E7E5E4', wordBreak: 'break-word',
                 }}>
                   {renderFormattedText(msg.text)}
+                </div>
+              </div>
+            );
+          }
+
+          if (msg.kind === 'ai-edit') {
+            const isCopied = copiedEditId === msg.id;
+            return (
+              <div key={msg.id} style={{ display: 'flex', gap: '7px', alignItems: 'flex-start' }}>
+                <div style={{
+                  width: '24px', height: '24px', borderRadius: '50%',
+                  backgroundColor: EDO_GREEN, flexShrink: 0, marginTop: '2px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <span style={{ color: 'white', fontSize: '11px', fontWeight: '700', fontFamily: "'Fraunces', serif" }}>E</span>
+                </div>
+                <div style={{
+                  maxWidth: '86%', borderRadius: '14px 14px 14px 2px',
+                  border: '1.5px solid #F5C98A', backgroundColor: '#FFFBF2',
+                  overflow: 'hidden',
+                }}>
+                  <div style={{
+                    padding: '6px 12px 4px',
+                    borderBottom: '1px solid #F5C98A',
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px',
+                  }}>
+                    <span style={{ fontSize: '11px', fontWeight: '700', color: '#B45309', fontFamily: "'DM Sans', sans-serif", textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                      ✏️ {msg.label}
+                    </span>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(msg.text).then(() => {
+                          setCopiedEditId(msg.id);
+                          setTimeout(() => setCopiedEditId(null), 2000);
+                        });
+                      }}
+                      style={{
+                        padding: '3px 10px', borderRadius: '6px',
+                        backgroundColor: isCopied ? '#D1FAE5' : '#FEF3C7',
+                        border: `1px solid ${isCopied ? '#6EE7B7' : '#F5C98A'}`,
+                        color: isCopied ? '#065F46' : '#B45309',
+                        fontSize: '11.5px', fontWeight: '700', fontFamily: "'DM Sans', sans-serif",
+                        cursor: 'pointer', flexShrink: 0, transition: 'all 0.15s',
+                      }}
+                    >
+                      {isCopied ? 'Copied ✓' : 'Copy'}
+                    </button>
+                  </div>
+                  <div style={{
+                    padding: '8px 12px 10px',
+                    fontSize: '13.5px', lineHeight: '1.6', color: '#1C1917',
+                    fontFamily: "'DM Sans', sans-serif", wordBreak: 'break-word',
+                    maxHeight: '220px', overflowY: 'auto',
+                    scrollbarWidth: 'thin', scrollbarColor: '#E8E6E1 transparent',
+                  }}>
+                    {renderFormattedText(msg.text)}
+                  </div>
                 </div>
               </div>
             );

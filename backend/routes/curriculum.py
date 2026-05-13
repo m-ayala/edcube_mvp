@@ -694,14 +694,32 @@ PAGE GUIDANCE: {page_guidance}
 
 RESPONSE FORMAT — always respond with valid JSON only, no markdown:
 
-When the teacher's message is exploratory, vague, or you need to clarify scope:
-{{"type": "conversation", "message": "..."}}
-Keep it short. End with a sharp question or "Want me to generate options?"
+INTENT DETECTION — read the teacher's message and choose the output type:
 
-When the teacher confirms or asks for suggestions:
-{{"type": "cards", "intro": "...", "suggestions": [...], "conclusion": "..."}}
+DISCUSS → {{"type": "conversation", "message": "..."}}
+  When the teacher is exploring, asking how/why/what if, requesting teaching guidance,
+  asking about pedagogy, activities, scope, misconceptions, timing, or saying "tell me more".
+  Give a THOROUGH, detailed answer. Use **bold** section headers, numbered steps, bullet points.
+  Reference earlier conversation by name when relevant.
+  Match depth to the question — never cut a teaching guidance response short.
+  Ask one focused follow-up question at the end only when it genuinely helps.
 
-Cards format:
+ADD → {{"type": "cards", "intro": "...", "suggestions": [...], "conclusion": "..."}}
+  When the teacher explicitly asks to generate, add, create, or make something new
+  (e.g. "generate a block", "add a worksheet", "make an activity", "give me options").
+  Check conversation history: if the teacher already planned something specific in this
+  session, generate that specific idea. Otherwise suggest 2-3 fresh options.
+
+EDIT → {{"type": "edit", "label": "brief description of what changed", "text": "..."}}
+  When the teacher asks to change, edit, rewrite, update, or improve something that already
+  exists (e.g. "change the title", "make that more detailed", "rewrite the How to teach it").
+  Have a brief conversation first to understand exactly what to change (respond with "conversation").
+  Only output type "edit" once the teacher confirms ("yes", "go ahead", "do it", "finalize").
+  text = only the specific part being changed. Teacher will copy-paste it manually.
+
+UNSURE: default to "conversation" and ask: "Want me to generate that as a card?" or "Should I write that up so you can copy it?"
+
+Cards format (for ADD responses):
 - intro: Acknowledge the specific request by name. No generic openers.
 - suggestions: 2-3 options, each meaningfully different
 - conclusion: one sentence — which option you'd lean toward and why
@@ -738,7 +756,14 @@ When the teacher asks for a resource block while focused on a TOPIC BOX:
     (3-5 bullet points covering the main components, vocabulary, or sub-concepts — specific to the topic, not generic)
 
     **How to teach it:**
-    Step-by-step delivery approach — what to show first, what analogy to use, how to check understanding. 2-3 sentences.
+    A step-by-step delivery guide for the teacher. Must include ALL of the following — never fewer than 5 steps:
+    1. Opening hook — how to introduce this concept to grab students' attention (1-2 sentences with a specific hook idea)
+    2. Main explanation — what to show, say, or demonstrate first; what analogy or visual to use
+    3. Mid-lesson check — one specific question to ask students to check understanding
+    4. Common confusion — one thing students typically get wrong and exactly how to address it
+    5. Reinforcement — a short activity, example, or prompt to make the concept stick
+    Suggested timing: state total minutes and rough per-step breakdown.
+    Each step must be a concrete teacher action — no vague suggestions.
 
     **Things to consider:**
     Tips, common misconceptions students have, or differentiation ideas. 1-2 sentences.
@@ -860,11 +885,20 @@ Respond ONLY with valid JSON. No markdown, no preamble."""
             messages.append({"role": msg.role, "content": msg.content})
         messages.append({"role": "user", "content": request.message})
 
+        # Dynamic token ceiling: different intents need different room
+        msg_lower = request.message.lower()
+        if any(w in msg_lower for w in ['generate', 'add', 'create', 'make', 'give me', 'suggest', 'write me']):
+            max_tokens = 2500   # Card generation: 3 full blocks with all sections
+        elif any(w in msg_lower for w in ['change', 'edit', 'rewrite', 'update', 'fix', 'improve', 'modify']):
+            max_tokens = 1200   # Edit: partial text only
+        else:
+            max_tokens = 2000   # Co-pilot conversation: thorough but bounded
+
         response = await generation_service.client.chat.completions.create(
             model="gpt-4o",
             messages=messages,
             temperature=0.7,
-            max_tokens=1400,
+            max_tokens=max_tokens,
             response_format={"type": "json_object"}
         )
 
@@ -875,6 +909,13 @@ Respond ONLY with valid JSON. No markdown, no preamble."""
 
             if response_type == "conversation":
                 return {"type": "conversation", "message": parsed.get("message", raw)}
+
+            if response_type == "edit":
+                return {
+                    "type": "edit",
+                    "label": parsed.get("label", "Edited text"),
+                    "text": parsed.get("text", ""),
+                }
 
             # Cards response
             suggestions = parsed.get("suggestions", [])
