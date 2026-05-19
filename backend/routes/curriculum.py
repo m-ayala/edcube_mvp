@@ -1138,6 +1138,82 @@ class SynopsisBlock(BaseModel):
     blockContent: Optional[str] = ""
 
 
+class GenerateDescriptionRequest(BaseModel):
+    courseName: str
+    subject: Optional[str] = ""
+    topic: Optional[str] = ""
+    ageRangeStart: Optional[str] = ""
+    ageRangeEnd: Optional[str] = ""
+    numStudents: Optional[str] = ""
+    timeDuration: Optional[str] = ""
+    timeUnit: Optional[str] = ""
+    objectives: Optional[str] = ""
+    teacherUid: Optional[str] = None
+
+
+@router.post("/curriculum/generate-description")
+async def generate_description(request: GenerateDescriptionRequest):
+    """
+    Generate a one-paragraph course description based on the teacher's course info.
+    Describes student learning outcomes and the general theme of the course.
+    """
+    try:
+        age_info = ""
+        if request.ageRangeStart and request.ageRangeEnd:
+            age_info = f" designed for students aged {request.ageRangeStart}–{request.ageRangeEnd}"
+        elif request.ageRangeStart:
+            age_info = f" designed for students aged {request.ageRangeStart}+"
+
+        subject_info = f" in {request.subject}" if request.subject else ""
+        topic_info = f", focusing on {request.topic}" if request.topic else ""
+
+        duration_info = ""
+        if request.timeDuration and request.timeUnit:
+            duration_info = f" The course spans {request.timeDuration} {request.timeUnit}."
+        elif request.timeDuration:
+            duration_info = f" The course runs for {request.timeDuration}."
+
+        objectives_info = f"\n\nThe teacher has outlined the following goals and notes:\n{request.objectives}" if request.objectives else ""
+
+        system_prompt = (
+            "You are an educational curriculum assistant writing professional course documentation. "
+            "Write exactly one concise paragraph in a clear, informative, and engaging tone. "
+            "The paragraph should describe what students will learn and what skills or understanding they will gain, "
+            "as well as the general theme or approach of the course. "
+            "Do not use bullet points or headers. Do not start with 'This course'. Refer to learners as 'students'."
+        )
+
+        user_prompt = (
+            f"Write a one-paragraph description for the course \"{request.courseName}\"{subject_info}{topic_info}{age_info}.{duration_info}"
+            f"{objectives_info}\n\n"
+            f"The paragraph should cover:\n"
+            f"1. The general theme and focus of the course\n"
+            f"2. What students will learn and the key skills or concepts they will develop\n"
+            f"3. The learning outcomes — what students will be able to do or understand by the end\n\n"
+            f"Keep it to a single paragraph of 3–5 sentences. Write for a general audience (parents and students)."
+        )
+
+        response = await generation_service.client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.7,
+            max_tokens=300,
+        )
+
+        description_text = response.choices[0].message.content.strip()
+        logger.info(f"[generate-description] Generated description ({len(description_text)} chars) for course '{request.courseName}'")
+        return {"success": True, "description": description_text}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Description generation error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 class GenerateSynopsisRequest(BaseModel):
     courseName: str
     subject: Optional[str] = ""

@@ -153,6 +153,41 @@ export const generateBlockLinks = async ({
 };
 
 /**
+ * Generate a one-paragraph course description from course info.
+ * @param {Object} params
+ * @param {string} params.courseName
+ * @param {string} params.subject
+ * @param {string} params.topic
+ * @param {string} params.ageRangeStart
+ * @param {string} params.ageRangeEnd
+ * @param {string} params.numStudents
+ * @param {string} params.timeDuration
+ * @param {string} params.timeUnit
+ * @param {string} params.objectives
+ * @param {string} params.teacherUid
+ */
+export const generateCourseDescription = async ({
+  courseName,
+  subject = '',
+  topic = '',
+  ageRangeStart = '',
+  ageRangeEnd = '',
+  numStudents = '',
+  timeDuration = '',
+  timeUnit = '',
+  objectives = '',
+  teacherUid = null,
+}) => {
+  const response = await fetch(`${API_BASE_URL}/curriculum/generate-description`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ courseName, subject, topic, ageRangeStart, ageRangeEnd, numStudents, timeDuration, timeUnit, objectives, teacherUid }),
+  });
+  if (!response.ok) throw new Error('Description generation failed');
+  return await response.json(); // { success: true, description: string }
+};
+
+/**
  * Generate a parent-facing narrative synopsis of a completed course.
  * @param {Object} params
  * @param {string} params.courseName

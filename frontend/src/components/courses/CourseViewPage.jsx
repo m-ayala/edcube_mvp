@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { generateSynopsis } from '../../utils/curriculumApi';
+import { generateSynopsis, generateCourseDescription } from '../../utils/curriculumApi';
 import html2pdf from 'html2pdf.js';
 
 const SERIF = "'DM Serif Display', serif";
@@ -258,6 +258,7 @@ const CourseViewPage = () => {
 
   // ── Description state ─────────────────────────────────────────────────
   const [courseDescription, setCourseDescription] = useState(incomingFormData?.courseDescription || '');
+  const [descriptionLoading, setDescriptionLoading] = useState(false);
 
   // ── Synopsis state ────────────────────────────────────────────────────
   const [synopsis, setSynopsis] = useState(incomingFormData?.synopsis || '');
@@ -386,6 +387,32 @@ const CourseViewPage = () => {
     }
   };
 
+  const handleGenerateDescription = async () => {
+    setDescriptionLoading(true);
+    try {
+      const result = await generateCourseDescription({
+        courseName,
+        subject:       editableFormData.subject,
+        topic:         editableFormData.topic,
+        ageRangeStart: editableFormData.ageRangeStart,
+        ageRangeEnd:   editableFormData.ageRangeEnd,
+        numStudents:   editableFormData.numStudents,
+        timeDuration:  editableFormData.timeDuration,
+        timeUnit:      editableFormData.timeUnit,
+        objectives:    editableFormData.objectives,
+        teacherUid:    currentUser?.uid || null,
+      });
+      if (result.description) {
+        setCourseDescription(result.description);
+        await saveField({ courseDescription: result.description });
+      }
+    } catch (err) {
+      console.error('Description generation error:', err);
+    } finally {
+      setDescriptionLoading(false);
+    }
+  };
+
   // ── Stats ─────────────────────────────────────────────────────────────
   const sectionCount = sections.filter(s => s.type !== 'break').length;
   const lessonCount  = sections.reduce((a, s) => a + (s.subsections?.length || 0), 0);
@@ -506,30 +533,69 @@ const CourseViewPage = () => {
             </p>
 
             {isOwner ? (
-              <div style={{ position: 'relative' }}>
-                <textarea
-                  value={courseDescription}
-                  onChange={e => setCourseDescription(e.target.value)}
-                  placeholder="Write a short description of what this course covers — its key objectives, what students will learn, and why parents should sign their child up…"
-                  rows={8}
-                  style={{
-                    width: '100%', boxSizing: 'border-box',
-                    fontFamily: SANS, fontSize: '15.5px', color: '#111',
-                    lineHeight: '1.75', letterSpacing: '0.01em',
-                    border: '1.5px solid rgba(0,0,0,0.1)',
-                    borderRadius: '10px', padding: '16px 18px',
-                    outline: 'none', resize: 'vertical',
-                    background: '#FAFAFA',
-                    transition: 'border-color 0.15s',
-                  }}
-                  onFocus={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.3)'; e.currentTarget.style.background = '#fff'; }}
-                  onBlur={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.1)'; e.currentTarget.style.background = '#FAFAFA'; saveField({ courseDescription: e.currentTarget.value }); }}
-                />
-                {courseDescription && (
-                  <span style={{ position: 'absolute', bottom: '10px', right: '14px', fontSize: '11px', color: '#ccc', fontFamily: SANS }}>
-                    auto-saved
-                  </span>
-                )}
+              <div>
+                <div style={{ position: 'relative' }}>
+                  <textarea
+                    value={courseDescription}
+                    onChange={e => setCourseDescription(e.target.value)}
+                    placeholder="Write a short description of what this course covers — its key objectives, what students will learn, and why parents should sign their child up…"
+                    rows={8}
+                    style={{
+                      width: '100%', boxSizing: 'border-box',
+                      fontFamily: SANS, fontSize: '15.5px', color: '#111',
+                      lineHeight: '1.75', letterSpacing: '0.01em',
+                      border: '1.5px solid rgba(0,0,0,0.1)',
+                      borderRadius: '10px', padding: '16px 18px',
+                      outline: 'none', resize: 'vertical',
+                      background: '#FAFAFA',
+                      transition: 'border-color 0.15s',
+                    }}
+                    onFocus={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.3)'; e.currentTarget.style.background = '#fff'; }}
+                    onBlur={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.1)'; e.currentTarget.style.background = '#FAFAFA'; saveField({ courseDescription: e.currentTarget.value }); }}
+                  />
+                  {courseDescription && (
+                    <span style={{ position: 'absolute', bottom: '10px', right: '14px', fontSize: '11px', color: '#ccc', fontFamily: SANS }}>
+                      auto-saved
+                    </span>
+                  )}
+                </div>
+                <div style={{ marginTop: '14px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <button
+                    onClick={handleGenerateDescription}
+                    disabled={descriptionLoading}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '7px',
+                      padding: '9px 18px',
+                      background: descriptionLoading ? '#f0f0f0' : '#111',
+                      color: descriptionLoading ? '#aaa' : '#fff',
+                      border: 'none', borderRadius: '8px',
+                      fontFamily: SANS, fontSize: '13.5px', fontWeight: '500',
+                      cursor: descriptionLoading ? 'not-allowed' : 'pointer',
+                      transition: 'background 0.15s, color 0.15s',
+                    }}
+                  >
+                    {descriptionLoading ? (
+                      <>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ animation: 'spin 0.8s linear infinite' }}>
+                          <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                        </svg>
+                        Generating…
+                      </>
+                    ) : (
+                      <>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                          <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/>
+                        </svg>
+                        {courseDescription ? 'Regenerate Description' : 'Generate Description'}
+                      </>
+                    )}
+                  </button>
+                  {courseDescription && !descriptionLoading && (
+                    <span style={{ fontSize: '12px', color: '#aaa', fontFamily: SANS }}>
+                      You can edit the generated text directly above.
+                    </span>
+                  )}
+                </div>
               </div>
             ) : (
               courseDescription ? (
