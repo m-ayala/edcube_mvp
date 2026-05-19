@@ -259,6 +259,7 @@ const CourseViewPage = () => {
   // ── Description state ─────────────────────────────────────────────────
   const [courseDescription, setCourseDescription] = useState(incomingFormData?.courseDescription || '');
   const [descriptionLoading, setDescriptionLoading] = useState(false);
+  const [descriptionError, setDescriptionError] = useState(null);
 
   // ── Synopsis state ────────────────────────────────────────────────────
   const [synopsis, setSynopsis] = useState(incomingFormData?.synopsis || '');
@@ -388,7 +389,9 @@ const CourseViewPage = () => {
   };
 
   const handleGenerateDescription = async () => {
+    console.log('[desc] clicked, courseName=', courseName, 'formData=', editableFormData);
     setDescriptionLoading(true);
+    setDescriptionError(null);
     try {
       const result = await generateCourseDescription({
         courseName,
@@ -402,12 +405,16 @@ const CourseViewPage = () => {
         objectives:    editableFormData.objectives,
         teacherUid:    currentUser?.uid || null,
       });
+      console.log('[desc] result=', result);
       if (result.description) {
         setCourseDescription(result.description);
         await saveField({ courseDescription: result.description });
+      } else {
+        setDescriptionError('No description returned. Please try again.');
       }
     } catch (err) {
-      console.error('Description generation error:', err);
+      console.error('[desc] error:', err);
+      setDescriptionError(err.message || 'Generation failed. Please try again.');
     } finally {
       setDescriptionLoading(false);
     }
@@ -590,7 +597,12 @@ const CourseViewPage = () => {
                       </>
                     )}
                   </button>
-                  {courseDescription && !descriptionLoading && (
+                  {descriptionError && (
+                    <span style={{ fontSize: '12px', color: '#c0392b', fontFamily: SANS }}>
+                      {descriptionError}
+                    </span>
+                  )}
+                  {!descriptionError && courseDescription && !descriptionLoading && (
                     <span style={{ fontSize: '12px', color: '#aaa', fontFamily: SANS }}>
                       You can edit the generated text directly above.
                     </span>
