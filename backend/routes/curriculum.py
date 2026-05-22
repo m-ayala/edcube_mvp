@@ -8,7 +8,7 @@ Generates boxes/topics without any video or worksheet population
 from fastapi import APIRouter, HTTPException, Depends, Form, UploadFile, File
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Any
 import json
 import asyncio
 import logging
@@ -29,29 +29,28 @@ logger = logging.getLogger(__name__)
 
 @router.post("/generate-curriculum")
 async def generate_curriculum(
-    course_name:     str = Form(...),
-    age_range_start: int = Form(...),
-    age_range_end:   int = Form(...),
-    num_students:    int = Form(...),
-    subject:         str = Form(...),
-    topic:           str = Form(...),
-    time_duration:   str = Form(...),
-    num_worksheets:  int = Form(...),
-    num_activities:  int = Form(...),
-    objectives:      str = Form(""),
-    teacherUid:      str = Form(...),
-    organizationId:  str = Form(...),
+    course_name:     str   = Form(...),
+    age_range_start: int   = Form(...),
+    age_range_end:   int   = Form(...),
+    num_students:    int   = Form(...),
+    subject:         str   = Form(...),
+    topic:           str   = Form(...),
+    num_days:        int   = Form(...),
+    hours_per_day:   float = Form(...),
+    num_worksheets:  int   = Form(...),
+    num_activities:  int   = Form(...),
+    objectives:      str   = Form(""),
+    teacherUid:      str   = Form(...),
+    organizationId:  str   = Form(...),
     files: List[UploadFile] = File(default=[]),
 ):
     """
-    PHASE 1 ONLY: Generate curriculum boxes/topics.
-    Accepts multipart/form-data so teachers can attach reference files
-    (PDF, Word, Excel, PPT, images) alongside the form fields.
+    Generate a full course: outline (sections = days, subsections = hours)
+    then content blocks for every subsection.
+    Streams progress via Server-Sent Events.
     """
-    # ── Read all file bytes EAGERLY before the generator ──────────────────
-    # UploadFile objects are closed after the request, so we must read them
-    # here (in the endpoint body) before handing control to the SSE generator.
-    file_bytes: List[tuple] = []  # list of (filename, ext, bytes)
+    # Read all file bytes EAGERLY — UploadFile objects close after the request body.
+    file_bytes: List[tuple] = []
     for uf in (files or []):
         ext = os.path.splitext(uf.filename)[1].lower()
         data = await uf.read()
@@ -63,7 +62,7 @@ async def generate_curriculum(
             yield f"data: {json.dumps({'phase': 0, 'message': 'Starting...', 'progress': 0})}\n\n"
             await asyncio.sleep(0.1)
 
-            # ── Write pre-read bytes to temp files & extract content ────────
+            # ── Extract content from attached files ─────────────────────────
             extracted_text = ""
             vision_images = []
 
@@ -82,27 +81,31 @@ async def generate_curriculum(
                 extracted_text = result['extracted_text']
                 vision_images = result['images']
 
-            # ── Merge objectives + extracted file text ──────────────────────
+            # ── Merge teacher objectives + extracted file text ──────────────
             full_objectives = objectives or ""
             if extracted_text.strip():
                 full_objectives = (
                     (full_objectives + "\n\n") if full_objectives else ""
                 ) + "ATTACHED MATERIALS:\n" + extracted_text
 
-            yield f"data: {json.dumps({'phase': 1, 'message': 'Generating curriculum outline...', 'progress': 10})}\n\n"
+            # ── Phase 1: Generate outline ───────────────────────────────────
+            yield f"data: {json.dumps({'phase': 1, 'message': 'Generating course outline...', 'progress': 10})}\n\n"
+
+            teacher_input = {
+                'age_range_start': age_range_start,
+                'age_range_end':   age_range_end,
+                'num_students':    num_students,
+                'subject':         subject,
+                'topic':           topic,
+                'num_days':        num_days,
+                'hours_per_day':   hours_per_day,
+                'num_worksheets':  num_worksheets,
+                'num_activities':  num_activities,
+                'objectives':      full_objectives,
+            }
 
             outline_data = await orchestrator.run_phase1(
-                {
-                    'age_range_start': age_range_start,
-                    'age_range_end':   age_range_end,
-                    'num_students':    num_students,
-                    'subject':         subject,
-                    'topic':           topic,
-                    'duration':        time_duration,
-                    'num_worksheets':  num_worksheets,
-                    'num_activities':  num_activities,
-                    'objectives':      full_objectives,
-                },
+                teacher_input,
                 images=vision_images or None,
             )
 
@@ -110,28 +113,43 @@ async def generate_curriculum(
                 yield f"data: {json.dumps({'phase': 1, 'message': 'Error: Failed to generate outline', 'progress': 0, 'error': True})}\n\n"
                 return
 
-            yield f"data: {json.dumps({'phase': 1, 'message': 'Outline generated!', 'progress': 80})}\n\n"
-            await asyncio.sleep(0.3)
+            yield f"data: {json.dumps({'phase': 1, 'message': 'Outline ready! Generating content blocks...', 'progress': 50})}\n\n"
+            await asyncio.sleep(0.2)
 
-            yield f"data: {json.dumps({'phase': 1, 'message': 'Saving curriculum...', 'progress': 90})}\n\n"
+            # ── Phase 2: Generate blocks for each subsection ────────────────
+            blocks_by_subsection: Dict = {}
+            async for event in orchestrator.run_phase2_blocks(
+                teacher_input, outline_data, num_worksheets, num_activities
+            ):
+                if event['type'] == 'progress':
+                    yield f"data: {json.dumps({'phase': 2, 'message': event['message'], 'progress': event['progress']})}\n\n"
+                    await asyncio.sleep(0)
+                elif event['type'] == 'done':
+                    blocks_by_subsection = event['blocks_by_subsection']
 
+            yield f"data: {json.dumps({'phase': 2, 'message': 'Blocks generated! Saving...', 'progress': 95})}\n\n"
+            await asyncio.sleep(0.2)
+
+            # ── Save everything to Firestore ────────────────────────────────
             curriculum_id = await firebase.save_curriculum(
                 teacherUid=teacherUid,
                 curriculum_data={
-                    'course_name':     course_name,
-                    'age_range_start': age_range_start,
-                    'age_range_end':   age_range_end,
-                    'num_students':    num_students,
-                    'subject':         subject,
-                    'topic':           topic,
-                    'duration':        time_duration,
+                    'course_name':          course_name,
+                    'age_range_start':      age_range_start,
+                    'age_range_end':        age_range_end,
+                    'num_students':         num_students,
+                    'subject':              subject,
+                    'topic':                topic,
+                    'num_days':             num_days,
+                    'hours_per_day':        hours_per_day,
                     'outline':         outline_data,
                     'sections':        outline_data.get('sections', []),
+                    'handsOnResources': blocks_by_subsection,
                 },
                 organizationId=organizationId,
             )
 
-            yield f"data: {json.dumps({'phase': 1, 'message': 'Complete!', 'progress': 100, 'curriculum_id': curriculum_id, 'done': True})}\n\n"
+            yield f"data: {json.dumps({'phase': 2, 'message': 'Complete!', 'progress': 100, 'curriculum_id': curriculum_id, 'done': True})}\n\n"
 
         except Exception as e:
             logger.error(f"generate-curriculum error: {e}", exc_info=True)
@@ -1142,10 +1160,10 @@ class GenerateDescriptionRequest(BaseModel):
     courseName: str
     subject: Optional[str] = ""
     topic: Optional[str] = ""
-    ageRangeStart: Optional[str] = ""
-    ageRangeEnd: Optional[str] = ""
-    numStudents: Optional[str] = ""
-    timeDuration: Optional[str] = ""
+    ageRangeStart: Optional[Any] = ""
+    ageRangeEnd: Optional[Any] = ""
+    numStudents: Optional[Any] = ""
+    timeDuration: Optional[Any] = ""
     timeUnit: Optional[str] = ""
     objectives: Optional[str] = ""
     teacherUid: Optional[str] = None
@@ -1158,20 +1176,24 @@ async def generate_description(request: GenerateDescriptionRequest):
     Describes student learning outcomes and the general theme of the course.
     """
     try:
+        age_start = str(request.ageRangeStart) if request.ageRangeStart not in (None, "", 0) else ""
+        age_end   = str(request.ageRangeEnd)   if request.ageRangeEnd   not in (None, "", 0) else ""
+        duration  = str(request.timeDuration)  if request.timeDuration  not in (None, "", 0) else ""
+
         age_info = ""
-        if request.ageRangeStart and request.ageRangeEnd:
-            age_info = f" designed for students aged {request.ageRangeStart}–{request.ageRangeEnd}"
-        elif request.ageRangeStart:
-            age_info = f" designed for students aged {request.ageRangeStart}+"
+        if age_start and age_end:
+            age_info = f" designed for students aged {age_start}–{age_end}"
+        elif age_start:
+            age_info = f" designed for students aged {age_start}+"
 
         subject_info = f" in {request.subject}" if request.subject else ""
         topic_info = f", focusing on {request.topic}" if request.topic else ""
 
         duration_info = ""
-        if request.timeDuration and request.timeUnit:
-            duration_info = f" The course spans {request.timeDuration} {request.timeUnit}."
-        elif request.timeDuration:
-            duration_info = f" The course runs for {request.timeDuration}."
+        if duration and request.timeUnit:
+            duration_info = f" The course spans {duration} {request.timeUnit}."
+        elif duration:
+            duration_info = f" The course runs for {duration}."
 
         objectives_info = f"\n\nThe teacher has outlined the following goals and notes:\n{request.objectives}" if request.objectives else ""
 

@@ -32,6 +32,7 @@ const CourseWorkspace = () => {
     isOwner: incomingIsOwner,
     isCollaborator: incomingIsCollaborator,
     targetFolderId,
+    handsOnResources: incomingHandsOnResources,
   } = location.state || {};
 
   const [curriculumId, setCurriculumId] = useState(initialCurriculumId);
@@ -50,7 +51,7 @@ const CourseWorkspace = () => {
   const [history, setHistory] = useState([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [videosByTopic, setVideosByTopic] = useState({});
-  const [handsOnResources, setHandsOnResources] = useState({});
+  const [handsOnResources, setHandsOnResources] = useState(incomingHandsOnResources || {});
   const [organizationId, setOrganizationId] = useState(null);
   const [isPublic, setIsPublic] = useState(incomingIsPublic || false);
   const [readOnly] = useState(incomingReadOnly || false);

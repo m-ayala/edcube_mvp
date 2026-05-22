@@ -9,7 +9,8 @@ Phase 2 and Phase 3 are commented out for testing.
 
 import logging
 import asyncio
-from typing import Dict, List, Optional
+import time
+from typing import Dict, List, Optional, AsyncGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -28,108 +29,148 @@ class CurriculumOrchestrator:
     
     async def run_phase1(self, teacher_input: Dict, images: Optional[List[str]] = None) -> Dict:
         """
-        Run Phase 1: Generate curriculum boxes/topics
-
-        Args:
-            teacher_input: Dictionary containing:
-                - grade_level: str
-                - subject: str
-                - topic: str
-                - duration: str (e.g., "8 hours", "2 weeks")
-                - num_worksheets: int
-                - num_activities: int
-                - objectives: str (optional)
-            images: Optional list of base64 data URIs for reference images
-
-        Returns:
-            dict: Outline data with generated boxes
+        Run Phase 1: Generate course outline (sections = days, subsections = hours).
         """
         from outliner.outline_generator import generate_boxes, create_final_outline
 
         logger.info(f"Running Phase 1 for: {teacher_input.get('topic', 'Unknown')}")
 
         try:
-            # Convert duration string to minutes
-            duration_str = teacher_input.get('duration', '8 hours')
-            total_minutes = self._parse_duration_to_minutes(duration_str)
+            num_days = teacher_input.get('num_days', 1)
+            hours_per_day = teacher_input.get('hours_per_day', 1.0)
 
-            # Add total_minutes and requirements fields expected by generate_boxes
             teacher_input_formatted = {
                 'age_range_start': teacher_input.get('age_range_start', ''),
                 'age_range_end':   teacher_input.get('age_range_end', ''),
                 'num_students':    teacher_input.get('num_students', ''),
                 'subject':         teacher_input.get('subject'),
                 'topic':           teacher_input.get('topic'),
-                'duration':        duration_str,
-                'total_minutes':   total_minutes,
-                'requirements':    teacher_input.get('objectives', 'None')
+                'num_days':        num_days,
+                'hours_per_day':   hours_per_day,
+                'requirements':    teacher_input.get('objectives', 'None'),
             }
 
-            # Generate outline (sections + subsections)
+            # Call synchronously — blocks the event loop but acceptable for single-user SSE
             outline_data = generate_boxes(teacher_input_formatted, images=images)
-            
+
             if not outline_data:
                 logger.error("Phase 1 failed: No outline generated")
                 return None
-            
+
             logger.info(f"Phase 1 complete: Generated {len(outline_data.get('sections', []))} sections")
-            
-            # Build final outline with computed fields
-            outline = create_final_outline(outline_data)
-            
-            return outline
-            
+            return create_final_outline(outline_data)
+
         except Exception as e:
             logger.error(f"Phase 1 error: {e}", exc_info=True)
             return None
-    
-    def _parse_duration_to_minutes(self, duration_str: str) -> int:
+
+    async def run_phase2_blocks(
+        self,
+        teacher_input: Dict,
+        outline_data: Dict,
+        num_worksheets: int,
+        num_activities: int,
+    ) -> AsyncGenerator[Dict, None]:
         """
-        Parse duration string to minutes.
-        
-        Args:
-            duration_str: Duration string like "8 hours", "90 minutes", "2 weeks"
-        
-        Returns:
-            int: Total minutes
+        Phase 2: Generate content blocks for every subsection in the outline.
+
+        Yields dicts:
+          {'type': 'progress', 'message': str, 'progress': int}
+          {'type': 'done', 'blocks_by_subsection': {subsection_id: [block, ...]}}
         """
-        duration_str = duration_str.lower().strip()
-        
-        # Handle hours
-        if 'hour' in duration_str:
+        from outliner.block_prompts import get_block_generation_prompt
+        from utils.llm_handler import call_openai
+
+        sections = outline_data.get('sections', [])
+        all_pairs = [
+            (section, sub)
+            for section in sections
+            for sub in section.get('subsections', [])
+        ]
+        total_subs = len(all_pairs)
+
+        if total_subs == 0:
+            yield {'type': 'done', 'blocks_by_subsection': {}}
+            return
+
+        # Distribute worksheets evenly across subsections
+        worksheet_indices: set = set()
+        if num_worksheets > 0:
+            step = total_subs / num_worksheets
+            for i in range(min(num_worksheets, total_subs)):
+                worksheet_indices.add(round(i * step))
+
+        # Distribute activities evenly, nudging off worksheet slots when possible
+        activity_indices: set = set()
+        if num_activities > 0:
+            step = total_subs / num_activities
+            for i in range(min(num_activities, total_subs)):
+                idx = round(i * step)
+                if idx in worksheet_indices and idx + 1 < total_subs:
+                    idx += 1
+                activity_indices.add(idx)
+
+        blocks_by_subsection: Dict[str, List] = {}
+        hours_per_day = int(teacher_input.get('hours_per_day', 1)) or 1
+
+        for flat_idx, (section, sub) in enumerate(all_pairs):
+            sub_id = sub.get('id', f'sub-{flat_idx}')
+            section_title = section.get('title', f'Day {flat_idx + 1}')
+            hour_num = (flat_idx % hours_per_day) + 1
+
+            pct = 55 + int(flat_idx / total_subs * 40)
+            yield {
+                'type': 'progress',
+                'message': f'Generating blocks: {section_title} — Hour {hour_num} ({flat_idx + 1}/{total_subs})',
+                'progress': pct,
+            }
+
+            worksheet_slots = 1 if flat_idx in worksheet_indices else 0
+            activity_slots = 1 if flat_idx in activity_indices else 0
+
             try:
-                hours = float(duration_str.split('hour')[0].strip())
-                return int(hours * 60)
-            except:
-                pass
-        
-        # Handle minutes
-        if 'min' in duration_str:
-            try:
-                minutes = int(duration_str.split('min')[0].strip())
-                return minutes
-            except:
-                pass
-        
-        # Handle days (assume 1 hour per day of instruction)
-        if 'day' in duration_str:
-            try:
-                days = int(duration_str.split('day')[0].strip())
-                return days * 60
-            except:
-                pass
-        
-        # Handle weeks (assume 5 hours per week)
-        if 'week' in duration_str:
-            try:
-                weeks = int(duration_str.split('week')[0].strip())
-                return weeks * 300  # 5 hours = 300 minutes
-            except:
-                pass
-        
-        # Default to 480 minutes (8 hours)
-        logger.warning(f"Could not parse duration '{duration_str}', defaulting to 480 minutes (8 hours)")
-        return 480
+                prompt = get_block_generation_prompt(
+                    teacher_input={
+                        'age_range_start': teacher_input.get('age_range_start', ''),
+                        'age_range_end':   teacher_input.get('age_range_end', ''),
+                        'subject':         teacher_input.get('subject', ''),
+                        'topic':           teacher_input.get('topic', ''),
+                        'requirements':    teacher_input.get('objectives', 'None'),
+                    },
+                    subsection=sub,
+                    section_title=section_title,
+                    worksheet_slots=worksheet_slots,
+                    activity_slots=activity_slots,
+                )
+
+                result = call_openai(
+                    prompt,
+                    system_message=(
+                        "You are an expert elementary education curriculum designer. "
+                        "Generate content blocks as valid JSON only."
+                    ),
+                )
+
+                # Defensively extract the blocks list
+                raw_blocks = result.get('blocks', []) if isinstance(result, dict) else []
+                if not isinstance(raw_blocks, list):
+                    raw_blocks = []
+
+                stamped = []
+                for block in raw_blocks:
+                    if not isinstance(block, dict):
+                        continue  # skip malformed entries
+                    block['id'] = f"block-{sub_id}-{int(time.time() * 1000)}-{len(stamped)}"
+                    block.setdefault('addedAt', None)
+                    stamped.append(block)
+
+            except Exception as e:
+                logger.error(f"Block generation failed for subsection {sub_id}: {e}", exc_info=True)
+                stamped = []
+
+            blocks_by_subsection[sub_id] = stamped
+
+        yield {'type': 'done', 'blocks_by_subsection': blocks_by_subsection}
     
     # PHASE 2 METHODS - COMMENTED OUT FOR PHASE 1 TESTING
     # Uncomment these when ready to test Phase 2

@@ -43,8 +43,8 @@ const CourseDesigner = () => {
     ageRangeStart: '',
     ageRangeEnd: '',
     numStudents: '',
-    timeDuration: '',
-    timeUnit: 'hours',
+    numDays: '',
+    hoursPerDay: '',
     subject: '',
     topic: '',
     numWorksheets: 1,
@@ -129,14 +129,15 @@ const CourseDesigner = () => {
       body.append('age_range_start',  String(parseInt(formData.ageRangeStart)));
       body.append('age_range_end',    String(parseInt(formData.ageRangeEnd)));
       body.append('num_students',     String(parseInt(formData.numStudents)));
-      body.append('subject',        formData.subject);
-      body.append('topic',          formData.topic);
-      body.append('time_duration',  `${formData.timeDuration} ${formData.timeUnit}`);
-      body.append('num_worksheets', String(parseInt(formData.numWorksheets)));
-      body.append('num_activities', String(parseInt(formData.numActivities)));
-      body.append('objectives',     formData.objectives || '');
-      body.append('teacherUid',     currentUser.uid);
-      body.append('organizationId', organizationId);
+      body.append('subject',          formData.subject);
+      body.append('topic',            formData.topic);
+      body.append('num_days',         String(parseInt(formData.numDays)));
+      body.append('hours_per_day',    String(parseFloat(formData.hoursPerDay)));
+      body.append('num_worksheets',   String(parseInt(formData.numWorksheets)));
+      body.append('num_activities',   String(parseInt(formData.numActivities)));
+      body.append('objectives',       formData.objectives || '');
+      body.append('teacherUid',       currentUser.uid);
+      body.append('organizationId',   organizationId);
       attachedFiles.forEach(({ file }) => body.append('files', file));
 
       const response = await fetch(
@@ -186,6 +187,7 @@ const CourseDesigner = () => {
       console.log('SSE complete. curriculumId =', curriculumId);
 
       let sections = [];
+      let handsOnResources = {};
       if (curriculumId) {
         const curriculumResponse = await fetch(
           `${import.meta.env.VITE_API_BASE_URL}/api/curricula/${curriculumId}?teacherUid=${currentUser.uid}`
@@ -204,7 +206,7 @@ const CourseDesigner = () => {
               id: `topic-${sub.id}-initial`,
               title: sub.title,
               description: sub.description || '',
-              duration_minutes: sub.duration_minutes || 20,
+              duration_minutes: sub.duration_minutes || 60,
               pla_pillars: sub.pla_pillars || [],
               learning_objectives: sub.learning_objectives || [],
               content_keywords: sub.content_keywords || [],
@@ -214,11 +216,14 @@ const CourseDesigner = () => {
             }]
           }))
         }));
+
+        // Pre-generated blocks keyed by subsection ID
+        handsOnResources = curriculumData.handsOnResources || {};
       }
 
       trackAiOutlineGenerated({ subject: formData.subject, grade: formData.ageRangeStart, sections_count: sections.length });
       navigate('/course-workspace', {
-        state: { formData, sections, isEditing: true, curriculumId, targetFolderId }
+        state: { formData, sections, isEditing: true, curriculumId, targetFolderId, handsOnResources }
       });
 
     } catch (error) {
@@ -348,52 +353,58 @@ const CourseDesigner = () => {
             </div>
           </div>
 
-          {/* Number of Students + Duration */}
+          {/* Number of Students */}
+          <div style={{ marginBottom: '18px' }}>
+            <label style={labelStyle}>
+              Number of Students <span style={{ fontWeight: '400', color: '#a0aec0', fontSize: '13px' }}>(approximate is fine)</span>
+            </label>
+            <select
+              name="numStudents"
+              value={formData.numStudents}
+              onChange={handleChange}
+              required
+              disabled={loading}
+              style={{ ...inputStyle, maxWidth: '200px' }}
+            >
+              <option value="">Select</option>
+              {Array.from({ length: 40 }, (_, i) => i + 1).map(n => (
+                <option key={n} value={n}>{n}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Number of Days + Hours per Day */}
           <div style={{ display: 'flex', gap: '16px', marginBottom: '18px' }}>
             <div style={{ flex: 1 }}>
-              <label style={labelStyle}>
-                Number of Students <span style={{ fontWeight: '400', color: '#a0aec0', fontSize: '13px' }}>(approximate is fine)</span>
-              </label>
-              <select
-                name="numStudents"
-                value={formData.numStudents}
+              <label style={labelStyle}>Number of Days</label>
+              <input
+                type="number"
+                name="numDays"
+                value={formData.numDays}
                 onChange={handleChange}
                 required
                 disabled={loading}
+                min="1"
+                max="30"
+                placeholder="e.g., 5"
                 style={inputStyle}
-              >
-                <option value="">Select</option>
-                {Array.from({ length: 40 }, (_, i) => i + 1).map(n => (
-                  <option key={n} value={n}>{n}</option>
-                ))}
-              </select>
+              />
             </div>
             <div style={{ flex: 1 }}>
-              <label style={labelStyle}>Time Duration</label>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <input
-                  type="number"
-                  name="timeDuration"
-                  value={formData.timeDuration}
-                  onChange={handleChange}
-                  required
-                  disabled={loading}
-                  min="1"
-                  placeholder="e.g., 6"
-                  style={{ ...inputStyle, flex: 1 }}
-                />
-                <select
-                  name="timeUnit"
-                  value={formData.timeUnit}
-                  onChange={handleChange}
-                  disabled={loading}
-                  style={{ ...inputStyle, width: 'auto', paddingRight: '28px' }}
-                >
-                  <option value="minutes">minutes</option>
-                  <option value="hours">hours</option>
-                  <option value="weeks">weeks</option>
-                </select>
-              </div>
+              <label style={labelStyle}>Teaching Hours per Day</label>
+              <input
+                type="number"
+                name="hoursPerDay"
+                value={formData.hoursPerDay}
+                onChange={handleChange}
+                required
+                disabled={loading}
+                min="0.5"
+                max="8"
+                step="0.5"
+                placeholder="e.g., 2"
+                style={inputStyle}
+              />
             </div>
           </div>
 

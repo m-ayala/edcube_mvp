@@ -8,14 +8,8 @@ from typing import Dict
 
 def get_box_generation_prompt(teacher_input: Dict, has_images: bool = False) -> str:
     """
-    Generate the prompt for creating a GROUPED course outline.
-    Output is sections (chapters) containing subsections (individual lessons).
-    
-    Args:
-        teacher_input: Teacher's requirements (grade, subject, topic, duration, etc.)
-    
-    Returns:
-        str: Prompt for LLM
+    Generate the prompt for creating a course outline.
+    Sections = teaching days. Subsections = hour-long lessons within each day.
     """
     age_range_start = teacher_input.get('age_range_start', '')
     age_range_end = teacher_input.get('age_range_end', '')
@@ -23,12 +17,12 @@ def get_box_generation_prompt(teacher_input: Dict, has_images: bool = False) -> 
     age_range = f"{age_range_start}–{age_range_end} years old"
     subject = teacher_input['subject']
     topic = teacher_input['topic']
-    duration = teacher_input['duration']
-    total_minutes = teacher_input['total_minutes']
+    num_days = teacher_input['num_days']
+    hours_per_day = teacher_input['hours_per_day']
     requirements = teacher_input['requirements']
 
-    # Target 2x content so teacher has flexibility
-    target_total_minutes = total_minutes * 2
+    # Each subsection = 1 hour. Number of subsections per section = hours_per_day.
+    subsections_per_day = int(hours_per_day) if hours_per_day == int(hours_per_day) else hours_per_day
 
     image_instruction = ""
     if has_images:
@@ -44,88 +38,85 @@ Incorporate all relevant details extracted from the images into the course outli
 """
 
     prompt = f"""
-You are an expert elementary education curriculum designer. Generate a structured course outline for the following topic. The outline must be organized into SECTIONS (logical chapters) and SUBSECTIONS (individual lessons within each chapter).
+You are an expert elementary education curriculum designer. Generate a structured course outline for the following topic.
+
+TIME MODEL:
+- Each SECTION = one teaching DAY
+- Each SUBSECTION = one HOUR of teaching within that day
+- You will later generate content blocks (15–45 min each) that fill each subsection/hour
+
 {image_instruction}
 TEACHER INPUT:
 - Student Age Range: {age_range}
 - Number of Students: {num_students}
 - Subject: {subject}
 - Topic: {topic}
-- Available Teaching Time: {duration} ({total_minutes} minutes)
+- Course Length: {num_days} day(s), {hours_per_day} teaching hour(s) per day
 - Special Requirements: {requirements}
 
 PLA FRAMEWORK (every subsection must map to one or more of these pillars):
 {OutlinerConfig.PLA_FRAMEWORK}
 
 WHAT SECTIONS AND SUBSECTIONS MEAN:
-- A SECTION is a logical chapter or grouping. It groups related lessons together.
-- A SUBSECTION is one individual lesson inside that chapter. Each subsection is one teachable unit with its own topic box, resources, and hands-on activities.
+- A SECTION = one full teaching day. Title it "Day N: [specific aspect of {topic}]". Generate EXACTLY {num_days} section(s).
+- A SUBSECTION = one hour-long lesson within that day. Each day must have EXACTLY {subsections_per_day} subsection(s). The subsection's duration_minutes field must be 60.
+- Content blocks (worksheets, activities, explanations) will be generated separately — do NOT include them here.
 
 CRITICAL SPECIFICITY RULES:
 - ALL titles and descriptions must be SPECIFIC to "{topic}" for students aged {age_range} — never use generic filler
-- Section titles must name the specific aspect of "{topic}" being explored, NOT generic labels like "Introduction", "Core Concepts", "Advanced Topics", or "Review and Assessment"
-- Subsection titles must describe the EXACT learning activity or concept — start with an activity type when possible: "Watch:", "Experiment:", "Visual Models:", "Discussion:", "Practice:", "Read:", "Draw:", "Sort:", "Compare:", etc.
-- The subsection title should tell a teacher EXACTLY what happens during this learning block
-- Subsection descriptions must be 2-3 sentences with CONCRETE details about what students will do and learn — not vague summaries. Keep descriptions under 400 characters.
+- Section titles must name the specific aspect of "{topic}" covered that day (e.g. "Day 1: What Is the Water Cycle and Why Does It Matter?")
+- Subsection titles must describe the EXACT concept or skill for that hour — start with an activity hint when possible: "Understanding:", "Exploring:", "Practicing:", "Investigating:", "Comparing:", "Applying:", etc.
+- Subsection descriptions must be 2-3 sentences with CONCRETE details about what students will learn — not vague summaries. Keep descriptions under 400 characters.
 - Learning objectives must use measurable action verbs (identify, explain, compare, demonstrate, calculate, describe, list, classify) and reference specific content from "{topic}"
 - Content keywords must be precise enough that searching YouTube for "{age_range_start}-{age_range_end} year old [keyword]" would find relevant educational videos
 - what_must_be_covered must detail the SPECIFIC facts, concepts, or skills — as if briefing a substitute teacher
 
 BAD EXAMPLES (too generic — DO NOT do this):
 - Section: "Introduction to the Topic" / "Foundational Concepts" / "Exploring Key Ideas"
-- Subsection: "Key Vocabulary" / "Main Ideas" / "Practice and Review" / "Introduction" / "Key Facts" / "Wrap Up"
+- Subsection: "Key Vocabulary" / "Main Ideas" / "Practice and Review" / "Introduction" / "Wrap Up"
 - Learning objective: "Students will understand the topic" / "Students will learn key concepts"
 - Content keyword: "introduction" / "basics" / "review"
 
-GOOD EXAMPLES (for topic "The Water Cycle", ages 8–9):
-- Section: "Where Does Rain Come From? — Understanding Evaporation and Condensation"
-- Subsection: "Watch: How the Sun Turns Puddles Into Water Vapor" (10 min)
-  Description: "Students watch a short video showing how heat from the sun causes water to change from liquid to invisible gas. Real-life examples include puddles drying up on a sunny day and wet clothes drying on a clothesline. Introduces vocabulary: evaporation, water vapor, heat energy."
-- Subsection: "Experiment: Measuring Evaporation with Two Cups of Water" (15 min)
-  Description: "Students place two cups of water — one in direct sunlight and one in the shade — and predict which will lose more water. They measure and record water levels over time to observe evaporation in action."
-- Learning objective: "Students will explain how heat from the sun causes water to evaporate from lakes, rivers, and oceans"
-- Content keywords: ["water cycle evaporation", "sun heats water", "water vapor for kids", "evaporation experiment grade 3"]
-
-GOOD EXAMPLES (for topic "Fractions", ages 10–11):
-- Section: "What Are Fractions? — Dividing Wholes into Equal Parts"
-- Subsection: "Visual Models: Using Fraction Bars to Show 1/2, 1/3, and 1/4" (10 min)
-  Description: "Students use fraction bar manipulatives to see how wholes divide into equal parts, comparing the size of 1/2, 1/3, and 1/4 pieces side by side. Teaches numerator (parts taken) and denominator (total equal parts)."
-- Subsection: "Word Problems: Sharing Pizza Slices with Friends" (15 min)
-  Description: "Students solve real-world fraction problems about dividing pizza equally among friends, writing fractions with correct numerator and denominator. Practice naming fractions from pictures: 1/2, 1/3, 1/4, 2/3, 3/4."
-- Learning objective: "Students will identify and name fractions using real-world examples of dividing food into equal parts"
-- Content keywords: ["fractions for kids grade 5", "naming fractions pizza", "numerator denominator", "equal parts fractions"]
+GOOD EXAMPLES (for topic "The Water Cycle", ages 8–9, 2 days × 2 hours/day):
+- Section: "Day 1: Where Does Water Go? — Evaporation and Condensation"
+  - Subsection 1: "Understanding: How the Sun Turns Water Into Invisible Vapor" (60 min)
+    Description: "Students explore evaporation by observing how heat from the sun causes liquid water to become water vapor. Real-life examples: puddles drying up, wet laundry on a line. Key vocabulary: evaporate, water vapor, heat energy."
+  - Subsection 2: "Exploring: How Water Vapor Becomes Clouds — Condensation in Action" (60 min)
+    Description: "Students learn how rising water vapor cools and condenses into tiny droplets that form clouds. They observe condensation on a cold glass and connect it to cloud formation."
+- Section: "Day 2: Completing the Cycle — Precipitation and Runoff"
+  - Subsection 1: "Investigating: Why Does It Rain? Understanding Precipitation" (60 min)
+  - Subsection 2: "Applying: Tracing Water from Rain to River to Ocean" (60 min)
 
 DESIGN RULES:
-1. Generate 3-5 sections total
-2. Each section must have 2-4 subsections
-3. Each subsection is one lesson: 15-30 minutes, independently teachable
-4. Target ~{target_total_minutes} total minutes across ALL subsections (2x teacher time for flexibility)
-5. Topics must be specific yet well-known enough to find YouTube videos, worksheets, and activities for
-6. Every subsection needs specific learning objectives and content keywords (these are used later by an automated system to find real resources — vague keywords will find bad or irrelevant resources)
-7. Section and subsection descriptions should be clear enough for a teacher to understand the lesson at a glance
-8. Sections should flow in a logical teaching order (foundational knowledge first, then deeper dives, then application/synthesis)
+1. Generate EXACTLY {num_days} section(s) — one per teaching day
+2. Each section must have EXACTLY {subsections_per_day} subsection(s) — one per teaching hour
+3. Every subsection has duration_minutes = 60
+4. Sections must flow in logical teaching order (foundational concepts first, then deeper dives, then application)
+5. Topics must be specific yet well-known enough to find YouTube videos and worksheets for
+6. Every subsection needs specific learning objectives and content keywords (used by an automated system to find real resources — vague keywords will find irrelevant resources)
 
 OUTPUT FORMAT (strict JSON, no other text):
 {{
 "topic": "{topic}",
 "age_range": "{age_range}",
 "subject": "{subject}",
-"teacher_time_budget_minutes": {total_minutes},
+"num_days": {num_days},
+"hours_per_day": {hours_per_day},
 "sections": [
 {{
     "section_id": "section_1",
-    "title": "string (specific chapter name tied to {topic})",
-    "description": "string (what this chapter covers with specific subtopics mentioned, 2-3 sentences, max 400 characters)",
+    "title": "Day 1: [specific aspect of {topic}]",
+    "description": "string (what this day covers with specific subtopics mentioned, 2-3 sentences, max 400 characters)",
     "subsections": [
     {{
         "subsection_id": "section_1_sub_1",
-        "title": "string (activity-specific title, e.g. 'Watch: How Volcanoes Erupt' or 'Experiment: Building a Baking Soda Volcano')",
-        "description": "string (2-3 sentences with concrete details about what students will DO and LEARN — name specific activities, materials, examples, and vocabulary; max 400 characters)",
-        "duration_minutes": 0,
+        "title": "string (e.g. 'Understanding: How Volcanoes Form' or 'Investigating: The Role of Tectonic Plates')",
+        "description": "string (2-3 sentences with concrete details about what students will DO and LEARN — name specific concepts, vocabulary, and examples; max 400 characters)",
+        "duration_minutes": 60,
         "pla_pillars": ["Self-Knowledge", "Knowledge", "Wisdom", "Application"],
         "learning_objectives": ["string - specific, measurable goals using action verbs and referencing actual content"],
         "content_keywords": ["string - precise terms for finding YouTube videos and worksheets appropriate for ages {age_range_start}–{age_range_end}"],
-        "what_must_be_covered": "string - detailed content brief as if instructing a substitute teacher: specific facts, vocabulary, examples, and activities"
+        "what_must_be_covered": "string - detailed content brief as if instructing a substitute teacher: specific facts, vocabulary, examples"
     }}
     ]
 }}
@@ -133,10 +124,11 @@ OUTPUT FORMAT (strict JSON, no other text):
 }}
 
 IMPORTANT:
-- Be VERY specific in learning_objectives, content_keywords, and what_must_be_covered. These are used by an automated system to find real YouTube videos and worksheets — vague or generic keywords will find irrelevant resources and ruin the course.
-- All content must be age-appropriate for students aged {age_range_start}–{age_range_end} years old. Calibrate vocabulary, examples, and complexity accordingly.
-- Worksheets and activities are NOT generated here — leave them out entirely
+- Be VERY specific in learning_objectives, content_keywords, and what_must_be_covered.
+- All content must be age-appropriate for students aged {age_range_start}–{age_range_end} years old.
+- Do NOT include worksheets or activities in the outline — those are generated separately per subsection.
 - Address teacher's requirements: {requirements}
+- STRICTLY generate {num_days} section(s) with {subsections_per_day} subsection(s) each.
 
 Generate the course outline now as valid JSON only. No other text.
 """
