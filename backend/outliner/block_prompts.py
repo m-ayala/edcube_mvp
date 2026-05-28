@@ -9,6 +9,8 @@ from typing import Dict
 # Canonical lists used by the rest of the system (kept in sync with frontend)
 WORKSHEET_TYPES = [
     "fill in the blanks",
+    "comprehension",
+    "answering questions",
     "name the images",
     "matching",
     "drawing",
@@ -95,11 +97,23 @@ def get_block_generation_prompt(
         worksheet_instruction = f"""
 WORKSHEET BLOCK (include exactly 1):
 - type: "worksheet"
-- worksheetType: one of {WORKSHEET_TYPES}
-- Pick the type that best fits the learning objective
+- worksheetType: one of {WORKSHEET_TYPES} — pick the type best suited to the age group and learning objective
 - duration_minutes: 15
-- Title should describe exactly what students do (e.g. "Label the Parts of a Flower")
-- Content field: concise instructions for the teacher on how to run it (what students fill in, match, draw, etc.)
+- Title should describe exactly what the worksheet is (e.g. "Label the Parts of a Flower")
+- Content field must follow this exact structure:
+
+**Learning Objectives:**
+Students will [verb] [specific thing].
+
+**Duration:** Approximately 15 minutes for students to complete.
+
+**Worksheet Type:** [chosen type from the list above]
+
+**Worksheet Content:**
+[WRITE THE COMPLETE VERBATIM STUDENT-FACING WORKSHEET TEXT HERE — every word, sentence, blank, question, answer option, comprehension passage, or drawing prompt exactly as it would appear on the printed worksheet. Do NOT write instructions about what to generate — write the actual content. This must be complete enough for another system to generate a PDF directly from this text.]
+
+**Answer Key:**
+[Complete answers for every blank, question, or item, numbered to match the worksheet.]
 """
     else:
         worksheet_instruction = "- Do NOT include any worksheet block in this subsection."
@@ -109,11 +123,34 @@ WORKSHEET BLOCK (include exactly 1):
         activity_instruction = f"""
 ACTIVITY BLOCK (include exactly 1):
 - type: "activity"
-- activityType: one of {ACTIVITY_TYPES}
-- Pick the type that best fits the learning objective and age group
+- activityType: one of {ACTIVITY_TYPES} — pick the type best suited to the learning objective and age group
 - duration_minutes: 30
-- Title should describe exactly what students do (e.g. "Quiz: Water Cycle Vocabulary")
-- Content field: step-by-step instructions for the teacher to run the activity
+- Title should describe exactly what students do (e.g. "Build a Simple Robot Arm")
+- Content field must follow this exact structure:
+
+**Learning Objectives:**
+Students will [verb] [specific thing].
+
+**Duration:** 30 minutes
+
+**Activity Type:** [chosen type from the list above]
+
+**Resources/Materials Needed:**
+- [Material 1]
+- [Material 2]
+(use "None required" if no materials needed)
+
+**Steps to Conduct:**
+1. [Setup — what to prepare before students arrive]
+2. [Introduction — how to frame the activity for students]
+3. [Main activity — what students do, in detail]
+4. [Check / debrief question]
+5. [Wrap-up]
+
+**Management Tips:**
+- [Tip 1: specific behavioral or logistical guidance]
+- [Tip 2: grouping or pacing strategy]
+- [Tip 3: transition or early-finisher guidance]
 """
     else:
         activity_instruction = "- Do NOT include any activity block in this subsection."
@@ -145,15 +182,33 @@ CONTENT BLOCK(S) (include {content_slots}):
 - type: "content"
 - subcategory: one of {CONTENT_SUBCATEGORIES}
   Pick the subcategory that best describes the block (e.g. "Definitions" for vocab, "Process" for step-by-step, "Parts of" for anatomy, "Compare & Contrast" for comparisons)
-- duration_minutes: 15, 30, or 45
-- Title: specific and descriptive (e.g. "What Is Photosynthesis? — Definition and Key Terms")
-- Content field: full teacher-facing explanation structured as:
-  **What is [concept]?** [1-2 sentence definition]
+- duration_minutes: 15 (each content block covers one focused concept — keep blocks short)
+- Title: specific and descriptive (e.g. "What Is a Robot?", "Parts of a Robot", "Types of Robots")
+  IMPORTANT: Each block must cover EXACTLY ONE concept. Never bundle multiple concepts into one block.
+  If a subsection has several concepts (e.g. what it is, its parts, its types), generate a SEPARATE block for each.
+- Content field must follow this exact structure:
+
+  **Learning Objective:**
+  Students will [measurable verb] [specific concept].
+
+  **Description:**
+  [2-4 sentence plain explanation of THIS ONE concept — what it is, how it works, why it matters. Keep it simple and age-appropriate for {age_range}.]
+
   **Key [concept-specific noun]:**
-  - Point 1: explanation
-  - Point 2: explanation
-  **How to teach it:** 1. Opening hook → 2. Main explanation → 3. Mid-lesson check → 4. Common confusion to address → 5. Reinforcement
-  **Example:** One concrete, age-appropriate example.
+  - [Part or element 1]: brief explanation
+  - [Part or element 2]: brief explanation
+  - [Part or element 3]: brief explanation
+
+  **Pedagogy:**
+  How to teach this concept to {age_range} students:
+  1. Opening hook: [specific hook idea]
+  2. Main explanation: [what to say, show, or demonstrate]
+  3. Mid-lesson check: [one specific question to verify understanding]
+  4. Common confusion: [what students typically get wrong and how to fix it]
+  5. Reinforcement: [short activity, example, or prompt to make it stick]
+
+  **Example:**
+  [One concrete, specific, relatable example for {age_range}]
 
 {worksheet_instruction}
 
@@ -161,10 +216,12 @@ CONTENT BLOCK(S) (include {content_slots}):
 
 CONTENT QUALITY RULES:
 - Every block must be directly tied to "{topic}" for students aged {age_range}
-- Content blocks should progress logically within the hour (e.g. definition first, then process, then application)
+- Each content block covers EXACTLY ONE concept — never bundle multiple concepts into a single block
+- Content blocks should progress logically within the hour (e.g. definition first, then parts, then types, then application)
 - All vocabulary, examples, and complexity must be appropriate for ages {age_range_start}–{age_range_end}
 - Block titles must be specific — never generic like "Introduction" or "Review"
 - The total duration_minutes of all blocks combined must be between 30 and 60
+- Worksheet **Worksheet Content:** must be complete verbatim student text — not instructions about what to generate
 
 OUTPUT FORMAT (strict JSON, no other text):
 {{
@@ -173,8 +230,8 @@ OUTPUT FORMAT (strict JSON, no other text):
       "id": "auto",
       "type": "content",
       "subcategory": "string — from the content subcategory list",
-      "title": "string — specific block title",
-      "content": "string — full formatted content as described above",
+      "title": "string — specific single-concept block title (e.g. 'What Is a Robot?')",
+      "content": "**Learning Objective:**\\nStudents will [verb] [concept].\\n\\n**Description:**\\n[2-4 sentence plain explanation of this ONE concept]\\n\\n**Key [noun]:**\\n- [Part 1]: explanation\\n- [Part 2]: explanation\\n- [Part 3]: explanation\\n\\n**Pedagogy:**\\nHow to teach this concept to [age]-year-olds:\\n1. Opening hook: ...\\n2. Main explanation: ...\\n3. Mid-lesson check: ...\\n4. Common confusion: ...\\n5. Reinforcement: ...\\n\\n**Example:**\\n[Concrete example]",
       "duration_minutes": 15
     }},
     {{
@@ -182,7 +239,7 @@ OUTPUT FORMAT (strict JSON, no other text):
       "type": "worksheet",
       "worksheetType": "string — from the worksheet type list",
       "title": "string — specific worksheet title",
-      "content": "string — teacher instructions for running the worksheet",
+      "content": "**Learning Objectives:**\\nStudents will [verb] [thing].\\n\\n**Duration:** Approximately 15 minutes for students to complete.\\n\\n**Worksheet Type:** [type]\\n\\n**Worksheet Content:**\\n[Complete verbatim student-facing worksheet text]\\n\\n**Answer Key:**\\n[Complete answers numbered to match]",
       "duration_minutes": 15
     }},
     {{
@@ -190,7 +247,7 @@ OUTPUT FORMAT (strict JSON, no other text):
       "type": "activity",
       "activityType": "string — from the activity type list",
       "title": "string — specific activity title",
-      "content": "string — step-by-step teacher instructions",
+      "content": "**Learning Objectives:**\\nStudents will [verb] [thing].\\n\\n**Duration:** 30 minutes\\n\\n**Activity Type:** [type]\\n\\n**Resources/Materials Needed:**\\n- [Material 1]\\n- [Material 2]\\n\\n**Steps to Conduct:**\\n1. [Setup]\\n2. [Introduction]\\n3. [Main activity]\\n4. [Debrief]\\n5. [Wrap-up]\\n\\n**Management Tips:**\\n- [Tip 1]\\n- [Tip 2]\\n- [Tip 3]",
       "duration_minutes": 30
     }}
   ]

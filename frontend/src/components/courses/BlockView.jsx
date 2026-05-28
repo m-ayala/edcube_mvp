@@ -1,6 +1,6 @@
 // src/components/courses/BlockView.jsx
 import { useState, useEffect, useRef } from 'react';
-import { ExternalLink, Trash2, Plus, Sparkles, Loader2, Library, Check, X, Pencil } from 'lucide-react';
+import { ExternalLink, Trash2, Plus, Sparkles, Loader2, Library, Check, X, Pencil, Clock } from 'lucide-react';
 import { getLibraryFolders } from '../../firebase/dbService';
 
 const TYPE_COLORS = {
@@ -8,6 +8,8 @@ const TYPE_COLORS = {
   worksheet: { bg: '#FFF3E8', text: '#9A5C12', border: '#F5C98A', label: 'Worksheet' },
   activity:  { bg: '#EDFFF3', text: '#1E7C43', border: '#86EFAC', label: 'Activity' },
 };
+
+const DURATION_OPTIONS = [5, 10, 15, 20, 30, 45];
 
 const BlockView = ({
   block,
@@ -27,7 +29,9 @@ const BlockView = ({
   const [localContent, setLocalContent] = useState(block?.content || '');
   const [localCategory] = useState(block?.category || '');
   const [localSubcategory] = useState(block?.subcategory || '');
+  const [localDuration, setLocalDuration] = useState(block?.duration_minutes ?? 15);
   const [editingTitle, setEditingTitle] = useState(false);
+  const [editingDuration, setEditingDuration] = useState(false);
   const [isEditingContent, setIsEditingContent] = useState(false);
   const [links, setLinks] = useState(block?.links || []);
   const [newLinkUrl, setNewLinkUrl] = useState('');
@@ -62,9 +66,11 @@ const BlockView = ({
   useEffect(() => {
     setLocalTitle(block?.title || '');
     setLocalContent(block?.content || '');
+    setLocalDuration(block?.duration_minutes ?? 15);
     setLinks(block?.links || []);
     setEditingTitle(false);
     setIsEditingContent(false);
+    setEditingDuration(false);
   }, [block?.id]);
 
   // Sync links when background generation completes (block.links gets a new array ref)
@@ -199,10 +205,54 @@ const BlockView = ({
         {/* Block info card */}
         <div style={{ background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.08)', borderRadius: '12px', padding: '20px 24px', marginBottom: '24px', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
 
-          {/* Type label */}
-          <p style={{ margin: '0 0 4px', fontSize: '12px', fontWeight: '600', color: typeStyle.text, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            {typeStyle.label}
-          </p>
+          {/* Type label row — label on left, duration badge on right */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+            <p style={{ margin: 0, fontSize: '12px', fontWeight: '600', color: typeStyle.text, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              {typeStyle.label}
+            </p>
+
+            {/* Duration badge — click to edit */}
+            {editingDuration ? (
+              <select
+                autoFocus
+                value={localDuration}
+                onChange={e => {
+                  const val = Number(e.target.value);
+                  setLocalDuration(val);
+                  setEditingDuration(false);
+                  save({ duration_minutes: val });
+                }}
+                onBlur={() => setEditingDuration(false)}
+                style={{
+                  fontSize: '12px', fontWeight: '600', color: '#555',
+                  border: '1px solid #CBD5E1', borderRadius: '20px',
+                  padding: '3px 8px', outline: 'none', background: '#FFF',
+                  cursor: 'pointer',
+                }}
+              >
+                {DURATION_OPTIONS.map(opt => (
+                  <option key={opt} value={opt}>{opt} min</option>
+                ))}
+              </select>
+            ) : (
+              <button
+                onClick={() => setEditingDuration(true)}
+                title="Click to change duration"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '4px',
+                  fontSize: '12px', fontWeight: '600', color: '#666',
+                  background: '#F1F5F9', border: '1px solid #E2E8F0',
+                  borderRadius: '20px', padding: '3px 10px', cursor: 'pointer',
+                  transition: 'background 0.15s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = '#E2E8F0'}
+                onMouseLeave={e => e.currentTarget.style.background = '#F1F5F9'}
+              >
+                <Clock size={11} />
+                {localDuration} min
+              </button>
+            )}
+          </div>
 
           {/* Title — click to edit */}
           {editingTitle ? (

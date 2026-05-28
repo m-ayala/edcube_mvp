@@ -758,51 +758,87 @@ When the teacher asks for a resource block while focused on a TOPIC BOX:
   "new_resource_activity"  → an Activity block (hands-on engagement)
 
   CONTENT BLOCK — body format (MANDATORY — use ALL 5 sections, every time, no exceptions):
-    Do NOT generate short summaries, definitions only, or partial structures. Every content block MUST contain all 5 sections below. A content block without all 5 sections is malformed.
+    Each content block must cover EXACTLY ONE concept. Never bundle multiple concepts into a single block.
+    For example, for "Intro to Robotics": generate separate blocks for "What Is a Robot?", "Parts of a Robot", "Types of Robots" — never combine them.
+    Do NOT generate short summaries or partial structures. Every content block MUST contain all 5 sections below.
 
-    **What is [concept name]?**
-    A clear, age-appropriate definition in 1-2 sentences. Use simple words for young students.
+    **Learning Objective:**
+    Students will [measurable verb] [specific concept for this block only].
 
-    **Key [concept-specific noun] / components:**
+    **Description:**
+    [2-4 sentence plain explanation of this ONE concept — what it is, how it works, why it matters. Simple and clear for the course age group. Do NOT cover other related concepts here.]
+
+    **Key [concept-specific noun]:**
     - [Part or element 1]: brief explanation
     - [Part or element 2]: brief explanation
     - [Part or element 3]: brief explanation
-    (3-5 bullet points covering the main components, vocabulary, or sub-concepts — specific to the topic, not generic)
+    (3-5 bullet points — specific to this one concept, not generic)
 
-    **How to teach it:**
-    A step-by-step delivery guide for the teacher. Must include ALL of the following — never fewer than 5 steps:
-    1. Opening hook — how to introduce this concept to grab students' attention (1-2 sentences with a specific hook idea)
-    2. Main explanation — what to show, say, or demonstrate first; what analogy or visual to use
+    **Pedagogy:**
+    How to teach this concept to students at this age:
+    1. Opening hook — how to introduce this concept to grab students' attention
+    2. Main explanation — what to show, say, or demonstrate; what analogy or visual to use
     3. Mid-lesson check — one specific question to ask students to check understanding
     4. Common confusion — one thing students typically get wrong and exactly how to address it
     5. Reinforcement — a short activity, example, or prompt to make the concept stick
-    Suggested timing: state total minutes and rough per-step breakdown.
-    Each step must be a concrete teacher action — no vague suggestions.
-
-    **Things to consider:**
-    Tips, common misconceptions students have, or differentiation ideas. 1-2 sentences.
 
     **Example:**
     One concrete, specific example the teacher can use in class. Make it relatable to the course age group.
 
     Rules for content blocks:
     - ALWAYS include all 5 sections. Never skip any section. Never truncate.
-    - Adapt the header wording to the concept (e.g. "Key robot parts:" not "Key parts:", "Key printing steps:" not "Key parts:").
-    - Each option should focus on a meaningfully different angle of the same concept (e.g. one more visual/concrete, one more technical, one with a stronger analogy).
+    - Each block = ONE concept only. Generate separate blocks for related concepts.
+    - Adapt the header wording to the concept (e.g. "Key robot parts:" not "Key parts:").
+    - Each option should focus on a meaningfully different angle of the same concept.
     - Keep language age-appropriate. Simpler for younger students, more precise for older.
     - No URLs — teacher adds links separately.
-    label: short descriptive title starting with "What is…" or the concept name (e.g. "What Is a Robot?" or "3D Printer Basics")
+    label: short descriptive title for the ONE concept this block covers (e.g. "What Is a Robot?", "Parts of a Robot", "Types of Robots")
 
-  WORKSHEET BLOCK — body format:
-    Line 1: Type: [fill in the blanks | name the images | drawing | matching | multiple choice | essay writing]
+  WORKSHEET BLOCK — body format (MANDATORY — generate ALL sections with complete content):
+    The worksheet content field must contain the complete, ready-to-use worksheet. Do NOT write instructions about what to generate — write the actual content.
+
+    **Learning Objectives:**
+    Students will [verb] [specific thing].
+
+    **Duration:** Approximately [X] minutes for students to complete.
+
+    **Worksheet Type:** [fill in the blanks | comprehension | answering questions | name the images | matching | drawing | multiple choice | essay writing]
       — pick the type most appropriate for the course age range (e.g. no essay writing for under 7s)
-    Line 2: Keywords: [2-5 keyword phrases the worksheet covers, e.g. "robot parts, sensors, movement"]
-    Line 3-4: Brief description of what the worksheet asks students to do.
+
+    **Worksheet Content:**
+    [Write the COMPLETE verbatim student-facing worksheet text here — every word, sentence, blank (use ___ for blanks), question, answer option, matching pair, comprehension passage, or drawing prompt exactly as it would appear on the printed worksheet. This section must be complete enough for another system to generate a PDF directly from this text.]
+
+    **Answer Key:**
+    [Complete answers for every blank, question, or item, numbered to match the worksheet.]
+
     label: worksheet title (e.g. "Robot Parts Labelling Sheet")
 
-  ACTIVITY BLOCK — body format:
-    Line 1: Type: [quiz | discussion | experiment | teamwork | hands-on]
-    Line 2-4: Step-by-step teacher instructions — setup, grouping, what students do, timing, debrief question.
+  ACTIVITY BLOCK — body format (MANDATORY — generate ALL sections with complete content):
+
+    **Learning Objectives:**
+    Students will [verb] [specific thing].
+
+    **Duration:** [X] minutes
+
+    **Activity Type:** [quiz | discussion | experiment | teamwork | hands-on | game]
+
+    **Resources/Materials Needed:**
+    - [Material 1]
+    - [Material 2]
+    (use "None required" if no materials needed)
+
+    **Steps to Conduct:**
+    1. [Setup — what to prepare before students arrive]
+    2. [Introduction — how to frame the activity for students]
+    3. [Main activity — what students do, in detail]
+    4. [Check / debrief question]
+    5. [Wrap-up]
+
+    **Management Tips:**
+    - [Tip 1: specific behavioral or logistical guidance]
+    - [Tip 2: grouping or pacing strategy]
+    - [Tip 3: transition or early-finisher guidance]
+
     Be concrete and specific. Age-appropriate. No URLs — teacher adds links separately.
     label: activity title (e.g. "Build-a-Robot Relay Race")
 
@@ -902,7 +938,7 @@ Respond ONLY with valid JSON. No markdown, no preamble."""
         # Dynamic token ceiling: different intents need different room
         msg_lower = request.message.lower()
         if any(w in msg_lower for w in ['generate', 'add', 'create', 'make', 'give me', 'suggest', 'write me']):
-            max_tokens = 2500   # Card generation: 3 full blocks with all sections
+            max_tokens = 4000   # Card generation: full blocks with complete worksheet content + answer keys
         elif any(w in msg_lower for w in ['change', 'edit', 'rewrite', 'update', 'fix', 'improve', 'modify']):
             max_tokens = 1200   # Edit: partial text only
         else:
