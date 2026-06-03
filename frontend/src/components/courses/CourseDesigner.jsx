@@ -86,6 +86,7 @@ const CourseDesigner = () => {
         name: file.name,
         ext,
         preview: isImage ? URL.createObjectURL(file) : null,
+        description: '',
       };
     });
     setAttachedFiles(prev => [...prev, ...newEntries]);
@@ -109,6 +110,10 @@ const CourseDesigner = () => {
       copy.splice(index, 1);
       return copy;
     });
+  };
+
+  const updateFileDescription = (index, description) => {
+    setAttachedFiles(prev => prev.map((f, i) => i === index ? { ...f, description } : f));
   };
 
   const handleSubmit = async (e) => {
@@ -135,9 +140,10 @@ const CourseDesigner = () => {
       body.append('hours_per_day',    String(parseFloat(formData.hoursPerDay)));
       body.append('num_worksheets',   String(parseInt(formData.numWorksheets)));
       body.append('num_activities',   String(parseInt(formData.numActivities)));
-      body.append('objectives',       formData.objectives || '');
-      body.append('teacherUid',       currentUser.uid);
-      body.append('organizationId',   organizationId);
+      body.append('objectives',        formData.objectives || '');
+      body.append('teacherUid',        currentUser.uid);
+      body.append('organizationId',    organizationId);
+      body.append('file_descriptions', JSON.stringify(attachedFiles.map(f => f.description || '')));
       attachedFiles.forEach(({ file }) => body.append('files', file));
 
       const response = await fetch(
@@ -540,53 +546,74 @@ const CourseDesigner = () => {
 
           {/* Attached file list */}
           {attachedFiles.length > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {attachedFiles.map((f, idx) => {
                 const meta = FILE_TYPE_META[f.ext] || FILE_TYPE_META['pdf'];
                 const Icon = meta.icon;
                 return (
                   <div key={idx} style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px',
-                    padding: '10px 14px',
                     background: '#f7fafc',
                     border: '1px solid #e2e8f0',
                     borderRadius: '8px',
+                    overflow: 'hidden',
                   }}>
-                    {f.preview ? (
-                      <img
-                        src={f.preview}
-                        alt={f.name}
-                        style={{ width: '36px', height: '36px', objectFit: 'cover', borderRadius: '4px', flexShrink: 0 }}
-                      />
-                    ) : (
-                      <div style={{
-                        width: '36px', height: '36px', borderRadius: '6px',
-                        background: `${meta.color}18`, display: 'flex',
-                        alignItems: 'center', justifyContent: 'center', flexShrink: 0
-                      }}>
-                        <Icon size={18} color={meta.color} />
+                    {/* File header row */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px' }}>
+                      {f.preview ? (
+                        <img
+                          src={f.preview}
+                          alt={f.name}
+                          style={{ width: '36px', height: '36px', objectFit: 'cover', borderRadius: '4px', flexShrink: 0 }}
+                        />
+                      ) : (
+                        <div style={{
+                          width: '36px', height: '36px', borderRadius: '6px',
+                          background: `${meta.color}18`, display: 'flex',
+                          alignItems: 'center', justifyContent: 'center', flexShrink: 0
+                        }}>
+                          <Icon size={18} color={meta.color} />
+                        </div>
+                      )}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ margin: 0, fontSize: '13px', fontWeight: '500', color: '#2d3748', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {f.name}
+                        </p>
+                        <p style={{ margin: 0, fontSize: '11px', color: '#a0aec0' }}>{meta.label}</p>
                       </div>
-                    )}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ margin: 0, fontSize: '13px', fontWeight: '500', color: '#2d3748', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {f.name}
-                      </p>
-                      <p style={{ margin: 0, fontSize: '11px', color: '#a0aec0' }}>{meta.label}</p>
+                      <button
+                        type="button"
+                        onClick={() => removeFile(idx)}
+                        disabled={loading}
+                        style={{
+                          background: 'none', border: 'none', cursor: 'pointer',
+                          padding: '4px', borderRadius: '4px', color: '#a0aec0',
+                          display: 'flex', alignItems: 'center'
+                        }}
+                      >
+                        <X size={16} />
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => removeFile(idx)}
-                      disabled={loading}
-                      style={{
-                        background: 'none', border: 'none', cursor: 'pointer',
-                        padding: '4px', borderRadius: '4px', color: '#a0aec0',
-                        display: 'flex', alignItems: 'center'
-                      }}
-                    >
-                      <X size={16} />
-                    </button>
+                    {/* Description input */}
+                    <div style={{ padding: '0 14px 10px' }}>
+                      <input
+                        type="text"
+                        value={f.description}
+                        onChange={e => updateFileDescription(idx, e.target.value)}
+                        disabled={loading}
+                        placeholder="Add a note about this file (optional) — e.g. 'This is the syllabus'"
+                        style={{
+                          width: '100%',
+                          padding: '7px 10px',
+                          fontSize: '12px',
+                          border: '1px solid #e2e8f0',
+                          borderRadius: '6px',
+                          background: '#fff',
+                          outline: 'none',
+                          boxSizing: 'border-box',
+                          color: '#4a5568',
+                        }}
+                      />
+                    </div>
                   </div>
                 );
               })}

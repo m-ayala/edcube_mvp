@@ -14,6 +14,8 @@ import asyncio
 import logging
 import os
 import tempfile
+import uuid
+from datetime import datetime
 from services.orchestrator import CurriculumOrchestrator
 from services.firebase_service import FirebaseService
 from schemas.generation_schema import GenerateRequest, GenerateResponse
@@ -39,9 +41,10 @@ async def generate_curriculum(
     hours_per_day:   float = Form(...),
     num_worksheets:  int   = Form(...),
     num_activities:  int   = Form(...),
-    objectives:      str   = Form(""),
-    teacherUid:      str   = Form(...),
-    organizationId:  str   = Form(...),
+    objectives:        str   = Form(""),
+    teacherUid:        str   = Form(...),
+    organizationId:    str   = Form(...),
+    file_descriptions: str   = Form(""),  # JSON array of per-file description strings
     files: List[UploadFile] = File(default=[]),
 ):
     """
@@ -56,37 +59,88 @@ async def generate_curriculum(
         data = await uf.read()
         file_bytes.append((uf.filename, ext, data))
 
+    # Parse per-file descriptions (JSON array sent from frontend)
+    try:
+        descriptions_list = json.loads(file_descriptions) if file_descriptions else []
+    except Exception:
+        descriptions_list = []
+
+    # Pre-generate course_id so file uploads go to the right storage path
+    preset_course_id = str(uuid.uuid4())
+
     async def generate():
         tmp_paths = []
         try:
             yield f"data: {json.dumps({'phase': 0, 'message': 'Starting...', 'progress': 0})}\n\n"
             await asyncio.sleep(0.1)
 
-            # ── Extract content from attached files ─────────────────────────
-            extracted_text = ""
-            vision_images = []
+            # ── Extract content from attached files and upload to Storage ────
+            combined_extracted_text = ""
+            combined_vision_images = []
+            course_attachments = []
 
             if file_bytes:
                 yield f"data: {json.dumps({'phase': 0, 'message': 'Reading attached files...', 'progress': 5})}\n\n"
-                from services.file_parser import extract_content_from_uploaded_files
+                from services.file_parser import extract_text_from_file, file_to_base64_data_uri, IMAGE_EXTENSIONS
 
-                file_tuples = []
-                for filename, ext, data in file_bytes:
+                content_type_map = {
+                    '.pdf': 'application/pdf',
+                    '.doc': 'application/msword',
+                    '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                    '.xls': 'application/vnd.ms-excel',
+                    '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    '.ppt': 'application/vnd.ms-powerpoint',
+                    '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                    '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+                    '.png': 'image/png', '.gif': 'image/gif', '.webp': 'image/webp',
+                }
+
+                for i, (filename, ext, data) in enumerate(file_bytes):
+                    attachment_id = str(uuid.uuid4())
                     with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
                         tmp.write(data)
                         tmp_paths.append(tmp.name)
-                        file_tuples.append((tmp.name, ext))
+                        tmp_path = tmp.name
 
-                result = await extract_content_from_uploaded_files(file_tuples)
-                extracted_text = result['extracted_text']
-                vision_images = result['images']
+                    is_image = ext.lower() in IMAGE_EXTENSIONS
+                    per_file_text = ""
+
+                    if is_image:
+                        combined_vision_images.append(file_to_base64_data_uri(tmp_path, ext.lower()))
+                    else:
+                        try:
+                            per_file_text = extract_text_from_file(tmp_path, ext.lower())
+                            if per_file_text.strip():
+                                combined_extracted_text += f"\n--- File: {filename} ---\n{per_file_text}\n"
+                        except Exception as e:
+                            per_file_text = f"(could not parse: {e})"
+
+                    # Upload original file to Firebase Storage
+                    ct = content_type_map.get(ext.lower(), 'application/octet-stream')
+                    storage_path = f"course_attachments/{preset_course_id}/{attachment_id}/{filename}"
+                    try:
+                        file_url = await firebase.upload_file(data, storage_path, ct)
+                    except Exception:
+                        file_url = ""
+
+                    course_attachments.append({
+                        'id': attachment_id,
+                        'filename': filename,
+                        'fileType': ext.lstrip('.').lower(),
+                        'uploadedAt': datetime.utcnow().isoformat(),
+                        'fileUrl': file_url,
+                        'extractedText': per_file_text,
+                        'description': descriptions_list[i] if i < len(descriptions_list) else '',
+                        'characterCount': len(per_file_text),
+                        'isActive': True,
+                    })
 
             # ── Merge teacher objectives + extracted file text ──────────────
             full_objectives = objectives or ""
-            if extracted_text.strip():
+            if combined_extracted_text.strip():
                 full_objectives = (
                     (full_objectives + "\n\n") if full_objectives else ""
-                ) + "ATTACHED MATERIALS:\n" + extracted_text
+                ) + "ATTACHED MATERIALS:\n" + combined_extracted_text
 
             # ── Phase 1: Generate outline ───────────────────────────────────
             yield f"data: {json.dumps({'phase': 1, 'message': 'Generating course outline...', 'progress': 10})}\n\n"
@@ -106,7 +160,7 @@ async def generate_curriculum(
 
             outline_data = await orchestrator.run_phase1(
                 teacher_input,
-                images=vision_images or None,
+                images=combined_vision_images or None,
             )
 
             if not outline_data:
@@ -134,6 +188,7 @@ async def generate_curriculum(
             curriculum_id = await firebase.save_curriculum(
                 teacherUid=teacherUid,
                 curriculum_data={
+                    'preset_course_id':     preset_course_id,
                     'course_name':          course_name,
                     'age_range_start':      age_range_start,
                     'age_range_end':        age_range_end,
@@ -142,9 +197,14 @@ async def generate_curriculum(
                     'topic':                topic,
                     'num_days':             num_days,
                     'hours_per_day':        hours_per_day,
-                    'outline':         outline_data,
-                    'sections':        outline_data.get('sections', []),
-                    'handsOnResources': blocks_by_subsection,
+                    'num_worksheets':       num_worksheets,
+                    'num_activities':       num_activities,
+                    'objectives':           objectives,  # raw objectives (without extracted file text)
+                    'course_attachments':   course_attachments,
+                    'course_info_notes':    '',
+                    'outline':              outline_data,
+                    'sections':             outline_data.get('sections', []),
+                    'handsOnResources':     blocks_by_subsection,
                 },
                 organizationId=organizationId,
             )
@@ -433,6 +493,219 @@ async def update_course(course_data: dict, teacherUid: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 # ============================================================================
+# COURSE ATTACHMENT ENDPOINTS
+# ============================================================================
+
+class AttachmentUpdate(BaseModel):
+    description: Optional[str] = None
+    isActive: Optional[bool] = None
+
+class CourseInfoNotesUpdate(BaseModel):
+    notes: str
+    teacherUid: str
+
+
+@router.post("/curricula/{curriculum_id}/attachments")
+async def upload_course_attachment(
+    curriculum_id: str,
+    teacherUid: str = Form(...),
+    description: str = Form(""),
+    file: UploadFile = File(...),
+):
+    """Upload a new attachment to an existing course and extract its text."""
+    try:
+        doc = firebase.curricula_collection.document(curriculum_id).get()
+        if not doc.exists:
+            raise HTTPException(status_code=404, detail="Course not found")
+        if doc.to_dict().get('teacherUid') != teacherUid:
+            raise HTTPException(status_code=403, detail="Not authorized")
+
+        filename = file.filename or "attachment"
+        ext = os.path.splitext(filename)[1].lower()
+        data = await file.read()
+
+        content_type_map = {
+            '.pdf': 'application/pdf',
+            '.doc': 'application/msword',
+            '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            '.xls': 'application/vnd.ms-excel',
+            '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            '.ppt': 'application/vnd.ms-powerpoint',
+            '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+            '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+            '.png': 'image/png', '.gif': 'image/gif', '.webp': 'image/webp',
+        }
+        from services.file_parser import extract_text_from_file, IMAGE_EXTENSIONS
+
+        attachment_id = str(uuid.uuid4())
+        per_file_text = ""
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
+            tmp.write(data)
+            tmp_path = tmp.name
+
+        try:
+            if ext.lower() not in IMAGE_EXTENSIONS:
+                try:
+                    per_file_text = extract_text_from_file(tmp_path, ext.lower())
+                except Exception:
+                    per_file_text = ""
+        finally:
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
+
+        ct = content_type_map.get(ext.lower(), 'application/octet-stream')
+        storage_path = f"course_attachments/{curriculum_id}/{attachment_id}/{filename}"
+        try:
+            file_url = await firebase.upload_file(data, storage_path, ct)
+        except Exception:
+            file_url = ""
+
+        attachment = {
+            'id': attachment_id,
+            'filename': filename,
+            'fileType': ext.lstrip('.').lower(),
+            'uploadedAt': datetime.utcnow().isoformat(),
+            'fileUrl': file_url,
+            'extractedText': per_file_text,
+            'description': description,
+            'characterCount': len(per_file_text),
+            'isActive': True,
+        }
+
+        existing = doc.to_dict().get('courseAttachments', [])
+        firebase.curricula_collection.document(curriculum_id).update({
+            'courseAttachments': existing + [attachment],
+            'lastModified': datetime.utcnow().isoformat(),
+        })
+
+        return {'success': True, 'attachment': attachment}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error uploading attachment: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch("/curricula/{curriculum_id}/attachments/{attachment_id}")
+async def update_course_attachment(
+    curriculum_id: str,
+    attachment_id: str,
+    update: AttachmentUpdate,
+    teacherUid: str,
+):
+    """Update description or isActive toggle for a course attachment."""
+    try:
+        doc = firebase.curricula_collection.document(curriculum_id).get()
+        if not doc.exists:
+            raise HTTPException(status_code=404, detail="Course not found")
+        if doc.to_dict().get('teacherUid') != teacherUid:
+            raise HTTPException(status_code=403, detail="Not authorized")
+
+        attachments = doc.to_dict().get('courseAttachments', [])
+        updated = []
+        found = False
+        for a in attachments:
+            if a.get('id') == attachment_id:
+                found = True
+                if update.description is not None:
+                    a = {**a, 'description': update.description}
+                if update.isActive is not None:
+                    a = {**a, 'isActive': update.isActive}
+            updated.append(a)
+
+        if not found:
+            raise HTTPException(status_code=404, detail="Attachment not found")
+
+        firebase.curricula_collection.document(curriculum_id).update({
+            'courseAttachments': updated,
+            'lastModified': datetime.utcnow().isoformat(),
+        })
+
+        return {'success': True}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating attachment: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/curricula/{curriculum_id}/attachments/{attachment_id}")
+async def delete_course_attachment(
+    curriculum_id: str,
+    attachment_id: str,
+    teacherUid: str,
+):
+    """Remove an attachment from a course (Firestore record + Storage file)."""
+    try:
+        doc = firebase.curricula_collection.document(curriculum_id).get()
+        if not doc.exists:
+            raise HTTPException(status_code=404, detail="Course not found")
+        if doc.to_dict().get('teacherUid') != teacherUid:
+            raise HTTPException(status_code=403, detail="Not authorized")
+
+        attachments = doc.to_dict().get('courseAttachments', [])
+        target = next((a for a in attachments if a.get('id') == attachment_id), None)
+        if not target:
+            raise HTTPException(status_code=404, detail="Attachment not found")
+
+        # Remove from Storage if URL is available
+        file_url = target.get('fileUrl', '')
+        if file_url:
+            try:
+                import urllib.parse
+                # Extract storage path from the download URL
+                encoded = file_url.split('/o/')[1].split('?')[0]
+                storage_path = urllib.parse.unquote(encoded)
+                blob = firebase.bucket.blob(storage_path)
+                blob.delete()
+            except Exception:
+                pass  # Storage cleanup is best-effort
+
+        remaining = [a for a in attachments if a.get('id') != attachment_id]
+        firebase.curricula_collection.document(curriculum_id).update({
+            'courseAttachments': remaining,
+            'lastModified': datetime.utcnow().isoformat(),
+        })
+
+        return {'success': True}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting attachment: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch("/curricula/{curriculum_id}/course-info-notes")
+async def update_course_info_notes(curriculum_id: str, body: CourseInfoNotesUpdate):
+    """Update the teacher's free-text project notes for a course."""
+    try:
+        doc = firebase.curricula_collection.document(curriculum_id).get()
+        if not doc.exists:
+            raise HTTPException(status_code=404, detail="Course not found")
+        if doc.to_dict().get('teacherUid') != body.teacherUid:
+            raise HTTPException(status_code=403, detail="Not authorized")
+
+        firebase.curricula_collection.document(curriculum_id).update({
+            'courseInfoNotes': body.notes,
+            'lastModified': datetime.utcnow().isoformat(),
+        })
+
+        return {'success': True}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating course info notes: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
 # NEW UNIFIED GENERATION ENDPOINT
 # ============================================================================
 
@@ -617,6 +890,36 @@ async def chat_with_edo(request: EdoChatRequest):
             )
             if course.get("description"):
                 static_course_info += f'Course objectives: {course["description"]}\n'
+
+            # --- Persistent course info: notes + attachment content from Firestore ---
+            course_id = request.context.get("courseId")
+            if course_id:
+                try:
+                    doc = firebase.curricula_collection.document(course_id).get()
+                    if doc.exists:
+                        doc_data = doc.to_dict()
+                        notes = doc_data.get('courseInfoNotes', '').strip()
+                        if notes:
+                            static_course_info += f'\nCourse project notes:\n{notes}\n'
+                        attachments = doc_data.get('courseAttachments', [])
+                        for att in attachments:
+                            if not att.get('isActive', True):
+                                continue
+                            att_name = att.get('filename', 'file')
+                            att_desc = att.get('description', '').strip()
+                            att_text = att.get('extractedText', '').strip()
+                            if not att_text:
+                                continue
+                            static_course_info += f'\n--- Attached material: {att_name} ---\n'
+                            if att_desc:
+                                static_course_info += f'About this file: {att_desc}\n'
+                            # Truncate very long files to keep prompt manageable
+                            static_course_info += att_text[:4000]
+                            if len(att_text) > 4000:
+                                static_course_info += '\n[...content truncated...]'
+                            static_course_info += '\n'
+                except Exception:
+                    pass  # Don't fail the whole chat if attachment fetch fails
 
             # --- Dynamic block: full structure + focused item (changes every message) ---
             if structure:

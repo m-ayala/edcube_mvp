@@ -210,7 +210,7 @@ const TRAY_DROPPABLE = {
   SUBSECTION: 'edo-tray-subsections',
 };
 
-const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onClose, trayItems = [], setTrayItems, handsOnResources = {}, currentPage = null }) => {
+const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onClose, trayItems = [], setTrayItems, handsOnResources = {}, currentPage = null, curriculumId = null }) => {
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -372,7 +372,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
       }
     }
 
-    return { course, course_structure, selected_item, current_page };
+    return { course, course_structure, selected_item, current_page, courseId: curriculumId || null };
   };
 
   const getHistory = () => {

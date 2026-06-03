@@ -8,6 +8,7 @@ import CourseViewer from './CourseViewer';
 import SubsectionView from './SubsectionView';
 import BlockView from './BlockView';
 import EdoChatbot from './EdoChatbot';
+import CourseInfoPanel from './CourseInfoPanel';
 import useCourseActions from './useCourseActions';
 import useAutosave from './useAutosave';
 import BreakModal from '../modals/BreakModal';
@@ -58,6 +59,9 @@ const CourseWorkspace = () => {
   const [isOwner] = useState(incomingIsOwner || false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [isEdoOpen, setIsEdoOpen] = useState(false);
+  const [showCourseInfo, setShowCourseInfo] = useState(false);
+  const [courseAttachments, setCourseAttachments] = useState([]);
+  const [courseInfoNotes, setCourseInfoNotes] = useState('');
   const [trayItems, setTrayItems] = useState([]);
   const [linkGenJobs, setLinkGenJobs] = useState({}); // { [blockId]: 'generating'|'done'|'error' }
 
@@ -178,6 +182,25 @@ const CourseWorkspace = () => {
     };
     fetchProfile();
   }, [currentUser]);
+
+  // ── Fetch course info (attachments + notes) once curriculumId is known ─
+  useEffect(() => {
+    if (!curriculumId || curriculumId === 'new-course' || !currentUser) return;
+    const fetchCourseInfo = async () => {
+      try {
+        const res = await fetch(
+          `${import.meta.env.VITE_API_BASE_URL}/api/curricula/${curriculumId}?teacherUid=${currentUser.uid}`
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        setCourseAttachments(data.courseAttachments || []);
+        setCourseInfoNotes(data.courseInfoNotes || '');
+      } catch (e) {
+        console.error('Failed to fetch course info:', e);
+      }
+    };
+    fetchCourseInfo();
+  }, [curriculumId, currentUser]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Mount: Transform old data (topicBoxes) → new flat structure ───────
   useEffect(() => {
@@ -697,6 +720,25 @@ const CourseWorkspace = () => {
             <div style={{ width: '1px', height: '22px', background: 'rgba(0,0,0,0.08)', flexShrink: 0 }} />
 
             <button
+              onClick={() => setShowCourseInfo(p => !p)}
+              title="Course Info"
+              style={{
+                fontFamily: "'DM Sans', sans-serif", fontSize: '13.8px', fontWeight: '500',
+                padding: '6px 13px', borderRadius: '8px', cursor: 'pointer',
+                background: showCourseInfo ? 'rgba(235,248,255,0.9)' : '#FFFFFF',
+                border: `1px solid ${showCourseInfo ? 'rgba(66,153,225,0.35)' : 'rgba(0,0,0,0.12)'}`,
+                color: showCourseInfo ? '#2b6cb0' : '#111',
+                whiteSpace: 'nowrap', flexShrink: 0,
+                display: 'flex', alignItems: 'center', gap: '5px',
+              }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
+              </svg>
+              Course Info
+            </button>
+
+            <button
               onClick={() => setIsEdoOpen(p => !p)}
               title={isEdoOpen ? 'Close Edo AI' : 'Open Edo AI'}
               style={{
@@ -787,10 +829,31 @@ const CourseWorkspace = () => {
                 setTrayItems={setTrayItems}
                 handsOnResources={handsOnResources}
                 currentPage={currentPageContext}
+                curriculumId={curriculumId}
               />
             )}
           </DragDropContext>
           </div>
+
+          {/* Course Info Panel */}
+          {showCourseInfo && (
+            <CourseInfoPanel
+              curriculumId={curriculumId}
+              formData={{
+                ...formData,
+                courseName,
+                subject: courseSubject,
+                topic: courseTopic,
+                objectives: courseObjectives,
+              }}
+              courseAttachments={courseAttachments}
+              courseInfoNotes={courseInfoNotes}
+              currentUser={currentUser}
+              readOnly={readOnly && !isOwner}
+              onClose={() => setShowCourseInfo(false)}
+              onAttachmentsChange={setCourseAttachments}
+            />
+          )}
 
           {/* Modals */}
           {showBreakModal && (

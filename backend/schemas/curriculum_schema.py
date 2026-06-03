@@ -22,13 +22,24 @@ class CurriculumFields:
     TOPIC = 'topic'
     TIME_DURATION = 'timeDuration'  # e.g., "6 hours"
     OBJECTIVES = 'objectives'
-    
+    AGE_RANGE_START = 'ageRangeStart'
+    AGE_RANGE_END = 'ageRangeEnd'
+    NUM_STUDENTS = 'numStudents'
+    NUM_DAYS = 'numDays'
+    HOURS_PER_DAY = 'hoursPerDay'
+    NUM_WORKSHEETS = 'numWorksheets'
+    NUM_ACTIVITIES = 'numActivities'
+
+    # Course info / project context
+    COURSE_ATTACHMENTS = 'courseAttachments'  # List of attachment objects
+    COURSE_INFO_NOTES = 'courseInfoNotes'      # Teacher's free-text project notes
+
     # Course content
     SECTIONS = 'sections'
     GENERATED_TOPICS = 'generatedTopics'  # The boxes generated in Phase 1
     HANDS_ON_RESOURCES = 'handsOnResources'
     OUTLINE = 'outline'  # Contains sections with structure
-    
+
     # Sharing & permissions
     IS_PUBLIC = 'isPublic'
     SHARED_WITH = 'sharedWith'
@@ -110,6 +121,15 @@ def format_curriculum_for_api(firestore_doc):
         F.TOPIC: firestore_doc.get(F.TOPIC),
         F.TIME_DURATION: firestore_doc.get(F.TIME_DURATION),
         F.OBJECTIVES: firestore_doc.get(F.OBJECTIVES),
+        F.AGE_RANGE_START: firestore_doc.get(F.AGE_RANGE_START, ''),
+        F.AGE_RANGE_END: firestore_doc.get(F.AGE_RANGE_END, ''),
+        F.NUM_STUDENTS: firestore_doc.get(F.NUM_STUDENTS, 0),
+        F.NUM_DAYS: firestore_doc.get(F.NUM_DAYS, 0),
+        F.HOURS_PER_DAY: firestore_doc.get(F.HOURS_PER_DAY, 0),
+        F.NUM_WORKSHEETS: firestore_doc.get(F.NUM_WORKSHEETS, 0),
+        F.NUM_ACTIVITIES: firestore_doc.get(F.NUM_ACTIVITIES, 0),
+        F.COURSE_ATTACHMENTS: firestore_doc.get(F.COURSE_ATTACHMENTS, []),
+        F.COURSE_INFO_NOTES: firestore_doc.get(F.COURSE_INFO_NOTES, ''),
         F.SECTIONS: firestore_doc.get(F.SECTIONS, []),
         F.GENERATED_TOPICS: firestore_doc.get(F.GENERATED_TOPICS, []),
         F.HANDS_ON_RESOURCES: firestore_doc.get(F.HANDS_ON_RESOURCES, {}),

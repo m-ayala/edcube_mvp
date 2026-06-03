@@ -64,8 +64,8 @@ class FirebaseService:
         """Save a new curriculum to Firestore (FLAT STRUCTURE)"""
         try:
             import uuid
-            
-            course_id = str(uuid.uuid4())
+
+            course_id = curriculum_data.get('preset_course_id') or str(uuid.uuid4())
             
             # Prepare flat structure document
             doc_data = {
@@ -77,14 +77,20 @@ class FirebaseService:
                 'ageRangeStart': curriculum_data.get('age_range_start', ''),
                 'ageRangeEnd': curriculum_data.get('age_range_end', ''),
                 'numStudents': curriculum_data.get('num_students', 0),
+                'numDays': curriculum_data.get('num_days', 0),
+                'hoursPerDay': curriculum_data.get('hours_per_day', 0),
+                'numWorksheets': curriculum_data.get('num_worksheets', 0),
+                'numActivities': curriculum_data.get('num_activities', 0),
                 'subject': curriculum_data.get('subject', ''),
                 'topic': curriculum_data.get('topic', ''),
-                'timeDuration': curriculum_data.get('duration', ''),  # ← FIX: should get 'timeDuration'
-                'objectives': curriculum_data.get('objectives', ''),  # ← Add this
+                'timeDuration': curriculum_data.get('duration', ''),
+                'objectives': curriculum_data.get('objectives', ''),
+                'courseAttachments': curriculum_data.get('course_attachments', []),
+                'courseInfoNotes': curriculum_data.get('course_info_notes', ''),
                 'sections': curriculum_data.get('sections', []),
                 'generatedTopics': curriculum_data.get('boxes', []),
                 'handsOnResources': curriculum_data.get('handsOnResources', {}),
-                'outline': curriculum_data.get('outline', {}),  # ← Add this
+                'outline': curriculum_data.get('outline', {}),
                 'isPublic': False,
                 'sharedWith': [],
                 'createdAt': datetime.utcnow().isoformat(),

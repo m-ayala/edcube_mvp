@@ -164,6 +164,12 @@ class CurriculumOrchestrator:
                     block.setdefault('addedAt', None)
                     stamped.append(block)
 
+                # Tag blocks generated together so the UI can highlight them as a teach-together group
+                if len(stamped) > 1:
+                    group_id = f"group-{sub_id}"
+                    for block in stamped:
+                        block['groupId'] = group_id
+
             except Exception as e:
                 logger.error(f"Block generation failed for subsection {sub_id}: {e}", exc_info=True)
                 stamped = []

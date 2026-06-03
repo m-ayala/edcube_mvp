@@ -33,6 +33,7 @@ const SubsectionView = ({
   const [localObjectives, setLocalObjectives] = useState(subsection.learning_objectives || []);
   const [newObjective, setNewObjective] = useState('');
   const [hoveredBlock, setHoveredBlock] = useState(null);
+  const [hoveredGroup, setHoveredGroup] = useState(null);
 
   // Sync local state from props when parent state changes (e.g. after undo)
   useEffect(() => { if (!editingTitle) setLocalTitle(subsection.title || ''); }, [subsection.title, editingTitle]);
@@ -430,36 +431,48 @@ const SubsectionView = ({
                 {blocks.map((block, idx) => {
                   const s = BLOCK_TYPE_STYLES[block.type] || BLOCK_TYPE_STYLES.content;
                   const isHovered = hoveredBlock === block.id;
+                  const isGroupMember = !isHovered && hoveredGroup && block.groupId === hoveredGroup;
                   return (
                     <Draggable key={block.id} draggableId={block.id} index={idx}>
                       {(provided, snapshot) => (
                         <div
                           ref={provided.innerRef}
                           {...provided.draggableProps}
-                          onMouseEnter={() => setHoveredBlock(block.id)}
-                          onMouseLeave={() => setHoveredBlock(null)}
+                          onMouseEnter={() => { setHoveredBlock(block.id); if (block.groupId) setHoveredGroup(block.groupId); }}
+                          onMouseLeave={() => { setHoveredBlock(null); setHoveredGroup(null); }}
                           onClick={() => onNavigateToBlock?.(sectionId, subsection.id, block.id)}
                           style={{
                             ...provided.draggableProps.style,
                             width: '160px',
                             aspectRatio: '1 / 1',
                             background: s.bg,
-                            border: `1.5px solid ${s.border}`,
+                            border: isGroupMember ? '1.5px solid rgba(100, 70, 180, 0.45)' : `1.5px solid ${s.border}`,
                             borderRadius: '12px',
                             padding: '14px',
                             cursor: snapshot.isDragging ? 'grabbing' : 'pointer',
                             display: 'flex',
                             flexDirection: 'column',
                             justifyContent: 'space-between',
-                            boxShadow: snapshot.isDragging ? '0 8px 20px rgba(0,0,0,0.15)' : isHovered ? '0 4px 14px rgba(0,0,0,0.12)' : '0 1px 4px rgba(0,0,0,0.06)',
+                            boxShadow: snapshot.isDragging
+                              ? '0 8px 20px rgba(0,0,0,0.15)'
+                              : isHovered
+                                ? '0 4px 14px rgba(0,0,0,0.12)'
+                                : isGroupMember
+                                  ? '0 0 0 3px rgba(100, 70, 180, 0.18), 0 2px 8px rgba(0,0,0,0.08)'
+                                  : '0 1px 4px rgba(0,0,0,0.06)',
                             transform: snapshot.isDragging
                               ? `${provided.draggableProps.style?.transform || ''} rotate(2deg)`
                               : isHovered
                                 ? 'translateY(-2px)'
-                                : provided.draggableProps.style?.transform || 'none',
+                                : isGroupMember
+                                  ? 'translateY(-1px)'
+                                  : provided.draggableProps.style?.transform || 'none',
+                            outline: isGroupMember ? '2px dashed rgba(100, 70, 180, 0.35)' : 'none',
+                            outlineOffset: '3px',
                             position: 'relative',
                             overflow: 'hidden',
                             opacity: snapshot.isDragging ? 0.9 : 1,
+                            transition: 'box-shadow 0.15s, transform 0.15s, border-color 0.15s, outline 0.15s',
                           }}
                         >
                           {/* Drag handle */}
@@ -517,13 +530,15 @@ const SubsectionView = ({
                             </p>
                           </div>
 
-                          {/* Open arrow */}
+                          {/* Open arrow / group indicator */}
                           <div style={{
-                            fontSize: '11px', fontWeight: '600', color: s.text,
-                            opacity: isHovered ? 1 : 0.45, transition: 'opacity 0.15s',
+                            fontSize: '11px', fontWeight: '600',
+                            color: isGroupMember ? 'rgba(100, 70, 180, 0.85)' : s.text,
+                            opacity: (isHovered || isGroupMember) ? 1 : 0.45,
+                            transition: 'opacity 0.15s, color 0.15s',
                             textAlign: 'right',
                           }}>
-                            Open →
+                            {isGroupMember ? 'teach together' : 'Open →'}
                           </div>
                         </div>
                       )}

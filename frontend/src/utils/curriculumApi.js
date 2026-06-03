@@ -187,6 +187,66 @@ export const generateCourseDescription = async ({
   return await response.json(); // { success: true, description: string }
 };
 
+// ── Course Info / Attachment APIs ────────────────────────────────────────────
+
+/**
+ * Upload a new attachment to an existing course.
+ */
+export const uploadCourseAttachment = async (curriculumId, file, description, teacherUid) => {
+  const form = new FormData();
+  form.append('file', file);
+  form.append('description', description || '');
+  form.append('teacherUid', teacherUid);
+
+  const response = await fetch(`${API_BASE_URL}/curricula/${curriculumId}/attachments`, {
+    method: 'POST',
+    body: form,
+  });
+  if (!response.ok) throw new Error('Attachment upload failed');
+  return await response.json(); // { success, attachment }
+};
+
+/**
+ * Update an attachment's description or isActive toggle.
+ */
+export const updateCourseAttachment = async (curriculumId, attachmentId, { description, isActive }, teacherUid) => {
+  const response = await fetch(
+    `${API_BASE_URL}/curricula/${curriculumId}/attachments/${attachmentId}?teacherUid=${encodeURIComponent(teacherUid)}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description, isActive }),
+    }
+  );
+  if (!response.ok) throw new Error('Attachment update failed');
+  return await response.json();
+};
+
+/**
+ * Delete an attachment from a course.
+ */
+export const deleteCourseAttachment = async (curriculumId, attachmentId, teacherUid) => {
+  const response = await fetch(
+    `${API_BASE_URL}/curricula/${curriculumId}/attachments/${attachmentId}?teacherUid=${encodeURIComponent(teacherUid)}`,
+    { method: 'DELETE' }
+  );
+  if (!response.ok) throw new Error('Attachment delete failed');
+  return await response.json();
+};
+
+/**
+ * Update the teacher's free-text course info notes.
+ */
+export const updateCourseInfoNotes = async (curriculumId, notes, teacherUid) => {
+  const response = await fetch(`${API_BASE_URL}/curricula/${curriculumId}/course-info-notes`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ notes, teacherUid }),
+  });
+  if (!response.ok) throw new Error('Course info notes update failed');
+  return await response.json();
+};
+
 /**
  * Generate a parent-facing narrative synopsis of a completed course.
  * @param {Object} params

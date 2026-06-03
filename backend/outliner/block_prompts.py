@@ -200,12 +200,12 @@ CONTENT BLOCK(S) (include {content_slots}):
   - [Part or element 3]: brief explanation
 
   **Pedagogy:**
-  How to teach this concept to {age_range} students:
-  1. Opening hook: [specific hook idea]
-  2. Main explanation: [what to say, show, or demonstrate]
-  3. Mid-lesson check: [one specific question to verify understanding]
-  4. Common confusion: [what students typically get wrong and how to fix it]
-  5. Reinforcement: [short activity, example, or prompt to make it stick]
+  Teaching strategies for {age_range} students:
+  1. Teaching approach: [which pedagogical strategy fits best — e.g. direct instruction, Socratic questioning, analogical reasoning, concept mapping — and one sentence on why it works for this specific concept]
+  2. Memory device: [a concrete mnemonic, acronym, rhyme, or visual anchor students can use — write out the actual device, not a description of one. E.g. "HOMES for the Great Lakes", or "Roy G. Biv for rainbow colors"]
+  3. Misconception: [the most common conceptual error students make with this concept and the exact reframing or analogy that corrects it — focus on the mental model fix, not an exercise]
+  4. Guided questions: [2–3 questions a teacher asks aloud, progressing from surface recall to deeper understanding — write the actual questions, not topics]
+  5. Mastery signal: [one observable verbal response or explanation a student gives that tells the teacher they have truly internalized this concept]
 
   **Example:**
   [One concrete, specific, relatable example for {age_range}]
@@ -231,7 +231,7 @@ OUTPUT FORMAT (strict JSON, no other text):
       "type": "content",
       "subcategory": "string — from the content subcategory list",
       "title": "string — specific single-concept block title (e.g. 'What Is a Robot?')",
-      "content": "**Learning Objective:**\\nStudents will [verb] [concept].\\n\\n**Description:**\\n[2-4 sentence plain explanation of this ONE concept]\\n\\n**Key [noun]:**\\n- [Part 1]: explanation\\n- [Part 2]: explanation\\n- [Part 3]: explanation\\n\\n**Pedagogy:**\\nHow to teach this concept to [age]-year-olds:\\n1. Opening hook: ...\\n2. Main explanation: ...\\n3. Mid-lesson check: ...\\n4. Common confusion: ...\\n5. Reinforcement: ...\\n\\n**Example:**\\n[Concrete example]",
+      "content": "**Learning Objective:**\\nStudents will [verb] [concept].\\n\\n**Description:**\\n[2-4 sentence plain explanation of this ONE concept]\\n\\n**Key [noun]:**\\n- [Part 1]: explanation\\n- [Part 2]: explanation\\n- [Part 3]: explanation\\n\\n**Pedagogy:**\\nTeaching strategies for [age]-year-olds:\\n1. Teaching approach: ...\\n2. Memory device: ...\\n3. Misconception: ...\\n4. Guided questions: ...\\n5. Mastery signal: ...\\n\\n**Example:**\\n[Concrete example]",
       "duration_minutes": 15
     }},
     {{
