@@ -11,6 +11,7 @@ import EdoChatbot from './EdoChatbot';
 import CourseInfoPanel from './CourseInfoPanel';
 import useCourseActions from './useCourseActions';
 import useAutosave from './useAutosave';
+import { useGeneration } from '../../contexts/GenerationContext';
 import BreakModal from '../modals/BreakModal';
 import ShareCourseModal from '../modals/ShareCourseModal';
 import { getOwnProfile } from '../../services/teacherService';
@@ -34,7 +35,11 @@ const CourseWorkspace = () => {
     isCollaborator: incomingIsCollaborator,
     targetFolderId,
     handsOnResources: incomingHandsOnResources,
+    isGenerating: incomingIsGenerating,
   } = location.state || {};
+
+  const { genState } = useGeneration();
+  const [isGenerating, setIsGenerating] = useState(!!incomingIsGenerating);
 
   const [curriculumId, setCurriculumId] = useState(initialCurriculumId);
 
@@ -201,6 +206,26 @@ const CourseWorkspace = () => {
     };
     fetchCourseInfo();
   }, [curriculumId, currentUser]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Subscribe to live generation updates ─────────────────────────────
+  useEffect(() => {
+    if (!isGenerating) return;
+    if (genState.status === 'generating-blocks' || genState.status === 'outline-ready') {
+      // Merge newly arrived subsection blocks without overwriting manual edits
+      setHandsOnResources(prev => ({ ...prev, ...genState.handsOnResources }));
+    }
+    if (genState.status === 'complete') {
+      if (genState.curriculumId) setCurriculumId(genState.curriculumId);
+      setHandsOnResources(prev => ({ ...prev, ...genState.handsOnResources }));
+      setIsGenerating(false);
+      if (targetFolderId && genState.curriculumId) {
+        addCourseToFolder(currentUser.uid, targetFolderId, genState.curriculumId).catch(() => {});
+      }
+    }
+    if (genState.status === 'error') {
+      setIsGenerating(false);
+    }
+  }, [genState.status, genState.handsOnResources, genState.curriculumId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Mount: Transform old data (topicBoxes) → new flat structure ───────
   useEffect(() => {
@@ -500,7 +525,7 @@ const CourseWorkspace = () => {
     performSave: saveCourse,
     deps: [sections, courseName, videosByTopic, handsOnResources],
     delay: 2000,
-    enabled: !!organizationId && !!currentUser && !readOnly
+    enabled: !!organizationId && !!currentUser && !readOnly && !isGenerating
   });
 
   // ── Drag and Drop ──────────────────────────────��──────────────────────
@@ -599,6 +624,28 @@ const CourseWorkspace = () => {
             @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
             @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
           `}</style>
+
+          {/* ── Generation progress banner ── */}
+          {isGenerating && (
+            <div style={{
+              padding: '8px 28px', display: 'flex', alignItems: 'center', gap: '10px',
+              background: 'linear-gradient(90deg, #ebf8ff 0%, #e0f7ef 100%)',
+              borderBottom: '1px solid rgba(66,153,225,0.2)', flexShrink: 0,
+            }}>
+              <span style={{
+                width: '8px', height: '8px', borderRadius: '50%', background: '#38A169',
+                flexShrink: 0, animation: 'pulse 1.2s ease-in-out infinite', display: 'inline-block',
+              }} />
+              <span style={{ fontSize: '13px', fontWeight: '500', color: '#2b6cb0', fontFamily: "'DM Sans', sans-serif" }}>
+                {genState.progress.message || 'Generating content blocks…'}
+              </span>
+              {genState.pendingSubsectionIds?.size > 0 && (
+                <span style={{ fontSize: '12px', color: '#4A90D9', fontFamily: "'DM Sans', sans-serif" }}>
+                  {genState.pendingSubsectionIds.size} remaining
+                </span>
+              )}
+            </div>
+          )}
 
           {/* ── Persistent workspace top bar ── */}
           <div style={{
@@ -774,6 +821,7 @@ const CourseWorkspace = () => {
                   onAddBreak={() => setShowBreakModal(true)}
                   navigate={navigate}
                   onNavigateToSubsection={navigateToSubsection}
+                  pendingSubsectionIds={isGenerating ? genState.pendingSubsectionIds : null}
                 />
               )}
 

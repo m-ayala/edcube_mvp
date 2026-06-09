@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { Paperclip, X, FileText, FileSpreadsheet, Image, Presentation } from 'lucide-react';
 import { getOwnProfile } from '../../services/teacherService';
 import { trackAiOutlineGenerated } from '../../firebase/analytics';
+import { useGeneration } from '../../contexts/GenerationContext';
 
 // Map file extension → icon + label
 const FILE_TYPE_META = {
@@ -32,9 +33,11 @@ const CourseDesigner = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { targetFolderId } = location.state || {};
-  const [loading, setLoading] = useState(false);
-  const [progress, setProgress] = useState({ message: '', progress: 0 });
+  const { genState, startGeneration } = useGeneration();
   const [organizationId, setOrganizationId] = useState(null);
+
+  const loading = genState.status === 'generating-outline';
+  const progress = { message: genState.progress.message, progress: genState.progress.percent };
   const [attachedFiles, setAttachedFiles] = useState([]);
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef(null);
@@ -66,6 +69,23 @@ const CourseDesigner = () => {
     };
     fetchProfile();
   }, [currentUser]);
+
+  // Navigate to workspace as soon as the outline is ready
+  useEffect(() => {
+    if (genState.status === 'outline-ready') {
+      trackAiOutlineGenerated({ subject: formData.subject, grade: formData.ageRangeStart, sections_count: genState.sections.length });
+      navigate('/course-workspace', {
+        state: {
+          formData: genState.formData,
+          sections: genState.sections,
+          isEditing: true,
+          isGenerating: true,
+          targetFolderId: genState.targetFolderId,
+          isOwner: true,
+        },
+      });
+    }
+  }, [genState.status]);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -116,129 +136,13 @@ const CourseDesigner = () => {
     setAttachedFiles(prev => prev.map((f, i) => i === index ? { ...f, description } : f));
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
-
     if (!organizationId) {
       alert('Unable to generate course: Organization ID not found. Please refresh the page and try again.');
       return;
     }
-
-    setLoading(true);
-    setProgress({ message: 'Starting...', progress: 0 });
-
-    try {
-      // Build multipart/form-data so we can send files alongside form fields
-      const body = new FormData();
-      body.append('course_name',      formData.courseName);
-      body.append('age_range_start',  String(parseInt(formData.ageRangeStart)));
-      body.append('age_range_end',    String(parseInt(formData.ageRangeEnd)));
-      body.append('num_students',     String(parseInt(formData.numStudents)));
-      body.append('subject',          formData.subject);
-      body.append('topic',            formData.topic);
-      body.append('num_days',         String(parseInt(formData.numDays)));
-      body.append('hours_per_day',    String(parseFloat(formData.hoursPerDay)));
-      body.append('num_worksheets',   String(parseInt(formData.numWorksheets)));
-      body.append('num_activities',   String(parseInt(formData.numActivities)));
-      body.append('objectives',        formData.objectives || '');
-      body.append('teacherUid',        currentUser.uid);
-      body.append('organizationId',    organizationId);
-      body.append('file_descriptions', JSON.stringify(attachedFiles.map(f => f.description || '')));
-      attachedFiles.forEach(({ file }) => body.append('files', file));
-
-      const response = await fetch(
-        `${import.meta.env.VITE_API_BASE_URL}/api/generate-curriculum`,
-        { method: 'POST', body }
-      );
-
-      // Handle Server-Sent Events stream
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let curriculumId = null;
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              setProgress({ message: data.message || '', progress: data.progress || 0 });
-              if (data.done && data.curriculum_id) curriculumId = data.curriculum_id;
-              if (data.error) throw new Error(data.message || 'Generation failed');
-            } catch (err) {
-              console.error('Error parsing SSE data:', err);
-            }
-          }
-        }
-      }
-
-      // Flush remaining buffer
-      if (buffer.trim().startsWith('data: ')) {
-        try {
-          const data = JSON.parse(buffer.trim().slice(6));
-          setProgress({ message: data.message || '', progress: data.progress || 0 });
-          if (data.done && data.curriculum_id) curriculumId = data.curriculum_id;
-        } catch (err) {
-          console.error('Error parsing final SSE buffer:', err);
-        }
-      }
-
-      console.log('SSE complete. curriculumId =', curriculumId);
-
-      let sections = [];
-      let handsOnResources = {};
-      if (curriculumId) {
-        const curriculumResponse = await fetch(
-          `${import.meta.env.VITE_API_BASE_URL}/api/curricula/${curriculumId}?teacherUid=${currentUser.uid}`
-        );
-        const curriculumData = await curriculumResponse.json();
-
-        sections = (curriculumData.outline?.sections || []).map(section => ({
-          id: section.id,
-          title: section.title,
-          description: section.description,
-          subsections: (section.subsections || []).map(sub => ({
-            id: sub.id,
-            title: sub.title,
-            description: sub.description,
-            topicBoxes: [{
-              id: `topic-${sub.id}-initial`,
-              title: sub.title,
-              description: sub.description || '',
-              duration_minutes: sub.duration_minutes || 60,
-              pla_pillars: sub.pla_pillars || [],
-              learning_objectives: sub.learning_objectives || [],
-              content_keywords: sub.content_keywords || [],
-              video_resources: sub.video_resources || [],
-              worksheets: sub.worksheets || [],
-              activities: sub.activities || []
-            }]
-          }))
-        }));
-
-        // Pre-generated blocks keyed by subsection ID
-        handsOnResources = curriculumData.handsOnResources || {};
-      }
-
-      trackAiOutlineGenerated({ subject: formData.subject, grade: formData.ageRangeStart, sections_count: sections.length });
-      navigate('/course-workspace', {
-        state: { formData, sections, isEditing: true, curriculumId, targetFolderId, handsOnResources, isOwner: true }
-      });
-
-    } catch (error) {
-      console.error('Error generating course:', error);
-      alert('Failed to generate course outline. Please try again.');
-    } finally {
-      setLoading(false);
-      setProgress({ message: '', progress: 0 });
-    }
+    startGeneration(formData, attachedFiles, currentUser.uid, organizationId, targetFolderId);
   };
 
   const inputStyle = {

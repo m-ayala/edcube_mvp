@@ -167,7 +167,7 @@ async def generate_curriculum(
                 yield f"data: {json.dumps({'phase': 1, 'message': 'Error: Failed to generate outline', 'progress': 0, 'error': True})}\n\n"
                 return
 
-            yield f"data: {json.dumps({'phase': 1, 'message': 'Outline ready! Generating content blocks...', 'progress': 50})}\n\n"
+            yield f"data: {json.dumps({'type': 'outline_ready', 'outline': outline_data, 'phase': 1, 'message': 'Outline ready! Generating content blocks...', 'progress': 50})}\n\n"
             await asyncio.sleep(0.2)
 
             # ── Phase 2: Generate blocks for each subsection ────────────────
@@ -177,6 +177,9 @@ async def generate_curriculum(
             ):
                 if event['type'] == 'progress':
                     yield f"data: {json.dumps({'phase': 2, 'message': event['message'], 'progress': event['progress']})}\n\n"
+                    await asyncio.sleep(0)
+                elif event['type'] == 'subsection_blocks':
+                    yield f"data: {json.dumps({'type': 'subsection_blocks', 'subsection_id': event['subsection_id'], 'blocks': event['blocks'], 'progress': event['progress']})}\n\n"
                     await asyncio.sleep(0)
                 elif event['type'] == 'done':
                     blocks_by_subsection = event['blocks_by_subsection']

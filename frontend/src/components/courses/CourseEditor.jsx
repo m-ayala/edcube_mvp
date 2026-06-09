@@ -212,6 +212,7 @@ const CourseEditor = ({
   onAddBreak,
   navigate,
   onNavigateToSubsection,
+  pendingSubsectionIds,
 }) => {
 
   // ── Colors ────────────────────────────────────────────────────────────
@@ -564,11 +565,20 @@ const CourseEditor = ({
                                   {sub.title || 'Untitled subsection'}
                                 </div>
                               </div>
-                              {subBlocks.length > 0 && (
+                              {pendingSubsectionIds?.has(sub.id) ? (
+                                <span style={{
+                                  fontSize: '11px', flexShrink: 0, padding: '2px 8px', borderRadius: '6px',
+                                  background: 'rgba(56,161,105,0.10)', color: '#276749',
+                                  display: 'flex', alignItems: 'center', gap: '5px',
+                                }}>
+                                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#38A169', display: 'inline-block', animation: 'pulse 1.2s ease-in-out infinite' }} />
+                                  Generating…
+                                </span>
+                              ) : subBlocks.length > 0 ? (
                                 <span style={{ fontSize: '11px', color: '#999', flexShrink: 0, background: '#F5F5F4', padding: '2px 7px', borderRadius: '6px' }}>
                                   {subBlocks.length} block{subBlocks.length !== 1 ? 's' : ''}
                                 </span>
-                              )}
+                              ) : null}
                               <button
                                 onClick={e => { e.stopPropagation(); actions.confirmDeleteSubsection(section.id, sub.id); }}
                                 style={{
@@ -602,9 +612,22 @@ const CourseEditor = ({
                                   }}
                                 >
                                   {subBlocks.length === 0 && !blockSnap.isDraggingOver && (
-                                    <div style={{ fontSize: '11.5px', color: '#CCC', fontStyle: 'italic', padding: '4px 0', fontFamily: "'DM Sans', sans-serif" }}>
-                                      No blocks — drag one here
-                                    </div>
+                                    pendingSubsectionIds?.has(sub.id) ? (
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', padding: '4px 0' }}>
+                                        {[1, 2, 3].map(i => (
+                                          <div key={i} style={{
+                                            height: '24px', borderRadius: '6px',
+                                            background: `rgba(56,161,105,${0.08 + i * 0.02})`,
+                                            animation: 'pulse 1.4s ease-in-out infinite',
+                                            animationDelay: `${i * 0.15}s`,
+                                          }} />
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <div style={{ fontSize: '11.5px', color: '#CCC', fontStyle: 'italic', padding: '4px 0', fontFamily: "'DM Sans', sans-serif" }}>
+                                        No blocks — drag one here
+                                      </div>
+                                    )
                                   )}
                                   {subBlocks.map((block, blockIdx) => {
                                     const bStyle = blockTypeStyle[block.type] || blockTypeStyle.content;

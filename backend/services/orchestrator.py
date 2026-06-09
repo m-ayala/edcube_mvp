@@ -176,6 +176,13 @@ class CurriculumOrchestrator:
 
             blocks_by_subsection[sub_id] = stamped
 
+            yield {
+                'type': 'subsection_blocks',
+                'subsection_id': sub_id,
+                'blocks': stamped,
+                'progress': pct,
+            }
+
         yield {'type': 'done', 'blocks_by_subsection': blocks_by_subsection}
     
     # PHASE 2 METHODS - COMMENTED OUT FOR PHASE 1 TESTING
