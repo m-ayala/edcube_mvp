@@ -229,7 +229,7 @@ const CourseDesigner = () => {
 
       trackAiOutlineGenerated({ subject: formData.subject, grade: formData.ageRangeStart, sections_count: sections.length });
       navigate('/course-workspace', {
-        state: { formData, sections, isEditing: true, curriculumId, targetFolderId, handsOnResources }
+        state: { formData, sections, isEditing: true, curriculumId, targetFolderId, handsOnResources, isOwner: true }
       });
 
     } catch (error) {

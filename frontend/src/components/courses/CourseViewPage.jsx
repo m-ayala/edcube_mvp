@@ -324,12 +324,12 @@ const CourseViewPage = () => {
 
   const handleEditInWorkspace = () =>
     navigate('/course-workspace', {
-      state: { formData: currentFormData(), sections, isEditing: true, curriculumId, isPublic, readOnly: false, isOwner: true }
+      state: { formData: currentFormData(), sections, handsOnResources, isEditing: true, curriculumId, isPublic, readOnly: false, isOwner: true }
     });
 
   const handleEditAsCollaborator = () =>
     navigate('/course-workspace', {
-      state: { formData: currentFormData(), sections, isEditing: true, curriculumId, isPublic, readOnly: false, isOwner: false, isCollaborator: true }
+      state: { formData: currentFormData(), sections, handsOnResources, isEditing: true, curriculumId, isPublic, readOnly: false, isOwner: false, isCollaborator: true }
     });
 
   // ── Synopsis: collect all selectable blocks ───────────────────────────

@@ -608,7 +608,7 @@ const CourseWorkspace = () => {
             flexShrink: 0, zIndex: 10,
           }}>
             <button
-              onClick={handleBack}
+              onClick={navPage === 'outline' ? handleBack : navigateBack}
               style={{
                 fontFamily: "'DM Sans', sans-serif", fontSize: '13.8px', fontWeight: '500',
                 padding: '6px 13px', borderRadius: '8px', cursor: 'pointer',
@@ -616,7 +616,7 @@ const CourseWorkspace = () => {
                 color: '#111', whiteSpace: 'nowrap', flexShrink: 0,
               }}
             >
-              ← Course View
+              {navPage === 'outline' ? '← Course View' : navPage === 'block' ? '← Topic' : '← Sections'}
             </button>
 
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 0 }}>
