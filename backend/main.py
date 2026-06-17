@@ -2,8 +2,9 @@
 import logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -12,7 +13,7 @@ import uvicorn
 from routes.file_upload import router as file_upload_router
 from routes.uploads import router as uploads_router
 import os
-from routes import curriculum, resources, topics, teachers, contact, notifications
+from routes import curriculum, resources, topics, teachers, contact, notifications, synopsis
 
 app = FastAPI(title="EdCube API")
 
@@ -42,6 +43,14 @@ app.include_router(teachers.router, tags=["teachers"])
 app.include_router(contact.router, prefix="/api", tags=["contact"])
 app.include_router(notifications.router, tags=["notifications"])
 app.include_router(uploads_router, tags=["uploads"])
+app.include_router(synopsis.router, tags=["synopsis"])
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    # Catch-all so errors go through the CORS middleware instead of bypassing it.
+    logging.getLogger(__name__).error("Unhandled exception", exc_info=exc)
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+
 
 @app.get("/")
 async def root():

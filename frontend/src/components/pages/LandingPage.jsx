@@ -2,11 +2,18 @@
 
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
+import { logoutTeacher } from '../../firebase/authService';
 
 const LandingPage = () => {
   const navigate = useNavigate();
+  const { currentUser } = useAuth();
 
   useEffect(() => { document.title = 'EdCube — A Studio for Educators'; }, []);
+
+  const handleLogout = async () => {
+    await logoutTeacher();
+  };
 
   return (
     <div style={{ fontFamily: "'DM Sans', sans-serif", background: '#FAF8F4', color: '#1C1917', overflow: 'hidden' }}>
@@ -68,24 +75,46 @@ const LandingPage = () => {
           EdCube
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          <button
-            onClick={() => navigate('/login')}
-            style={{ background: 'transparent', color: '#1C1917', padding: '10px 20px', borderRadius: 100, fontSize: 14, fontWeight: 500, border: '0.5px solid #D0CAC0', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}
-          >
-            Log in
-          </button>
-          <button
-            onClick={() => navigate('/contact')}
-            style={{ background: 'transparent', color: '#1C1917', padding: '10px 20px', borderRadius: 100, fontSize: 14, fontWeight: 500, border: '0.5px solid #D0CAC0', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}
-          >
-            Request a demo
-          </button>
-          <button
-            onClick={() => navigate('/signup')}
-            style={{ background: '#1C1917', color: '#FAF8F4', padding: '10px 22px', borderRadius: 100, fontSize: 14, fontWeight: 500, border: 'none', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}
-          >
-            Sign up free
-          </button>
+          {currentUser ? (
+            <>
+              <span style={{ fontSize: 13, color: '#6B6459', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {currentUser.displayName || currentUser.email}
+              </span>
+              <button
+                onClick={() => navigate('/my-courses')}
+                style={{ background: 'transparent', color: '#1C1917', padding: '10px 20px', borderRadius: 100, fontSize: 14, fontWeight: 500, border: '0.5px solid #D0CAC0', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}
+              >
+                My courses
+              </button>
+              <button
+                onClick={handleLogout}
+                style={{ background: '#1C1917', color: '#FAF8F4', padding: '10px 22px', borderRadius: 100, fontSize: 14, fontWeight: 500, border: 'none', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}
+              >
+                Log out
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => navigate('/login')}
+                style={{ background: 'transparent', color: '#1C1917', padding: '10px 20px', borderRadius: 100, fontSize: 14, fontWeight: 500, border: '0.5px solid #D0CAC0', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}
+              >
+                Log in
+              </button>
+              <button
+                onClick={() => navigate('/contact')}
+                style={{ background: 'transparent', color: '#1C1917', padding: '10px 20px', borderRadius: 100, fontSize: 14, fontWeight: 500, border: '0.5px solid #D0CAC0', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}
+              >
+                Request a demo
+              </button>
+              <button
+                onClick={() => navigate('/signup')}
+                style={{ background: '#1C1917', color: '#FAF8F4', padding: '10px 22px', borderRadius: 100, fontSize: 14, fontWeight: 500, border: 'none', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}
+              >
+                Sign up free
+              </button>
+            </>
+          )}
         </div>
       </nav>
 

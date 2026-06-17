@@ -16,6 +16,7 @@ import CourseViewPage from './components/courses/CourseViewPage';
 import TeacherProfile from './components/teacherProfile/TeacherProfile';
 import Search from './components/search/Search';
 import ContactPage from './components/pages/ContactPage';
+import SynopsisPage from './components/synopsis/SynopsisPage';
 
 function App() {
   return (
@@ -46,6 +47,10 @@ function App() {
             <Route path="/profile/:teacherUid" element={<TeacherProfile />} />
             <Route path="/search" element={<Search />} />
           </Route>
+
+          {/* Standalone public routes — no sidebar, no auth required */}
+          <Route path="/synopsis" element={<SynopsisPage />} />
+          <Route path="/synopsis/:campSlug" element={<SynopsisPage />} />
 
           {/* Catch all - redirect to landing */}
           <Route path="*" element={<Navigate to="/" replace />} />
