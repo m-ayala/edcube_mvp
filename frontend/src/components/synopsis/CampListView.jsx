@@ -7,11 +7,12 @@ import {
   VALID_DAYS,
   DAY_LABELS,
 } from '../../constants/synopsisSchema';
-import { Link } from 'lucide-react';
+import { Link, Trash2 } from 'lucide-react';
 import {
   updateWeek,
   updateCamp,
   createCamp,
+  deleteCamp,
   downloadGroupDoc,
 } from '../../services/synopsisService';
 
@@ -110,6 +111,29 @@ export default function CampListView({
     setEditingCampId(null);
     try { await updateCamp(currentUser, campId, editCampData); await onDataRefresh(); }
     catch (err) { alert(err.message); }
+  };
+
+  // ── Delete sub-camp / group (admin) ───────────────────────────────────────
+  const [deletingCampId, setDeletingCampId] = useState(null);
+  const [deletingGroup,  setDeletingGroup]  = useState(null);
+
+  const handleDeleteCamp = async (campId, campName, e) => {
+    e.stopPropagation();
+    if (!window.confirm(`Delete "${campName}"? This cannot be undone.`)) return;
+    setDeletingCampId(campId);
+    try { await deleteCamp(currentUser, campId); await onDataRefresh(); }
+    catch (err) { alert(err.message); }
+    finally { setDeletingCampId(null); }
+  };
+
+  const handleDeleteGroup = async (groupName, groupCamps) => {
+    if (!window.confirm(`Delete the entire "${groupName}" group and all its sub-camps? This cannot be undone.`)) return;
+    setDeletingGroup(groupName);
+    try {
+      await Promise.all(groupCamps.map(c => deleteCamp(currentUser, c[SynopsisCampFields.CAMP_ID])));
+      await onDataRefresh();
+    } catch (err) { alert(err.message); }
+    finally { setDeletingGroup(null); }
   };
 
   // ── Add sub-camp (admin) ───────────────────────────────────────────────────
@@ -318,6 +342,14 @@ export default function CampListView({
                 style={{ ...pillBtn('#ACD8F0', '#1e3a4a'), opacity: downloadingGroup === name ? 0.6 : 1, cursor: downloadingGroup === name ? 'wait' : 'pointer' }}>
                 {downloadingGroup === name ? '…' : '↓'} Download doc
               </button>
+              <button
+                onClick={() => handleDeleteGroup(name, groupCamps)}
+                disabled={deletingGroup === name}
+                style={{ ...pillBtn('rgba(239,68,68,0.1)', '#dc2626'), opacity: deletingGroup === name ? 0.5 : 1, cursor: deletingGroup === name ? 'wait' : 'pointer' }}
+                title="Delete entire group"
+              >
+                <Trash2 size={13} /> {deletingGroup === name ? 'Deleting…' : 'Delete group'}
+              </button>
             </div>
           </div>
 
@@ -351,6 +383,14 @@ export default function CampListView({
                       {count} / {VALID_DAYS.length} days
                     </span>
                     <button onClick={e => startEditCamp(camp, e)} style={{ ...editIconBtn, fontSize: 17, padding: '5px 7px' }} title="Edit camp">✏️</button>
+                    <button
+                      onClick={e => handleDeleteCamp(campId, camp[SynopsisCampFields.CAMP_NAME], e)}
+                      disabled={deletingCampId === campId}
+                      style={{ ...editIconBtn, padding: '5px 7px', color: deletingCampId === campId ? '#ccc' : '#ef4444', cursor: deletingCampId === campId ? 'wait' : 'pointer' }}
+                      title="Delete sub-camp"
+                    >
+                      <Trash2 size={15} />
+                    </button>
                   </div>
                 </div>
 
