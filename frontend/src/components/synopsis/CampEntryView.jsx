@@ -14,8 +14,6 @@ import {
   getEntriesForCamp,
   saveEntries,
   uploadPhoto,
-  getFoodForWeek,
-  saveFoodForWeek,
   enhanceText,
 } from '../../services/synopsisService';
 
@@ -30,18 +28,13 @@ const STATUS_BADGE = {
 
 const DAY_ORDINAL = { mon: 'Day 1', tue: 'Day 2', wed: 'Day 3', thu: 'Day 4', fri: 'Day 5' };
 
-const BLANK_FOOD_DAY = () => ({ morning_snack: '', lunch: '', afternoon_snack: '' });
-const BLANK_FOOD     = () => Object.fromEntries(VALID_DAYS.map(d => [d, BLANK_FOOD_DAY()]));
-const blankDay       = () => ({ day_title: '', raw_text: '', photo_urls: [], status: 'draft' });
+const blankDay = () => ({ day_title: '', raw_text: '', photo_urls: [], status: 'draft' });
 
 export default function CampEntryView({ camp, onBack, isAdmin = false }) {
   const campId = camp[SynopsisCampFields.CAMP_ID];
   const weekId = camp[SynopsisCampFields.WEEK_ID];
 
-  // ── Tabs ──────────────────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState('days');
-
-  // ── Days tab ──────────────────────────────────────────────────────────────
+  // ── Days ──────────────────────────────────────────────────────────────────
   const [dayData, setDayData]     = useState(() => Object.fromEntries(VALID_DAYS.map(d => [d, blankDay()])));
   const [uploading, setUploading]     = useState({});
   const [saving, setSaving]           = useState(false);
@@ -54,17 +47,6 @@ export default function CampEntryView({ camp, onBack, isAdmin = false }) {
   const dirtyDays     = useRef(new Set());
 
   useEffect(() => { dayDataRef.current = dayData; }, [dayData]);
-
-  // ── Food tab ──────────────────────────────────────────────────────────────
-  const [foodData, setFoodData]       = useState(BLANK_FOOD);
-  const [foodSaving, setFoodSaving]   = useState(false);
-  const [foodSaveMsg, setFoodSaveMsg] = useState('');
-  const [foodAutoSaved, setFoodAutoSaved] = useState(false);
-  const foodDataRef      = useRef(foodData);
-  const foodAutoTimer    = useRef(null);
-  const foodUserEdited   = useRef(false);
-
-  useEffect(() => { foodDataRef.current = foodData; }, [foodData]);
 
   // ── Load entries ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -86,21 +68,6 @@ export default function CampEntryView({ camp, onBack, isAdmin = false }) {
       });
     }).catch(() => {});
   }, [campId]);
-
-  // ── Load food ─────────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!weekId) return;
-    getFoodForWeek(weekId).then(({ food }) => {
-      if (!food) return;
-      setFoodData(prev => {
-        const next = { ...prev };
-        for (const day of VALID_DAYS) {
-          if (food[day]) next[day] = { ...BLANK_FOOD_DAY(), ...food[day] };
-        }
-        return next;
-      });
-    }).catch(() => {});
-  }, [weekId]);
 
   // ── Days: auto-save using effect ──────────────────────────────────────────
   useEffect(() => {
@@ -261,55 +228,11 @@ export default function CampEntryView({ camp, onBack, isAdmin = false }) {
     });
   };
 
-  // ── Food: auto-save using effect ──────────────────────────────────────────
-  useEffect(() => {
-    if (!weekId || !foodUserEdited.current) return;
-    clearTimeout(foodAutoTimer.current);
-    foodAutoTimer.current = setTimeout(async () => {
-      try {
-        await saveFoodForWeek(weekId, foodDataRef.current);
-        setFoodAutoSaved(true);
-        setTimeout(() => setFoodAutoSaved(false), 3000);
-      } catch { /* silent */ }
-    }, 3000);
-    return () => clearTimeout(foodAutoTimer.current);
-  }, [foodData, weekId]);
-
-  // ── Food: manual save ─────────────────────────────────────────────────────
-  const handleFoodSave = async () => {
-    if (!weekId) return;
-    clearTimeout(foodAutoTimer.current);
-    setFoodSaving(true);
-    setFoodSaveMsg('');
-    setFoodAutoSaved(false);
-    try {
-      await saveFoodForWeek(weekId, foodData);
-      setFoodSaveMsg('Food menu saved!');
-    } catch (err) {
-      alert(`Save failed: ${err.message}`);
-    } finally {
-      setFoodSaving(false);
-    }
-  };
-
-  const setFoodField = (day, field, val) => {
-    foodUserEdited.current = true;
-    setFoodData(prev => ({ ...prev, [day]: { ...prev[day], [field]: val } }));
-  };
-
   // ── Shared styles ─────────────────────────────────────────────────────────
   const campName = camp[SynopsisCampFields.CAMP_NAME];
   const campTime = [camp[SynopsisCampFields.TIME_START], camp[SynopsisCampFields.TIME_END]].filter(Boolean).join('–');
   const teacher  = camp[SynopsisCampFields.TEACHER_NAME];
   const fileRefs = useRef({});
-
-  const tabBtn = (active) => ({
-    padding: '9px 22px', borderRadius: 100, border: 'none', cursor: 'pointer',
-    fontSize: 14, fontWeight: 500, fontFamily: FONT,
-    background: active ? '#1C1917' : 'transparent',
-    color: active ? '#FAF8F4' : '#8b7355',
-    transition: 'background 0.15s, color 0.15s',
-  });
 
   const fieldInput = {
     width: '100%', padding: '11px 14px', borderRadius: 10,
@@ -353,21 +276,8 @@ export default function CampEntryView({ camp, onBack, isAdmin = false }) {
         </div>
       </div>
 
-      {/* Tab bar */}
-      <div style={{
-        display: 'inline-flex', gap: 4, padding: 4,
-        background: 'rgba(0,0,0,0.05)', borderRadius: 100, marginBottom: 32,
-      }}>
-        <button style={tabBtn(activeTab === 'days')} onClick={() => setActiveTab('days')}>
-          Camp Days
-        </button>
-        <button style={tabBtn(activeTab === 'food')} onClick={() => setActiveTab('food')}>
-          Food
-        </button>
-      </div>
-
-      {/* ═══════ DAYS TAB ═══════ */}
-      {activeTab === 'days' && (
+      {/* ═══════ DAYS ═══════ */}
+      <>
         <>
           {VALID_DAYS.map(day => {
             const data       = dayData[day];
@@ -522,69 +432,7 @@ export default function CampEntryView({ camp, onBack, isAdmin = false }) {
             )}
           </div>
         </>
-      )}
-
-      {/* ═══════ FOOD TAB ═══════ */}
-      {activeTab === 'food' && (
-        <>
-          <div style={{
-            background: 'rgba(246,178,107,0.15)', border: '1px solid rgba(246,178,107,0.4)',
-            borderRadius: 10, padding: '11px 16px', fontSize: 13, color: '#7a4a00', marginBottom: 28,
-          }}>
-            This food menu is shared across all camps for this week — fill it in once and it will appear in every synopsis document.
-          </div>
-
-          {VALID_DAYS.map(day => (
-            <div key={day} style={{ marginBottom: 32, paddingBottom: 32, borderBottom: '1px solid #F0EDE8' }}>
-              <div style={{ fontFamily: SERIF, fontSize: 16, fontWeight: 600, color: '#1C1917', marginBottom: 16 }}>
-                {DAY_ORDINAL[day]} — {DAY_LABELS[day]}
-              </div>
-
-              {[
-                ['morning_snack',   'Morning Snack'],
-                ['lunch',           'Lunch'],
-                ['afternoon_snack', 'Afternoon Snack'],
-              ].map(([field, label]) => (
-                <div key={field} style={{ marginBottom: 14 }}>
-                  <label style={{
-                    display: 'block', fontSize: 11, fontWeight: 700, color: '#8b7355',
-                    textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6,
-                  }}>
-                    {label}
-                  </label>
-                  <input
-                    type="text"
-                    value={foodData[day]?.[field] || ''}
-                    onChange={e => setFoodField(day, field, e.target.value)}
-                    placeholder={field === 'lunch' ? 'e.g. Rice, dal, and roasted vegetables' : 'e.g. Fresh fruit and crackers'}
-                    style={fieldInput}
-                    onFocus={e => { e.target.style.borderColor = '#f6b26b'; e.target.style.boxShadow = '0 0 0 3px rgba(246,178,107,0.2)'; }}
-                    onBlur={e => { e.target.style.borderColor = 'rgba(255,255,255,0.9)'; e.target.style.boxShadow = 'none'; }}
-                  />
-                </div>
-              ))}
-            </div>
-          ))}
-
-          {/* Food save bar */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', paddingTop: 8 }}>
-            <button onClick={handleFoodSave} disabled={foodSaving} style={saveBarBtn(foodSaving)}>
-              {foodSaving ? 'Saving…' : 'Save food menu'}
-            </button>
-
-            {foodAutoSaved && !foodSaveMsg && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#2d7a47' }}>
-                <Check size={13} /> Auto-saved
-              </div>
-            )}
-            {foodSaveMsg && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#2d7a47' }}>
-                <Check size={14} /> {foodSaveMsg}
-              </div>
-            )}
-          </div>
-        </>
-      )}
+      </>
     </div>
   );
 }

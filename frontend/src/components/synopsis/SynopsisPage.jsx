@@ -17,6 +17,7 @@ import {
 } from '../../services/synopsisService';
 import CampListView from './CampListView';
 import CampEntryView from './CampEntryView';
+import FoodMenuPage from './FoodMenuPage';
 import AdminPanel from './AdminPanel';
 import AdminLoginModal from './AdminLoginModal';
 
@@ -126,6 +127,11 @@ export default function SynopsisPage() {
     setSelectedCamp(camp);
     setView('camp');
     navigate(`/synopsis/${toCampSlug(camp[SynopsisCampFields.CAMP_NAME])}`);
+  };
+
+  const handleFoodSelect = () => {
+    setView('food');
+    navigate('/synopsis');
   };
 
   const handleBack = () => {
@@ -238,6 +244,13 @@ export default function SynopsisPage() {
         </div>
       ) : view === 'camp' && selectedCamp ? (
         <CampEntryView camp={selectedCamp} onBack={handleBack} isAdmin={effectiveIsAdmin} />
+      ) : view === 'food' ? (
+        <FoodMenuPage
+          week={currentDisplayWeek}
+          isAdmin={effectiveIsAdmin}
+          currentUser={currentUser}
+          onBack={handleBack}
+        />
       ) : (
         <CampListView
           activeWeek={activeWeek}
@@ -247,6 +260,7 @@ export default function SynopsisPage() {
           isAdmin={effectiveIsAdmin}
           currentUser={currentUser}
           onCampSelect={handleCampSelect}
+          onFoodSelect={handleFoodSelect}
           onDataRefresh={refresh}
           adminPanel={
             effectiveIsAdmin ? (

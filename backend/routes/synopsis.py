@@ -64,6 +64,18 @@ ENHANCE_SYSTEM_PROMPT = (
 DAY_LABELS = {'mon': 'Monday', 'tue': 'Tuesday', 'wed': 'Wednesday', 'thu': 'Thursday', 'fri': 'Friday'}
 DAY_ORDER = list(VALID_DAYS)
 
+PARSE_FOOD_PROMPT = (
+    "You extract a weekly camp food menu from an image. "
+    "Return JSON with exactly this structure (leave fields as empty strings if not found):\n"
+    '{"mon": {"morning_snack": "", "lunch": "", "afternoon_snack": ""}, '
+    '"tue": {"morning_snack": "", "lunch": "", "afternoon_snack": ""}, '
+    '"wed": {"morning_snack": "", "lunch": "", "afternoon_snack": ""}, '
+    '"thu": {"morning_snack": "", "lunch": "", "afternoon_snack": ""}, '
+    '"fri": {"morning_snack": "", "lunch": "", "afternoon_snack": ""}}\n\n'
+    "Fill in every field you can read. Use short, plain descriptions (e.g. 'Fresh fruit and crackers'). "
+    "Leave a field as an empty string if the menu does not mention it."
+)
+
 PARSE_FLYER_PROMPT = (
     "You extract camp schedule information from a flyer, image, or spreadsheet. "
     "Return JSON with exactly this structure (leave fields as empty strings if not found):\n"
@@ -242,6 +254,30 @@ async def parse_flyer(
     result.setdefault("start_date", "")
     result.setdefault("end_date", "")
     result.setdefault("camp_groups", [])
+    return result
+
+
+@router.post("/parse-food")
+async def parse_food_image(
+    file: UploadFile = File(...),
+    admin: dict = Depends(verify_icc_admin),
+):
+    """Upload a menu photo; returns structured food data keyed by day."""
+    import base64
+    content_type = (file.content_type or "").lower()
+    if not content_type.startswith("image/"):
+        raise HTTPException(400, "Please upload an image (JPG, PNG, etc.)")
+    data = await file.read()
+    b64      = base64.b64encode(data).decode()
+    data_uri = f"data:{content_type};base64,{b64}"
+    result = call_openai(
+        prompt="Extract the camp food menu from this image.",
+        system_message=PARSE_FOOD_PROMPT,
+        json_mode=True,
+        images=[data_uri],
+    )
+    for day in ("mon", "tue", "wed", "thu", "fri"):
+        result.setdefault(day, {"morning_snack": "", "lunch": "", "afternoon_snack": ""})
     return result
 
 

@@ -6,7 +6,6 @@ import {
   SynopsisEntryFields,
   VALID_DAYS,
   DAY_LABELS,
-  FoodFields,
 } from '../../constants/synopsisSchema';
 import { Link } from 'lucide-react';
 import {
@@ -14,8 +13,6 @@ import {
   updateCamp,
   createCamp,
   downloadGroupDoc,
-  getFoodForWeek,
-  saveFoodForWeek,
 } from '../../services/synopsisService';
 
 const FONT  = "'DM Sans', sans-serif";
@@ -46,7 +43,7 @@ function EditInput({ value, onChange, onSave, onCancel, style = {} }) {
 
 export default function CampListView({
   activeWeek, displayWeek, camps, allEntries,
-  isAdmin, currentUser, onCampSelect, onDataRefresh, adminPanel,
+  isAdmin, currentUser, onCampSelect, onFoodSelect, onDataRefresh, adminPanel,
 }) {
   const currentWeek = displayWeek || activeWeek;
   const weekId      = currentWeek?.[SynopsisWeekFields.WEEK_ID];
@@ -160,42 +157,6 @@ export default function CampListView({
       URL.revokeObjectURL(url);
     } catch (err) { alert(err.message); }
     finally { setDownloadingGroup(null); }
-  };
-
-  // ── Food section (admin) ──────────────────────────────────────────────────
-  const initFoodDraft = () =>
-    VALID_DAYS.reduce((acc, day) => ({ ...acc, [day]: { morning_snack: '', lunch: '', afternoon_snack: '' } }), {});
-
-  const [foodExpanded, setFoodExpanded] = useState(false);
-  const [foodDraft,    setFoodDraft]    = useState(initFoodDraft);
-  const [foodSaving,   setFoodSaving]   = useState(false);
-
-  useEffect(() => {
-    if (!isAdmin || !weekId) return;
-    getFoodForWeek(weekId)
-      .then(res => {
-        const saved = res.food || {};
-        setFoodDraft(VALID_DAYS.reduce((acc, day) => ({
-          ...acc,
-          [day]: {
-            morning_snack:   saved[day]?.morning_snack   || '',
-            lunch:           saved[day]?.lunch           || '',
-            afternoon_snack: saved[day]?.afternoon_snack || '',
-          },
-        }), {}));
-      })
-      .catch(() => setFoodDraft(initFoodDraft()));
-  }, [weekId, isAdmin]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handleFoodSave = async () => {
-    setFoodSaving(true);
-    try {
-      await saveFoodForWeek(weekId, foodDraft);
-    } catch (err) {
-      alert(err.message);
-    } finally {
-      setFoodSaving(false);
-    }
   };
 
   // ── Non-admin: selected group from dropdown ────────────────────────────────
@@ -430,71 +391,30 @@ export default function CampListView({
         </div>
       ))}
 
-      {/* ═══════ FOOD SECTION (admin only) ═══════ */}
-      {isAdmin && weekId && (
+      {/* ═══════ FOOD MENU CARD ═══════ */}
+      {currentWeek && onFoodSelect && (
         <div style={{ marginBottom: 44 }}>
-          <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            marginBottom: foodExpanded ? 16 : 0,
-            paddingBottom: 12, borderBottom: '2px solid rgba(0,0,0,0.08)',
-          }}>
+          <div
+            onClick={onFoodSelect}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              background: 'rgba(249,203,156,0.25)',
+              backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+              border: '1px solid rgba(249,203,156,0.6)',
+              borderRadius: 16, padding: '20px 24px',
+              cursor: 'pointer', transition: 'box-shadow 0.18s, transform 0.12s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 6px 24px rgba(0,0,0,0.09)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+            onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}
+          >
             <div>
-              <span style={{ fontSize: 18, fontWeight: 600, color: '#1e1e2e' }}>🍽️ Food Menu</span>
-              <div style={{ fontSize: 13, color: '#888', marginTop: 3 }}>Morning snack · Lunch · Afternoon snack</div>
-            </div>
-            <button
-              onClick={() => setFoodExpanded(v => !v)}
-              style={pillBtn('rgba(249,203,156,0.55)', '#5c3d0f')}
-            >
-              {foodExpanded ? 'Collapse ▲' : 'Edit food ▼'}
-            </button>
-          </div>
-
-          {foodExpanded && (
-            <>
-              {VALID_DAYS.map(day => (
-                <div key={day} style={{
-                  background: 'rgba(255,255,255,0.72)',
-                  backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
-                  border: '1px solid rgba(255,255,255,0.9)',
-                  borderRadius: 16, padding: '20px 24px', marginBottom: 12,
-                }}>
-                  <div style={{ fontSize: 15, fontWeight: 600, color: '#1e1e2e', marginBottom: 14 }}>
-                    {DAY_LABELS[day]}
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {[
-                      [FoodFields.MORNING_SNACK,   '🍎 Morning Snack'],
-                      [FoodFields.LUNCH,           '🥗 Lunch'],
-                      [FoodFields.AFTERNOON_SNACK, '🍪 Afternoon Snack'],
-                    ].map(([field, label]) => (
-                      <div key={field} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <label style={{ fontSize: 13, fontWeight: 500, color: '#555', minWidth: 150 }}>{label}</label>
-                        <input
-                          value={foodDraft[day]?.[field] || ''}
-                          onChange={e => setFoodDraft(prev => ({
-                            ...prev,
-                            [day]: { ...prev[day], [field]: e.target.value },
-                          }))}
-                          placeholder="e.g. Apple slices"
-                          style={{ ...editInputStyle, flex: 1 }}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
-                <button
-                  onClick={handleFoodSave}
-                  disabled={foodSaving}
-                  style={{ ...saveBtn, opacity: foodSaving ? 0.6 : 1, cursor: foodSaving ? 'wait' : 'pointer' }}
-                >
-                  {foodSaving ? 'Saving…' : 'Save food menu'}
-                </button>
+              <div style={{ fontSize: 18, fontWeight: 600, color: '#1e1e2e' }}>🍽️ Food Menu</div>
+              <div style={{ fontSize: 13, color: '#888', marginTop: 3 }}>
+                {isAdmin ? "View and edit this week's food menu" : "See this week's snacks and meals"}
               </div>
-            </>
-          )}
+            </div>
+            <span style={{ fontSize: 20, color: '#8b7355' }}>›</span>
+          </div>
         </div>
       )}
 

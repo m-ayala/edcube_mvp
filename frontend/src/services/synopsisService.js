@@ -199,6 +199,22 @@ export const getFoodForWeek = async (weekId) => {
   return res.json(); // { food: {...} | null }
 };
 
+export const parseFoodImage = async (currentUser, file) => {
+  const token = await currentUser.getIdToken();
+  const formData = new FormData();
+  formData.append('file', file);
+  const res = await fetch(`${API_BASE}/parse-food`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to parse food image');
+  }
+  return res.json();
+};
+
 export const saveFoodForWeek = async (weekId, days) => {
   const res = await fetch(`${API_BASE}/weeks/${weekId}/food`, {
     method: 'PATCH',
