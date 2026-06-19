@@ -28,11 +28,18 @@ class FirebaseService:
 
         self.db = firestore.client()
         self.curricula_collection = self.db.collection('curricula')
-        self.synopsis_weeks = self.db.collection('synopsis_weeks')
-        self.synopsis_camps = self.db.collection('synopsis_camps')
-        self.synopsis_entries = self.db.collection('synopsis_entries')
-        self.synopsis_food = self.db.collection('synopsis_food')
         self.bucket = fb_storage.bucket(STORAGE_BUCKET)
+
+    # ── Synopsis path helpers ─────────────────────────────────────────────────
+
+    def _weeks_col(self):
+        return self.db.collection('synopsis').document('ICC').collection('weeks')
+
+    def _camps_col(self, week_id: str):
+        return self._weeks_col().document(week_id).collection('camps')
+
+    def _entries_col(self, week_id: str, camp_id: str):
+        return self._camps_col(week_id).document(camp_id).collection('entries')
 
     async def upload_file(self, data: bytes, path: str, content_type: str) -> str:
         """Upload bytes to Firebase Storage and return a permanent download URL."""
@@ -598,40 +605,44 @@ class FirebaseService:
     async def create_synopsis_week(self, data: Dict) -> str:
         week_id = str(uuid.uuid4())
         data['week_id'] = week_id
-        self.synopsis_weeks.document(week_id).set(data)
+        self._weeks_col().document(week_id).set(data)
         print(f"✅ Created synopsis week: {week_id}")
         return week_id
 
     async def get_all_synopsis_weeks(self) -> List[Dict]:
-        docs = self.synopsis_weeks.order_by('created_at', direction=firestore.Query.DESCENDING).stream()
+        docs = self._weeks_col().order_by('created_at', direction=firestore.Query.DESCENDING).stream()
         return [{'id': d.id, **d.to_dict()} for d in docs]
 
     async def get_active_synopsis_week(self) -> Optional[Dict]:
-        docs = list(self.synopsis_weeks.where('is_active', '==', True).limit(1).stream())
+        docs = list(self._weeks_col().where('is_active', '==', True).limit(1).stream())
         if not docs:
             return None
         return {'id': docs[0].id, **docs[0].to_dict()}
 
     async def update_synopsis_week(self, week_id: str, updates: Dict) -> bool:
-        ref = self.synopsis_weeks.document(week_id)
+        ref = self._weeks_col().document(week_id)
         if not ref.get().exists:
             return False
         ref.update(updates)
         return True
 
     async def deactivate_all_synopsis_weeks(self) -> None:
-        docs = self.synopsis_weeks.where('is_active', '==', True).stream()
+        docs = self._weeks_col().where('is_active', '==', True).stream()
         for doc in docs:
             doc.reference.update({'is_active': False})
 
     async def delete_synopsis_week(self, week_id: str) -> bool:
-        ref = self.synopsis_weeks.document(week_id)
+        ref = self._weeks_col().document(week_id)
         if not ref.get().exists:
             return False
-        ref.delete()
-        # Cascade: delete all camps for this week
-        for camp_doc in self.synopsis_camps.where('week_id', '==', week_id).stream():
+        # Cascade: delete all entries under each camp, then each camp, then the week
+        for camp_doc in self._camps_col(week_id).stream():
+            camp_data = camp_doc.to_dict() or {}
+            camp_id = camp_data.get('camp_id', camp_doc.id)
+            for entry_doc in self._entries_col(week_id, camp_id).stream():
+                entry_doc.reference.delete()
             camp_doc.reference.delete()
+        ref.delete()
         return True
 
     # ── Synopsis Camps ────────────────────────────────────────────────────────
@@ -639,48 +650,48 @@ class FirebaseService:
     async def create_synopsis_camp(self, data: Dict) -> str:
         camp_id = str(uuid.uuid4())
         data['camp_id'] = camp_id
-        self.synopsis_camps.document(camp_id).set(data)
+        week_id = data['week_id']
+        self._camps_col(week_id).document(camp_id).set(data)
         print(f"✅ Created synopsis camp: {camp_id}")
         return camp_id
 
     async def get_synopsis_camps_for_week(self, week_id: str) -> List[Dict]:
-        # No order_by — avoids composite index requirement; sort in Python instead
-        docs = self.synopsis_camps.where('week_id', '==', week_id).stream()
+        docs = self._camps_col(week_id).stream()
         results = [{'id': d.id, **d.to_dict()} for d in docs]
         results.sort(key=lambda c: c.get('created_at', ''))
         return results
 
+    async def get_synopsis_camp(self, camp_id: str) -> Optional[Dict]:
+        docs = list(self.db.collection_group('camps').where('camp_id', '==', camp_id).limit(1).stream())
+        if not docs:
+            return None
+        return {'id': docs[0].id, **docs[0].to_dict()}
+
     async def update_synopsis_camp(self, camp_id: str, updates: Dict) -> bool:
-        ref = self.synopsis_camps.document(camp_id)
-        if not ref.get().exists:
+        docs = list(self.db.collection_group('camps').where('camp_id', '==', camp_id).limit(1).stream())
+        if not docs:
             return False
-        ref.update(updates)
+        docs[0].reference.update(updates)
         return True
 
     async def delete_synopsis_camp(self, camp_id: str) -> bool:
-        ref = self.synopsis_camps.document(camp_id)
-        if not ref.get().exists:
+        docs = list(self.db.collection_group('camps').where('camp_id', '==', camp_id).limit(1).stream())
+        if not docs:
             return False
-        ref.delete()
+        camp_data = docs[0].to_dict() or {}
+        week_id = camp_data.get('week_id', '')
+        # Delete all entries under this camp first
+        for entry_doc in self._entries_col(week_id, camp_id).stream():
+            entry_doc.reference.delete()
+        docs[0].reference.delete()
         return True
-
-    async def get_synopsis_camp(self, camp_id: str) -> Optional[Dict]:
-        doc = self.synopsis_camps.document(camp_id).get()
-        if not doc.exists:
-            return None
-        return {'id': doc.id, **doc.to_dict()}
 
     # ── Synopsis Entries ──────────────────────────────────────────────────────
 
     async def upsert_synopsis_entry(self, camp_id: str, week_id: str, day: str, data: Dict) -> str:
         """Create or overwrite the entry for (camp_id, day). Returns entry_id."""
-        existing = list(
-            self.synopsis_entries
-            .where('camp_id', '==', camp_id)
-            .where('day', '==', day)
-            .limit(1)
-            .stream()
-        )
+        entries_col = self._entries_col(week_id, camp_id)
+        existing = list(entries_col.where('day', '==', day).limit(1).stream())
         if existing:
             entry_id = existing[0].id
             existing[0].reference.update(data)
@@ -690,33 +701,38 @@ class FirebaseService:
             data['camp_id'] = camp_id
             data['week_id'] = week_id
             data['day'] = day
-            self.synopsis_entries.document(entry_id).set(data)
+            entries_col.document(entry_id).set(data)
         return entry_id
 
     async def get_synopsis_entries_for_camp(self, camp_id: str) -> List[Dict]:
-        docs = self.synopsis_entries.where('camp_id', '==', camp_id).stream()
+        docs = self.db.collection_group('entries').where('camp_id', '==', camp_id).stream()
         return [{'id': d.id, **d.to_dict()} for d in docs]
 
     async def get_synopsis_entry(self, entry_id: str) -> Optional[Dict]:
-        doc = self.synopsis_entries.document(entry_id).get()
-        if not doc.exists:
+        docs = list(self.db.collection_group('entries').where('entry_id', '==', entry_id).limit(1).stream())
+        if not docs:
             return None
-        return {'id': doc.id, **doc.to_dict()}
+        return {'id': docs[0].id, **docs[0].to_dict()}
 
     async def update_synopsis_entry(self, entry_id: str, updates: Dict) -> None:
-        self.synopsis_entries.document(entry_id).update(updates)
+        docs = list(self.db.collection_group('entries').where('entry_id', '==', entry_id).limit(1).stream())
+        if docs:
+            docs[0].reference.update(updates)
 
     async def get_synopsis_entries_for_week(self, week_id: str) -> List[Dict]:
-        docs = self.synopsis_entries.where('week_id', '==', week_id).stream()
+        docs = self.db.collection_group('entries').where('week_id', '==', week_id).stream()
         return [{'id': d.id, **d.to_dict()} for d in docs]
 
     # ── Synopsis Food ─────────────────────────────────────────────────────────
 
     async def get_synopsis_food(self, week_id: str) -> Optional[Dict]:
-        doc = self.synopsis_food.document(week_id).get()
+        doc = self._weeks_col().document(week_id).get()
         if not doc.exists:
             return None
-        return {'week_id': week_id, **doc.to_dict()}
+        food = (doc.to_dict() or {}).get('food')
+        if food is None:
+            return None
+        return {'week_id': week_id, **food}
 
     async def upsert_synopsis_food(self, week_id: str, data: Dict) -> None:
-        self.synopsis_food.document(week_id).set(data, merge=True)
+        self._weeks_col().document(week_id).set({'food': data}, merge=True)
