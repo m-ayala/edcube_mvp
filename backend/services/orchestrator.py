@@ -113,6 +113,12 @@ class CurriculumOrchestrator:
         blocks_by_subsection: Dict[str, List] = {}
         hours_per_day = int(teacher_input.get('hours_per_day', 1)) or 1
 
+        # Pre-build the full list of (section_title, subsection_title) pairs for context
+        all_subsection_labels = [
+            {'section': sec.get('title', ''), 'subsection': s.get('title', '')}
+            for sec, s in all_pairs
+        ]
+
         for flat_idx, (section, sub) in enumerate(all_pairs):
             sub_id = sub.get('id', f'sub-{flat_idx}')
             section_title = section.get('title', f'Day {flat_idx + 1}')
@@ -128,6 +134,13 @@ class CurriculumOrchestrator:
             worksheet_slots = 1 if flat_idx in worksheet_indices else 0
             activity_slots = 1 if flat_idx in activity_indices else 0
 
+            # All subsections except the current one — the LLM must not repeat their content
+            other_subsections = [
+                lbl for i, lbl in enumerate(all_subsection_labels) if i != flat_idx
+            ]
+
+            session_minutes = int(sub.get('duration_minutes', 60))
+
             try:
                 prompt = get_block_generation_prompt(
                     teacher_input={
@@ -141,6 +154,8 @@ class CurriculumOrchestrator:
                     section_title=section_title,
                     worksheet_slots=worksheet_slots,
                     activity_slots=activity_slots,
+                    other_subsections=other_subsections,
+                    session_minutes=session_minutes,
                 )
 
                 result = call_openai(
@@ -149,6 +164,7 @@ class CurriculumOrchestrator:
                         "You are an expert elementary education curriculum designer. "
                         "Generate content blocks as valid JSON only."
                     ),
+                    max_tokens=8000,
                 )
 
                 # Defensively extract the blocks list

@@ -87,6 +87,12 @@ GOOD EXAMPLES (for topic "The Water Cycle", ages 8–9, 2 days × 2 hours/day):
   - Subsection 1: "Investigating: Why Does It Rain? Understanding Precipitation" (60 min)
   - Subsection 2: "Applying: Tracing Water from Rain to River to Ocean" (60 min)
 
+UNIQUENESS RULES (CRITICAL — violations make the course worthless):
+- Every subsection across ALL sections must cover COMPLETELY DIFFERENT content — no concept, skill, vocabulary set, or activity type may be repeated in two different subsections
+- Before assigning a subsection title or description, mentally check: "has this concept appeared in any earlier section or subsection?" If yes, pick a different concept
+- Subsections within the same section must also be distinct from each other — no two subsections in the same day should teach overlapping ideas
+- Think of the full course as one continuous progression: Day 1 introduces X, Day 2 deepens with Y, Day 3 applies Z — never revisiting the same territory
+
 DESIGN RULES:
 1. Generate EXACTLY {num_days} section(s) — one per teaching day
 2. Each section must have EXACTLY {subsections_per_day} subsection(s) — one per teaching hour
@@ -94,6 +100,7 @@ DESIGN RULES:
 4. Sections must flow in logical teaching order (foundational concepts first, then deeper dives, then application)
 5. Topics must be specific yet well-known enough to find YouTube videos and worksheets for
 6. Every subsection needs specific learning objectives and content keywords (used by an automated system to find real resources — vague keywords will find irrelevant resources)
+7. Plan ALL subsection titles for all sections BEFORE writing any descriptions — this forces you to see the full picture and catch repeats early
 
 OUTPUT FORMAT (strict JSON, no other text):
 {{
@@ -129,6 +136,7 @@ IMPORTANT:
 - Do NOT include worksheets or activities in the outline — those are generated separately per subsection.
 - Address teacher's requirements: {requirements}
 - STRICTLY generate {num_days} section(s) with {subsections_per_day} subsection(s) each.
+- BEFORE outputting JSON: mentally scan every subsection title and confirm no two are the same or closely similar. If you find a duplicate, replace it with a genuinely distinct concept.
 
 Generate the course outline now as valid JSON only. No other text.
 """

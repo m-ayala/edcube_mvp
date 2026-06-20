@@ -58,6 +58,8 @@ def get_block_generation_prompt(
     section_title: str,
     worksheet_slots: int,
     activity_slots: int,
+    other_subsections: list = None,
+    session_minutes: int = 60,
 ) -> str:
     """
     Build the prompt that generates content blocks for one subsection (1 hour).
@@ -86,10 +88,18 @@ def get_block_generation_prompt(
 
     objectives_text = "\n".join(f"  - {o}" for o in learning_objectives) if learning_objectives else "  (none listed)"
 
-    # Derive content block count: fill remaining time after worksheet + activity
-    # Each block is 15, 30, or 45 min. Target total: 30–60 min.
-    # Assume worksheet = 15 min, activity = 30 min. Content fills the rest.
-    # We let the AI decide exact durations, just enforce the constraints.
+    # Build a "do not repeat" list from all other subsections in the course
+    already_covered_text = ""
+    if other_subsections:
+        lines = []
+        for s in other_subsections:
+            lines.append(f"  - {s['section']}: {s['subsection']}")
+        already_covered_text = (
+            "\nALREADY COVERED IN OTHER LESSONS (DO NOT REPEAT these concepts, titles, or activities):\n"
+            + "\n".join(lines)
+            + "\nYour blocks must cover content that is DISTINCT from all of the above.\n"
+        )
+
     content_slots = "at least 1"  # always include at least one content block
 
     worksheet_instruction = ""
@@ -98,7 +108,7 @@ def get_block_generation_prompt(
 WORKSHEET BLOCK (include exactly 1):
 - type: "worksheet"
 - worksheetType: one of {WORKSHEET_TYPES} — pick the type best suited to the age group and learning objective
-- duration_minutes: 15
+- duration_minutes: 15 (worksheets are always 15 minutes)
 - Title should describe exactly what the worksheet is (e.g. "Label the Parts of a Flower")
 - Content field must follow this exact structure:
 
@@ -124,7 +134,7 @@ Students will [verb] [specific thing].
 ACTIVITY BLOCK (include exactly 1):
 - type: "activity"
 - activityType: one of {ACTIVITY_TYPES} — pick the type best suited to the learning objective and age group
-- duration_minutes: 30
+- duration_minutes: 30 (activities are always 30 minutes)
 - Title should describe exactly what students do (e.g. "Build a Simple Robot Arm")
 - Content field must follow this exact structure:
 
@@ -155,26 +165,32 @@ Students will [verb] [specific thing].
     else:
         activity_instruction = "- Do NOT include any activity block in this subsection."
 
+    # Calculate safe total block budget: aim to fill 50–80% of session, never exceed it
+    max_total = session_minutes
+    min_total = min(15, session_minutes)
+    target_total = max(15, round(session_minutes * 0.6))
+
     prompt = f"""
-You are an expert elementary education curriculum designer. Generate the content blocks for ONE HOUR of teaching.
+You are an expert elementary education curriculum designer. Generate the content blocks for this teaching session.
 
 COURSE CONTEXT:
 - Subject: {subject}
 - Topic: {topic}
 - Student Age Range: {age_range}
 - Day: {section_title}
-- This Hour: {sub_title}
-- Hour Description: {sub_description}
+- This Session: {sub_title}
+- Session Description: {sub_description}
 - Learning Objectives:
 {objectives_text}
 - What Must Be Covered: {what_must_be_covered}
 - Special Requirements: {requirements}
+{already_covered_text}
 
 TIME BUDGET:
-- This subsection = 1 hour (60 minutes) of teaching
-- Total block time must be between 30 and 60 minutes (inclusive) — do NOT exceed 60 minutes
-- You do not need to fill the full 60 minutes; 30–45 minutes of blocks is fine
-- Each block must be exactly 15, 30, or 45 minutes
+- This session = {session_minutes} minutes of teaching
+- Total block time must NOT exceed {max_total} minutes
+- Aim for around {target_total} minutes of blocks (leave some buffer for transitions and questions)
+- Each individual block must be exactly 15 or 30 minutes — never more than 30 minutes per block
 
 BLOCK TYPES TO GENERATE:
 
@@ -182,7 +198,8 @@ CONTENT BLOCK(S) (include {content_slots}):
 - type: "content"
 - subcategory: one of {CONTENT_SUBCATEGORIES}
   Pick the subcategory that best describes the block (e.g. "Definitions" for vocab, "Process" for step-by-step, "Parts of" for anatomy, "Compare & Contrast" for comparisons)
-- duration_minutes: 15 (each content block covers one focused concept — keep blocks short)
+- duration_minutes: 15 or 30 (15 for a single tight concept, 30 for a richer concept that needs more depth)
+- Default to 15 minutes — only use 30 if the concept genuinely needs more time
 - Title: specific and descriptive (e.g. "What Is a Robot?", "Parts of a Robot", "Types of Robots")
   IMPORTANT: Each block must cover EXACTLY ONE concept. Never bundle multiple concepts into one block.
   If a subsection has several concepts (e.g. what it is, its parts, its types), generate a SEPARATE block for each.
@@ -220,7 +237,8 @@ CONTENT QUALITY RULES:
 - Content blocks should progress logically within the hour (e.g. definition first, then parts, then types, then application)
 - All vocabulary, examples, and complexity must be appropriate for ages {age_range_start}–{age_range_end}
 - Block titles must be specific — never generic like "Introduction" or "Review"
-- The total duration_minutes of all blocks combined must be between 30 and 60
+- Each block must be exactly 15 or 30 minutes — never 45 or 60 minutes
+- The total duration_minutes of all blocks combined must NOT exceed {max_total} minutes
 - Worksheet **Worksheet Content:** must be complete verbatim student text — not instructions about what to generate
 
 OUTPUT FORMAT (strict JSON, no other text):

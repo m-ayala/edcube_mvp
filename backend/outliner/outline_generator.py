@@ -112,6 +112,7 @@ def create_final_outline(outline_data: Dict) -> Dict:
                 "pla_pillars": sub.get('pla_pillars', []),
                 "learning_objectives": sub.get('learning_objectives', []),
                 "content_keywords": sub.get('content_keywords', []),
+                "what_must_be_covered": sub.get('what_must_be_covered', ''),
                 # Immediately populate one topic box from the subsection data so
                 # Firestore never starts with empty topicBoxes.
                 "topicBoxes": [{
