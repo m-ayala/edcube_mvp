@@ -1,12 +1,285 @@
 // src/components/courses/SubsectionView.jsx
-import { useState, useEffect } from 'react';
-import { Plus, Trash2, GripVertical } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Plus, Trash2 } from 'lucide-react';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
 
 const BLOCK_TYPE_STYLES = {
   content:   { bg: '#EAF0FF', border: '#BFD0FF', text: '#2A4A9A', badgeBg: '#6B8FE8', label: 'Content' },
   worksheet: { bg: '#FFF3E8', border: '#F5C98A', text: '#9A5C12', badgeBg: '#E8A55C', label: 'Worksheet' },
   activity:  { bg: '#EDFFF3', border: '#86EFAC', text: '#1E7C43', badgeBg: '#5CC97C', label: 'Activity' },
+};
+
+const BLOCK_W = 148;
+const BLOCK_H = 148;
+const BLOCK_GAP = 10;
+
+const ROW_LABEL = { content: 'Content', worksheet: 'Worksheets', activity: 'Activities' };
+
+const BlockRow = ({ blockType, blocks, subsectionId, sectionId, actions, onNavigateToBlock }) => {
+  const containerRef = useRef(null);
+  const [canLeft, setCanLeft]   = useState(false);
+  const [canRight, setCanRight] = useState(false);
+  const [hoveredId, setHoveredId] = useState(null);
+
+  const s = BLOCK_TYPE_STYLES[blockType];
+  const label = ROW_LABEL[blockType];
+  const dndType = `BLOCK_${blockType.toUpperCase()}`;
+
+  const refreshButtons = () => {
+    const el = containerRef.current;
+    if (!el) return;
+    setCanLeft(el.scrollLeft > 1);
+    setCanRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 1);
+  };
+
+  useEffect(() => { refreshButtons(); }, [blocks.length]);
+
+  const scrollBy = (dir) => {
+    containerRef.current?.scrollBy({ left: dir * (BLOCK_W + BLOCK_GAP), behavior: 'smooth' });
+  };
+
+  const addBlock = () => {
+    const newId = `block-${Date.now()}`;
+    actions.addBlock(subsectionId, { id: newId, type: blockType, title: '', content: '' });
+    onNavigateToBlock?.(sectionId, subsectionId, newId);
+  };
+
+  return (
+    <div style={{ marginBottom: '24px' }}>
+      {/* Row header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{
+            padding: '2px 9px', background: s.badgeBg, color: '#fff',
+            borderRadius: '5px', fontSize: '11px', fontWeight: '700',
+            textTransform: 'uppercase', letterSpacing: '0.05em',
+            fontFamily: "'DM Sans', sans-serif",
+          }}>{label}</span>
+          {blocks.length > 0 && (
+            <span style={{ fontSize: '12px', color: '#999', fontFamily: "'DM Sans', sans-serif" }}>
+              {blocks.length}
+            </span>
+          )}
+        </div>
+        <button
+          onClick={addBlock}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: '4px',
+            padding: '5px 12px', borderRadius: '7px', cursor: 'pointer',
+            background: s.bg, border: `1.5px solid ${s.border}`,
+            color: s.text, fontSize: '12px', fontWeight: '600',
+            fontFamily: "'DM Sans', sans-serif",
+          }}
+        >
+          <Plus size={12} /> Add
+        </button>
+      </div>
+
+      {/* Scroll row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <button
+          onClick={() => scrollBy(-1)}
+          style={{
+            width: '28px', height: '28px', borderRadius: '50%',
+            border: '1px solid rgba(0,0,0,0.12)', background: '#fff',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: canLeft ? 'pointer' : 'default',
+            opacity: canLeft ? 1 : 0.2,
+            transition: 'opacity 0.15s',
+            flexShrink: 0, fontSize: '17px', lineHeight: 1, color: '#444',
+            pointerEvents: canLeft ? 'auto' : 'none',
+          }}
+        >‹</button>
+
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <Droppable
+            droppableId={`block-row-${blockType}-${subsectionId}`}
+            direction="horizontal"
+            type={dndType}
+            renderClone={(cProv, _cSnap, rubric) => {
+              const block = blocks[rubric.source.index];
+              return (
+                <div
+                  ref={cProv.innerRef}
+                  {...cProv.draggableProps}
+                  {...cProv.dragHandleProps}
+                  style={{
+                    ...cProv.draggableProps.style,
+                    width: `${BLOCK_W}px`,
+                    height: `${BLOCK_H}px`,
+                    background: s.bg,
+                    border: `1.5px solid ${s.border}`,
+                    borderRadius: '12px',
+                    padding: '12px',
+                    cursor: 'grabbing',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    userSelect: 'none',
+                    boxShadow: '0 14px 36px rgba(0,0,0,0.22)',
+                    opacity: 0.93,
+                    overflow: 'hidden',
+                    rotate: '2deg',
+                    scale: '1.04',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                    <span style={{
+                      padding: '2px 7px', background: s.badgeBg, color: '#fff',
+                      borderRadius: '5px', fontSize: '10px', fontWeight: '700',
+                      textTransform: 'uppercase', letterSpacing: '0.04em',
+                      fontFamily: "'DM Sans', sans-serif",
+                    }}>{s.label}</span>
+                  </div>
+                  <p style={{
+                    margin: '6px 0 0', fontSize: '13px', fontWeight: '600',
+                    color: s.text, lineHeight: '1.35', flex: 1,
+                    overflow: 'hidden', display: '-webkit-box',
+                    WebkitLineClamp: 3, WebkitBoxOrient: 'vertical',
+                  }}>
+                    {block?.title || <span style={{ fontStyle: 'italic', opacity: 0.5 }}>Untitled</span>}
+                  </p>
+                  <div style={{ fontSize: '11px', fontWeight: '600', color: s.text, opacity: 0.5, textAlign: 'right' }}>
+                    Open →
+                  </div>
+                </div>
+              );
+            }}
+          >
+            {(provided, dropSnap) => {
+              const setRef = (el) => { provided.innerRef(el); containerRef.current = el; };
+              return (
+                <div
+                  ref={setRef}
+                  {...provided.droppableProps}
+                  onScroll={refreshButtons}
+                  style={{
+                    display: 'flex',
+                    gap: `${BLOCK_GAP}px`,
+                    overflowX: 'auto',
+                    scrollbarWidth: 'none',
+                    msOverflowStyle: 'none',
+                    padding: '6px 2px 8px',
+                    background: dropSnap.isDraggingOver ? s.bg : 'transparent',
+                    borderRadius: '12px',
+                    transition: 'background 0.2s',
+                    minHeight: `${BLOCK_H + 14}px`,
+                    alignItems: 'flex-start',
+                  }}
+                >
+                  {blocks.length === 0 && !dropSnap.isDraggingOver && (
+                    <div style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      minWidth: '100%', minHeight: `${BLOCK_H}px`,
+                      border: `1.5px dashed ${s.border}`, borderRadius: '12px',
+                      color: s.text, opacity: 0.45, fontSize: '13px', fontStyle: 'italic',
+                      fontFamily: "'DM Sans', sans-serif",
+                    }}>
+                      No {label.toLowerCase()} yet
+                    </div>
+                  )}
+                  {blocks.map((block, idx) => {
+                    const isHov = hoveredId === block.id;
+                    return (
+                      <Draggable key={block.id} draggableId={block.id} index={idx}>
+                        {(dProv, dSnap) => (
+                          <div
+                            ref={dProv.innerRef}
+                            {...dProv.draggableProps}
+                            {...dProv.dragHandleProps}
+                            onMouseEnter={() => setHoveredId(block.id)}
+                            onMouseLeave={() => setHoveredId(null)}
+                            onClick={() => { if (!dSnap.isDragging) onNavigateToBlock?.(sectionId, subsectionId, block.id); }}
+                            style={{
+                              ...dProv.draggableProps.style,
+                              width: `${BLOCK_W}px`,
+                              height: `${BLOCK_H}px`,
+                              flexShrink: 0,
+                              background: dSnap.isDragging ? 'transparent' : s.bg,
+                              border: `1.5px solid ${dSnap.isDragging ? 'rgba(0,0,0,0.08)' : s.border}`,
+                              borderRadius: '12px',
+                              padding: '12px',
+                              cursor: 'grab',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              justifyContent: 'space-between',
+                              userSelect: 'none',
+                              boxShadow: isHov && !dSnap.isDragging
+                                ? '0 4px 16px rgba(0,0,0,0.12)'
+                                : dSnap.isDragging
+                                  ? 'none'
+                                  : '0 1px 4px rgba(0,0,0,0.06)',
+                              opacity: dSnap.isDragging ? 0 : 1,
+                              overflow: 'hidden',
+                              transition: dProv.draggableProps.style?.transition || 'box-shadow 0.15s, transform 0.15s',
+                            }}
+                          >
+                            {/* Badge + delete */}
+                            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                              <span style={{
+                                padding: '2px 7px', background: s.badgeBg, color: '#fff',
+                                borderRadius: '5px', fontSize: '10px', fontWeight: '700',
+                                textTransform: 'uppercase', letterSpacing: '0.04em',
+                                fontFamily: "'DM Sans', sans-serif",
+                              }}>{s.label}</span>
+                              <button
+                                onMouseDown={e => e.stopPropagation()}
+                                onClick={e => { e.stopPropagation(); actions.removeBlock(subsectionId, block.id); }}
+                                style={{
+                                  background: 'none', border: 'none', cursor: 'pointer',
+                                  color: s.text, padding: '2px',
+                                  opacity: isHov && !dSnap.isDragging ? 0.7 : 0,
+                                  transition: 'opacity 0.15s',
+                                  display: 'flex', alignItems: 'center',
+                                }}
+                                title="Delete block"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                            {/* Title */}
+                            <p style={{
+                              margin: '6px 0 0', fontSize: '13px', fontWeight: '600',
+                              color: s.text, lineHeight: '1.35', flex: 1,
+                              overflow: 'hidden', display: '-webkit-box',
+                              WebkitLineClamp: 3, WebkitBoxOrient: 'vertical',
+                            }}>
+                              {block.title || <span style={{ fontStyle: 'italic', opacity: 0.5 }}>Untitled</span>}
+                            </p>
+                            {/* Open arrow */}
+                            <div style={{
+                              fontSize: '11px', fontWeight: '600', color: s.text,
+                              opacity: isHov && !dSnap.isDragging ? 1 : 0.35,
+                              transition: 'opacity 0.15s', textAlign: 'right',
+                            }}>Open →</div>
+                          </div>
+                        )}
+                      </Draggable>
+                    );
+                  })}
+                  {provided.placeholder}
+                </div>
+              );
+            }}
+          </Droppable>
+        </div>
+
+        <button
+          onClick={() => scrollBy(1)}
+          style={{
+            width: '28px', height: '28px', borderRadius: '50%',
+            border: '1px solid rgba(0,0,0,0.12)', background: '#fff',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: canRight ? 'pointer' : 'default',
+            opacity: canRight ? 1 : 0.2,
+            transition: 'opacity 0.15s',
+            flexShrink: 0, fontSize: '17px', lineHeight: 1, color: '#444',
+            pointerEvents: canRight ? 'auto' : 'none',
+          }}
+        >›</button>
+      </div>
+    </div>
+  );
 };
 
 const SubsectionView = ({
@@ -32,9 +305,6 @@ const SubsectionView = ({
   const [editingObjectives, setEditingObjectives] = useState(false);
   const [localObjectives, setLocalObjectives] = useState(subsection.learning_objectives || []);
   const [newObjective, setNewObjective] = useState('');
-  const [hoveredBlock, setHoveredBlock] = useState(null);
-  const [hoveredGroup, setHoveredGroup] = useState(null);
-
   // Sync local state from props when parent state changes (e.g. after undo)
   useEffect(() => { if (!editingTitle) setLocalTitle(subsection.title || ''); }, [subsection.title, editingTitle]);
   useEffect(() => { if (!editingDesc) setLocalDesc(subsection.description || ''); }, [subsection.description, editingDesc]);
@@ -42,6 +312,9 @@ const SubsectionView = ({
   useEffect(() => { if (!editingObjectives) setLocalObjectives(subsection.learning_objectives || []); }, [subsection.learning_objectives, editingObjectives]);
 
   const blocks = handsOnResources?.[subsection.id] || [];
+  const contentBlocks   = blocks.filter(b => b.type === 'content');
+  const worksheetBlocks = blocks.filter(b => b.type === 'worksheet');
+  const activityBlocks  = blocks.filter(b => b.type === 'activity');
 
   // ── Field save helpers ────────────────────────────────────────────────
   const handleTitleBlur = () => {
@@ -91,13 +364,6 @@ const SubsectionView = ({
 
   const handleObjectiveBlur = () => {
     actions.updateSubsectionFull(sectionId, subsection.id, { learning_objectives: localObjectives });
-  };
-
-  // ── Add block & navigate ──────────────────────────────────────────────
-  const handleAddBlock = (type) => {
-    const newId = `block-${Date.now()}`;
-    actions.addBlock(subsection.id, { id: newId, type, title: '', content: '' });
-    onNavigateToBlock?.(sectionId, subsection.id, newId);
   };
 
   return (
@@ -357,199 +623,38 @@ const SubsectionView = ({
 
       {/* ── Blocks section ── */}
       <div>
-        {/* Header row with add buttons */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
-          <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '700', color: '#111', fontFamily: "'DM Sans', sans-serif" }}>
-            Blocks
-            {blocks.length > 0 && (
-              <span style={{ marginLeft: '8px', fontSize: '13px', fontWeight: '500', color: '#999' }}>
-                {blocks.length}
-              </span>
-            )}
-          </h3>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            {['content', 'worksheet', 'activity'].map(type => {
-              const s = BLOCK_TYPE_STYLES[type];
-              return (
-                <button
-                  key={type}
-                  onClick={() => handleAddBlock(type)}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: '5px',
-                    padding: '6px 13px', borderRadius: '8px', cursor: 'pointer',
-                    background: s.bg, border: `1px solid ${s.border}`,
-                    color: s.text, fontSize: '13px', fontWeight: '600',
-                    fontFamily: "'DM Sans', sans-serif",
-                  }}
-                >
-                  <Plus size={13} /> {s.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Blocks grid */}
-        {blocks.length === 0 ? (
-          <div style={{
-            textAlign: 'center', padding: '60px 20px',
-            border: '1px dashed rgba(0,0,0,0.12)', borderRadius: '12px',
-            background: '#FFFFFF',
-          }}>
-            <p style={{ fontSize: '28px', marginBottom: '8px' }}>📦</p>
-            <p style={{ fontSize: '18px', color: '#111', fontWeight: '600', margin: '0 0 4px' }}>No blocks yet</p>
-            <p style={{ fontSize: '14px', color: '#777', margin: '0 0 20px' }}>Add content, worksheets, or activities to this subsection</p>
-            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
-              {['content', 'worksheet', 'activity'].map(type => {
-                const s = BLOCK_TYPE_STYLES[type];
-                return (
-                  <button
-                    key={type}
-                    onClick={() => handleAddBlock(type)}
-                    style={{
-                      display: 'inline-flex', alignItems: 'center', gap: '6px',
-                      padding: '9px 20px', borderRadius: '8px', cursor: 'pointer',
-                      background: s.bg, border: `1px solid ${s.border}`,
-                      color: s.text, fontSize: '14px', fontWeight: '600',
-                      fontFamily: "'DM Sans', sans-serif",
-                    }}
-                  >
-                    <Plus size={14} /> {s.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ) : (
-          <Droppable droppableId={`blocks-${subsection.id}`} type="BLOCK" direction="horizontal">
-            {(provided) => (
-              <div
-                ref={provided.innerRef}
-                {...provided.droppableProps}
-                style={{ display: 'flex', flexWrap: 'wrap', gap: '14px' }}
-              >
-                {blocks.map((block, idx) => {
-                  const s = BLOCK_TYPE_STYLES[block.type] || BLOCK_TYPE_STYLES.content;
-                  const isHovered = hoveredBlock === block.id;
-                  const isGroupMember = !isHovered && hoveredGroup && block.groupId === hoveredGroup;
-                  return (
-                    <Draggable key={block.id} draggableId={block.id} index={idx}>
-                      {(provided, snapshot) => (
-                        <div
-                          ref={provided.innerRef}
-                          {...provided.draggableProps}
-                          onMouseEnter={() => { setHoveredBlock(block.id); if (block.groupId) setHoveredGroup(block.groupId); }}
-                          onMouseLeave={() => { setHoveredBlock(null); setHoveredGroup(null); }}
-                          onClick={() => onNavigateToBlock?.(sectionId, subsection.id, block.id)}
-                          style={{
-                            ...provided.draggableProps.style,
-                            width: '160px',
-                            aspectRatio: '1 / 1',
-                            background: s.bg,
-                            border: isGroupMember ? '1.5px solid rgba(100, 70, 180, 0.45)' : `1.5px solid ${s.border}`,
-                            borderRadius: '12px',
-                            padding: '14px',
-                            cursor: snapshot.isDragging ? 'grabbing' : 'pointer',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            justifyContent: 'space-between',
-                            boxShadow: snapshot.isDragging
-                              ? '0 8px 20px rgba(0,0,0,0.15)'
-                              : isHovered
-                                ? '0 4px 14px rgba(0,0,0,0.12)'
-                                : isGroupMember
-                                  ? '0 0 0 3px rgba(100, 70, 180, 0.18), 0 2px 8px rgba(0,0,0,0.08)'
-                                  : '0 1px 4px rgba(0,0,0,0.06)',
-                            transform: snapshot.isDragging
-                              ? `${provided.draggableProps.style?.transform || ''} rotate(2deg)`
-                              : isHovered
-                                ? 'translateY(-2px)'
-                                : isGroupMember
-                                  ? 'translateY(-1px)'
-                                  : provided.draggableProps.style?.transform || 'none',
-                            outline: isGroupMember ? '2px dashed rgba(100, 70, 180, 0.35)' : 'none',
-                            outlineOffset: '3px',
-                            position: 'relative',
-                            overflow: 'hidden',
-                            opacity: snapshot.isDragging ? 0.9 : 1,
-                            transition: 'box-shadow 0.15s, transform 0.15s, border-color 0.15s, outline 0.15s',
-                          }}
-                        >
-                          {/* Drag handle */}
-                          <div
-                            {...provided.dragHandleProps}
-                            onClick={e => e.stopPropagation()}
-                            style={{
-                              position: 'absolute', top: '6px', left: '6px',
-                              cursor: 'grab', opacity: isHovered ? 0.45 : 0,
-                              transition: 'opacity 0.15s',
-                              display: 'flex', alignItems: 'center',
-                            }}
-                          >
-                            <GripVertical size={12} color={s.text} />
-                          </div>
-
-                          {/* Type badge + delete */}
-                          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-                            <span style={{
-                              display: 'inline-block', padding: '3px 8px',
-                              background: s.badgeBg, color: 'white',
-                              borderRadius: '6px', fontSize: '10px', fontWeight: '700',
-                              textTransform: 'uppercase', letterSpacing: '0.04em',
-                              fontFamily: "'DM Sans', sans-serif",
-                            }}>
-                              {s.label}
-                            </span>
-                            <button
-                              onClick={e => { e.stopPropagation(); actions.removeBlock(subsection.id, block.id); }}
-                              style={{
-                                background: 'none', border: 'none', cursor: 'pointer',
-                                color: s.text, padding: '2px',
-                                opacity: isHovered ? 0.7 : 0,
-                                transition: 'opacity 0.15s',
-                                display: 'flex', alignItems: 'center',
-                              }}
-                              title="Delete block"
-                            >
-                              <Trash2 size={12} />
-                            </button>
-                          </div>
-
-                          {/* Title */}
-                          <div>
-                            <p style={{
-                              margin: '0 0 4px', fontSize: '14px', fontWeight: '600',
-                              color: s.text, fontFamily: "'DM Sans', sans-serif",
-                              lineHeight: '1.35',
-                              overflow: 'hidden',
-                              display: '-webkit-box',
-                              WebkitLineClamp: 3,
-                              WebkitBoxOrient: 'vertical',
-                            }}>
-                              {block.title || <span style={{ fontStyle: 'italic', opacity: 0.6 }}>Untitled</span>}
-                            </p>
-                          </div>
-
-                          {/* Open arrow / group indicator */}
-                          <div style={{
-                            fontSize: '11px', fontWeight: '600',
-                            color: isGroupMember ? 'rgba(100, 70, 180, 0.85)' : s.text,
-                            opacity: (isHovered || isGroupMember) ? 1 : 0.45,
-                            transition: 'opacity 0.15s, color 0.15s',
-                            textAlign: 'right',
-                          }}>
-                            {isGroupMember ? 'teach together' : 'Open →'}
-                          </div>
-                        </div>
-                      )}
-                    </Draggable>
-                  );
-                })}
-                {provided.placeholder}
-              </div>
-            )}
-          </Droppable>
-        )}
+        <h3 style={{ margin: '0 0 20px', fontSize: '16px', fontWeight: '700', color: '#111', fontFamily: "'DM Sans', sans-serif" }}>
+          Blocks
+          {blocks.length > 0 && (
+            <span style={{ marginLeft: '8px', fontSize: '13px', fontWeight: '500', color: '#999' }}>
+              {blocks.length}
+            </span>
+          )}
+        </h3>
+        <BlockRow
+          blockType="content"
+          blocks={contentBlocks}
+          subsectionId={subsection.id}
+          sectionId={sectionId}
+          actions={actions}
+          onNavigateToBlock={onNavigateToBlock}
+        />
+        <BlockRow
+          blockType="worksheet"
+          blocks={worksheetBlocks}
+          subsectionId={subsection.id}
+          sectionId={sectionId}
+          actions={actions}
+          onNavigateToBlock={onNavigateToBlock}
+        />
+        <BlockRow
+          blockType="activity"
+          blocks={activityBlocks}
+          subsectionId={subsection.id}
+          sectionId={sectionId}
+          actions={actions}
+          onNavigateToBlock={onNavigateToBlock}
+        />
       </div>
       </div>
     </div>

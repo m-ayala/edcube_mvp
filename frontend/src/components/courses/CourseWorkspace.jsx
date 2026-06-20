@@ -567,15 +567,33 @@ const CourseWorkspace = () => {
     }
 
     if (type === 'SUBSECTION') {
-      const sectionId = source.droppableId.replace('subsections-', '');
-      const section = sections.find(s => s.id === sectionId);
-      if (section && section.subsections) {
-        const reorderedSubsections = Array.from(section.subsections);
-        const [movedSubsection] = reorderedSubsections.splice(source.index, 1);
-        reorderedSubsections.splice(destination.index, 0, movedSubsection);
-        setSections(sections.map(s =>
-          s.id === sectionId ? { ...s, subsections: reorderedSubsections } : s
-        ));
+      const sourceSectionId = source.droppableId.replace('subsections-', '');
+      const destSectionId = destination.droppableId.replace('subsections-', '');
+
+      if (sourceSectionId === destSectionId) {
+        const section = sections.find(s => s.id === sourceSectionId);
+        if (section && section.subsections) {
+          const reordered = Array.from(section.subsections);
+          const [moved] = reordered.splice(source.index, 1);
+          reordered.splice(destination.index, 0, moved);
+          setSections(sections.map(s =>
+            s.id === sourceSectionId ? { ...s, subsections: reordered } : s
+          ));
+        }
+      } else {
+        const sourceSection = sections.find(s => s.id === sourceSectionId);
+        const destSection = sections.find(s => s.id === destSectionId);
+        if (sourceSection && destSection) {
+          const sourceSubs = Array.from(sourceSection.subsections || []);
+          const destSubs = Array.from(destSection.subsections || []);
+          const [moved] = sourceSubs.splice(source.index, 1);
+          destSubs.splice(destination.index, 0, moved);
+          setSections(sections.map(s => {
+            if (s.id === sourceSectionId) return { ...s, subsections: sourceSubs };
+            if (s.id === destSectionId) return { ...s, subsections: destSubs };
+            return s;
+          }));
+        }
       }
       return;
     }
@@ -599,6 +617,32 @@ const CourseWorkspace = () => {
           [destSubId]: destBlocks,
         }));
       }
+      return;
+    }
+
+    // SubsectionView typed block rows: BLOCK_CONTENT, BLOCK_WORKSHEET, BLOCK_ACTIVITY
+    if (type === 'BLOCK_CONTENT' || type === 'BLOCK_WORKSHEET' || type === 'BLOCK_ACTIVITY') {
+      // droppableId format: block-row-{blockType}-{subsectionId}
+      const parseRowId = (id) => {
+        const m = id.match(/^block-row-(content|worksheet|activity)-(.+)$/);
+        return m ? { blockType: m[1], subId: m[2] } : null;
+      };
+      const src = parseRowId(source.droppableId);
+      const dst = parseRowId(destination.droppableId);
+      if (!src || !dst || src.subId !== dst.subId || src.blockType !== dst.blockType) return;
+
+      const { blockType, subId } = src;
+      const allBlocks = [...(handsOnResources[subId] || [])];
+      const rowBlocks = allBlocks.filter(b => b.type === blockType);
+      const [moved] = rowBlocks.splice(source.index, 1);
+      rowBlocks.splice(destination.index, 0, moved);
+
+      // Rebuild flat array: reconstruct this type's slots in original order positions
+      let rowIdx = 0;
+      const newBlocks = allBlocks.map(b =>
+        b.type === blockType ? rowBlocks[rowIdx++] : b
+      );
+      setHandsOnResources(prev => ({ ...prev, [subId]: newBlocks }));
       return;
     }
   };
