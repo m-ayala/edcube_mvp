@@ -1,6 +1,6 @@
 """
 Prompts for block generation within a subsection.
-Each subsection = 1 hour. Blocks are 15/30/45-min content/worksheet/activity chunks.
+Each subsection = 1 hour. Blocks are 15/30-min content/worksheet/activity chunks.
 """
 
 from typing import Dict
@@ -51,6 +51,26 @@ CONTENT_SUBCATEGORIES = [
     "Impact & Consequences",
 ]
 
+# Flexible section toolkit for content blocks — LLM picks 3-5 per block
+CONTENT_SECTION_TOOLKIT = """
+Available sections (choose 3-5 that fit the concept — do NOT use sections that don't apply):
+
+  Explain It        — Always include. Core explanation: what this concept IS, 4-6 sentences.
+  How It Works      — For processes, mechanisms, systems, or cause-and-effect.
+  Key Points        — For fact-heavy topics. 3-5 bullet points that would work on a PPT slide.
+  Parts / Structure — For anatomy, components, or physical structures (what are the pieces?).
+  Types / Categories— For classification topics (what kinds are there?).
+  In Real Life      — Always valuable. 2-3 concrete examples from the student's world.
+  Key People & Events— For history, biographies, social studies topics.
+  Why It Matters    — For context, significance, or impact — why should students care?
+  Formula / Rule    — For math or science: the actual formula or rule, written out clearly.
+  How to Do It      — For skills, procedures, techniques: numbered step-by-step.
+  Common Mix-Ups    — The most frequent misconception students have, and the correct idea.
+
+Write the chosen sections as natural flowing prose or lists — NOT as a rigid form.
+The content must read the way a knowledgeable teacher would explain it, not like a template.
+"""
+
 
 def get_block_generation_prompt(
     teacher_input: Dict,
@@ -100,8 +120,6 @@ def get_block_generation_prompt(
             + "\nYour blocks must cover content that is DISTINCT from all of the above.\n"
         )
 
-    content_slots = "at least 1"  # always include at least one content block
-
     worksheet_instruction = ""
     if worksheet_slots == 1:
         worksheet_instruction = f"""
@@ -109,10 +127,12 @@ WORKSHEET BLOCK (include exactly 1):
 - type: "worksheet"
 - worksheetType: one of {WORKSHEET_TYPES} — pick the type best suited to the age group and learning objective
 - duration_minutes: 15 (worksheets are always 15 minutes)
+- contentBlockIndex: the 0-based index of the content block in this blocks array that this worksheet is designed to reinforce.
+  Pick the content block whose concept is most worth testing or practising.
 - Title should describe exactly what the worksheet is (e.g. "Label the Parts of a Flower")
 - Content field must follow this exact structure:
 
-**Learning Objectives:**
+**Learning Objective:**
 Students will [verb] [specific thing].
 
 **Duration:** Approximately 15 minutes for students to complete.
@@ -135,10 +155,12 @@ ACTIVITY BLOCK (include exactly 1):
 - type: "activity"
 - activityType: one of {ACTIVITY_TYPES} — pick the type best suited to the learning objective and age group
 - duration_minutes: 30 (activities are always 30 minutes)
+- contentBlockIndex: the 0-based index of the content block in this blocks array that this activity is designed to reinforce.
+  Pick the content block whose concept students most need to apply or experience hands-on.
 - Title should describe exactly what students do (e.g. "Build a Simple Robot Arm")
 - Content field must follow this exact structure:
 
-**Learning Objectives:**
+**Learning Objective:**
 Students will [verb] [specific thing].
 
 **Duration:** 30 minutes
@@ -171,7 +193,7 @@ Students will [verb] [specific thing].
     target_total = max(15, round(session_minutes * 0.6))
 
     prompt = f"""
-You are an expert elementary education curriculum designer. Generate the content blocks for this teaching session.
+You are an expert curriculum designer. Generate the content blocks for this teaching session.
 
 COURSE CONTEXT:
 - Subject: {subject}
@@ -189,43 +211,43 @@ COURSE CONTEXT:
 TIME BUDGET:
 - This session = {session_minutes} minutes of teaching
 - Total block time must NOT exceed {max_total} minutes
-- Aim for around {target_total} minutes of blocks (leave some buffer for transitions and questions)
-- Each individual block must be exactly 15 or 30 minutes — never more than 30 minutes per block
+- Aim for around {target_total} minutes of blocks (leave buffer for transitions and questions)
+- Content blocks: exactly 15 or 30 minutes each. 15 for a single tight concept, 30 for a richer one that needs depth.
+- Default to 15 minutes — only use 30 if the concept genuinely needs more time.
+
+CONTENT BLOCK RULES:
+- Think of each content block as ONE slide in a presentation — it should have enough to fill that slide.
+- Each block covers EXACTLY ONE concept. NEVER bundle multiple concepts into a single block.
+- If a subsection covers multiple distinct concepts (e.g. definition, how it works, types), generate a SEPARATE block for each.
+- Blocks must progress logically (e.g. definition first → how it works → types → application).
+- Titles must be specific: "What Is a Gear?" not "Introduction". "The Three Types of Rock" not "Types".
+
+CONTENT BLOCK STRUCTURE:
+{CONTENT_SECTION_TOOLKIT}
+For each content block, choose the 3-5 sections from the toolkit above that best fit the concept.
+Write the content field as natural flowing prose and lists — not a rigid form.
+All vocabulary, examples, and complexity must be appropriate for ages {age_range_start}–{age_range_end}.
 
 BLOCK TYPES TO GENERATE:
 
-CONTENT BLOCK(S) (include {content_slots}):
+CONTENT BLOCK(S) (include at least 1, more if the what_must_be_covered spans multiple distinct concepts):
 - type: "content"
 - subcategory: one of {CONTENT_SUBCATEGORIES}
-  Pick the subcategory that best describes the block (e.g. "Definitions" for vocab, "Process" for step-by-step, "Parts of" for anatomy, "Compare & Contrast" for comparisons)
-- duration_minutes: 15 or 30 (15 for a single tight concept, 30 for a richer concept that needs more depth)
-- Default to 15 minutes — only use 30 if the concept genuinely needs more time
-- Title: specific and descriptive (e.g. "What Is a Robot?", "Parts of a Robot", "Types of Robots")
-  IMPORTANT: Each block must cover EXACTLY ONE concept. Never bundle multiple concepts into one block.
-  If a subsection has several concepts (e.g. what it is, its parts, its types), generate a SEPARATE block for each.
-- Content field must follow this exact structure:
-
-  **Learning Objective:**
-  Students will [measurable verb] [specific concept].
-
-  **Description:**
-  [2-4 sentence plain explanation of THIS ONE concept — what it is, how it works, why it matters. Keep it simple and age-appropriate for {age_range}.]
-
-  **Key [concept-specific noun]:**
-  - [Part or element 1]: brief explanation
-  - [Part or element 2]: brief explanation
-  - [Part or element 3]: brief explanation
-
-  **Pedagogy:**
-  Teaching strategies for {age_range} students:
-  1. Teaching approach: [which pedagogical strategy fits best — e.g. direct instruction, Socratic questioning, analogical reasoning, concept mapping — and one sentence on why it works for this specific concept]
-  2. Memory device: [a concrete mnemonic, acronym, rhyme, or visual anchor students can use — write out the actual device, not a description of one. E.g. "HOMES for the Great Lakes", or "Roy G. Biv for rainbow colors"]
-  3. Misconception: [the most common conceptual error students make with this concept and the exact reframing or analogy that corrects it — focus on the mental model fix, not an exercise]
-  4. Guided questions: [2–3 questions a teacher asks aloud, progressing from surface recall to deeper understanding — write the actual questions, not topics]
-  5. Mastery signal: [one observable verbal response or explanation a student gives that tells the teacher they have truly internalized this concept]
-
-  **Example:**
-  [One concrete, specific, relatable example for {age_range}]
+- duration_minutes: 15 or 30
+- title: specific single-concept title
+- content: the teaching content using 3-5 chosen sections from the toolkit
+- key_takeaways: array of 3-5 concise bullet strings (used for PPT generation — must capture the essential points of this block)
+- pedagogy: object with fields:
+    teaching_approach: which strategy fits best and one sentence why
+    memory_device: a concrete mnemonic, acronym, rhyme, or visual anchor (write the actual device)
+    misconception: the most common student error and the correct mental model that fixes it
+    guided_questions: array of 2-3 questions progressing from recall to deeper understanding
+    mastery_signal: one observable thing a student says/does that proves they truly understood this concept
+- visual_suggestion: one sentence describing an image or diagram that would illustrate this on a PPT slide
+- sources: array of 2-3 objects, each with:
+    name: well-known educational resource (e.g. "Khan Academy", "Encyclopedia Britannica Kids", "National Geographic Kids")
+    search_query: the exact search terms a teacher would type to find this concept on that site
+    type: one of "educational_site", "encyclopedia", "curriculum_standard", "textbook"
 
 {worksheet_instruction}
 
@@ -233,13 +255,10 @@ CONTENT BLOCK(S) (include {content_slots}):
 
 CONTENT QUALITY RULES:
 - Every block must be directly tied to "{topic}" for students aged {age_range}
-- Each content block covers EXACTLY ONE concept — never bundle multiple concepts into a single block
-- Content blocks should progress logically within the hour (e.g. definition first, then parts, then types, then application)
-- All vocabulary, examples, and complexity must be appropriate for ages {age_range_start}–{age_range_end}
-- Block titles must be specific — never generic like "Introduction" or "Review"
-- Each block must be exactly 15 or 30 minutes — never 45 or 60 minutes
+- Each content block covers EXACTLY ONE concept — never bundle
+- Block titles must be specific — never "Introduction", "Overview", "Key Concepts", or "Review"
+- Worksheet and activity content must be COMPLETE verbatim text, not instructions about what to generate
 - The total duration_minutes of all blocks combined must NOT exceed {max_total} minutes
-- Worksheet **Worksheet Content:** must be complete verbatim student text — not instructions about what to generate
 
 OUTPUT FORMAT (strict JSON, no other text):
 {{
@@ -248,8 +267,21 @@ OUTPUT FORMAT (strict JSON, no other text):
       "id": "auto",
       "type": "content",
       "subcategory": "string — from the content subcategory list",
-      "title": "string — specific single-concept block title (e.g. 'What Is a Robot?')",
-      "content": "**Learning Objective:**\\nStudents will [verb] [concept].\\n\\n**Description:**\\n[2-4 sentence plain explanation of this ONE concept]\\n\\n**Key [noun]:**\\n- [Part 1]: explanation\\n- [Part 2]: explanation\\n- [Part 3]: explanation\\n\\n**Pedagogy:**\\nTeaching strategies for [age]-year-olds:\\n1. Teaching approach: ...\\n2. Memory device: ...\\n3. Misconception: ...\\n4. Guided questions: ...\\n5. Mastery signal: ...\\n\\n**Example:**\\n[Concrete example]",
+      "title": "string — specific single-concept title",
+      "content": "string — natural prose using 3-5 chosen sections from the toolkit, written with **Section Name** as bold headers",
+      "key_takeaways": ["string", "string", "string"],
+      "pedagogy": {{
+        "teaching_approach": "string",
+        "memory_device": "string",
+        "misconception": "string",
+        "guided_questions": ["string", "string"],
+        "mastery_signal": "string"
+      }},
+      "visual_suggestion": "string",
+      "sources": [
+        {{"name": "string", "search_query": "string", "type": "string"}},
+        {{"name": "string", "search_query": "string", "type": "string"}}
+      ],
       "duration_minutes": 15
     }},
     {{
@@ -257,7 +289,8 @@ OUTPUT FORMAT (strict JSON, no other text):
       "type": "worksheet",
       "worksheetType": "string — from the worksheet type list",
       "title": "string — specific worksheet title",
-      "content": "**Learning Objectives:**\\nStudents will [verb] [thing].\\n\\n**Duration:** Approximately 15 minutes for students to complete.\\n\\n**Worksheet Type:** [type]\\n\\n**Worksheet Content:**\\n[Complete verbatim student-facing worksheet text]\\n\\n**Answer Key:**\\n[Complete answers numbered to match]",
+      "content": "string — complete verbatim student-facing worksheet with answer key",
+      "contentBlockIndex": 0,
       "duration_minutes": 15
     }},
     {{
@@ -265,7 +298,8 @@ OUTPUT FORMAT (strict JSON, no other text):
       "type": "activity",
       "activityType": "string — from the activity type list",
       "title": "string — specific activity title",
-      "content": "**Learning Objectives:**\\nStudents will [verb] [thing].\\n\\n**Duration:** 30 minutes\\n\\n**Activity Type:** [type]\\n\\n**Resources/Materials Needed:**\\n- [Material 1]\\n- [Material 2]\\n\\n**Steps to Conduct:**\\n1. [Setup]\\n2. [Introduction]\\n3. [Main activity]\\n4. [Debrief]\\n5. [Wrap-up]\\n\\n**Management Tips:**\\n- [Tip 1]\\n- [Tip 2]\\n- [Tip 3]",
+      "content": "string — complete activity instructions with materials, steps, and management tips",
+      "contentBlockIndex": 1,
       "duration_minutes": 30
     }}
   ]

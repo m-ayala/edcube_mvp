@@ -65,7 +65,7 @@ WHAT SECTIONS AND SUBSECTIONS MEAN:
 CRITICAL SPECIFICITY RULES:
 - ALL titles and descriptions must be SPECIFIC to "{topic}" for students aged {age_range} — never use generic filler
 - Section titles must name the specific aspect of "{topic}" covered that day (e.g. "Day 1: What Is the Water Cycle and Why Does It Matter?")
-- Subsection titles must describe the EXACT concept or skill for that hour — start with an activity hint when possible: "Understanding:", "Exploring:", "Practicing:", "Investigating:", "Comparing:", "Applying:", etc.
+- Subsection titles must describe the EXACT concept or skill covered in that hour. Write them as natural, descriptive phrases — like a chapter heading in a textbook or a TV episode title. Do NOT use framework prefixes like "Understanding:", "Exploring:", "Practicing:", "Investigating:", "Comparing:", or "Applying:".
 - Subsection descriptions must be 2-3 sentences with CONCRETE details about what students will learn — not vague summaries. Keep descriptions under 400 characters.
 - Learning objectives must use measurable action verbs (identify, explain, compare, demonstrate, calculate, describe, list, classify) and reference specific content from "{topic}"
 - Content keywords must be precise enough that searching YouTube for "{age_range_start}-{age_range_end} year old [keyword]" would find relevant educational videos
@@ -79,13 +79,13 @@ BAD EXAMPLES (too generic — DO NOT do this):
 
 GOOD EXAMPLES (for topic "The Water Cycle", ages 8–9, 2 days × 2 hours/day):
 - Section: "Day 1: Where Does Water Go? — Evaporation and Condensation"
-  - Subsection 1: "Understanding: How the Sun Turns Water Into Invisible Vapor" (60 min)
+  - Subsection 1: "How the Sun Turns Water Into Invisible Vapor" (60 min)
     Description: "Students explore evaporation by observing how heat from the sun causes liquid water to become water vapor. Real-life examples: puddles drying up, wet laundry on a line. Key vocabulary: evaporate, water vapor, heat energy."
-  - Subsection 2: "Exploring: How Water Vapor Becomes Clouds — Condensation in Action" (60 min)
+  - Subsection 2: "How Water Vapor Becomes Clouds — Condensation and Cloud Formation" (60 min)
     Description: "Students learn how rising water vapor cools and condenses into tiny droplets that form clouds. They observe condensation on a cold glass and connect it to cloud formation."
 - Section: "Day 2: Completing the Cycle — Precipitation and Runoff"
-  - Subsection 1: "Investigating: Why Does It Rain? Understanding Precipitation" (60 min)
-  - Subsection 2: "Applying: Tracing Water from Rain to River to Ocean" (60 min)
+  - Subsection 1: "Why Does It Rain? — Precipitation and How Water Falls Back to Earth" (60 min)
+  - Subsection 2: "Tracing Water's Journey from Raindrop to Ocean" (60 min)
 
 UNIQUENESS RULES (CRITICAL — violations make the course worthless):
 - Every subsection across ALL sections must cover COMPLETELY DIFFERENT content — no concept, skill, vocabulary set, or activity type may be repeated in two different subsections
@@ -117,7 +117,7 @@ OUTPUT FORMAT (strict JSON, no other text):
     "subsections": [
     {{
         "subsection_id": "section_1_sub_1",
-        "title": "string (e.g. 'Understanding: How Volcanoes Form' or 'Investigating: The Role of Tectonic Plates')",
+        "title": "string (e.g. 'How Volcanoes Form and Why They Erupt' or 'The Role of Tectonic Plates in Shaping Earth')",
         "description": "string (2-3 sentences with concrete details about what students will DO and LEARN — name specific concepts, vocabulary, and examples; max 400 characters)",
         "duration_minutes": 60,
         "pla_pillars": ["Self-Knowledge", "Knowledge", "Wisdom", "Application"],

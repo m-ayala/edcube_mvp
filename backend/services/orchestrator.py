@@ -172,11 +172,12 @@ class CurriculumOrchestrator:
                 if not isinstance(raw_blocks, list):
                     raw_blocks = []
 
+                ts = int(time.time() * 1000)
                 stamped = []
-                for block in raw_blocks:
+                for i, block in enumerate(raw_blocks):
                     if not isinstance(block, dict):
                         continue  # skip malformed entries
-                    block['id'] = f"block-{sub_id}-{int(time.time() * 1000)}-{len(stamped)}"
+                    block['id'] = f"block-{sub_id}-{ts}-{i}"
                     block.setdefault('addedAt', None)
                     stamped.append(block)
 
@@ -185,6 +186,21 @@ class CurriculumOrchestrator:
                     group_id = f"group-{sub_id}"
                     for block in stamped:
                         block['groupId'] = group_id
+
+                # Resolve contentBlockIndex → parentContentBlockId
+                # Build map: 0-based index among content blocks → assigned block ID
+                content_id_map = {}
+                content_count = 0
+                for block in stamped:
+                    if block.get('type') == 'content':
+                        content_id_map[content_count] = block['id']
+                        content_count += 1
+
+                for block in stamped:
+                    if block.get('type') in ('worksheet', 'activity'):
+                        cb_idx = block.pop('contentBlockIndex', None)
+                        if isinstance(cb_idx, int) and cb_idx in content_id_map:
+                            block['parentContentBlockId'] = content_id_map[cb_idx]
 
             except Exception as e:
                 logger.error(f"Block generation failed for subsection {sub_id}: {e}", exc_info=True)

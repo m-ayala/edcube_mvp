@@ -780,7 +780,18 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
                           const blockType =
                             c.apply_field === 'new_resource_content' ? 'content' :
                             c.apply_field === 'new_resource_worksheet' ? 'worksheet' : 'activity';
-                          data = { id: `block-${Date.now()}`, type: blockType, title: c.label, content: c.body };
+                          data = {
+                            id: `block-${Date.now()}`,
+                            type: blockType,
+                            title: c.label,
+                            content: c.body,
+                            ...(blockType === 'content' && {
+                              key_takeaways: c.key_takeaways || [],
+                              pedagogy: c.pedagogy || null,
+                              sources: c.sources || [],
+                              visual_suggestion: c.visual_suggestion || '',
+                            }),
+                          };
                         } else {
                           data = { label: c.label, body: c.body, apply_field: c.apply_field };
                         }

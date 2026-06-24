@@ -620,28 +620,39 @@ const CourseWorkspace = () => {
       return;
     }
 
-    // SubsectionView typed block rows: BLOCK_CONTENT, BLOCK_WORKSHEET, BLOCK_ACTIVITY
-    if (type === 'BLOCK_CONTENT' || type === 'BLOCK_WORKSHEET' || type === 'BLOCK_ACTIVITY') {
-      // droppableId format: block-row-{blockType}-{subsectionId}
-      const parseRowId = (id) => {
-        const m = id.match(/^block-row-(content|worksheet|activity)-(.+)$/);
-        return m ? { blockType: m[1], subId: m[2] } : null;
-      };
-      const src = parseRowId(source.droppableId);
-      const dst = parseRowId(destination.droppableId);
-      if (!src || !dst || src.subId !== dst.subId || src.blockType !== dst.blockType) return;
-
-      const { blockType, subId } = src;
+    // SubsectionView: reorder content blocks within the left column
+    if (type.startsWith('CONTENT_COL_')) {
+      const subId = source.droppableId.replace('content-col-', '');
       const allBlocks = [...(handsOnResources[subId] || [])];
-      const rowBlocks = allBlocks.filter(b => b.type === blockType);
-      const [moved] = rowBlocks.splice(source.index, 1);
-      rowBlocks.splice(destination.index, 0, moved);
+      const contentBlocks = allBlocks.filter(b => b.type === 'content');
+      const others = allBlocks.filter(b => b.type !== 'content');
+      const [moved] = contentBlocks.splice(source.index, 1);
+      contentBlocks.splice(destination.index, 0, moved);
+      setHandsOnResources(prev => ({ ...prev, [subId]: [...contentBlocks, ...others] }));
+      return;
+    }
 
-      // Rebuild flat array: reconstruct this type's slots in original order positions
-      let rowIdx = 0;
-      const newBlocks = allBlocks.map(b =>
-        b.type === blockType ? rowBlocks[rowIdx++] : b
-      );
+    // SubsectionView: move a linked worksheet/activity between content block groups
+    if (type.startsWith('LINKED_')) {
+      const subId = type.replace('LINKED_', '');
+      const srcContentBlockId = source.droppableId.replace('linked-col-', '');
+      const dstContentBlockId = destination.droppableId.replace('linked-col-', '');
+      if (srcContentBlockId === dstContentBlockId) return; // same group, no-op (single item per slot)
+
+      // Update parentContentBlockId on the moved block
+      const blocks = [...(handsOnResources[subId] || [])];
+      const blockIdx = blocks.findIndex(b => b.id === draggableId);
+      if (blockIdx === -1) return;
+      let updatedBlock;
+      if (dstContentBlockId === 'unlinked') {
+        // Dropping into the unlinked zone removes the parent link
+        const { parentContentBlockId: _removed, ...rest } = blocks[blockIdx];
+        updatedBlock = rest;
+      } else {
+        updatedBlock = { ...blocks[blockIdx], parentContentBlockId: dstContentBlockId };
+      }
+      const newBlocks = [...blocks];
+      newBlocks[blockIdx] = updatedBlock;
       setHandsOnResources(prev => ({ ...prev, [subId]: newBlocks }));
       return;
     }
@@ -904,6 +915,8 @@ const CourseWorkspace = () => {
                   currentUser={currentUser}
                   onGenerateLinks={generateLinksForBlock}
                   linkGenStatus={linkGenJobs[navPath.blockId]}
+                  handsOnResources={handsOnResources}
+                  onNavigateToBlock={navigateToBlock}
                 />
               )}
             </div>
