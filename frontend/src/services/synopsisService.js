@@ -15,25 +15,34 @@ export const getActiveWeek = async () => {
   return res.json();
 };
 
+export const getVisibleWeeks = async () => {
+  const res = await fetch(`${API_BASE}/weeks/visible`);
+  if (!res.ok) throw new Error('Failed to fetch visible weeks');
+  return res.json();
+};
+
 export const getCampsForWeek = async (weekId) => {
   const res = await fetch(`${API_BASE}/weeks/${weekId}/camps`);
   if (!res.ok) throw new Error('Failed to fetch camps');
   return res.json();
 };
 
-export const getEntriesForCamp = async (campId) => {
-  const res = await fetch(`${API_BASE}/camps/${campId}/entries`);
+export const getEntriesForCamp = async (campId, weekId) => {
+  const url = weekId
+    ? `${API_BASE}/camps/${campId}/entries?week_id=${encodeURIComponent(weekId)}`
+    : `${API_BASE}/camps/${campId}/entries`;
+  const res = await fetch(url);
   if (!res.ok) throw new Error('Failed to fetch entries');
   return res.json();
 };
 
 // ── Public writes ─────────────────────────────────────────────────────────────
 
-export const saveEntries = async (campId, entries) => {
+export const saveEntries = async (campId, weekId, entries) => {
   const res = await fetch(`${API_BASE}/entries`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ camp_id: campId, entries }),
+    body: JSON.stringify({ camp_id: campId, week_id: weekId, entries }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -130,9 +139,9 @@ export const createCamp = async (currentUser, data) => {
   return res.json();
 };
 
-export const updateCamp = async (currentUser, campId, data) => {
+export const updateCamp = async (currentUser, campId, weekId, data) => {
   const headers = await authHeader(currentUser);
-  const res = await fetch(`${API_BASE}/camps/${campId}`, {
+  const res = await fetch(`${API_BASE}/camps/${campId}?week_id=${encodeURIComponent(weekId)}`, {
     method: 'PATCH',
     headers,
     body: JSON.stringify(data),
@@ -141,9 +150,9 @@ export const updateCamp = async (currentUser, campId, data) => {
   return res.json();
 };
 
-export const deleteCamp = async (currentUser, campId) => {
+export const deleteCamp = async (currentUser, campId, weekId) => {
   const headers = await authHeader(currentUser);
-  const res = await fetch(`${API_BASE}/camps/${campId}`, {
+  const res = await fetch(`${API_BASE}/camps/${campId}?week_id=${encodeURIComponent(weekId)}`, {
     method: 'DELETE',
     headers,
   });

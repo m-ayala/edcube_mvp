@@ -45,11 +45,22 @@ app.include_router(notifications.router, tags=["notifications"])
 app.include_router(uploads_router, tags=["uploads"])
 app.include_router(synopsis.router, tags=["synopsis"])
 
+ALLOWED_ORIGINS = {
+    "http://localhost:5173", "http://localhost:5174", "http://localhost:5175",
+    "https://edcube-8fe7d.web.app", "https://edcube-8fe7d.firebaseapp.com",
+    "https://edcubeai.web.app", "https://edcubeai.firebaseapp.com",
+}
+
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
-    # Catch-all so errors go through the CORS middleware instead of bypassing it.
     logging.getLogger(__name__).error("Unhandled exception", exc_info=exc)
-    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+    # Explicitly add CORS headers so they are never stripped by error paths
+    origin = request.headers.get("origin", "")
+    headers = {}
+    if origin in ALLOWED_ORIGINS:
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Access-Control-Allow-Credentials"] = "true"
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"}, headers=headers)
 
 
 @app.get("/")

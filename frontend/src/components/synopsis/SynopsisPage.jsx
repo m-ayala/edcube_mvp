@@ -11,6 +11,7 @@ import {
 } from '../../constants/synopsisSchema';
 import {
   getActiveWeek,
+  getVisibleWeeks,
   getCampsForWeek,
   getEntriesForCamp,
   getAllWeeks,
@@ -34,6 +35,7 @@ export default function SynopsisPage() {
   const [activeWeek, setActiveWeek] = useState(null);
   const [displayWeek, setDisplayWeek] = useState(null);
   const [allWeeks, setAllWeeks] = useState([]);
+  const [visibleWeeks, setVisibleWeeks] = useState([]);
   const [camps, setCamps] = useState([]);
   const [allEntries, setAllEntries] = useState({});
   const [showAdminLogin, setShowAdminLogin] = useState(false);
@@ -59,6 +61,10 @@ export default function SynopsisPage() {
       const active = weekRes.week || null;
       setActiveWeek(active);
 
+      const visibleRes = await getVisibleWeeks();
+      const visible = visibleRes.weeks || [];
+      setVisibleWeeks(visible);
+
       if (isAdmin && currentUser) {
         try {
           const weeksRes = await getAllWeeks(currentUser);
@@ -68,7 +74,10 @@ export default function SynopsisPage() {
         }
       }
 
-      const current = displayWeek || active;
+      // Teachers only get a default week if the active week is one the admin
+      // has flagged visible; otherwise they must pick one from the dropdown.
+      const teacherDefault = visible.find(w => w[SynopsisWeekFields.WEEK_ID] === active?.[SynopsisWeekFields.WEEK_ID]) || null;
+      const current = displayWeek || (effectiveIsAdmin ? active : teacherDefault);
       if (!current) {
         setCamps([]);
         setAllEntries({});
@@ -85,7 +94,7 @@ export default function SynopsisPage() {
       await Promise.all(
         campList.map(async (camp) => {
           try {
-            const res = await getEntriesForCamp(camp[SynopsisCampFields.CAMP_ID]);
+            const res = await getEntriesForCamp(camp[SynopsisCampFields.CAMP_ID], weekId);
             entriesMap[camp[SynopsisCampFields.CAMP_ID]] = res.entries || [];
           } catch {
             entriesMap[camp[SynopsisCampFields.CAMP_ID]] = [];
@@ -103,7 +112,7 @@ export default function SynopsisPage() {
   useEffect(() => {
     setLoading(true);
     loadData();
-  }, [currentUser, displayWeek, forceRefresh]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentUser, displayWeek, forceRefresh, adminViewMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Resolve campSlug from URL after camps load
   useEffect(() => {
@@ -119,7 +128,8 @@ export default function SynopsisPage() {
   }, [campSlug, loading, camps]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleWeekChange = (weekId) => {
-    const week = allWeeks.find(w => w[SynopsisWeekFields.WEEK_ID] === weekId);
+    const week = allWeeks.find(w => w[SynopsisWeekFields.WEEK_ID] === weekId)
+      || visibleWeeks.find(w => w[SynopsisWeekFields.WEEK_ID] === weekId);
     setDisplayWeek(week || null);
   };
 
@@ -255,6 +265,8 @@ export default function SynopsisPage() {
         <CampListView
           activeWeek={activeWeek}
           displayWeek={currentDisplayWeek}
+          visibleWeeks={visibleWeeks}
+          onWeekChange={handleWeekChange}
           camps={camps}
           allEntries={allEntries}
           isAdmin={effectiveIsAdmin}

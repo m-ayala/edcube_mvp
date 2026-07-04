@@ -18,9 +18,12 @@ export default function AdminPanel({ currentUser, allWeeks, displayWeekId, activ
   const [showAddWeek, setShowAddWeek] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [weekMenuOpen, setWeekMenuOpen] = useState(false);
+  const [togglingVisible, setTogglingVisible] = useState(null);
 
   const isDisplayingActiveWeek = displayWeekId === activeWeekId;
-  const displayWeekLabel = allWeeks.find(w => w[SynopsisWeekFields.WEEK_ID] === displayWeekId)?.[SynopsisWeekFields.LABEL] || 'this week';
+  const displayWeek = allWeeks.find(w => w[SynopsisWeekFields.WEEK_ID] === displayWeekId);
+  const displayWeekLabel = displayWeek?.[SynopsisWeekFields.LABEL] || 'this week';
 
   const handleSetActive = async () => {
     if (!displayWeekId || isDisplayingActiveWeek) return;
@@ -28,6 +31,16 @@ export default function AdminPanel({ currentUser, allWeeks, displayWeekId, activ
       await updateWeek(currentUser, displayWeekId, { is_active: true });
       await onDataRefresh();
     } catch (err) { alert(err.message); }
+  };
+
+  const handleToggleVisible = async (week) => {
+    const weekId = week[SynopsisWeekFields.WEEK_ID];
+    setTogglingVisible(weekId);
+    try {
+      await updateWeek(currentUser, weekId, { is_visible: !week[SynopsisWeekFields.IS_VISIBLE] });
+      await onDataRefresh();
+    } catch (err) { alert(err.message); }
+    finally { setTogglingVisible(null); }
   };
 
   const handleDelete = async () => {
@@ -49,7 +62,7 @@ export default function AdminPanel({ currentUser, allWeeks, displayWeekId, activ
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `synopsis_${displayWeekId}.docx`;
+      a.download = `synopsis_${displayWeekId}.zip`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) { alert(err.message); }
@@ -73,23 +86,68 @@ export default function AdminPanel({ currentUser, allWeeks, displayWeekId, activ
         {allWeeks.length > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
-              <select
-                value={displayWeekId || ''}
-                onChange={e => onWeekChange(e.target.value)}
+              <button
+                onClick={() => setWeekMenuOpen(o => !o)}
                 style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 8,
                   padding: '7px 30px 7px 12px', borderRadius: 8,
                   border: '1px solid rgba(0,0,0,0.12)',
                   fontSize: 14, fontFamily: FONT, color: '#1e1e2e',
-                  background: '#FFFFFF', cursor: 'pointer', appearance: 'none', outline: 'none',
+                  background: '#FFFFFF', cursor: 'pointer', outline: 'none',
+                  position: 'relative',
                 }}
               >
-                {allWeeks.map(w => (
-                  <option key={w[SynopsisWeekFields.WEEK_ID]} value={w[SynopsisWeekFields.WEEK_ID]}>
-                    {w[SynopsisWeekFields.LABEL]}{w[SynopsisWeekFields.IS_ACTIVE] ? ' ★' : ''}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown size={13} style={{ position: 'absolute', right: 9, pointerEvents: 'none', color: '#888' }} />
+                {displayWeekLabel}{displayWeek?.[SynopsisWeekFields.IS_ACTIVE] ? ' ★' : ''}
+                <ChevronDown size={13} style={{ position: 'absolute', right: 9, color: '#888' }} />
+              </button>
+
+              {weekMenuOpen && (
+                <>
+                  <div
+                    onClick={() => setWeekMenuOpen(false)}
+                    style={{ position: 'fixed', inset: 0, zIndex: 19 }}
+                  />
+                  <div style={{
+                    position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 20,
+                    background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.1)', borderRadius: 12,
+                    boxShadow: '0 10px 32px rgba(0,0,0,0.14)', minWidth: 300,
+                    maxHeight: 340, overflowY: 'auto', padding: 6,
+                  }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: '#999', textTransform: 'uppercase', letterSpacing: '0.05em', padding: '6px 10px' }}>
+                      Show on teacher view
+                    </div>
+                    {allWeeks.map(w => {
+                      const wId = w[SynopsisWeekFields.WEEK_ID];
+                      return (
+                        <div
+                          key={wId}
+                          onClick={() => { onWeekChange(wId); setWeekMenuOpen(false); }}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 10,
+                            padding: '9px 10px', borderRadius: 8, cursor: 'pointer',
+                            background: wId === displayWeekId ? 'rgba(172,216,240,0.25)' : 'transparent',
+                          }}
+                          onMouseEnter={e => { if (wId !== displayWeekId) e.currentTarget.style.background = 'rgba(0,0,0,0.04)'; }}
+                          onMouseLeave={e => { if (wId !== displayWeekId) e.currentTarget.style.background = 'transparent'; }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={!!w[SynopsisWeekFields.IS_VISIBLE]}
+                            disabled={togglingVisible === wId}
+                            onClick={e => e.stopPropagation()}
+                            onChange={() => handleToggleVisible(w)}
+                            title="Visible to teachers"
+                            style={{ width: 15, height: 15, cursor: 'pointer', flexShrink: 0 }}
+                          />
+                          <span style={{ flex: 1, fontSize: 14, color: '#1e1e2e' }}>
+                            {w[SynopsisWeekFields.LABEL]}{w[SynopsisWeekFields.IS_ACTIVE] ? ' ★' : ''}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Active week indicator / set active button */}

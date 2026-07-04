@@ -37,6 +37,7 @@ export default function AddWeekModal({ currentUser, onClose, onSuccess }) {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [isActive, setIsActive] = useState(true);
+  const [isVisible, setIsVisible] = useState(true);
   const [driveLink, setDriveLink] = useState('');
   const [groups, setGroups] = useState([blankGroup()]);
   const [flyerFile, setFlyerFile] = useState(null);
@@ -145,6 +146,7 @@ export default function AddWeekModal({ currentUser, onClose, onSuccess }) {
         start_date: startDate,
         end_date: endDate,
         is_active: isActive,
+        is_visible: isVisible,
         drive_link: driveLink.trim(),
         camp_groups: validGroups,
       });
@@ -244,17 +246,31 @@ export default function AddWeekModal({ currentUser, onClose, onSuccess }) {
               <label style={LABEL}>End date</label>
               <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={INPUT} />
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 20 }}>
-              <input
-                type="checkbox"
-                id="isActive"
-                checked={isActive}
-                onChange={e => setIsActive(e.target.checked)}
-                style={{ accentColor: '#8b7355', width: 15, height: 15 }}
-              />
-              <label htmlFor="isActive" style={{ fontSize: 13, color: '#1C1917', cursor: 'pointer' }}>
-                Set as active week
-              </label>
+            <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input
+                  type="checkbox"
+                  id="isActive"
+                  checked={isActive}
+                  onChange={e => setIsActive(e.target.checked)}
+                  style={{ accentColor: '#8b7355', width: 15, height: 15 }}
+                />
+                <label htmlFor="isActive" style={{ fontSize: 13, color: '#1C1917', cursor: 'pointer' }}>
+                  Set as active week
+                </label>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input
+                  type="checkbox"
+                  id="isVisible"
+                  checked={isVisible}
+                  onChange={e => setIsVisible(e.target.checked)}
+                  style={{ accentColor: '#8b7355', width: 15, height: 15 }}
+                />
+                <label htmlFor="isVisible" style={{ fontSize: 13, color: '#1C1917', cursor: 'pointer' }}>
+                  Show on teacher view
+                </label>
+              </div>
             </div>
           </div>
 

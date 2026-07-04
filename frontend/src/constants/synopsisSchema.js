@@ -10,6 +10,7 @@ export const SynopsisWeekFields = {
   START_DATE: 'start_date',
   END_DATE: 'end_date',
   IS_ACTIVE: 'is_active',
+  IS_VISIBLE: 'is_visible',
   DRIVE_LINK: 'drive_link',
   CREATED_BY: 'created_by',
   CREATED_AT: 'created_at',

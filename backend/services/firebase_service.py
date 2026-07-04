@@ -43,15 +43,15 @@ class FirebaseService:
 
     async def upload_file(self, data: bytes, path: str, content_type: str) -> str:
         """Upload bytes to Firebase Storage and return a permanent download URL."""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         bucket = self.bucket
 
         def _upload():
             blob = bucket.blob(path)
             download_token = str(uuid.uuid4())
-            blob.upload_from_string(data, content_type=content_type)
+            # Set metadata before upload so it's included in one API call (no patch needed)
             blob.metadata = {'firebaseStorageDownloadTokens': download_token}
-            blob.patch()
+            blob.upload_from_string(data, content_type=content_type)
             encoded = urllib.parse.quote(path, safe='')
             return (
                 f"https://firebasestorage.googleapis.com/v0/b/{bucket.name}"
@@ -619,6 +619,13 @@ class FirebaseService:
             return None
         return {'id': docs[0].id, **docs[0].to_dict()}
 
+    async def get_visible_synopsis_weeks(self) -> List[Dict]:
+        """Weeks the admin has flagged as visible to teachers, most recent start_date first."""
+        docs = self._weeks_col().where('is_visible', '==', True).stream()
+        weeks = [{'id': d.id, **d.to_dict()} for d in docs]
+        weeks.sort(key=lambda w: w.get('start_date', ''), reverse=True)
+        return weeks
+
     async def update_synopsis_week(self, week_id: str, updates: Dict) -> bool:
         ref = self._weeks_col().document(week_id)
         if not ref.get().exists:
@@ -667,23 +674,27 @@ class FirebaseService:
             return None
         return {'id': docs[0].id, **docs[0].to_dict()}
 
-    async def update_synopsis_camp(self, camp_id: str, updates: Dict) -> bool:
-        docs = list(self.db.collection_group('camps').where('camp_id', '==', camp_id).limit(1).stream())
-        if not docs:
+    async def get_synopsis_camp_in_week(self, week_id: str, camp_id: str) -> Optional[Dict]:
+        """Direct path lookup — no collection group query, no composite index required."""
+        doc = self._camps_col(week_id).document(camp_id).get()
+        if not doc.exists:
+            return None
+        return {'id': doc.id, **doc.to_dict()}
+
+    async def update_synopsis_camp(self, week_id: str, camp_id: str, updates: Dict) -> bool:
+        ref = self._camps_col(week_id).document(camp_id)
+        if not ref.get().exists:
             return False
-        docs[0].reference.update(updates)
+        ref.update(updates)
         return True
 
-    async def delete_synopsis_camp(self, camp_id: str) -> bool:
-        docs = list(self.db.collection_group('camps').where('camp_id', '==', camp_id).limit(1).stream())
-        if not docs:
+    async def delete_synopsis_camp(self, week_id: str, camp_id: str) -> bool:
+        ref = self._camps_col(week_id).document(camp_id)
+        if not ref.get().exists:
             return False
-        camp_data = docs[0].to_dict() or {}
-        week_id = camp_data.get('week_id', '')
-        # Delete all entries under this camp first
         for entry_doc in self._entries_col(week_id, camp_id).stream():
             entry_doc.reference.delete()
-        docs[0].reference.delete()
+        ref.delete()
         return True
 
     # ── Synopsis Entries ──────────────────────────────────────────────────────
@@ -708,6 +719,11 @@ class FirebaseService:
         docs = self.db.collection_group('entries').where('camp_id', '==', camp_id).stream()
         return [{'id': d.id, **d.to_dict()} for d in docs]
 
+    async def get_synopsis_entries_for_camp_in_week(self, week_id: str, camp_id: str) -> List[Dict]:
+        """Direct path lookup — no collection group query, no composite index required."""
+        docs = self._entries_col(week_id, camp_id).stream()
+        return [{'id': d.id, **d.to_dict()} for d in docs]
+
     async def get_synopsis_entry(self, entry_id: str) -> Optional[Dict]:
         docs = list(self.db.collection_group('entries').where('entry_id', '==', entry_id).limit(1).stream())
         if not docs:
@@ -720,8 +736,14 @@ class FirebaseService:
             docs[0].reference.update(updates)
 
     async def get_synopsis_entries_for_week(self, week_id: str) -> List[Dict]:
-        docs = self.db.collection_group('entries').where('week_id', '==', week_id).stream()
-        return [{'id': d.id, **d.to_dict()} for d in docs]
+        """Direct path: iterate camps then their entries — no collection group, no composite index."""
+        all_entries = []
+        for camp_doc in self._camps_col(week_id).stream():
+            camp_data = camp_doc.to_dict() or {}
+            camp_id = camp_data.get('camp_id', camp_doc.id)
+            for entry_doc in self._entries_col(week_id, camp_id).stream():
+                all_entries.append({'id': entry_doc.id, **entry_doc.to_dict()})
+        return all_entries
 
     # ── Synopsis Food ─────────────────────────────────────────────────────────
 

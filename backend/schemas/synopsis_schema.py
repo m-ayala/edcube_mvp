@@ -16,6 +16,7 @@ class SynopsisWeekFields:
     START_DATE = 'start_date'
     END_DATE = 'end_date'
     IS_ACTIVE = 'is_active'
+    IS_VISIBLE = 'is_visible'
     DRIVE_LINK = 'drive_link'
     CREATED_BY = 'created_by'
     CREATED_AT = 'created_at'
@@ -65,6 +66,7 @@ class WeekCreate(BaseModel):
     start_date: str
     end_date: str
     is_active: bool = False
+    is_visible: bool = False
     drive_link: Optional[str] = ""
 
 
@@ -73,6 +75,7 @@ class WeekUpdate(BaseModel):
     start_date: Optional[str] = None
     end_date: Optional[str] = None
     is_active: Optional[bool] = None
+    is_visible: Optional[bool] = None
     drive_link: Optional[str] = None
 
 
@@ -97,6 +100,7 @@ class WeekSetupRequest(BaseModel):
     start_date: str
     end_date: str
     is_active: bool = True
+    is_visible: bool = False
     drive_link: Optional[str] = ""
     camp_groups: List[CampGroupInput] = []
 
@@ -133,6 +137,7 @@ class EnhanceTextRequest(BaseModel):
 
 class EntrySaveRequest(BaseModel):
     camp_id: str
+    week_id: str
     entries: List[EntryDayInput]
 
 

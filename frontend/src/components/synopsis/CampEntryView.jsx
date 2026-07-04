@@ -50,7 +50,7 @@ export default function CampEntryView({ camp, onBack, isAdmin = false }) {
 
   // ── Load entries ──────────────────────────────────────────────────────────
   useEffect(() => {
-    getEntriesForCamp(campId).then(({ entries = [] }) => {
+    getEntriesForCamp(campId, weekId).then(({ entries = [] }) => {
       setDayData(prev => {
         const next = { ...prev };
         for (const e of entries) {
@@ -67,7 +67,7 @@ export default function CampEntryView({ camp, onBack, isAdmin = false }) {
         return next;
       });
     }).catch(() => {});
-  }, [campId]);
+  }, [campId, weekId]);
 
   // ── Days: auto-save using effect ──────────────────────────────────────────
   useEffect(() => {
@@ -81,7 +81,7 @@ export default function CampEntryView({ camp, onBack, isAdmin = false }) {
         .map(d => ({ day: d, day_title: current[d].day_title, raw_text: current[d].raw_text, photo_urls: current[d].photo_urls }));
       if (!toSend.length) return;
       try {
-        await saveEntries(campId, toSend);
+        await saveEntries(campId, weekId, toSend);
         setDayData(prev => {
           const next = { ...prev };
           for (const d of VALID_DAYS) {
@@ -96,7 +96,7 @@ export default function CampEntryView({ camp, onBack, isAdmin = false }) {
       } catch { /* silent on auto-save fail */ }
     }, 3000);
     return () => clearTimeout(dayAutoTimer.current);
-  }, [dayData, campId]);
+  }, [dayData, campId, weekId]);
 
   // ── Days: manual save ─────────────────────────────────────────────────────
   const handleSave = async () => {
@@ -121,7 +121,7 @@ export default function CampEntryView({ camp, onBack, isAdmin = false }) {
     setSaveMsg('');
     setAutoSaved(false);
     try {
-      await saveEntries(campId, toSend);
+      await saveEntries(campId, weekId, toSend);
       setDayData(prev => {
         const next = { ...prev };
         for (const d of VALID_DAYS) {
@@ -150,7 +150,7 @@ export default function CampEntryView({ camp, onBack, isAdmin = false }) {
     clearTimeout(dayAutoTimer.current);
     setSavingDay(prev => ({ ...prev, [day]: true }));
     try {
-      await saveEntries(campId, [{
+      await saveEntries(campId, weekId, [{
         day,
         day_title:  dayData[day].day_title,
         raw_text:   dayData[day].raw_text,

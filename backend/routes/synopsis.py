@@ -6,13 +6,22 @@ Public read/write for entries and photos; ICC admin required for write on weeks/
 
 import io
 import logging
+import os as _os
 import re
 import urllib.parse
 import urllib.request
 import uuid
+import zipfile
+import datetime as _dt
 from datetime import datetime
 from html import escape as _html_escape
 from typing import Optional
+
+from docx import Document
+from docx.shared import Inches, Pt, RGBColor
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
+from docx.oxml.ns import qn as _qn
+from docx.oxml import OxmlElement
 
 from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
@@ -59,6 +68,19 @@ ENHANCE_SYSTEM_PROMPT = (
     "- Bold 1 to 2 key phrases using markdown bold (**like this**).\n"
     "- Keep a warm, first-person plural voice (e.g. 'we built...', 'our campers...').\n"
     "- Return only the paraphrased text, no preamble, no quotes around it."
+)
+
+LIGHT_CORRECT_PROMPT = (
+    "You are a copy editor for a K-8 enrichment camp newsletter. "
+    "A teacher has written a brief activity description for parents. "
+    "Lightly polish the text so it reads clearly and professionally, while keeping the teacher's facts, voice, and all details fully intact. Rules:\n"
+    "- Fix all spelling, grammar, and punctuation errors.\n"
+    "- Improve sentence flow and readability where helpful (e.g. break run-on sentences, smooth awkward phrasing) "
+    "without paraphrasing or restructuring the overall content.\n"
+    "- Do NOT add or remove any activity, fact, or detail the teacher wrote.\n"
+    "- Keep the teacher's warm, first-person voice.\n"
+    "- Add 1 to 2 relevant emojis placed naturally within the text.\n"
+    "- Return only the polished text. No preamble, no explanation, no quotes around it."
 )
 
 DAY_LABELS = {'mon': 'Monday', 'tue': 'Tuesday', 'wed': 'Wednesday', 'thu': 'Thursday', 'fri': 'Friday'}
@@ -130,6 +152,13 @@ async def get_active_week():
     return {"week": week}
 
 
+@router.get("/weeks/visible")
+async def list_visible_weeks():
+    """Weeks the admin has flagged as visible to teachers — used to populate the teacher week picker."""
+    weeks = await firebase.get_visible_synopsis_weeks()
+    return {"weeks": weeks}
+
+
 @router.post("/weeks", status_code=status.HTTP_201_CREATED)
 async def create_week(body: WeekCreate, admin: dict = Depends(verify_icc_admin)):
     now = datetime.utcnow().isoformat()
@@ -140,6 +169,7 @@ async def create_week(body: WeekCreate, admin: dict = Depends(verify_icc_admin))
         SynopsisWeekFields.START_DATE: body.start_date,
         SynopsisWeekFields.END_DATE: body.end_date,
         SynopsisWeekFields.IS_ACTIVE: body.is_active,
+        SynopsisWeekFields.IS_VISIBLE: body.is_visible,
         SynopsisWeekFields.DRIVE_LINK: body.drive_link or "",
         SynopsisWeekFields.CREATED_BY: admin.get("uid", ""),
         SynopsisWeekFields.CREATED_AT: now,
@@ -181,6 +211,7 @@ async def setup_week(body: WeekSetupRequest, admin: dict = Depends(verify_icc_ad
         SynopsisWeekFields.START_DATE: body.start_date,
         SynopsisWeekFields.END_DATE: body.end_date,
         SynopsisWeekFields.IS_ACTIVE: body.is_active,
+        SynopsisWeekFields.IS_VISIBLE: body.is_visible,
         SynopsisWeekFields.DRIVE_LINK: body.drive_link or "",
         SynopsisWeekFields.CREATED_BY: admin.get("uid", ""),
         SynopsisWeekFields.CREATED_AT: now,
@@ -306,19 +337,19 @@ async def create_camp(body: CampCreate, admin: dict = Depends(verify_icc_admin))
 
 
 @router.patch("/camps/{camp_id}")
-async def update_camp(camp_id: str, body: CampUpdate, admin: dict = Depends(verify_icc_admin)):
+async def update_camp(camp_id: str, body: CampUpdate, week_id: str = Query(...), admin: dict = Depends(verify_icc_admin)):
     updates = {k: v for k, v in body.model_dump().items() if v is not None}
     if not updates:
         raise HTTPException(400, "No fields to update")
-    ok = await firebase.update_synopsis_camp(camp_id, updates)
+    ok = await firebase.update_synopsis_camp(week_id, camp_id, updates)
     if not ok:
         raise HTTPException(404, "Camp not found")
     return {"success": True}
 
 
 @router.delete("/camps/{camp_id}")
-async def delete_camp(camp_id: str, admin: dict = Depends(verify_icc_admin)):
-    ok = await firebase.delete_synopsis_camp(camp_id)
+async def delete_camp(camp_id: str, week_id: str = Query(...), admin: dict = Depends(verify_icc_admin)):
+    ok = await firebase.delete_synopsis_camp(week_id, camp_id)
     if not ok:
         raise HTTPException(404, "Camp not found")
     return {"success": True}
@@ -327,14 +358,25 @@ async def delete_camp(camp_id: str, admin: dict = Depends(verify_icc_admin)):
 # ── Entries ───────────────────────────────────────────────────────────────────
 
 @router.get("/camps/{camp_id}/entries")
-async def get_entries(camp_id: str):
-    entries = await firebase.get_synopsis_entries_for_camp(camp_id)
+async def get_entries(camp_id: str, week_id: Optional[str] = Query(None)):
+    # week_id lets callers target any week's camps (needed now that teachers can
+    # add synopses to any admin-visible week, not just the single "active" one).
+    if not week_id:
+        active_week = await firebase.get_active_synopsis_week()
+        if not active_week:
+            return {"entries": []}
+        week_id = active_week.get(SynopsisWeekFields.WEEK_ID) or active_week.get('id')
+    entries = await firebase.get_synopsis_entries_for_camp_in_week(week_id, camp_id)
     return {"entries": entries}
 
 
 @router.get("/entries/{entry_id}")
-async def get_entry(entry_id: str):
-    entry = await firebase.get_synopsis_entry(entry_id)
+async def get_entry(entry_id: str, week_id: Optional[str] = Query(None), camp_id: Optional[str] = Query(None)):
+    if week_id and camp_id:
+        doc = firebase._entries_col(week_id, camp_id).document(entry_id).get()
+        entry = ({'id': doc.id, **doc.to_dict()} if doc.exists else None)
+    else:
+        entry = await firebase.get_synopsis_entry(entry_id)
     if not entry:
         raise HTTPException(404, "Entry not found")
     return entry
@@ -342,16 +384,15 @@ async def get_entry(entry_id: str):
 
 @router.post("/entries")
 async def save_entries(body: EntrySaveRequest):
-    # Verify the camp belongs to the active week
-    camp = await firebase.get_synopsis_camp(body.camp_id)
+    # Teachers now pick which (admin-visible) week they're submitting for, so the
+    # target week comes from the request instead of always being the active week.
+    week_id = body.week_id
+
+    # Verify the camp exists within the given week (direct path, no composite index needed)
+    camp = await firebase.get_synopsis_camp_in_week(week_id, body.camp_id)
     if not camp:
-        raise HTTPException(404, "Camp not found")
+        raise HTTPException(404, "Camp not found in the given week")
 
-    active_week = await firebase.get_active_synopsis_week()
-    if not active_week or active_week.get(SynopsisWeekFields.WEEK_ID) != camp.get(SynopsisCampFields.WEEK_ID):
-        raise HTTPException(403, "Entries can only be added to the active week")
-
-    week_id = camp[SynopsisCampFields.WEEK_ID]
     saved_ids = []
 
     for entry in body.entries:
@@ -502,6 +543,23 @@ def _add_md_text(para, text: str, size_pt: int = 12) -> None:
             _run(para, part, bold=(i % 2 == 1), size_pt=size_pt)
 
 
+def _light_correct(text: str) -> str:
+    """Fix spelling/grammar/punctuation and add emojis without changing meaning."""
+    if not text or not text.strip():
+        return text
+    try:
+        result = call_openai(
+            prompt=text,
+            system_message=LIGHT_CORRECT_PROMPT,
+            json_mode=False,
+            temperature=0.1,
+        )
+        return result.get("response", text) or text
+    except Exception:
+        logger.warning("Light correction failed; using original teacher text.")
+        return text
+
+
 # Day ordinal labels used in the document (matches reference doc format)
 DAY_ORDINAL = {'mon': 'Day 1', 'tue': 'Day 2', 'wed': 'Day 3', 'thu': 'Day 4', 'fri': 'Day 5'}
 
@@ -515,13 +573,9 @@ COLOR_DAY_BG   = "dd7e6b"  # red-orange — day heading within camp
 
 def _run(para, text: str, bold=False, italic=False, size_pt=12,
          color_hex: str = None, bg_hex: str = None):
-    """Add a run with exact font (Lora), size, colour and optional background shading."""
-    from docx.oxml import OxmlElement
-    from docx.oxml.ns import qn as _qn
-    from docx.shared import Pt, RGBColor
     r = para.add_run(text)
-    r.bold   = bold
-    r.italic = italic
+    r.bold      = bold
+    r.italic    = italic
     r.font.name = "Lora"
     r.font.size = Pt(size_pt)
     if color_hex:
@@ -537,10 +591,6 @@ def _run(para, text: str, bold=False, italic=False, size_pt=12,
 
 
 def _para(doc, style='Normal', align=None, spc_b=None, spc_a=None, line=None, para_bg=None):
-    """Add a paragraph and set its spacing / alignment / full-width background fill."""
-    from docx.shared import Pt
-    from docx.oxml import OxmlElement
-    from docx.oxml.ns import qn as _qn
     p  = doc.add_paragraph(style=style)
     pf = p.paragraph_format
     if align is not None:
@@ -561,165 +611,123 @@ def _para(doc, style='Normal', align=None, spc_b=None, spc_a=None, line=None, pa
     return p
 
 
-@router.get("/weeks/{week_id}/download")
-async def download_weekly_doc(
-    week_id: str,
-    group_name: Optional[str] = Query(None, description="Download only this camp group"),
-    admin: dict = Depends(verify_icc_admin),
-):
-    import os as _os
-    import datetime as _dt
-    from docx import Document
-    from docx.shared import Inches, Pt, RGBColor
-    from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
-    from docx.oxml.ns import qn
-    from docx.oxml import OxmlElement
+def _cell_bg(cell, hex6: str):
+    tcPr = cell._tc.get_or_add_tcPr()
+    shd  = OxmlElement('w:shd')
+    shd.set(_qn('w:val'),   'clear')
+    shd.set(_qn('w:color'), 'auto')
+    shd.set(_qn('w:fill'),  hex6.lstrip('#'))
+    tcPr.append(shd)
 
-    # ── Fetch data ─────────────────────────────────────────────────────────────
-    weeks = await firebase.get_all_synopsis_weeks()
-    week  = next((w for w in weeks if w.get(SynopsisWeekFields.WEEK_ID) == week_id), None)
-    if not week:
-        raise HTTPException(404, "Week not found")
 
-    camps = await firebase.get_synopsis_camps_for_week(week_id)
-    filter_group = group_name
-    if filter_group:
-        camps = [c for c in camps if c.get(SynopsisCampFields.GROUP_NAME) == filter_group]
+def _para_border_bottom(para, color_hex: str = '1a1a1a', sz: str = '8'):
+    pPr  = para._p.get_or_add_pPr()
+    pBdr = OxmlElement('w:pBdr')
+    btm  = OxmlElement('w:bottom')
+    btm.set(_qn('w:val'),   'single')
+    btm.set(_qn('w:sz'),    sz)
+    btm.set(_qn('w:space'), '1')
+    btm.set(_qn('w:color'), color_hex.lstrip('#'))
+    pBdr.append(btm)
+    pPr.append(pBdr)
 
-    all_entries = await firebase.get_synopsis_entries_for_week(week_id)
-    entries_by_camp: dict = {}
-    for e in all_entries:
-        cid = e.get(SynopsisEntryFields.CAMP_ID)
-        entries_by_camp.setdefault(cid, {})[e.get(SynopsisEntryFields.DAY)] = e
 
-    food_data  = await firebase.get_synopsis_food(week_id) or {}
-    week_label = week.get(SynopsisWeekFields.LABEL, "ICC Summer Camps")
-    drive_link = week.get(SynopsisWeekFields.DRIVE_LINK, '') or ''
+def _remove_table_borders(tbl):
+    for row in tbl.rows:
+        for cell in row.cells:
+            tcPr  = cell._tc.get_or_add_tcPr()
+            tcBdr = OxmlElement('w:tcBorders')
+            for side in ('top', 'left', 'bottom', 'right', 'insideH', 'insideV'):
+                b = OxmlElement(f'w:{side}')
+                b.set(_qn('w:val'), 'none')
+                tcBdr.append(b)
+            tcPr.append(tcBdr)
 
-    # ── Derived metadata ───────────────────────────────────────────────────────
-    group_camps  = list(camps)
-    camp_names   = [c.get(SynopsisCampFields.CAMP_NAME, '') for c in group_camps]
-    unique_names = list(dict.fromkeys(n for n in camp_names if n))
-    if len(unique_names) > 2:
-        doc_title = ', '.join(unique_names[:-1]) + ' & ' + unique_names[-1] + ' Camp'
-    elif len(unique_names) == 2:
-        doc_title = unique_names[0] + ' & ' + unique_names[1] + ' Camp'
-    elif unique_names:
-        doc_title = unique_names[0] + ' Camp'
-    else:
-        doc_title = week_label
 
-    year = _dt.datetime.now().year
+_HYPERLINK_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink'
 
-    def _ordinal(n: int) -> str:
-        if 11 <= n % 100 <= 13:
-            return f'{n}th'
-        return f'{n}{["th","st","nd","rd","th"][min(n % 10, 4)]}'
 
-    def _fmt_date(date_str: str) -> str:
-        try:
-            d = _dt.datetime.strptime(date_str, '%Y-%m-%d')
-            return f'{_ordinal(d.day)} {d.strftime("%B")}'
-        except Exception:
-            return date_str
+def _add_hyperlink(para, url: str, display_text: str, size_pt: int = 10, bold: bool = True):
+    """Insert a clickable hyperlink run into an existing paragraph."""
+    rId = para.part.relate_to(url, _HYPERLINK_REL, is_external=True)
+    hl  = OxmlElement('w:hyperlink')
+    hl.set(_qn('r:id'), rId)
+    r   = OxmlElement('w:r')
+    rPr = OxmlElement('w:rPr')
+    rFonts = OxmlElement('w:rFonts')
+    rFonts.set(_qn('w:ascii'),    'Lora')
+    rFonts.set(_qn('w:hAnsi'),   'Lora')
+    rPr.append(rFonts)
+    sz_el = OxmlElement('w:sz')
+    sz_el.set(_qn('w:val'), str(size_pt * 2))
+    rPr.append(sz_el)
+    if bold:
+        rPr.append(OxmlElement('w:b'))
+    color_el = OxmlElement('w:color')
+    color_el.set(_qn('w:val'), '0563C1')
+    rPr.append(color_el)
+    u_el = OxmlElement('w:u')
+    u_el.set(_qn('w:val'), 'single')
+    rPr.append(u_el)
+    r.append(rPr)
+    t = OxmlElement('w:t')
+    t.text = display_text
+    r.append(t)
+    hl.append(r)
+    para._p.append(hl)
 
-    start = week.get(SynopsisWeekFields.START_DATE, '')
-    end   = week.get(SynopsisWeekFields.END_DATE,   '')
-    if start and end:
-        end_year        = _dt.datetime.strptime(end, '%Y-%m-%d').year
-        formatted_dates = f'{_fmt_date(start)} – {_fmt_date(end)} {end_year}'
-    elif start:
-        formatted_dates = _fmt_date(start)
-    else:
-        formatted_dates = ''
 
-    header_meta = week_label + (f' · {formatted_dates}' if formatted_dates else '')
+# ── Shared doc-generation constants ──────────────────────────────────────────
+_LOGO_PATH = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), 'assets', 'ICC_official_logo.png')
+_DAY_NUM         = {'mon': '1', 'tue': '2', 'wed': '3', 'thu': '4', 'fri': '5'}
+_DAY_C_HEX       = {'mon': 'B8E8A5', 'tue': 'A5C9E8', 'wed': 'E8D5A5', 'thu': 'E8A5A5', 'fri': 'C5B8E8'}
+_DAY_LABEL_SHORT = {'mon': 'Mon',    'tue': 'Tue',    'wed': 'Wed',    'thu': 'Thu',    'fri': 'Fri'}
+_DAY_EMOJI       = {'mon': '🌟',     'tue': '⭐',     'wed': '🌈',     'thu': '🎉',     'fri': '🎊'}
 
-    # ── Logo path ──────────────────────────────────────────────────────────────
-    _here     = _os.path.dirname(_os.path.abspath(__file__))
-    _root     = _os.path.dirname(_os.path.dirname(_here))
-    logo_path = _os.path.join(_root, 'frontend', 'public', 'ICC_official_logo.png')
 
-    # ── Day constants ──────────────────────────────────────────────────────────
-    DAY_NUM   = {'mon': '1', 'tue': '2', 'wed': '3', 'thu': '4', 'fri': '5'}
-    DAY_C_HEX = {'mon': 'B8E8A5', 'tue': 'A5C9E8', 'wed': 'E8D5A5',
-                 'thu': 'E8A5A5', 'fri': 'C5B8E8'}
-    DAY_LABEL_SHORT = {'mon': 'Mon', 'tue': 'Tue', 'wed': 'Wed', 'thu': 'Thu', 'fri': 'Fri'}
-    DAY_EMOJI       = {'mon': '🌟', 'tue': '⭐', 'wed': '🌈', 'thu': '🎉', 'fri': '🎊'}
-
-    # ── XML helpers ────────────────────────────────────────────────────────────
-    def _cell_bg(cell, hex6: str):
-        tcPr = cell._tc.get_or_add_tcPr()
-        shd  = OxmlElement('w:shd')
-        shd.set(qn('w:val'),   'clear')
-        shd.set(qn('w:color'), 'auto')
-        shd.set(qn('w:fill'),  hex6.lstrip('#'))
-        tcPr.append(shd)
-
-    def _para_border_bottom(para, color_hex: str = '1a1a1a', sz: str = '8'):
-        pPr  = para._p.get_or_add_pPr()
-        pBdr = OxmlElement('w:pBdr')
-        btm  = OxmlElement('w:bottom')
-        btm.set(qn('w:val'),   'single')
-        btm.set(qn('w:sz'),    sz)
-        btm.set(qn('w:space'), '1')
-        btm.set(qn('w:color'), color_hex.lstrip('#'))
-        pBdr.append(btm)
-        pPr.append(pBdr)
-
-    def _remove_table_borders(tbl):
-        for row in tbl.rows:
-            for cell in row.cells:
-                tcPr    = cell._tc.get_or_add_tcPr()
-                tcBdr   = OxmlElement('w:tcBorders')
-                for side in ('top','left','bottom','right','insideH','insideV'):
-                    b = OxmlElement(f'w:{side}')
-                    b.set(qn('w:val'), 'none')
-                    tcBdr.append(b)
-                tcPr.append(tcBdr)
-
-    # ── Build document ─────────────────────────────────────────────────────────
+def _build_synopsis_doc(
+    *,
+    group_camps: list,
+    doc_title: str,
+    header_meta: str,
+    drive_link: str,
+    entries_by_camp: dict,
+    food_data: dict,
+    year: int,
+) -> bytes:
+    """Build one synopsis .docx for a single camp group and return raw bytes."""
     doc     = Document()
     section = doc.sections[0]
-    section.top_margin       = Inches(1.1)
-    section.bottom_margin    = Inches(1.1)
-    section.left_margin      = Inches(0.85)
-    section.right_margin     = Inches(0.85)
-    section.header_distance  = Inches(0.4)
-    section.footer_distance  = Inches(0.4)
+    section.top_margin      = Inches(1.1)
+    section.bottom_margin   = Inches(1.1)
+    section.left_margin     = Inches(0.85)
+    section.right_margin    = Inches(0.85)
+    section.header_distance = Inches(0.4)
+    section.footer_distance = Inches(0.4)
 
-    # ── Header (every page) ────────────────────────────────────────────────────
-    hdr_p = section.header.paragraphs[0]
-    hdr_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    hdr_r = hdr_p.add_run(f'ICC Summer Camps Program {year}')
-    hdr_r.font.size      = Pt(11)
-    hdr_r.font.color.rgb = RGBColor(0x44, 0x44, 0x44)
+    # Header / footer
+    for hf_p in (section.header.paragraphs[0], section.footer.paragraphs[0]):
+        hf_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        hf_r = hf_p.add_run(f'ICC Summer Camps Program {year}')
+        hf_r.font.size      = Pt(11)
+        hf_r.font.color.rgb = RGBColor(0x44, 0x44, 0x44)
 
-    # ── Footer (every page) ────────────────────────────────────────────────────
-    ftr_p = section.footer.paragraphs[0]
-    ftr_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    ftr_r = ftr_p.add_run(f'ICC Summer Camps Program {year}')
-    ftr_r.font.size      = Pt(11)
-    ftr_r.font.color.rgb = RGBColor(0x44, 0x44, 0x44)
-
-    # ── Title block: 2-col table (camp name + meta | logo) ────────────────────
+    # Title block: camp name + meta | logo
     ttbl = doc.add_table(rows=1, cols=2)
     ttbl.autofit = False
     ttbl.columns[0].width = Inches(4.5)
     ttbl.columns[1].width = Inches(2.0)
     _remove_table_borders(ttbl)
 
-    # Left: camp name
-    cl = ttbl.cell(0, 0)
+    cl     = ttbl.cell(0, 0)
     p_name = cl.paragraphs[0]
     p_name.paragraph_format.space_before = Pt(6)
     p_name.paragraph_format.space_after  = Pt(6)
-    r = p_name.add_run(doc_title)
-    r.bold           = True
-    r.font.size      = Pt(22)
-    r.font.color.rgb = RGBColor(0x1a, 0x1a, 0x1a)
+    r_title = p_name.add_run(doc_title)
+    r_title.bold           = True
+    r_title.font.size      = Pt(22)
+    r_title.font.color.rgb = RGBColor(0x1a, 0x1a, 0x1a)
 
-    # Left: meta (week + dates)
     p_meta = cl.add_paragraph()
     p_meta.paragraph_format.space_before = Pt(4)
     p_meta.paragraph_format.space_after  = Pt(10)
@@ -727,104 +735,92 @@ async def download_weekly_doc(
     r_meta.font.size      = Pt(12)
     r_meta.font.color.rgb = RGBColor(0x1a, 0x1a, 0x1a)
 
-    # Right: logo
-    cr = ttbl.cell(0, 1)
+    cr     = ttbl.cell(0, 1)
     p_logo = cr.paragraphs[0]
     p_logo.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-    if _os.path.exists(logo_path):
+    if _os.path.exists(_LOGO_PATH):
         try:
-            p_logo.add_run().add_picture(logo_path, width=Inches(1.9))
+            p_logo.add_run().add_picture(_LOGO_PATH, width=Inches(1.9))
         except Exception:
             pass
 
-    # Divider after title block
     p_div = _para(doc, spc_b=6, spc_a=10)
     _para_border_bottom(p_div, '1a1a1a', sz='12')
 
-    # ── Gallery bar ────────────────────────────────────────────────────────────
+    # Gallery bar with clickable hyperlink
     if drive_link:
         p_gal = _para(doc, spc_b=4, spc_a=8)
         pPr = p_gal._p.get_or_add_pPr()
         shd = OxmlElement('w:shd')
-        shd.set(qn('w:val'),   'clear')
-        shd.set(qn('w:color'), 'auto')
-        shd.set(qn('w:fill'),  'A5C9E8')
+        shd.set(_qn('w:val'),   'clear')
+        shd.set(_qn('w:color'), 'auto')
+        shd.set(_qn('w:fill'),  'A5C9E8')
         pPr.append(shd)
         _run(p_gal, '📷  This week\'s photos — ', size_pt=10)
-        _run(p_gal, drive_link, bold=True, size_pt=10)
+        _add_hyperlink(p_gal, drive_link, drive_link, size_pt=10, bold=True)
 
-    # ── Camp sections ──────────────────────────────────────────────────────────
+    # Camp sections
     for camp_idx, camp in enumerate(group_camps):
         camp_id      = camp.get(SynopsisCampFields.CAMP_ID)
         camp_name    = camp.get(SynopsisCampFields.CAMP_NAME, 'Camp')
         camp_entries = entries_by_camp.get(camp_id, {})
 
-        # Camp name heading + divider — all camps except the first start on a fresh page
         p_camp = _para(doc, spc_b=16, spc_a=10, align=WD_ALIGN_PARAGRAPH.CENTER, para_bg=COLOR_CAMP_BG)
         if camp_idx > 0:
             p_camp.paragraph_format.page_break_before = True
         _run(p_camp, camp_name, bold=True, size_pt=23)
         _para_border_bottom(p_camp, '1a1a1a', sz='6')
 
-        # Days
         for day_key in DAY_ORDER:
             entry     = camp_entries.get(day_key)
-            day_color = DAY_C_HEX[day_key]
-            day_num   = DAY_NUM[day_key]
-            emoji     = DAY_EMOJI[day_key]
+            day_color = _DAY_C_HEX[day_key]
+            day_num   = _DAY_NUM[day_key]
+            emoji     = _DAY_EMOJI[day_key]
             day_title = (entry.get(SynopsisEntryFields.DAY_TITLE, '') if entry else '') or ''
             notes_raw = ''
             if entry:
-                notes_raw = (entry.get(SynopsisEntryFields.POLISHED_TEXT)
-                             or entry.get(SynopsisEntryFields.RAW_TEXT) or '')
+                polished = entry.get(SynopsisEntryFields.POLISHED_TEXT) or ''
+                raw      = entry.get(SynopsisEntryFields.RAW_TEXT) or ''
+                notes_raw = polished if polished else (_light_correct(raw) if raw else '')
 
-            # Day pill + topic — both highlighted
             p_day = _para(doc, spc_b=12, spc_a=6)
             label = f'{emoji} Day {day_num}'
             if day_title:
                 label += f'  ·  {day_title}'
             _run(p_day, label, bold=True, size_pt=14, bg_hex=day_color)
 
-            # Notes
             p_notes = _para(doc, spc_b=6, spc_a=12, line=1.5, align=WD_ALIGN_PARAGRAPH.JUSTIFY)
             if notes_raw:
                 _add_md_text(p_notes, notes_raw, size_pt=11)
             else:
-                r_none = _run(p_notes, 'No notes submitted for this day.', size_pt=11)
+                _run(p_notes, 'No notes submitted for this day.', size_pt=11)
 
-            # Photos
             if entry:
                 photo_urls = entry.get(SynopsisEntryFields.PHOTO_URLS, [])
                 if photo_urls:
-                    photo_w = Inches(2.1)
                     for row_start in range(0, len(photo_urls), 3):
-                        row      = photo_urls[row_start:row_start + 3]
-                        p_photos = _para(doc, spc_b=4, spc_a=4,
-                                         align=WD_ALIGN_PARAGRAPH.CENTER)
-                        for url in row:
+                        p_photos = _para(doc, spc_b=4, spc_a=4, align=WD_ALIGN_PARAGRAPH.CENTER)
+                        for url in photo_urls[row_start:row_start + 3]:
                             try:
                                 img_b = _fix_exif_rotation(_fetch_photo_bytes(url))
-                                p_photos.add_run().add_picture(io.BytesIO(img_b), width=photo_w)
+                                p_photos.add_run().add_picture(io.BytesIO(img_b), width=Inches(2.1))
                             except Exception as exc:
                                 logger.warning(f"Could not embed photo {url}: {exc}")
 
-            # Light separator between days
             p_sep = _para(doc, spc_b=2, spc_a=2)
             _para_border_bottom(p_sep, 'e5e5e5', sz='2')
 
         _para(doc, spc_b=20, spc_a=20)
 
-    # ── Page break → Food section ──────────────────────────────────────────────
+    # Food section
     p_brk = doc.add_paragraph()
     p_brk.add_run().add_break(WD_BREAK.PAGE)
 
-    # Food heading + divider
     p_fhdr = _para(doc, spc_b=4, spc_a=8)
     _run(p_fhdr, '🍽️  This Week\'s Menu', bold=True, size_pt=15)
     _para_border_bottom(p_fhdr, '1a1a1a', sz='6')
 
-    # ── Food matrix table ──────────────────────────────────────────────────────
-    USABLE_W  = 6.5          # inches (8.5 - 0.75 - 0.75 margins)
+    USABLE_W  = 6.5
     LABEL_COL = 1.3
     DAY_COL   = (USABLE_W - LABEL_COL) / 5
 
@@ -835,18 +831,16 @@ async def download_weekly_doc(
     for i in range(1, 6):
         ftbl.columns[i].width = Inches(DAY_COL)
 
-    # Header row
     _cell_bg(ftbl.cell(0, 0), 'f5f5f3')
     for col_i, dk in enumerate(DAY_ORDER):
         cell = ftbl.cell(0, col_i + 1)
-        _cell_bg(cell, DAY_C_HEX[dk])
+        _cell_bg(cell, _DAY_C_HEX[dk])
         p = cell.paragraphs[0]
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        r = p.add_run(DAY_LABEL_SHORT[dk])
+        r = p.add_run(_DAY_LABEL_SHORT[dk])
         r.bold      = True
         r.font.size = Pt(12)
 
-    # Meal rows
     for row_i, (meal_key, meal_label, meal_emoji) in enumerate([
         ('morning_snack',   'Morning Snack',   '🍎'),
         ('lunch',           'Lunch',           '🥗'),
@@ -870,17 +864,110 @@ async def download_weekly_doc(
             r.font.size      = Pt(11)
             r.font.color.rgb = RGBColor(0x1a, 0x1a, 0x1a)
 
-    # ── Serialize and stream ───────────────────────────────────────────────────
     buf = io.BytesIO()
     doc.save(buf)
     buf.seek(0)
+    return buf.read()
 
-    slug     = filter_group.replace(" ", "_") if filter_group else week_id
-    filename = f"synopsis_{slug}.docx"
+
+def _week_header_meta(week: dict) -> str:
+    week_label = week.get(SynopsisWeekFields.LABEL, 'ICC Summer Camps')
+
+    def _ordinal(n: int) -> str:
+        if 11 <= n % 100 <= 13:
+            return f'{n}th'
+        return f'{n}{["th","st","nd","rd","th"][min(n % 10, 4)]}'
+
+    def _fmt_date(s: str) -> str:
+        try:
+            d = _dt.datetime.strptime(s, '%Y-%m-%d')
+            return f'{_ordinal(d.day)} {d.strftime("%B")}'
+        except Exception:
+            return s
+
+    start = week.get(SynopsisWeekFields.START_DATE, '')
+    end   = week.get(SynopsisWeekFields.END_DATE, '')
+    if start and end:
+        end_year = _dt.datetime.strptime(end, '%Y-%m-%d').year
+        dates    = f'{_fmt_date(start)} – {_fmt_date(end)} {end_year}'
+    elif start:
+        dates = _fmt_date(start)
+    else:
+        dates = ''
+    return week_label + (f' · {dates}' if dates else '')
+
+
+@router.get("/weeks/{week_id}/download")
+async def download_weekly_doc(
+    week_id: str,
+    group_name: Optional[str] = Query(None, description="Download only this camp group"),
+    admin: dict = Depends(verify_icc_admin),
+):
+    # ── Fetch shared data ──────────────────────────────────────────────────────
+    weeks = await firebase.get_all_synopsis_weeks()
+    week  = next((w for w in weeks if w.get(SynopsisWeekFields.WEEK_ID) == week_id or w.get('id') == week_id), None)
+    if not week:
+        raise HTTPException(404, "Week not found")
+
+    all_camps   = await firebase.get_synopsis_camps_for_week(week_id)
+    all_entries = await firebase.get_synopsis_entries_for_week(week_id)
+    entries_by_camp: dict = {}
+    for e in all_entries:
+        cid = e.get(SynopsisEntryFields.CAMP_ID)
+        entries_by_camp.setdefault(cid, {})[e.get(SynopsisEntryFields.DAY)] = e
+
+    food_data   = await firebase.get_synopsis_food(week_id) or {}
+    drive_link  = week.get(SynopsisWeekFields.DRIVE_LINK, '') or ''
+    header_meta = _week_header_meta(week)
+    year        = _dt.datetime.now().year
+
+    # ── Single-group download → .docx ─────────────────────────────────────────
+    if group_name:
+        camps = [c for c in all_camps if c.get(SynopsisCampFields.GROUP_NAME) == group_name]
+        doc_bytes = _build_synopsis_doc(
+            group_camps=camps,
+            doc_title=group_name,
+            header_meta=header_meta,
+            drive_link=drive_link,
+            entries_by_camp=entries_by_camp,
+            food_data=food_data,
+            year=year,
+        )
+        slug     = group_name.replace(' ', '_')
+        filename = f'synopsis_{slug}.docx'
+        return StreamingResponse(
+            io.BytesIO(doc_bytes),
+            media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+        )
+
+    # ── All-groups download → .zip of per-group .docx files ───────────────────
+    unique_groups = list(dict.fromkeys(
+        c.get(SynopsisCampFields.GROUP_NAME, '') for c in all_camps
+        if c.get(SynopsisCampFields.GROUP_NAME)
+    ))
+
+    zip_buf = io.BytesIO()
+    with zipfile.ZipFile(zip_buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for gname in unique_groups:
+            camps = [c for c in all_camps if c.get(SynopsisCampFields.GROUP_NAME) == gname]
+            doc_bytes = _build_synopsis_doc(
+                group_camps=camps,
+                doc_title=gname,
+                header_meta=header_meta,
+                drive_link=drive_link,
+                entries_by_camp=entries_by_camp,
+                food_data=food_data,
+                year=year,
+            )
+            safe_name = re.sub(r'[^\w\s\-]', '', gname).strip().replace(' ', '_')
+            zf.writestr(f'{safe_name}.docx', doc_bytes)
+
+    zip_buf.seek(0)
     return StreamingResponse(
-        buf,
-        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        zip_buf,
+        media_type='application/zip',
+        headers={'Content-Disposition': f'attachment; filename="synopsis_{week_id}.zip"'},
     )
 
 

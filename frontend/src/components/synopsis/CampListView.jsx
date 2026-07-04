@@ -7,7 +7,7 @@ import {
   VALID_DAYS,
   DAY_LABELS,
 } from '../../constants/synopsisSchema';
-import { Link, Trash2 } from 'lucide-react';
+import { Link, Trash2, ChevronDown } from 'lucide-react';
 import {
   updateWeek,
   updateCamp,
@@ -43,7 +43,7 @@ function EditInput({ value, onChange, onSave, onCancel, style = {} }) {
 }
 
 export default function CampListView({
-  activeWeek, displayWeek, camps, allEntries,
+  activeWeek, displayWeek, visibleWeeks = [], onWeekChange, camps, allEntries,
   isAdmin, currentUser, onCampSelect, onFoodSelect, onDataRefresh, adminPanel,
 }) {
   const currentWeek = displayWeek || activeWeek;
@@ -88,7 +88,7 @@ export default function CampListView({
     const trimmed = groupNameVal.trim();
     if (!trimmed || trimmed === oldName) return;
     try {
-      await Promise.all(groupCamps.map(c => updateCamp(currentUser, c[SynopsisCampFields.CAMP_ID], { group_name: trimmed })));
+      await Promise.all(groupCamps.map(c => updateCamp(currentUser, c[SynopsisCampFields.CAMP_ID], weekId, { group_name: trimmed })));
       await onDataRefresh();
     } catch (err) { alert(err.message); }
   };
@@ -109,7 +109,7 @@ export default function CampListView({
   };
   const saveCampEdit = async (campId) => {
     setEditingCampId(null);
-    try { await updateCamp(currentUser, campId, editCampData); await onDataRefresh(); }
+    try { await updateCamp(currentUser, campId, weekId, editCampData); await onDataRefresh(); }
     catch (err) { alert(err.message); }
   };
 
@@ -121,7 +121,7 @@ export default function CampListView({
     e.stopPropagation();
     if (!window.confirm(`Delete "${campName}"? This cannot be undone.`)) return;
     setDeletingCampId(campId);
-    try { await deleteCamp(currentUser, campId); await onDataRefresh(); }
+    try { await deleteCamp(currentUser, campId, weekId); await onDataRefresh(); }
     catch (err) { alert(err.message); }
     finally { setDeletingCampId(null); }
   };
@@ -130,7 +130,7 @@ export default function CampListView({
     if (!window.confirm(`Delete the entire "${groupName}" group and all its sub-camps? This cannot be undone.`)) return;
     setDeletingGroup(groupName);
     try {
-      await Promise.all(groupCamps.map(c => deleteCamp(currentUser, c[SynopsisCampFields.CAMP_ID])));
+      await Promise.all(groupCamps.map(c => deleteCamp(currentUser, c[SynopsisCampFields.CAMP_ID], weekId)));
       await onDataRefresh();
     } catch (err) { alert(err.message); }
     finally { setDeletingGroup(null); }
@@ -153,7 +153,7 @@ export default function CampListView({
     try {
       // Patch existing camps to the updated group name
       await Promise.all(groupCamps.map(c =>
-        updateCamp(currentUser, c[SynopsisCampFields.CAMP_ID], { group_name: updatedGroupName })
+        updateCamp(currentUser, c[SynopsisCampFields.CAMP_ID], weekId, { group_name: updatedGroupName })
       ));
       await createCamp(currentUser, {
         week_id: weekId, group_name: updatedGroupName,
@@ -185,6 +185,9 @@ export default function CampListView({
 
   // ── Non-admin: selected group from dropdown ────────────────────────────────
   const [selectedGroup, setSelectedGroup] = useState(null);
+
+  // Camp groups differ per week, so reset the group choice whenever the teacher switches weeks
+  useEffect(() => { setSelectedGroup(null); }, [weekId]);
 
   // ── Grouped camps (sorted by time_start within each group) ────────────────
   const groupedCamps = useMemo(() => {
@@ -226,6 +229,40 @@ export default function CampListView({
   return (
     <div style={{ maxWidth: 960, margin: '0 auto', padding: '48px 64px 72px', fontFamily: FONT }}>
       {adminPanel}
+
+      {/* Week selector — teacher view */}
+      {!isAdmin && visibleWeeks.length > 0 && (
+        <div style={{ marginBottom: 28 }}>
+          <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#555', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+            Select week
+          </label>
+          <div style={{ position: 'relative', display: 'inline-block', width: '100%', maxWidth: 480 }}>
+            <select
+              value={weekId || ''}
+              onChange={e => onWeekChange?.(e.target.value)}
+              style={{
+                width: '100%',
+                appearance: 'none', WebkitAppearance: 'none',
+                background: 'rgba(255,255,255,0.85)',
+                backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+                border: '1.5px solid rgba(172,216,240,0.7)',
+                borderRadius: 12, padding: '14px 44px 14px 18px',
+                fontSize: 15, fontWeight: 500, fontFamily: FONT, color: '#1e1e2e',
+                cursor: 'pointer', outline: 'none',
+                boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
+              }}
+            >
+              <option value="">— Choose a week —</option>
+              {visibleWeeks.map(w => (
+                <option key={w[SynopsisWeekFields.WEEK_ID]} value={w[SynopsisWeekFields.WEEK_ID]}>
+                  {w[SynopsisWeekFields.LABEL]}
+                </option>
+              ))}
+            </select>
+            <ChevronDown size={16} style={{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#888' }} />
+          </div>
+        </div>
+      )}
 
       {/* Week heading */}
       {weekLabel && (
@@ -288,13 +325,22 @@ export default function CampListView({
       )}
 
       {/* No week */}
-      {!currentWeek && (
+      {!currentWeek && (isAdmin || visibleWeeks.length === 0) && (
         <div style={{ textAlign: 'center', padding: '80px 0' }}>
           <div style={{ fontSize: 40, marginBottom: 16 }}>☀️</div>
           <div style={{ fontFamily: SERIF, fontSize: 22, color: '#1e1e2e', marginBottom: 8 }}>No active week yet</div>
           <div style={{ fontSize: 15, color: '#666' }}>
             {isAdmin ? 'Use "Set up new week" to get started.' : "Check back soon — camp week hasn't started yet."}
           </div>
+        </div>
+      )}
+
+      {/* Teacher hasn't picked a week yet, but some are available */}
+      {!currentWeek && !isAdmin && visibleWeeks.length > 0 && (
+        <div style={{ textAlign: 'center', padding: '80px 0' }}>
+          <div style={{ fontSize: 40, marginBottom: 16 }}>🗓️</div>
+          <div style={{ fontFamily: SERIF, fontSize: 22, color: '#1e1e2e', marginBottom: 8 }}>Select a week</div>
+          <div style={{ fontSize: 15, color: '#666' }}>Choose a week above to see camps and add your synopsis.</div>
         </div>
       )}
 
