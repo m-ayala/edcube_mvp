@@ -154,8 +154,19 @@ async def get_active_week():
 
 @router.get("/weeks/visible")
 async def list_visible_weeks():
-    """Weeks the admin has flagged as visible to teachers — used to populate the teacher week picker."""
+    """Weeks the admin has flagged as visible to teachers — used to populate the teacher week picker.
+
+    The active week is always included even if it isn't explicitly flagged
+    visible, so weeks created before this feature (or where the admin forgot
+    to tick the box) still reach teachers.
+    """
     weeks = await firebase.get_visible_synopsis_weeks()
+    active = await firebase.get_active_synopsis_week()
+    if active:
+        active_id = active.get(SynopsisWeekFields.WEEK_ID) or active.get('id')
+        already_included = any((w.get(SynopsisWeekFields.WEEK_ID) or w.get('id')) == active_id for w in weeks)
+        if not already_included:
+            weeks.insert(0, active)
     return {"weeks": weeks}
 
 
