@@ -11,6 +11,7 @@ export const SynopsisWeekFields = {
   END_DATE: 'end_date',
   IS_ACTIVE: 'is_active',
   IS_VISIBLE: 'is_visible',
+  DAYS: 'days', // computed server-side from start_date/end_date — not stored
   DRIVE_LINK: 'drive_link',
   CREATED_BY: 'created_by',
   CREATED_AT: 'created_at',

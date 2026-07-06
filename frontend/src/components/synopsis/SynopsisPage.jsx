@@ -253,7 +253,7 @@ export default function SynopsisPage() {
           Loading…
         </div>
       ) : view === 'camp' && selectedCamp ? (
-        <CampEntryView camp={selectedCamp} onBack={handleBack} isAdmin={effectiveIsAdmin} />
+        <CampEntryView camp={selectedCamp} week={currentDisplayWeek} onBack={handleBack} isAdmin={effectiveIsAdmin} />
       ) : view === 'food' ? (
         <FoodMenuPage
           week={currentDisplayWeek}

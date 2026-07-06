@@ -613,6 +613,13 @@ class FirebaseService:
         docs = self._weeks_col().order_by('created_at', direction=firestore.Query.DESCENDING).stream()
         return [{'id': d.id, **d.to_dict()} for d in docs]
 
+    async def get_synopsis_week(self, week_id: str) -> Optional[Dict]:
+        """Direct path lookup for a single week — no collection scan required."""
+        doc = self._weeks_col().document(week_id).get()
+        if not doc.exists:
+            return None
+        return {'id': doc.id, **doc.to_dict()}
+
     async def get_active_synopsis_week(self) -> Optional[Dict]:
         docs = list(self._weeks_col().where('is_active', '==', True).limit(1).stream())
         if not docs:

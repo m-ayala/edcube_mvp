@@ -51,6 +51,8 @@ export default function CampListView({
   const weekLabel   = currentWeek?.[SynopsisWeekFields.LABEL] || '';
   const isActiveWeek = !!currentWeek?.[SynopsisWeekFields.IS_ACTIVE];
   const weekDriveLink = currentWeek?.[SynopsisWeekFields.DRIVE_LINK] || '';
+  // This week's actual camp days — a 4-day week (e.g. Jun 29–Jul 2) only has 4, not the full Mon–Fri set
+  const weekDays    = currentWeek?.[SynopsisWeekFields.DAYS]?.length ? currentWeek[SynopsisWeekFields.DAYS] : VALID_DAYS;
 
   // ── Week name edit (admin) ─────────────────────────────────────────────────
   const [editingWeekName, setEditingWeekName] = useState(false);
@@ -403,7 +405,7 @@ export default function CampListView({
           {groupCamps.map(camp => {
             const campId = camp[SynopsisCampFields.CAMP_ID];
             const count  = progressCount(campId, allEntries);
-            const done   = count === VALID_DAYS.length;
+            const done   = count === weekDays.length;
             const partial = count > 0 && !done;
             return (
               <div key={campId}>
@@ -426,7 +428,7 @@ export default function CampListView({
                       </span>
                     )}
                     <span style={{ fontSize: 14, color: '#1e1e2e', background: 'rgba(0,0,0,0.07)', padding: '5px 13px', borderRadius: 100, fontWeight: 500 }}>
-                      {count} / {VALID_DAYS.length} days
+                      {count} / {weekDays.length} days
                     </span>
                     <button onClick={e => startEditCamp(camp, e)} style={{ ...editIconBtn, fontSize: 17, padding: '5px 7px' }} title="Edit camp">✏️</button>
                     <button
@@ -554,7 +556,7 @@ export default function CampListView({
                 {activeGroupData.camps.map(camp => {
                   const campId  = camp[SynopsisCampFields.CAMP_ID];
                   const count   = progressCount(campId, allEntries);
-                  const done    = count === VALID_DAYS.length;
+                  const done    = count === weekDays.length;
                   const partial = count > 0 && !done;
 
                   return (
@@ -585,7 +587,7 @@ export default function CampListView({
                           </span>
                         )}
                         <span style={{ fontSize: 13, color: '#1e1e2e', background: 'rgba(0,0,0,0.07)', padding: '4px 11px', borderRadius: 100, fontWeight: 500 }}>
-                          {count} / {VALID_DAYS.length} days
+                          {count} / {weekDays.length} days
                         </span>
                         <span style={{ color: '#aaa', fontSize: 18 }}>›</span>
                       </div>

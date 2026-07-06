@@ -86,6 +86,36 @@ LIGHT_CORRECT_PROMPT = (
 DAY_LABELS = {'mon': 'Monday', 'tue': 'Tuesday', 'wed': 'Wednesday', 'thu': 'Thursday', 'fri': 'Friday'}
 DAY_ORDER = list(VALID_DAYS)
 
+
+def _week_day_keys(week: dict) -> list:
+    """Weekday keys (subset of VALID_DAYS, Mon–Fri) actually spanned by a week's
+    start/end date range. A camp created for e.g. Jun 29 (Mon) – Jul 2 (Thu) only
+    spans 4 weekdays, so only those 4 days should appear anywhere in the UI/doc —
+    falls back to the full Mon–Fri set if dates are missing or unparseable."""
+    start = week.get(SynopsisWeekFields.START_DATE, '')
+    end = week.get(SynopsisWeekFields.END_DATE, '')
+    try:
+        d0 = datetime.strptime(start, '%Y-%m-%d')
+        d1 = datetime.strptime(end, '%Y-%m-%d')
+    except (ValueError, TypeError):
+        return list(VALID_DAYS)
+    if d1 < d0:
+        return list(VALID_DAYS)
+    keys = []
+    cur = d0
+    one_day = _dt.timedelta(days=1)
+    while cur <= d1:
+        weekday = cur.weekday()  # Mon=0 .. Sun=6
+        if weekday < 5:
+            keys.append(VALID_DAYS[weekday])
+        cur += one_day
+    return keys or list(VALID_DAYS)
+
+
+def _annotate_week_days(week: dict) -> dict:
+    week['days'] = _week_day_keys(week)
+    return week
+
 PARSE_FOOD_PROMPT = (
     "You extract a weekly camp food menu from an image. "
     "Return JSON with exactly this structure (leave fields as empty strings if not found):\n"
@@ -141,7 +171,7 @@ async def verify_icc_admin(authorization: Optional[str] = Header(default=None)) 
 @router.get("/weeks")
 async def list_weeks():
     weeks = await firebase.get_all_synopsis_weeks()
-    return {"weeks": weeks}
+    return {"weeks": [_annotate_week_days(w) for w in weeks]}
 
 
 @router.get("/weeks/active")
@@ -149,7 +179,7 @@ async def get_active_week():
     week = await firebase.get_active_synopsis_week()
     if not week:
         return {"week": None}
-    return {"week": week}
+    return {"week": _annotate_week_days(week)}
 
 
 @router.get("/weeks/visible")
@@ -167,7 +197,7 @@ async def list_visible_weeks():
         already_included = any((w.get(SynopsisWeekFields.WEEK_ID) or w.get('id')) == active_id for w in weeks)
         if not already_included:
             weeks.insert(0, active)
-    return {"weeks": weeks}
+    return {"weeks": [_annotate_week_days(w) for w in weeks]}
 
 
 @router.post("/weeks", status_code=status.HTTP_201_CREATED)
@@ -404,12 +434,15 @@ async def save_entries(body: EntrySaveRequest):
     if not camp:
         raise HTTPException(404, "Camp not found in the given week")
 
+    week = await firebase.get_synopsis_week(week_id)
+    allowed_days = _week_day_keys(week) if week else list(VALID_DAYS)
+
     saved_ids = []
 
     for entry in body.entries:
         day = entry.day.lower()
-        if day not in VALID_DAYS:
-            raise HTTPException(400, f"Invalid day '{day}'. Must be one of: {', '.join(VALID_DAYS)}")
+        if day not in allowed_days:
+            raise HTTPException(400, f"Invalid day '{day}'. This week only runs: {', '.join(allowed_days)}")
 
         photo_count = len(entry.photo_urls)
         if photo_count > 0 and (photo_count < PHOTO_MIN or photo_count > PHOTO_MAX):
@@ -705,6 +738,7 @@ def _build_synopsis_doc(
     entries_by_camp: dict,
     food_data: dict,
     year: int,
+    day_order: list = DAY_ORDER,
 ) -> bytes:
     """Build one synopsis .docx for a single camp group and return raw bytes."""
     doc     = Document()
@@ -782,7 +816,7 @@ def _build_synopsis_doc(
         _run(p_camp, camp_name, bold=True, size_pt=23)
         _para_border_bottom(p_camp, '1a1a1a', sz='6')
 
-        for day_key in DAY_ORDER:
+        for day_key in day_order:
             entry     = camp_entries.get(day_key)
             day_color = _DAY_C_HEX[day_key]
             day_num   = _DAY_NUM[day_key]
@@ -831,19 +865,20 @@ def _build_synopsis_doc(
     _run(p_fhdr, '🍽️  This Week\'s Menu', bold=True, size_pt=15)
     _para_border_bottom(p_fhdr, '1a1a1a', sz='6')
 
+    num_days  = len(day_order)
     USABLE_W  = 6.5
     LABEL_COL = 1.3
-    DAY_COL   = (USABLE_W - LABEL_COL) / 5
+    DAY_COL   = (USABLE_W - LABEL_COL) / num_days
 
-    ftbl = doc.add_table(rows=4, cols=6)
+    ftbl = doc.add_table(rows=4, cols=num_days + 1)
     ftbl.style   = 'Table Grid'
     ftbl.autofit = False
     ftbl.columns[0].width = Inches(LABEL_COL)
-    for i in range(1, 6):
+    for i in range(1, num_days + 1):
         ftbl.columns[i].width = Inches(DAY_COL)
 
     _cell_bg(ftbl.cell(0, 0), 'f5f5f3')
-    for col_i, dk in enumerate(DAY_ORDER):
+    for col_i, dk in enumerate(day_order):
         cell = ftbl.cell(0, col_i + 1)
         _cell_bg(cell, _DAY_C_HEX[dk])
         p = cell.paragraphs[0]
@@ -866,7 +901,7 @@ def _build_synopsis_doc(
         r.font.size      = Pt(11)
         r.font.color.rgb = RGBColor(0x1a, 0x1a, 0x1a)
 
-        for col_i, dk in enumerate(DAY_ORDER):
+        for col_i, dk in enumerate(day_order):
             val  = (food_data.get(dk) or {}).get(meal_key, '') or '—'
             cell = tbl_row.cells[col_i + 1]
             p    = cell.paragraphs[0]
@@ -931,6 +966,7 @@ async def download_weekly_doc(
     drive_link  = week.get(SynopsisWeekFields.DRIVE_LINK, '') or ''
     header_meta = _week_header_meta(week)
     year        = _dt.datetime.now().year
+    day_order   = _week_day_keys(week)
 
     # ── Single-group download → .docx ─────────────────────────────────────────
     if group_name:
@@ -943,6 +979,7 @@ async def download_weekly_doc(
             entries_by_camp=entries_by_camp,
             food_data=food_data,
             year=year,
+            day_order=day_order,
         )
         slug     = group_name.replace(' ', '_')
         filename = f'synopsis_{slug}.docx'
@@ -970,6 +1007,7 @@ async def download_weekly_doc(
                 entries_by_camp=entries_by_camp,
                 food_data=food_data,
                 year=year,
+                day_order=day_order,
             )
             safe_name = re.sub(r'[^\w\s\-]', '', gname).strip().replace(' ', '_')
             zf.writestr(f'{safe_name}.docx', doc_bytes)

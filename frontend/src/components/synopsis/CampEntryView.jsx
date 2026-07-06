@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Plus, X, Check } from 'lucide-react';
 import {
+  SynopsisWeekFields,
   SynopsisCampFields,
   SynopsisEntryFields,
   VALID_DAYS,
@@ -30,9 +31,12 @@ const DAY_ORDINAL = { mon: 'Day 1', tue: 'Day 2', wed: 'Day 3', thu: 'Day 4', fr
 
 const blankDay = () => ({ day_title: '', raw_text: '', photo_urls: [], status: 'draft' });
 
-export default function CampEntryView({ camp, onBack, isAdmin = false }) {
+export default function CampEntryView({ camp, week, onBack, isAdmin = false }) {
   const campId = camp[SynopsisCampFields.CAMP_ID];
   const weekId = camp[SynopsisCampFields.WEEK_ID];
+
+  // This camp's actual days — a 4-day week (e.g. Jun 29–Jul 2) only has 4, not the full Mon–Fri set
+  const dayKeys = week?.[SynopsisWeekFields.DAYS]?.length ? week[SynopsisWeekFields.DAYS] : VALID_DAYS;
 
   // ── Days ──────────────────────────────────────────────────────────────────
   const [dayData, setDayData]     = useState(() => Object.fromEntries(VALID_DAYS.map(d => [d, blankDay()])));
@@ -76,7 +80,7 @@ export default function CampEntryView({ camp, onBack, isAdmin = false }) {
     clearTimeout(dayAutoTimer.current);
     dayAutoTimer.current = setTimeout(async () => {
       const current = dayDataRef.current;
-      const toSend = VALID_DAYS
+      const toSend = dayKeys
         .filter(d => dirtyDays.current.has(d) && current[d]?.status === 'draft')
         .map(d => ({ day: d, day_title: current[d].day_title, raw_text: current[d].raw_text, photo_urls: current[d].photo_urls }));
       if (!toSend.length) return;
@@ -84,7 +88,7 @@ export default function CampEntryView({ camp, onBack, isAdmin = false }) {
         await saveEntries(campId, weekId, toSend);
         setDayData(prev => {
           const next = { ...prev };
-          for (const d of VALID_DAYS) {
+          for (const d of dayKeys) {
             if (dirtyDays.current.has(d) && prev[d].status === 'draft') {
               next[d] = { ...next[d], status: 'saved' };
             }
@@ -96,22 +100,22 @@ export default function CampEntryView({ camp, onBack, isAdmin = false }) {
       } catch { /* silent on auto-save fail */ }
     }, 3000);
     return () => clearTimeout(dayAutoTimer.current);
-  }, [dayData, campId, weekId]);
+  }, [dayData, campId, weekId, dayKeys]);
 
   // ── Days: manual save ─────────────────────────────────────────────────────
   const handleSave = async () => {
-    for (const day of VALID_DAYS) {
+    for (const day of dayKeys) {
       const count = dayData[day].photo_urls.length;
       if (count > 0 && count < PHOTO_MIN) {
         alert(`${DAY_LABELS[day]}: add at least ${PHOTO_MIN} photos or remove the existing ones.`);
         return;
       }
     }
-    const toSend = VALID_DAYS
+    const toSend = dayKeys
       .filter(d => dirtyDays.current.has(d) && dayData[d].status === 'draft')
       .map(d => ({ day: d, day_title: dayData[d].day_title, raw_text: dayData[d].raw_text, photo_urls: dayData[d].photo_urls }));
     if (!toSend.length) {
-      const hasAnyContent = VALID_DAYS.some(d => dayData[d].raw_text.trim() || dayData[d].photo_urls.length > 0);
+      const hasAnyContent = dayKeys.some(d => dayData[d].raw_text.trim() || dayData[d].photo_urls.length > 0);
       if (!hasAnyContent) alert('Write notes for at least one day before saving.');
       return;
     }
@@ -124,7 +128,7 @@ export default function CampEntryView({ camp, onBack, isAdmin = false }) {
       await saveEntries(campId, weekId, toSend);
       setDayData(prev => {
         const next = { ...prev };
-        for (const d of VALID_DAYS) {
+        for (const d of dayKeys) {
           if (dirtyDays.current.has(d) && prev[d].status === 'draft') {
             next[d] = { ...next[d], status: 'saved' };
           }
@@ -279,7 +283,7 @@ export default function CampEntryView({ camp, onBack, isAdmin = false }) {
       {/* ═══════ DAYS ═══════ */}
       <>
         <>
-          {VALID_DAYS.map(day => {
+          {dayKeys.map(day => {
             const data       = dayData[day];
             const badge      = STATUS_BADGE[data.status] || STATUS_BADGE.draft;
             const photoCount = data.photo_urls.length;
