@@ -52,7 +52,7 @@ export const DAY_LABELS = {
   fri: 'Friday',
 };
 
-export const PHOTO_MIN = 3;
+export const PHOTO_MIN = 0;
 export const PHOTO_MAX = 6;
 export const ICC_ADMIN_DOMAIN = 'indiacc.org';
 
