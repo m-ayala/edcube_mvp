@@ -55,14 +55,14 @@ class CurriculumOrchestrator:
 
             if not outline_data:
                 logger.error("Phase 1 failed: No outline generated")
-                return None
+                raise ValueError("No outline generated")
 
             logger.info(f"Phase 1 complete: Generated {len(outline_data.get('sections', []))} sections")
             return create_final_outline(outline_data)
 
         except Exception as e:
             logger.error(f"Phase 1 error: {e}", exc_info=True)
-            return None
+            raise
 
     async def run_phase2_blocks(
         self,

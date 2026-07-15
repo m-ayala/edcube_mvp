@@ -4,7 +4,7 @@ import { Droppable, Draggable } from '@hello-pangea/dnd';
 import { X, Send, Check, Copy, Minus, GripVertical } from 'lucide-react';
 import { chatWithEdo, generateEdoChips } from '../../utils/curriculumApi';
 import { trackEdoMessageSent } from '../../firebase/analytics';
-import { BLOCK_CATEGORIES } from '../../constants/blockCategories';
+import { getSubcategoriesForType } from '../../constants/blockCategories';
 
 const EDO_GREEN = '#2C5F3A';
 const EDO_ORANGE = '#E8761A';
@@ -257,9 +257,8 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
     const sub = sec?.subsections?.find(ss => ss.id === currentPage?.subsectionId);
 
     // Collect flat taxonomy hints for this block type
-    const hints = BLOCK_CATEGORIES
-      .filter(cat => cat.allowedTypes.includes(selectedBlockType))
-      .flatMap(cat => cat.clusters ? cat.clusters.flatMap(c => c.subcategories) : cat.subcategories);
+    const hints = getSubcategoriesForType(selectedBlockType)
+      .flatMap(cat => cat.subcategories);
 
     const ageRange = (formData?.ageRangeStart && formData?.ageRangeEnd)
       ? `${formData.ageRangeStart}–${formData.ageRangeEnd}`

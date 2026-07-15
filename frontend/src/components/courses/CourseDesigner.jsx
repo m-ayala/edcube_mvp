@@ -37,6 +37,7 @@ const CourseDesigner = () => {
   const [organizationId, setOrganizationId] = useState(null);
 
   const loading = genState.status === 'generating-outline';
+  const hasError = genState.status === 'error';
   const progress = { message: genState.progress.message, progress: genState.progress.percent };
   const [attachedFiles, setAttachedFiles] = useState([]);
   const [dragOver, setDragOver] = useState(false);
@@ -199,6 +200,21 @@ const CourseDesigner = () => {
             }} />
           </div>
           <div style={{ marginTop: '4px', fontSize: '13px', color: '#4a90d9' }}>{progress.progress}%</div>
+        </div>
+      )}
+
+      {hasError && (
+        <div style={{
+          marginBottom: '24px',
+          padding: '16px 20px',
+          backgroundColor: '#fff5f5',
+          borderRadius: '10px',
+          border: '1px solid #feb2b2',
+          color: '#c53030',
+          fontSize: '14px',
+          fontWeight: '500',
+        }}>
+          ⚠️ {progress.message || 'Failed to generate course. Please try again.'}
         </div>
       )}
 

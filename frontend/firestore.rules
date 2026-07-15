@@ -13,6 +13,24 @@ service cloud.firestore {
                     && resource.data.teacherUid == request.auth.uid;
     }
 
+    // ── Knowledge Base (taxonomy reference data) ────────────────────────
+    // Seeded only via the backend admin script; read-only for clients.
+    match /kb_age_bands/{docId} {
+      allow read: if request.auth != null;
+    }
+    match /kb_objectives/{docId} {
+      allow read: if request.auth != null;
+    }
+    match /kb_worksheet_formats/{docId} {
+      allow read: if request.auth != null;
+    }
+    match /kb_activity_formats/{docId} {
+      allow read: if request.auth != null;
+    }
+    match /kb_content_formats/{docId} {
+      allow read: if request.auth != null;
+    }
+
     // ── Teachers ─────────────────────────────────────────────────────────
     match /teachers/{teacherUid} {
       // Any authenticated user can read a teacher profile (for profile pages)
