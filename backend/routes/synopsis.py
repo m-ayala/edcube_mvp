@@ -52,7 +52,7 @@ from schemas.synopsis_schema import (
     VALID_DAYS,
 )
 from services.firebase_service import FirebaseService
-from utils.llm_handler import call_openai
+from utils.llm_handler import call_openai, OpenAIServiceError
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/synopsis", tags=["synopsis"])
@@ -471,12 +471,15 @@ async def enhance_text(body: EnhanceTextRequest):
     """Enhance a day's description with AI — teacher-triggered only."""
     if not body.raw_text.strip():
         raise HTTPException(400, "raw_text is required")
-    result = call_openai(
-        prompt=body.raw_text,
-        system_message=ENHANCE_SYSTEM_PROMPT,
-        json_mode=False,
-        temperature=0.7,
-    )
+    try:
+        result = call_openai(
+            prompt=body.raw_text,
+            system_message=ENHANCE_SYSTEM_PROMPT,
+            json_mode=False,
+            temperature=0.7,
+        )
+    except OpenAIServiceError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     return {"enhanced_text": result.get("response", "")}
 
 

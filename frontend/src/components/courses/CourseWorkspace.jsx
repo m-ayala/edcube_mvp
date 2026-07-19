@@ -7,6 +7,7 @@ import CourseEditor, { EditableField } from './CourseEditor';
 import CourseViewer from './CourseViewer';
 import SubsectionView from './SubsectionView';
 import BlockView from './BlockView';
+import SubsectionSelectionMatrix from './SubsectionSelectionMatrix';
 import EdoChatbot from './EdoChatbot';
 import CourseInfoPanel from './CourseInfoPanel';
 import useCourseActions from './useCourseActions';
@@ -36,10 +37,12 @@ const CourseWorkspace = () => {
     targetFolderId,
     handsOnResources: incomingHandsOnResources,
     isGenerating: incomingIsGenerating,
+    isSelectingSubsections: incomingIsSelectingSubsections,
   } = location.state || {};
 
-  const { genState } = useGeneration();
+  const { genState, submitSelectionsAndGenerateBlocks, clearGeneration } = useGeneration();
   const [isGenerating, setIsGenerating] = useState(!!incomingIsGenerating);
+  const [isSelectingSubsections, setIsSelectingSubsections] = useState(!!incomingIsSelectingSubsections);
 
   const [curriculumId, setCurriculumId] = useState(initialCurriculumId);
 
@@ -206,6 +209,40 @@ const CourseWorkspace = () => {
     };
     fetchCourseInfo();
   }, [curriculumId, currentUser]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Handle Phase 1.5 selection submission ─────────────────────────────
+  const handleSelectionSubmit = (selections) => {
+    // Merge the teacher-approved subsections into the visible outline immediately
+    // so CourseEditor can show "Generating…" badges while Stage 2 streams in.
+    const selectionsBySection = {};
+    selections.forEach(sel => {
+      selectionsBySection[sel.sectionId] = [...(selectionsBySection[sel.sectionId] || []), sel];
+    });
+    const order = { Basics: 0, Intermediate: 1, Advanced: 2 };
+    setSections(prev => prev.map(section => {
+      const sels = (selectionsBySection[section.id] || [])
+        .slice()
+        .sort((a, b) => (order[a.depthLevel] ?? 9) - (order[b.depthLevel] ?? 9));
+      return {
+        ...section,
+        subsections: sels.map(sel => ({
+          id: sel.subsectionId,
+          title: sel.title,
+          description: sel.description,
+          core_concept: sel.coreConcept,
+          depth_level: sel.depthLevel,
+          prerequisite_subsection_id: sel.prerequisiteSubsectionId,
+          chain_id: sel.chainId,
+          duration_minutes: sel.durationMinutes,
+          learning_objectives: sel.learningObjectives,
+        })),
+      };
+    }));
+
+    setIsSelectingSubsections(false);
+    setIsGenerating(true);
+    submitSelectionsAndGenerateBlocks(selections);
+  };
 
   // ── Subscribe to live generation updates ─────────────────────────────
   useEffect(() => {
@@ -491,6 +528,15 @@ const CourseWorkspace = () => {
     });
   };
 
+  // ── Back to Phase 1 (course generation) from the Phase 1.5 selection screen ──
+  // Nothing has been saved yet at this point, so there's no course to view —
+  // just return to the generation form. Clears the in-flight candidates so a
+  // fresh Phase 1 run starts clean.
+  const handleBackToGeneration = () => {
+    clearGeneration();
+    navigate('/course-designer');
+  };
+
   const handleEditInWorkspace = () => {
     navigate('/course-workspace', {
       state: {
@@ -525,7 +571,7 @@ const CourseWorkspace = () => {
     performSave: saveCourse,
     deps: [sections, courseName, videosByTopic, handsOnResources],
     delay: 2000,
-    enabled: !!organizationId && !!currentUser && !readOnly && !isGenerating
+    enabled: !!organizationId && !!currentUser && !readOnly && !isGenerating && !isSelectingSubsections
   });
 
   // ── Drag and Drop ──────────────────────────────��──────────────────────
@@ -710,7 +756,7 @@ const CourseWorkspace = () => {
             flexShrink: 0, zIndex: 10,
           }}>
             <button
-              onClick={navPage === 'outline' ? handleBack : navigateBack}
+              onClick={isSelectingSubsections ? handleBackToGeneration : (navPage === 'outline' ? handleBack : navigateBack)}
               style={{
                 fontFamily: "'DM Sans', sans-serif", fontSize: '13.8px', fontWeight: '500',
                 padding: '6px 13px', borderRadius: '8px', cursor: 'pointer',
@@ -718,7 +764,9 @@ const CourseWorkspace = () => {
                 color: '#111', whiteSpace: 'nowrap', flexShrink: 0,
               }}
             >
-              {navPage === 'outline' ? '← Course View' : navPage === 'block' ? '← Topic' : '← Sections'}
+              {isSelectingSubsections
+                ? '← Phase 1: Course Generation'
+                : navPage === 'outline' ? '← Course View' : navPage === 'block' ? '← Topic' : '← Sections'}
             </button>
 
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 0 }}>
@@ -861,8 +909,17 @@ const CourseWorkspace = () => {
           <DragDropContext onDragEnd={handleDragEnd}>
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
 
+              {/* ── Subsection Selection Matrix (Phase 1.5 review) ── */}
+              {navPage === 'outline' && isSelectingSubsections && (
+                <SubsectionSelectionMatrix
+                  sections={sections}
+                  candidatesBySection={genState.candidatesBySection}
+                  onSubmit={handleSelectionSubmit}
+                />
+              )}
+
               {/* ── Course Outline Page ── */}
-              {navPage === 'outline' && (
+              {navPage === 'outline' && !isSelectingSubsections && (
                 <CourseEditor
                   courseClass={courseClass}
                   setCourseClass={setCourseClass}

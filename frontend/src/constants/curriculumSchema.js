@@ -59,7 +59,29 @@ export const SectionFields = {
   LEARNING_OBJECTIVES: 'learning_objectives',
   CONTENT_KEYWORDS: 'content_keywords',
   SUBTOPICS: 'subtopics',
-  PLA_PILLARS: 'pla_pillars'
+  PLA_PILLARS: 'pla_pillars',
+
+  // Phase 1.5 additions
+  DEPTH_CEILING: 'depth_ceiling'  // 'Basics' | 'Intermediate' | 'Advanced' — how deep this section may go
+};
+
+export const SubsectionFields = {
+  SUBSECTION_ID: 'id',
+  CORE_CONCEPT: 'core_concept',  // one sentence — the single idea this subsection teaches
+  DEPTH_LEVEL: 'depth_level',  // 'Basics' | 'Intermediate' | 'Advanced', relative to its section
+  PREREQUISITE_SUBSECTION_ID: 'prerequisite_subsection_id',  // nullable — subsection this one builds on
+  CHAIN_ID: 'chain_id',  // groups subsections into an independent Basics->Intermediate->Advanced chain
+  BLOCKS: 'blocks',  // ordered list of block-spec dicts (see BlockSpecFields)
+  EXCLUDED_BLOCK_IDS: 'excluded_block_ids'  // block ids the teacher unchecked at selection time
+};
+
+export const BlockSpecFields = {
+  BLOCK_ID: 'id',
+  TYPE: 'type',  // 'content' | 'worksheet' | 'activity'
+  SUBTYPE: 'subtype',  // closed taxonomy value — see CONTENT_SUBTYPES / WORKSHEET_SUBTYPES / ACTIVITY_SUBTYPES in curriculumApi.js/backend block_prompts.py
+  TITLE: 'title',
+  DESCRIPTION: 'description',  // 1-2 sentence preview of what this block will contain, shown to the teacher before full content is generated
+  SOURCE_BLOCK_IDS: 'source_block_ids'  // worksheet only — content block id(s) it draws its questions from
 };
 
 export const TopicFields = {

@@ -53,89 +53,51 @@ def generate_boxes(teacher_input: Dict, images: Optional[List[str]] = None) -> D
 
     logger.info("Calling LLM to generate outline (this may take 30-60 seconds)...")
     outline_data = call_openai(prompt, system_message, images=images or None)
-    
+
     # Validate the new structure
     _validate_outline_response(outline_data)
-    
-    # Calculate total duration across all subsections
-    total = 0
-    for section in outline_data.get('sections', []):
-        for sub in section.get('subsections', []):
-            total += sub.get('duration_minutes', 0)
-    outline_data['total_duration_minutes'] = total
-    
+
     logger.info(f"Successfully generated {len(outline_data.get('sections', []))} sections")
-    logger.info(f"Total content duration: {total} minutes")
     logger.info("="*70)
-    
+
     return outline_data
 
 
 def create_final_outline(outline_data: Dict) -> Dict:
     """
     Pass through the LLM outline, adding computed fields.
-    The LLM now directly outputs sections with subsections,
-    so no box-to-section conversion needed.
-    
+    Sections only — subsections are proposed later in Phase 1.5 and merged in
+    once the teacher approves a selection (see run_phase2_blocks_for_selection).
+
     Args:
-        outline_data: Raw LLM output with sections and subsections
-    
+        outline_data: Raw LLM output with sections (title, description, depth_ceiling)
+
     Returns:
-        dict: Final course outline ready for Firestore
+        dict: Final course outline ready for Phase 1.5
     """
-    logger.info("Building final outline from sections/subsections...")
-    
+    logger.info("Building final outline from sections...")
+
     outline = {
         "course_title": f"{outline_data.get('topic', '')} - {outline_data.get('age_range', '')}",
         "age_range": outline_data.get('age_range', ''),
         "subject": outline_data.get('subject', ''),
         "topic": outline_data.get('topic', ''),
-        "total_duration_minutes": outline_data.get('total_duration_minutes', 0),
         "sections": []
     }
-    
+
     for section in outline_data.get('sections', []):
-        built_section = {
+        outline['sections'].append({
             "id": section.get('section_id', ''),
             "title": section.get('title', ''),
             "description": section.get('description', ''),
+            "depth_ceiling": section.get('depth_ceiling', 'Basics'),
             "subsections": []
-        }
-        
-        for sub in section.get('subsections', []):
-            sub_id = sub.get('subsection_id', '')
-            built_subsection = {
-                "id": sub_id,
-                "title": sub.get('title', ''),
-                "description": sub.get('description', ''),
-                "duration_minutes": sub.get('duration_minutes', 0),
-                "pla_pillars": sub.get('pla_pillars', []),
-                "learning_objectives": sub.get('learning_objectives', []),
-                "content_keywords": sub.get('content_keywords', []),
-                "what_must_be_covered": sub.get('what_must_be_covered', ''),
-                # Immediately populate one topic box from the subsection data so
-                # Firestore never starts with empty topicBoxes.
-                "topicBoxes": [{
-                    "id": f"topic-{sub_id}-initial",
-                    "title": sub.get('title', ''),
-                    "description": sub.get('description', ''),
-                    "duration_minutes": sub.get('duration_minutes', 0),
-                    "pla_pillars": sub.get('pla_pillars', []),
-                    "learning_objectives": sub.get('learning_objectives', []),
-                    "content_keywords": sub.get('content_keywords', []),
-                    "video_resources": [],
-                    "worksheets": [],
-                    "activities": []
-                }]
-            }
-            built_section['subsections'].append(built_subsection)
-        
-        outline['sections'].append(built_section)
-    
+        })
+
     logger.info(f"Final outline: {len(outline['sections'])} sections")
     for s in outline['sections']:
-        logger.info(f"  - {s['title']}: {len(s['subsections'])} subsections")
-    
+        logger.info(f"  - {s['title']} (depth_ceiling: {s['depth_ceiling']})")
+
     return outline
 
 
@@ -200,43 +162,39 @@ def save_outline(outline: Dict, output_dir: str) -> None:
 
 def _validate_outline_response(outline_data: Dict) -> bool:
     """
-    Validate the new sections/subsections structure from LLM.
-    
+    Validate the sections structure from LLM. Subsections are no longer part of
+    Phase 1 output — they're proposed per-section in Phase 1.5.
+
     Args:
         outline_data: Parsed JSON from LLM
-    
+
     Returns:
         bool: True if valid
-    
+
     Raises:
         ValueError: If validation fails
     """
     required_top = ['topic', 'age_range', 'sections']
     validate_json_response(outline_data, required_top, "outline response")
-    
+
     if not isinstance(outline_data['sections'], list):
         raise ValueError("'sections' must be a list")
-    
+
     if len(outline_data['sections']) == 0:
         raise ValueError("No sections generated")
-    
-    required_section_fields = ['section_id', 'title', 'description', 'subsections']
-    required_sub_fields = ['subsection_id', 'title', 'description', 'duration_minutes']
-    
+
+    required_section_fields = ['section_id', 'title', 'description', 'depth_ceiling']
+
     for i, section in enumerate(outline_data['sections']):
         try:
             validate_json_response(section, required_section_fields, f"section {i+1}")
         except ValueError as e:
             raise ValueError(f"Section {i+1} validation failed: {e}")
-        
-        if not isinstance(section['subsections'], list) or len(section['subsections']) == 0:
-            raise ValueError(f"Section {i+1} '{section['title']}' has no subsections")
-        
-        for j, sub in enumerate(section['subsections']):
-            try:
-                validate_json_response(sub, required_sub_fields, f"section {i+1} subsection {j+1}")
-            except ValueError as e:
-                raise ValueError(f"Section {i+1}, Subsection {j+1} validation failed: {e}")
-    
+
+        if section['depth_ceiling'] not in ('Basics', 'Intermediate', 'Advanced'):
+            raise ValueError(
+                f"Section {i+1} '{section['title']}' has invalid depth_ceiling: {section['depth_ceiling']!r}"
+            )
+
     logger.info(f"✅ Validated: {len(outline_data['sections'])} sections")
     return True

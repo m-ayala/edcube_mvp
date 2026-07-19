@@ -36,7 +36,7 @@ const CourseDesigner = () => {
   const { genState, startGeneration } = useGeneration();
   const [organizationId, setOrganizationId] = useState(null);
 
-  const loading = genState.status === 'generating-outline';
+  const loading = genState.status === 'generating-outline' || genState.status === 'generating-candidates';
   const hasError = genState.status === 'error';
   const progress = { message: genState.progress.message, progress: genState.progress.percent };
   const [attachedFiles, setAttachedFiles] = useState([]);
@@ -71,16 +71,19 @@ const CourseDesigner = () => {
     fetchProfile();
   }, [currentUser]);
 
-  // Navigate to workspace as soon as the outline is ready
+  // Navigate to workspace once Phase 1.5 candidates are ready for review — there's
+  // nothing structurally useful to show between the bare outline (sections only,
+  // no subsections yet) and the full candidate matrix, so the loading screen stays
+  // up through candidate generation too (see `loading` above).
   useEffect(() => {
-    if (genState.status === 'outline-ready') {
+    if (genState.status === 'selection-pending') {
       trackAiOutlineGenerated({ subject: formData.subject, grade: formData.ageRangeStart, sections_count: genState.sections.length });
       navigate('/course-workspace', {
         state: {
           formData: genState.formData,
           sections: genState.sections,
           isEditing: true,
-          isGenerating: true,
+          isSelectingSubsections: true,
           targetFolderId: genState.targetFolderId,
           isOwner: true,
         },

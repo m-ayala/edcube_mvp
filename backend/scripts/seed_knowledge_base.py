@@ -126,7 +126,112 @@ OBJECTIVES = [
         "id": "application_impact",
         "label": "Application and Impact",
         "allowed_types": ["content", "worksheet", "activity"],
-        "clusters": [],
+        "clusters": [
+            {
+                "label": "Building & Making",
+                "subcategories": [
+                    "Model/diorama building",
+                    "Prototyping",
+                    "Design-build challenge",
+                    "Construction project",
+                    "Coding/app project",
+                    "3D modeling",
+                ],
+            },
+            {
+                "label": "Design",
+                "subcategories": [
+                    "Product design",
+                    "Poster/infographic design",
+                    "Diagram/blueprint design (process or system)",
+                    "Game design",
+                ],
+            },
+            {
+                "label": "Visual Arts",
+                "subcategories": [
+                    "Drawing/illustration",
+                    "Painting",
+                    "Sculpture",
+                    "Collage/mixed media",
+                    "Photography project",
+                    "Comic strip/storyboard",
+                    "Digital art",
+                ],
+            },
+            {
+                "label": "Writing & Composition",
+                "subcategories": [
+                    "Essay writing",
+                    "Persuasive writing (letter, op-ed, speech)",
+                    "Creative/narrative writing",
+                    "Poetry writing",
+                    "Journal/diary entry",
+                    "Script writing",
+                    "Research report",
+                ],
+            },
+            {
+                "label": "Performance & Presentation",
+                "subcategories": [
+                    "Oral presentation",
+                    "Skit/performance",
+                    "Speech/oration",
+                    "Music or movement composition",
+                    "Podcast/video recording",
+                ],
+            },
+            {
+                "label": "Discussion & Argumentation",
+                "subcategories": [
+                    "Debate",
+                    "Seminar/structured discussion",
+                    "Panel discussion",
+                ],
+            },
+            {
+                "label": "Investigation & Inquiry",
+                "subcategories": [
+                    "Experiment/investigation",
+                    "Field observation/data collection",
+                    "Survey or interview project",
+                    "Case study analysis",
+                ],
+            },
+            {
+                "label": "Simulation & Roleplay",
+                "subcategories": [
+                    "Roleplay",
+                    "Simulation",
+                    "Negotiation/decision-making exercise",
+                ],
+            },
+            {
+                "label": "Planning & Strategy",
+                "subcategories": [
+                    "Plan or proposal creation",
+                    "Timeline creation",
+                    "Campaign or pitch design",
+                    "Event planning",
+                ],
+            },
+            {
+                "label": "Teaching & Mentoring",
+                "subcategories": [
+                    "Peer teach-back",
+                    "How-to guide/tutorial",
+                    "Explainer video",
+                ],
+            },
+            {
+                "label": "Reflection & Self-Assessment",
+                "subcategories": [
+                    "Reflection journal",
+                    "Goal-setting exercise",
+                    "Portfolio curation",
+                ],
+            },
+        ],
     },
 ]
 

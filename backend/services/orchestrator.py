@@ -15,6 +15,18 @@ from typing import Dict, List, Optional, AsyncGenerator
 logger = logging.getLogger(__name__)
 
 
+def _distribute_budget(total: int, buckets: int) -> List[int]:
+    """
+    Split a course-wide total (e.g. numWorksheets) evenly across `buckets` days/
+    sections, as a soft per-section target for Phase 1.5 — not a hard quota.
+    Remainder goes to the earliest days. E.g. _distribute_budget(10, 3) -> [4, 3, 3].
+    """
+    if buckets <= 0:
+        return []
+    base, remainder = divmod(max(total, 0), buckets)
+    return [base + (1 if i < remainder else 0) for i in range(buckets)]
+
+
 class CurriculumOrchestrator:
     """
     Orchestrator for curriculum generation - PHASE 1 ONLY VERSION
@@ -29,7 +41,8 @@ class CurriculumOrchestrator:
     
     async def run_phase1(self, teacher_input: Dict, images: Optional[List[str]] = None) -> Dict:
         """
-        Run Phase 1: Generate course outline (sections = days, subsections = hours).
+        Run Phase 1: Generate course outline (sections only — each a day/theme with a
+        depth_ceiling). Subsections are proposed later in Phase 1.5 (run_phase1_5).
         """
         from outliner.outline_generator import generate_boxes, create_final_outline
 
@@ -64,82 +77,214 @@ class CurriculumOrchestrator:
             logger.error(f"Phase 1 error: {e}", exc_info=True)
             raise
 
-    async def run_phase2_blocks(
+    async def run_phase1_5(
         self,
         teacher_input: Dict,
         outline_data: Dict,
-        num_worksheets: int,
-        num_activities: int,
     ) -> AsyncGenerator[Dict, None]:
         """
-        Phase 2: Generate content blocks for every subsection in the outline.
+        Phase 1.5: Propose candidate subsection chains for every section.
 
         Yields dicts:
           {'type': 'progress', 'message': str, 'progress': int}
-          {'type': 'done', 'blocks_by_subsection': {subsection_id: [block, ...]}}
+          {'type': 'subsections_ready', 'section_id': str, 'chains': [...]}
+          {'type': 'candidates_complete'}
         """
-        from outliner.block_prompts import get_block_generation_prompt
-        from utils.llm_handler import call_openai
+        from outliner.subsection_selection_generator import generate_subsection_candidates
+        from outliner.context_utils import build_subsection_labels
 
         sections = outline_data.get('sections', [])
-        all_pairs = [
-            (section, sub)
-            for section in sections
-            for sub in section.get('subsections', [])
-        ]
-        total_subs = len(all_pairs)
+        total_sections = len(sections)
 
+        if total_sections == 0:
+            yield {'type': 'candidates_complete'}
+            return
+
+        course_context = {
+            'subject':          teacher_input.get('subject', ''),
+            'topic':            teacher_input.get('topic', ''),
+            'age_range_start':  teacher_input.get('age_range_start', ''),
+            'age_range_end':    teacher_input.get('age_range_end', ''),
+            'requirements':     teacher_input.get('objectives', 'None'),
+        }
+        hours_per_day = teacher_input.get('hours_per_day', 1.0)
+        num_days = teacher_input.get('num_days', 1)
+
+        # Course-wide worksheet/activity counts split evenly across days as a soft
+        # per-section target — Phase 1.5 no longer forces exactly 1 of each per
+        # subsection (see subsection_selection_prompts.py).
+        worksheet_budgets = _distribute_budget(teacher_input.get('num_worksheets', 0), total_sections)
+        activity_budgets = _distribute_budget(teacher_input.get('num_activities', 0), total_sections)
+
+        # Structured requirements (recurring daily elements + per-day explicit asks),
+        # if the Requirements Interpreter produced any — None means fall back to the
+        # raw requirements text only.
+        interpreted_requirements = teacher_input.get('interpreted_requirements')
+        recurring_structure = (interpreted_requirements or {}).get('recurring_structure')
+        day_slices_by_number = {
+            d.get('day_number'): d for d in (interpreted_requirements or {}).get('days', [])
+        }
+
+        # Sections whose candidate chains have been generated so far, used to build
+        # the sibling "already proposed" dedup context for sections processed later.
+        sections_so_far: List[Dict] = []
+
+        for idx, section in enumerate(sections):
+            pct = 50 + int(idx / total_sections * 20)
+            yield {
+                'type': 'progress',
+                'message': f"Proposing subsections for {section.get('title', f'Section {idx + 1}')}...",
+                'progress': pct,
+            }
+
+            other_subsections = build_subsection_labels(sections_so_far)
+
+            try:
+                result = generate_subsection_candidates(
+                    section=section,
+                    course_context=course_context,
+                    other_subsections=other_subsections,
+                    hours_per_day=hours_per_day,
+                    num_days=num_days,
+                    worksheet_budget=worksheet_budgets[idx] if idx < len(worksheet_budgets) else 0,
+                    activity_budget=activity_budgets[idx] if idx < len(activity_budgets) else 0,
+                    day_slice=day_slices_by_number.get(idx + 1),
+                    recurring_structure=recurring_structure,
+                )
+                chains = result.get('chains', [])
+            except Exception as e:
+                logger.error(f"Phase 1.5 failed for section {section.get('id')}: {e}", exc_info=True)
+                chains = []
+
+            # Feed this section's approved-candidate subsections into the sibling
+            # context for subsequent sections, so later sections don't repeat them.
+            sections_so_far.append({
+                'title': section.get('title', ''),
+                'subsections': [sub for chain in chains for sub in chain.get('subsections', [])],
+            })
+
+            yield {
+                'type': 'subsections_ready',
+                'section_id': section.get('id', ''),
+                'chains': chains,
+                'progress': pct,
+            }
+
+        yield {'type': 'candidates_complete'}
+
+    async def generate_more_subsections(
+        self,
+        section: Dict,
+        teacher_input: Dict,
+        existing_subsections: List[Dict],
+        day_number: Optional[int] = None,
+    ) -> Dict:
+        """
+        Phase 1.5 "generate more": propose one additional independent chain for a
+        single section, on demand (triggered by the teacher clicking "+" in the
+        matrix UI). `existing_subsections` is the dedup context — every subsection
+        already proposed anywhere in the course (other sections AND this one) —
+        so the new chain doesn't repeat anything already on screen.
+
+        Returns: {'section_id': str, 'chains': [...]} — same shape as run_phase1_5's
+        per-section payload, just generated synchronously for one section.
+        """
+        from outliner.subsection_selection_generator import generate_subsection_candidates
+
+        course_context = {
+            'subject':          teacher_input.get('subject', ''),
+            'topic':            teacher_input.get('topic', ''),
+            'age_range_start':  teacher_input.get('age_range_start', ''),
+            'age_range_end':    teacher_input.get('age_range_end', ''),
+            'requirements':     teacher_input.get('objectives', 'None'),
+        }
+        num_days = teacher_input.get('num_days', 1)
+
+        # This is one extra chain added to a section that already has candidates —
+        # give it a small share of that section's soft budget rather than the
+        # section's full day-share, so repeated "generate more" clicks don't each
+        # think they're the section's only chain.
+        idx = (day_number - 1) if day_number else 0
+        worksheet_budgets = _distribute_budget(teacher_input.get('num_worksheets', 0), num_days)
+        activity_budgets = _distribute_budget(teacher_input.get('num_activities', 0), num_days)
+
+        return generate_subsection_candidates(
+            section=section,
+            course_context=course_context,
+            other_subsections=existing_subsections,
+            hours_per_day=teacher_input.get('hours_per_day', 1.0),
+            num_days=num_days,
+            num_new_chains=1,
+            worksheet_budget=min(1, worksheet_budgets[idx]) if idx < len(worksheet_budgets) else 0,
+            activity_budget=activity_budgets[idx] if idx < len(activity_budgets) else 0,
+        )
+
+    async def run_phase2_blocks_for_selection(
+        self,
+        teacher_input: Dict,
+        approved_subsections: List[Dict],
+    ) -> AsyncGenerator[Dict, None]:
+        """
+        Phase 2: Generate full block content for teacher-approved subsections only.
+
+        Each entry in `approved_subsections` carries its fixed composition from
+        Phase 1.5 (`blocks`, each a block-spec dict with id/type/subtype/title and,
+        for worksheets, `source_block_ids`) plus `excluded_block_ids` reflecting
+        what the teacher unchecked. Composition is no longer decided here — only
+        expanded into full content, filtered by exclusions.
+
+        Yields dicts:
+          {'type': 'progress', 'message': str, 'progress': int}
+          {'type': 'subsection_blocks', 'subsection_id': str, 'blocks': [...]}
+          {'type': 'done', 'blocks_by_subsection': {subsection_id: [block, ...]}}
+        """
+        from outliner.block_prompts import get_block_generation_prompt, _filter_excluded_block_specs
+        from outliner.context_utils import build_subsection_labels
+        from utils.llm_handler import call_openai
+
+        total_subs = len(approved_subsections)
         if total_subs == 0:
             yield {'type': 'done', 'blocks_by_subsection': {}}
             return
 
-        # Distribute worksheets evenly across subsections
-        worksheet_indices: set = set()
-        if num_worksheets > 0:
-            step = total_subs / num_worksheets
-            for i in range(min(num_worksheets, total_subs)):
-                worksheet_indices.add(round(i * step))
-
-        # Distribute activities evenly, nudging off worksheet slots when possible
-        activity_indices: set = set()
-        if num_activities > 0:
-            step = total_subs / num_activities
-            for i in range(min(num_activities, total_subs)):
-                idx = round(i * step)
-                if idx in worksheet_indices and idx + 1 < total_subs:
-                    idx += 1
-                activity_indices.add(idx)
+        # Sibling context: every OTHER approved subsection's title, grouped by section title.
+        sections_for_labels = {}
+        for sub in approved_subsections:
+            section_title = sub.get('section_title', '')
+            sections_for_labels.setdefault(section_title, []).append(sub)
+        all_subsection_labels = build_subsection_labels([
+            {'title': title, 'subsections': subs} for title, subs in sections_for_labels.items()
+        ])
 
         blocks_by_subsection: Dict[str, List] = {}
-        hours_per_day = int(teacher_input.get('hours_per_day', 1)) or 1
 
-        # Pre-build the full list of (section_title, subsection_title) pairs for context
-        all_subsection_labels = [
-            {'section': sec.get('title', ''), 'subsection': s.get('title', '')}
-            for sec, s in all_pairs
-        ]
-
-        for flat_idx, (section, sub) in enumerate(all_pairs):
+        for flat_idx, sub in enumerate(approved_subsections):
             sub_id = sub.get('id', f'sub-{flat_idx}')
-            section_title = section.get('title', f'Day {flat_idx + 1}')
-            hour_num = (flat_idx % hours_per_day) + 1
+            section_title = sub.get('section_title', f'Section {flat_idx + 1}')
 
-            pct = 55 + int(flat_idx / total_subs * 40)
+            pct = 70 + int(flat_idx / total_subs * 25)
             yield {
                 'type': 'progress',
-                'message': f'Generating blocks: {section_title} — Hour {hour_num} ({flat_idx + 1}/{total_subs})',
+                'message': f'Generating blocks: {section_title} — {sub.get("title", sub_id)} ({flat_idx + 1}/{total_subs})',
                 'progress': pct,
             }
 
-            worksheet_slots = 1 if flat_idx in worksheet_indices else 0
-            activity_slots = 1 if flat_idx in activity_indices else 0
-
-            # All subsections except the current one — the LLM must not repeat their content
             other_subsections = [
-                lbl for i, lbl in enumerate(all_subsection_labels) if i != flat_idx
+                lbl for lbl in all_subsection_labels
+                if not (lbl['section'] == section_title and lbl['subsection'] == sub.get('title', ''))
             ]
 
-            session_minutes = int(sub.get('duration_minutes', 60))
+            excluded_block_ids = sub.get('excluded_block_ids', [])
+            block_specs = _filter_excluded_block_specs(sub.get('blocks', []), excluded_block_ids)
+
+            if not block_specs:
+                blocks_by_subsection[sub_id] = []
+                yield {'type': 'subsection_blocks', 'subsection_id': sub_id, 'blocks': [], 'progress': pct}
+                continue
+
+            session_minutes = int(sub.get('duration_minutes') or sum(
+                {'content': 15, 'worksheet': 15, 'activity': 30}.get(b.get('type'), 15) for b in block_specs
+            ))
 
             try:
                 prompt = get_block_generation_prompt(
@@ -152,8 +297,7 @@ class CurriculumOrchestrator:
                     },
                     subsection=sub,
                     section_title=section_title,
-                    worksheet_slots=worksheet_slots,
-                    activity_slots=activity_slots,
+                    block_specs=block_specs,
                     other_subsections=other_subsections,
                     session_minutes=session_minutes,
                 )
@@ -167,40 +311,28 @@ class CurriculumOrchestrator:
                     max_tokens=8000,
                 )
 
-                # Defensively extract the blocks list
                 raw_blocks = result.get('blocks', []) if isinstance(result, dict) else []
                 if not isinstance(raw_blocks, list):
                     raw_blocks = []
 
-                ts = int(time.time() * 1000)
+                # Block ids are stable from Phase 1.5 onward (block_specs already carry
+                # real ids, e.g. referenced by worksheet source_block_ids) — keep whatever
+                # the LLM echoed back, falling back to the approved spec's id by position
+                # if it dropped or mangled one.
+                spec_ids_by_position = [spec.get('id') for spec in block_specs]
                 stamped = []
                 for i, block in enumerate(raw_blocks):
                     if not isinstance(block, dict):
-                        continue  # skip malformed entries
-                    block['id'] = f"block-{sub_id}-{ts}-{i}"
+                        continue
+                    if not block.get('id') and i < len(spec_ids_by_position):
+                        block['id'] = spec_ids_by_position[i]
                     block.setdefault('addedAt', None)
                     stamped.append(block)
 
-                # Tag blocks generated together so the UI can highlight them as a teach-together group
                 if len(stamped) > 1:
                     group_id = f"group-{sub_id}"
                     for block in stamped:
                         block['groupId'] = group_id
-
-                # Resolve contentBlockIndex → parentContentBlockId
-                # Build map: 0-based index among content blocks → assigned block ID
-                content_id_map = {}
-                content_count = 0
-                for block in stamped:
-                    if block.get('type') == 'content':
-                        content_id_map[content_count] = block['id']
-                        content_count += 1
-
-                for block in stamped:
-                    if block.get('type') in ('worksheet', 'activity'):
-                        cb_idx = block.pop('contentBlockIndex', None)
-                        if isinstance(cb_idx, int) and cb_idx in content_id_map:
-                            block['parentContentBlockId'] = content_id_map[cb_idx]
 
             except Exception as e:
                 logger.error(f"Block generation failed for subsection {sub_id}: {e}", exc_info=True)
@@ -216,7 +348,7 @@ class CurriculumOrchestrator:
             }
 
         yield {'type': 'done', 'blocks_by_subsection': blocks_by_subsection}
-    
+
     # PHASE 2 METHODS - COMMENTED OUT FOR PHASE 1 TESTING
     # Uncomment these when ready to test Phase 2
     

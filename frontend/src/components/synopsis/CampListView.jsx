@@ -168,6 +168,30 @@ export default function CampListView({
     } catch (err) { alert(err.message); }
   };
 
+  // ── Add new camp group to this week (admin) ───────────────────────────────
+  const [addingNewGroup, setAddingNewGroup] = useState(false);
+  const [newGroup, setNewGroup] = useState({ group_name: '', camp_name: '', teacher_name: '', time_start: '', time_end: '' });
+
+  const startAddNewGroup = () => {
+    setNewGroup({ group_name: '', camp_name: '', teacher_name: '', time_start: '', time_end: '' });
+    setAddingNewGroup(true);
+  };
+
+  const saveNewGroup = async () => {
+    const groupName = newGroup.group_name.trim();
+    const campName  = newGroup.camp_name.trim();
+    if (!groupName || !campName) return;
+    try {
+      await createCamp(currentUser, {
+        week_id: weekId, group_name: groupName,
+        camp_name: campName, teacher_name: newGroup.teacher_name.trim(),
+        time_start: newGroup.time_start.trim(), time_end: newGroup.time_end.trim(),
+      });
+      setAddingNewGroup(false);
+      await onDataRefresh();
+    } catch (err) { alert(err.message); }
+  };
+
   // ── Per-group download (admin) ─────────────────────────────────────────────
   const [downloadingGroup, setDownloadingGroup] = useState(null);
 
@@ -346,15 +370,53 @@ export default function CampListView({
         </div>
       )}
 
-      {/* Legend — admin only */}
-      {isAdmin && groupedCamps.length > 0 && (
-        <div style={{ display: 'flex', gap: 20, alignItems: 'center', fontSize: 14, color: '#555', marginBottom: 28 }}>
-          {[['#B2E8C8','All 5 days done'],['#F7E4A0','Some days added'],['rgba(0,0,0,0.12)','Not started']].map(([bg, label]) => (
-            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-              <div style={{ width: 12, height: 12, borderRadius: '50%', background: bg }} />
-              {label}
+      {/* Legend + New camp group — admin only */}
+      {isAdmin && currentWeek && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 20, marginBottom: 28 }}>
+          {groupedCamps.length > 0 && (
+            <div style={{ display: 'flex', gap: 20, alignItems: 'center', fontSize: 14, color: '#555' }}>
+              {[['#B2E8C8','All 5 days done'],['#F7E4A0','Some days added'],['rgba(0,0,0,0.12)','Not started']].map(([bg, label]) => (
+                <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <div style={{ width: 12, height: 12, borderRadius: '50%', background: bg }} />
+                  {label}
+                </div>
+              ))}
+            </div>
+          )}
+          <button onClick={startAddNewGroup} style={pillBtn('#1e1e2e', '#FFF')}>
+            + New camp group
+          </button>
+        </div>
+      )}
+
+      {isAdmin && addingNewGroup && (
+        <div style={{ ...inlineEditRowStyle, marginBottom: 28 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            <div style={editLabelStyle}>Group name</div>
+            <input
+              autoFocus
+              value={newGroup.group_name}
+              onChange={e => setNewGroup(p => ({ ...p, group_name: e.target.value }))}
+              placeholder="e.g. Junior Robotics, Art, & Sports Camp"
+              style={{ ...editInputStyle, width: 260 }}
+            />
+          </div>
+          {[['Camp name','camp_name',180],['Teacher','teacher_name',130],['Start','time_start',90],['End','time_end',90]].map(([label, field, w]) => (
+            <div key={field} style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              <div style={editLabelStyle}>{label}</div>
+              <input
+                value={newGroup[field] || ''}
+                onChange={e => setNewGroup(p => ({ ...p, [field]: e.target.value }))}
+                onKeyDown={e => e.key === 'Enter' && saveNewGroup()}
+                placeholder={field === 'camp_name' ? 'e.g. Junior Robotics' : field === 'time_start' ? '9:00 AM' : ''}
+                style={{ ...editInputStyle, width: w }}
+              />
             </div>
           ))}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+            <button onClick={saveNewGroup} style={saveBtn}>Add group</button>
+            <button onClick={() => setAddingNewGroup(false)} style={cancelBtn}>Cancel</button>
+          </div>
         </div>
       )}
 

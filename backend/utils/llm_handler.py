@@ -6,7 +6,13 @@ Consolidates all LLM interactions across all three phases
 import json
 import logging
 from typing import Dict, List, Optional
-from openai import OpenAI
+from openai import (
+    OpenAI,
+    APIConnectionError,
+    APIStatusError,
+    AuthenticationError,
+    RateLimitError,
+)
 
 from config import OPENAI_API_KEY, OPENAI_MODEL, OPENAI_TEMPERATURE
 
@@ -15,6 +21,13 @@ logger = logging.getLogger(__name__)
 
 # Initialize OpenAI client
 client = OpenAI(api_key=OPENAI_API_KEY)
+
+
+class OpenAIServiceError(Exception):
+    """Raised when the OpenAI API itself fails (quota, auth, connectivity),
+    as opposed to a bug in how we're calling it. Carries a message that's
+    safe to show directly to the end user."""
+    pass
 
 
 def call_openai(
@@ -84,8 +97,30 @@ def call_openai(
         
         # Call OpenAI API
         logger.info(f"Calling OpenAI API with model: {OPENAI_MODEL}")
-        response = client.chat.completions.create(**params)
-        
+        try:
+            response = client.chat.completions.create(**params)
+        except RateLimitError as e:
+            logger.error(f"OpenAI quota/rate limit exceeded: {e}")
+            raise OpenAIServiceError(
+                "The AI service is temporarily unavailable (quota exceeded). "
+                "Please try again later."
+            ) from e
+        except AuthenticationError as e:
+            logger.error(f"OpenAI authentication failed: {e}")
+            raise OpenAIServiceError(
+                "The AI service is misconfigured. Please contact support."
+            ) from e
+        except APIConnectionError as e:
+            logger.error(f"OpenAI API connection error: {e}")
+            raise OpenAIServiceError(
+                "Could not reach the AI service. Please try again in a moment."
+            ) from e
+        except APIStatusError as e:
+            logger.error(f"OpenAI API error ({e.status_code}): {e}")
+            raise OpenAIServiceError(
+                "The AI service returned an error. Please try again."
+            ) from e
+
         # Extract response text
         response_text = response.choices[0].message.content
         

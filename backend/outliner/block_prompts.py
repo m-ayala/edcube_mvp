@@ -1,55 +1,62 @@
 """
 Prompts for block generation within a subsection.
-Each subsection = 1 hour. Blocks are 15/30-min content/worksheet/activity chunks.
+Blocks are 15/30-min content/worksheet/activity chunks. Composition (which blocks,
+their type/subtype/title, and worksheet source_block_ids) is decided in Phase 1.5
+(subsection_selection_prompts.py) and approved by the teacher — this module only
+expands each approved block spec into full content.
 """
 
-from typing import Dict
+from typing import Dict, List, Optional
 
 
-# Canonical lists used by the rest of the system (kept in sync with frontend)
-WORKSHEET_TYPES = [
-    "fill in the blanks",
-    "comprehension",
-    "answering questions",
-    "name the images",
-    "matching",
-    "drawing",
-    "multiple choice",
-    "essay writing",
-]
-
-ACTIVITY_TYPES = [
-    "quiz",
-    "discussion",
-    "experiment",
-    "teamwork",
-    "hands-on",
-    "game",
-]
-
-CONTENT_SUBCATEGORIES = [
-    "Definitions",
-    "Concepts",
-    "Theories",
-    "Types of",
-    "Parts of",
+# Canonical closed taxonomy (kept in sync with frontend). Single source of truth,
+# shared by Phase 1.5 (subsection_selection_prompts.py) and Phase 2 (this file) so
+# both stages speak the same vocabulary.
+CONTENT_SUBTYPES = [
+    "Definition",
+    "Categories/Types",
+    "Examples",
+    "Terminology",
     "Process",
-    "Methodologies",
-    "Techniques",
-    "Principles",
-    "Frameworks",
-    "Systems",
-    "Rules & Formulas",
-    "Critical Thinking",
-    "Compare & Contrast",
-    "Pattern Recognition",
-    "Examine Evidence",
-    "Synthesize",
-    "History",
-    "Evolution",
+    "Parts/Components",
+    "Comparison",
     "Perspectives",
-    "Impact & Consequences",
+    "Context/History",
 ]
+
+WORKSHEET_SUBTYPES = [
+    "Fill-in-the-blank",
+    "Matching",
+    "Sequencing/ordering",
+    "Labeling/diagramming",
+    "Compare/contrast short answer",
+    "Multiple choice",
+]
+
+ACTIVITY_SUBTYPES = [
+    "Create-your-own/design challenge",
+    "Roleplay/simulation",
+    "Debate/discussion",
+    "Presentation/teach-back",
+    "Group project/build",
+    "Reflection/journaling",
+]
+
+# Which worksheet subtypes are a valid fit for a given source content subtype.
+# A worksheet can't test content that isn't in the subsection, and its format
+# must fit what it's testing (e.g. Matching for Categories/Examples, Sequencing
+# for Process, Labeling for Parts/Components).
+WORKSHEET_SUBTYPE_COMPATIBILITY = {
+    "Definition": ["Fill-in-the-blank", "Multiple choice"],
+    "Categories/Types": ["Matching", "Multiple choice"],
+    "Examples": ["Matching", "Fill-in-the-blank"],
+    "Terminology": ["Fill-in-the-blank", "Matching"],
+    "Process": ["Sequencing/ordering"],
+    "Parts/Components": ["Labeling/diagramming"],
+    "Comparison": ["Compare/contrast short answer"],
+    "Perspectives": ["Compare/contrast short answer"],
+    "Context/History": ["Sequencing/ordering", "Multiple choice"],
+}
 
 # Flexible section toolkit for content blocks — LLM picks 3-5 per block
 CONTENT_SECTION_TOOLKIT = """
@@ -72,27 +79,55 @@ The content must read the way a knowledgeable teacher would explain it, not like
 """
 
 
+def _filter_excluded_block_specs(block_specs: List[Dict], excluded_block_ids: Optional[List[str]]) -> List[Dict]:
+    """
+    Apply the teacher's exclusions to an approved subsection's block-spec list,
+    before any content generation happens.
+
+    1. Drop any block_spec whose own id was excluded.
+    2. For remaining worksheet specs, drop excluded ids from source_block_ids;
+       if that leaves the worksheet with no sources (and it originally had some),
+       drop the worksheet spec entirely rather than generating it against nothing.
+    Activities have no source_block_ids and are never dropped by step 2 — only
+    by being excluded themselves in step 1.
+    """
+    excluded = set(excluded_block_ids or [])
+    kept = [spec for spec in block_specs if spec.get('id') not in excluded]
+
+    filtered = []
+    for spec in kept:
+        if spec.get('type') == 'worksheet' and spec.get('source_block_ids'):
+            remaining = [bid for bid in spec['source_block_ids'] if bid not in excluded]
+            if not remaining:
+                continue  # all sources excluded — skip this worksheet
+            spec = {**spec, 'source_block_ids': remaining}
+        filtered.append(spec)
+
+    return filtered
+
+
 def get_block_generation_prompt(
     teacher_input: Dict,
     subsection: Dict,
     section_title: str,
-    worksheet_slots: int,
-    activity_slots: int,
+    block_specs: List[Dict],
     other_subsections: list = None,
     session_minutes: int = 60,
 ) -> str:
     """
-    Build the prompt that generates content blocks for one subsection (1 hour).
+    Build the prompt that expands an approved subsection's block specs (titles/
+    subtypes only, decided in Phase 1.5) into full block content.
 
     Args:
         teacher_input: Course-level info (topic, age_range_start/end, subject, requirements)
-        subsection: The subsection dict with title, description, learning_objectives, what_must_be_covered
-        section_title: Title of the parent section (day)
-        worksheet_slots: 0 or 1 — how many worksheet blocks to include
-        activity_slots: 0 or 1 — how many activity blocks to include
+        subsection: The subsection dict with title, description, core_concept, learning_objectives
+        section_title: Title of the parent section
+        block_specs: Ordered list of approved block-spec dicts (already exclusion-filtered),
+            each {id, type, subtype, title, source_block_ids? (worksheet only)}
+        session_minutes: Estimated total minutes for this subsection (from Phase 1.5)
 
     Returns:
-        str: Prompt for the LLM — expects JSON array { "blocks": [...] }
+        str: Prompt for the LLM — expects JSON { "blocks": [...] }
     """
     age_range_start = teacher_input.get('age_range_start', '')
     age_range_end = teacher_input.get('age_range_end', '')
@@ -103,69 +138,109 @@ def get_block_generation_prompt(
 
     sub_title = subsection.get('title', '')
     sub_description = subsection.get('description', '')
+    core_concept = subsection.get('core_concept', '')
     learning_objectives = subsection.get('learning_objectives', [])
-    what_must_be_covered = subsection.get('what_must_be_covered', '')
 
     objectives_text = "\n".join(f"  - {o}" for o in learning_objectives) if learning_objectives else "  (none listed)"
 
     # Build a "do not repeat" list from all other subsections in the course
     already_covered_text = ""
     if other_subsections:
-        lines = []
-        for s in other_subsections:
-            lines.append(f"  - {s['section']}: {s['subsection']}")
+        lines = [f"  - {s['section']}: {s['subsection']}" for s in other_subsections]
         already_covered_text = (
             "\nALREADY COVERED IN OTHER LESSONS (DO NOT REPEAT these concepts, titles, or activities):\n"
             + "\n".join(lines)
             + "\nYour blocks must cover content that is DISTINCT from all of the above.\n"
         )
 
-    worksheet_instruction = ""
-    if worksheet_slots == 1:
-        worksheet_instruction = f"""
-WORKSHEET BLOCK (include exactly 1):
-- type: "worksheet"
-- worksheetType: one of {WORKSHEET_TYPES} — pick the type best suited to the age group and learning objective
-- duration_minutes: 15 (worksheets are always 15 minutes)
-- contentBlockIndex: the 0-based index of the content block in this blocks array that this worksheet is designed to reinforce.
-  Pick the content block whose concept is most worth testing or practising.
-- Title should describe exactly what the worksheet is (e.g. "Label the Parts of a Flower")
-- Content field must follow this exact structure:
+    id_by_index = {i: spec.get('id') for i, spec in enumerate(block_specs)}
+    content_ids = {spec['id'] for spec in block_specs if spec.get('type') == 'content'}
+
+    spec_lines = []
+    for i, spec in enumerate(block_specs):
+        line = f"  {i + 1}. id=\"{spec.get('id')}\" type=\"{spec.get('type')}\" subtype=\"{spec.get('subtype')}\" title=\"{spec.get('title')}\""
+        if spec.get('type') == 'worksheet' and spec.get('source_block_ids'):
+            line += f" source_block_ids={spec['source_block_ids']}"
+        spec_lines.append(line)
+    specs_text = "\n".join(spec_lines)
+
+    prompt = f"""
+You are an expert curriculum designer. The block COMPOSITION for this session has already been
+decided and approved by the teacher — your job is to expand EACH approved block spec below into
+its full content. Do NOT add, remove, or reorder blocks, and do NOT change any block's id,
+type, subtype, or title — use them exactly as given.
+
+COURSE CONTEXT:
+- Subject: {subject}
+- Topic: {topic}
+- Student Age Range: {age_range}
+- Section: {section_title}
+- This Session: {sub_title}
+- Session Description: {sub_description}
+- Core Concept: {core_concept}
+- Learning Objectives:
+{objectives_text}
+- Special Requirements: {requirements}
+{already_covered_text}
+
+APPROVED BLOCK COMPOSITION (expand each of these, in this exact order, using the given id/type/subtype/title):
+{specs_text}
+
+TIME BUDGET:
+- This session is estimated at {session_minutes} minutes of teaching — content blocks are 15
+  or 30 minutes each (default 15, use 30 only if the concept genuinely needs more depth),
+  worksheets are always 15 minutes, activities are always 30 minutes.
+
+CONTENT BLOCK RULES (for specs with type "content"):
+- Think of each content block as ONE slide in a presentation.
+- Each block covers EXACTLY ONE concept matching its given subtype and title — never bundle.
+- Titles are already fixed (given above) — write content that matches the given title exactly.
+
+CONTENT BLOCK STRUCTURE:
+{CONTENT_SECTION_TOOLKIT}
+For each content block, choose the 3-5 sections from the toolkit above that best fit the concept.
+Write the content field as natural flowing prose and lists — not a rigid form.
+All vocabulary, examples, and complexity must be appropriate for ages {age_range_start}–{age_range_end}.
+
+For each spec with type "content", output:
+- id, type, subtype, title: copied exactly from the approved composition above
+- content: the teaching content using 3-5 chosen sections from the toolkit
+- key_takeaways: array of 3-5 concise bullet strings (used for PPT generation)
+- pedagogy: object with fields:
+    teaching_approach, memory_device, misconception, guided_questions (array of 2-3), mastery_signal
+- visual_suggestion: one sentence describing an image or diagram for a PPT slide
+- sources: array of 2-3 objects, each with name, search_query, type (one of "educational_site", "encyclopedia", "curriculum_standard", "textbook")
+- duration_minutes: 15 or 30
+
+For each spec with type "worksheet", output:
+- id, type, subtype, title, source_block_ids: copied exactly from the approved composition above
+- duration_minutes: 15
+- content: must follow this exact structure —
 
 **Learning Objective:**
 Students will [verb] [specific thing].
 
 **Duration:** Approximately 15 minutes for students to complete.
 
-**Worksheet Type:** [chosen type from the list above]
+**Worksheet Type:** {{subtype}}
 
 **Worksheet Content:**
-[WRITE THE COMPLETE VERBATIM STUDENT-FACING WORKSHEET TEXT HERE — every word, sentence, blank, question, answer option, comprehension passage, or drawing prompt exactly as it would appear on the printed worksheet. Do NOT write instructions about what to generate — write the actual content. This must be complete enough for another system to generate a PDF directly from this text.]
+[WRITE THE COMPLETE VERBATIM STUDENT-FACING WORKSHEET TEXT HERE — every word, sentence, blank, question, answer option, comprehension passage, or drawing prompt exactly as it would appear on the printed worksheet. Do NOT write instructions about what to generate — write the actual content. This must be complete enough for another system to generate a PDF directly from this text. Base every question on the content block(s) referenced by source_block_ids.]
 
 **Answer Key:**
 [Complete answers for every blank, question, or item, numbered to match the worksheet.]
-"""
-    else:
-        worksheet_instruction = "- Do NOT include any worksheet block in this subsection."
 
-    activity_instruction = ""
-    if activity_slots == 1:
-        activity_instruction = f"""
-ACTIVITY BLOCK (include exactly 1):
-- type: "activity"
-- activityType: one of {ACTIVITY_TYPES} — pick the type best suited to the learning objective and age group
-- duration_minutes: 30 (activities are always 30 minutes)
-- contentBlockIndex: the 0-based index of the content block in this blocks array that this activity is designed to reinforce.
-  Pick the content block whose concept students most need to apply or experience hands-on.
-- Title should describe exactly what students do (e.g. "Build a Simple Robot Arm")
-- Content field must follow this exact structure:
+For each spec with type "activity", output:
+- id, type, subtype, title: copied exactly from the approved composition above
+- duration_minutes: 30
+- content: must follow this exact structure, built around the session's Core Concept above (not a single content block) —
 
 **Learning Objective:**
 Students will [verb] [specific thing].
 
 **Duration:** 30 minutes
 
-**Activity Type:** [chosen type from the list above]
+**Activity Type:** {{subtype}}
 
 **Resources/Materials Needed:**
 - [Material 1]
@@ -183,91 +258,20 @@ Students will [verb] [specific thing].
 - [Tip 1: specific behavioral or logistical guidance]
 - [Tip 2: grouping or pacing strategy]
 - [Tip 3: transition or early-finisher guidance]
-"""
-    else:
-        activity_instruction = "- Do NOT include any activity block in this subsection."
-
-    # Calculate safe total block budget: aim to fill 50–80% of session, never exceed it
-    max_total = session_minutes
-    min_total = min(15, session_minutes)
-    target_total = max(15, round(session_minutes * 0.6))
-
-    prompt = f"""
-You are an expert curriculum designer. Generate the content blocks for this teaching session.
-
-COURSE CONTEXT:
-- Subject: {subject}
-- Topic: {topic}
-- Student Age Range: {age_range}
-- Day: {section_title}
-- This Session: {sub_title}
-- Session Description: {sub_description}
-- Learning Objectives:
-{objectives_text}
-- What Must Be Covered: {what_must_be_covered}
-- Special Requirements: {requirements}
-{already_covered_text}
-
-TIME BUDGET:
-- This session = {session_minutes} minutes of teaching
-- Total block time must NOT exceed {max_total} minutes
-- Aim for around {target_total} minutes of blocks (leave buffer for transitions and questions)
-- Content blocks: exactly 15 or 30 minutes each. 15 for a single tight concept, 30 for a richer one that needs depth.
-- Default to 15 minutes — only use 30 if the concept genuinely needs more time.
-
-CONTENT BLOCK RULES:
-- Think of each content block as ONE slide in a presentation — it should have enough to fill that slide.
-- Each block covers EXACTLY ONE concept. NEVER bundle multiple concepts into a single block.
-- If a subsection covers multiple distinct concepts (e.g. definition, how it works, types), generate a SEPARATE block for each.
-- Blocks must progress logically (e.g. definition first → how it works → types → application).
-- Titles must be specific: "What Is a Gear?" not "Introduction". "The Three Types of Rock" not "Types".
-
-CONTENT BLOCK STRUCTURE:
-{CONTENT_SECTION_TOOLKIT}
-For each content block, choose the 3-5 sections from the toolkit above that best fit the concept.
-Write the content field as natural flowing prose and lists — not a rigid form.
-All vocabulary, examples, and complexity must be appropriate for ages {age_range_start}–{age_range_end}.
-
-BLOCK TYPES TO GENERATE:
-
-CONTENT BLOCK(S) (include at least 1, more if the what_must_be_covered spans multiple distinct concepts):
-- type: "content"
-- subcategory: one of {CONTENT_SUBCATEGORIES}
-- duration_minutes: 15 or 30
-- title: specific single-concept title
-- content: the teaching content using 3-5 chosen sections from the toolkit
-- key_takeaways: array of 3-5 concise bullet strings (used for PPT generation — must capture the essential points of this block)
-- pedagogy: object with fields:
-    teaching_approach: which strategy fits best and one sentence why
-    memory_device: a concrete mnemonic, acronym, rhyme, or visual anchor (write the actual device)
-    misconception: the most common student error and the correct mental model that fixes it
-    guided_questions: array of 2-3 questions progressing from recall to deeper understanding
-    mastery_signal: one observable thing a student says/does that proves they truly understood this concept
-- visual_suggestion: one sentence describing an image or diagram that would illustrate this on a PPT slide
-- sources: array of 2-3 objects, each with:
-    name: well-known educational resource (e.g. "Khan Academy", "Encyclopedia Britannica Kids", "National Geographic Kids")
-    search_query: the exact search terms a teacher would type to find this concept on that site
-    type: one of "educational_site", "encyclopedia", "curriculum_standard", "textbook"
-
-{worksheet_instruction}
-
-{activity_instruction}
 
 CONTENT QUALITY RULES:
 - Every block must be directly tied to "{topic}" for students aged {age_range}
-- Each content block covers EXACTLY ONE concept — never bundle
-- Block titles must be specific — never "Introduction", "Overview", "Key Concepts", or "Review"
 - Worksheet and activity content must be COMPLETE verbatim text, not instructions about what to generate
-- The total duration_minutes of all blocks combined must NOT exceed {max_total} minutes
+- Preserve the exact ids, types, subtypes, and titles given in the approved composition above
 
-OUTPUT FORMAT (strict JSON, no other text):
+OUTPUT FORMAT (strict JSON, no other text, one entry per approved block spec above, same order):
 {{
   "blocks": [
     {{
-      "id": "auto",
+      "id": "string — copied from the approved composition",
       "type": "content",
-      "subcategory": "string — from the content subcategory list",
-      "title": "string — specific single-concept title",
+      "subtype": "string — copied from the approved composition",
+      "title": "string — copied from the approved composition",
       "content": "string — natural prose using 3-5 chosen sections from the toolkit, written with **Section Name** as bold headers",
       "key_takeaways": ["string", "string", "string"],
       "pedagogy": {{
@@ -285,26 +289,25 @@ OUTPUT FORMAT (strict JSON, no other text):
       "duration_minutes": 15
     }},
     {{
-      "id": "auto",
+      "id": "string — copied from the approved composition",
       "type": "worksheet",
-      "worksheetType": "string — from the worksheet type list",
-      "title": "string — specific worksheet title",
+      "subtype": "string — copied from the approved composition",
+      "title": "string — copied from the approved composition",
+      "source_block_ids": ["string — copied from the approved composition"],
       "content": "string — complete verbatim student-facing worksheet with answer key",
-      "contentBlockIndex": 0,
       "duration_minutes": 15
     }},
     {{
-      "id": "auto",
+      "id": "string — copied from the approved composition",
       "type": "activity",
-      "activityType": "string — from the activity type list",
-      "title": "string — specific activity title",
+      "subtype": "string — copied from the approved composition",
+      "title": "string — copied from the approved composition",
       "content": "string — complete activity instructions with materials, steps, and management tips",
-      "contentBlockIndex": 1,
       "duration_minutes": 30
     }}
   ]
 }}
 
-Only include the block types specified above. Generate the blocks now as valid JSON only. No other text.
+Generate the blocks now as valid JSON only. No other text.
 """
     return prompt

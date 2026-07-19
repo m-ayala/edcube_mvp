@@ -48,8 +48,10 @@ async def generate_curriculum(
     files: List[UploadFile] = File(default=[]),
 ):
     """
-    Generate a full course: outline (sections = days, subsections = hours)
-    then content blocks for every subsection.
+    Generate a course outline (sections = days/themes) then candidate subsection
+    chains per section (Phase 1.5) for the teacher to review and select. Stops
+    there — nothing is saved to Firestore yet. Call POST /api/generate-blocks
+    with the teacher's selection to generate full block content and save.
     Streams progress via Server-Sent Events.
     """
     # Read all file bytes EAGERLY — UploadFile objects close after the request body.
@@ -142,6 +144,22 @@ async def generate_curriculum(
                     (full_objectives + "\n\n") if full_objectives else ""
                 ) + "ATTACHED MATERIALS:\n" + combined_extracted_text
 
+            # ── Requirements Interpreter: structure the raw text once, up front ──
+            yield f"data: {json.dumps({'phase': 0.5, 'message': 'Interpreting your requirements...', 'progress': 8})}\n\n"
+            await asyncio.sleep(0.1)
+
+            from interpreter.requirements_interpreter import interpret_requirements
+            interpreted_requirements = interpret_requirements(
+                raw_requirements=full_objectives,
+                num_days=num_days,
+                hours_per_day=hours_per_day,
+                subject=subject,
+                topic=topic,
+                age_range_start=age_range_start,
+                age_range_end=age_range_end,
+            )
+            yield f"data: {json.dumps({'type': 'requirements_interpreted', 'interpretation': interpreted_requirements, 'phase': 0.5, 'progress': 9})}\n\n"
+
             # ── Phase 1: Generate outline ───────────────────────────────────
             yield f"data: {json.dumps({'phase': 1, 'message': 'Generating course outline...', 'progress': 10})}\n\n"
 
@@ -156,6 +174,7 @@ async def generate_curriculum(
                 'num_worksheets':  num_worksheets,
                 'num_activities':  num_activities,
                 'objectives':      full_objectives,
+                'interpreted_requirements': interpreted_requirements,
             }
 
             outline_data = await orchestrator.run_phase1(
@@ -167,14 +186,180 @@ async def generate_curriculum(
                 yield f"data: {json.dumps({'phase': 1, 'message': 'Error: Failed to generate outline', 'progress': 0, 'error': True})}\n\n"
                 return
 
-            yield f"data: {json.dumps({'type': 'outline_ready', 'outline': outline_data, 'phase': 1, 'message': 'Outline ready! Generating content blocks...', 'progress': 50})}\n\n"
+            yield f"data: {json.dumps({'type': 'outline_ready', 'outline': outline_data, 'phase': 1, 'message': 'Outline ready! Proposing subsections...', 'progress': 50})}\n\n"
             await asyncio.sleep(0.2)
 
-            # ── Phase 2: Generate blocks for each subsection ────────────────
+            # ── Phase 1.5: Propose candidate subsection chains per section ──
+            async for event in orchestrator.run_phase1_5(teacher_input, outline_data):
+                if event['type'] == 'progress':
+                    yield f"data: {json.dumps({'phase': 1.5, 'message': event['message'], 'progress': event['progress']})}\n\n"
+                    await asyncio.sleep(0)
+                elif event['type'] == 'subsections_ready':
+                    yield f"data: {json.dumps({'type': 'subsections_ready', 'section_id': event['section_id'], 'chains': event['chains'], 'progress': event['progress']})}\n\n"
+                    await asyncio.sleep(0)
+                elif event['type'] == 'candidates_complete':
+                    # Nothing is saved yet — the teacher still needs to review and
+                    # select before any block content (and any Firestore write) happens.
+                    yield f"data: {json.dumps({'type': 'candidates_complete', 'preset_course_id': preset_course_id, 'course_attachments': course_attachments, 'phase': 1.5, 'message': 'Candidates ready for review!', 'progress': 70})}\n\n"
+
+        except Exception as e:
+            logger.error(f"generate-curriculum error: {e}", exc_info=True)
+            yield f"data: {json.dumps({'message': f'Error: {str(e)}', 'error': True})}\n\n"
+        finally:
+            for p in tmp_paths:
+                try:
+                    os.remove(p)
+                except OSError:
+                    pass
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+    )
+
+
+class SubsectionLabel(BaseModel):
+    section: str
+    subsection: str
+
+
+class GenerateMoreSubsectionsRequest(BaseModel):
+    sectionId: str
+    sectionTitle: str
+    sectionDescription: str = ""
+    depthCeiling: str = "Basics"
+    subject: str
+    topic: str
+    ageRangeStart: int
+    ageRangeEnd: int
+    objectives: str = ""
+    hoursPerDay: float
+    numDays: int
+    dayNumber: Optional[int] = None
+    numWorksheets: int = 0
+    numActivities: int = 0
+    existingSubsections: List[SubsectionLabel] = []
+
+
+@router.post("/generate-more-subsections")
+async def generate_more_subsections(body: GenerateMoreSubsectionsRequest):
+    """
+    Phase 1.5 "generate more": propose one additional independent chain for a
+    single section, triggered by the teacher clicking "+" in the selection matrix.
+    Synchronous JSON response (single LLM call, no need for SSE).
+    """
+    try:
+        section = {
+            'id': body.sectionId,
+            'title': body.sectionTitle,
+            'description': body.sectionDescription,
+            'depth_ceiling': body.depthCeiling,
+        }
+        teacher_input = {
+            'subject':         body.subject,
+            'topic':           body.topic,
+            'age_range_start': body.ageRangeStart,
+            'age_range_end':   body.ageRangeEnd,
+            'objectives':      body.objectives,
+            'hours_per_day':   body.hoursPerDay,
+            'num_days':        body.numDays,
+            'num_worksheets':  body.numWorksheets,
+            'num_activities':  body.numActivities,
+        }
+        existing_subsections = [s.model_dump() for s in body.existingSubsections]
+
+        result = await orchestrator.generate_more_subsections(
+            section, teacher_input, existing_subsections, day_number=body.dayNumber,
+        )
+        return {'success': True, 'section_id': result['section_id'], 'chains': result['chains']}
+    except Exception as e:
+        logger.error(f"generate-more-subsections error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class SubsectionSelection(BaseModel):
+    subsectionId: str
+    sectionId: str
+    sectionTitle: str
+    title: str
+    description: str = ""
+    coreConcept: str = ""
+    depthLevel: str = "Basics"
+    prerequisiteSubsectionId: Optional[str] = None
+    chainId: str = ""
+    durationMinutes: int = 0
+    learningObjectives: List[str] = []
+    blocks: List[Dict[str, Any]] = []
+    included: bool = True
+    excludedBlockIds: List[str] = []
+
+
+class GenerateBlocksRequest(BaseModel):
+    presetCourseId: str
+    teacherUid: str
+    organizationId: str
+    courseName: str
+    ageRangeStart: int
+    ageRangeEnd: int
+    numStudents: int
+    subject: str
+    topic: str
+    numDays: int
+    hoursPerDay: float
+    objectives: str = ""
+    courseAttachments: List[Dict[str, Any]] = []
+    outline: Dict[str, Any]
+    selections: List[SubsectionSelection]
+
+
+@router.post("/generate-blocks")
+async def generate_blocks(body: GenerateBlocksRequest):
+    """
+    Stage 2 of course generation: take the teacher's Phase 1.5 selection (which
+    subsections are included, and which of their blocks were unchecked) and
+    generate full block content for only the approved composition. This is
+    where the course is actually saved to Firestore.
+    Streams progress via Server-Sent Events.
+    """
+
+    async def generate():
+        try:
+            yield f"data: {json.dumps({'phase': 2, 'message': 'Starting block generation...', 'progress': 0})}\n\n"
+            await asyncio.sleep(0.1)
+
+            teacher_input = {
+                'age_range_start': body.ageRangeStart,
+                'age_range_end':   body.ageRangeEnd,
+                'num_students':    body.numStudents,
+                'subject':         body.subject,
+                'topic':           body.topic,
+                'num_days':        body.numDays,
+                'hours_per_day':   body.hoursPerDay,
+                'objectives':      body.objectives,
+            }
+
+            approved_subsections = []
+            for sel in body.selections:
+                if not sel.included:
+                    continue
+                approved_subsections.append({
+                    'id': sel.subsectionId,
+                    'title': sel.title,
+                    'description': sel.description,
+                    'core_concept': sel.coreConcept,
+                    'depth_level': sel.depthLevel,
+                    'prerequisite_subsection_id': sel.prerequisiteSubsectionId,
+                    'chain_id': sel.chainId,
+                    'section_title': sel.sectionTitle,
+                    'duration_minutes': sel.durationMinutes,
+                    'learning_objectives': sel.learningObjectives,
+                    'blocks': sel.blocks,
+                    'excluded_block_ids': sel.excludedBlockIds,
+                })
+
             blocks_by_subsection: Dict = {}
-            async for event in orchestrator.run_phase2_blocks(
-                teacher_input, outline_data, num_worksheets, num_activities
-            ):
+            async for event in orchestrator.run_phase2_blocks_for_selection(teacher_input, approved_subsections):
                 if event['type'] == 'progress':
                     yield f"data: {json.dumps({'phase': 2, 'message': event['message'], 'progress': event['progress']})}\n\n"
                     await asyncio.sleep(0)
@@ -187,42 +372,69 @@ async def generate_curriculum(
             yield f"data: {json.dumps({'phase': 2, 'message': 'Blocks generated! Saving...', 'progress': 95})}\n\n"
             await asyncio.sleep(0.2)
 
+            # ── Merge approved subsections (with their final selected blocks
+            # manifest) back into the outline's section/subsection tree ──────
+            selections_by_section: Dict[str, List[Dict]] = {}
+            for sel in body.selections:
+                if sel.included:
+                    selections_by_section.setdefault(sel.sectionId, []).append(sel)
+
+            final_sections = []
+            total_duration = 0
+            for section in body.outline.get('sections', []):
+                built_section = dict(section)
+                built_subsections = []
+                for sel in selections_by_section.get(section.get('id', ''), []):
+                    duration = sel.durationMinutes
+                    total_duration += duration
+                    built_subsections.append({
+                        'id': sel.subsectionId,
+                        'title': sel.title,
+                        'description': sel.description,
+                        'core_concept': sel.coreConcept,
+                        'depth_level': sel.depthLevel,
+                        'prerequisite_subsection_id': sel.prerequisiteSubsectionId,
+                        'chain_id': sel.chainId,
+                        'duration_minutes': duration,
+                        'learning_objectives': sel.learningObjectives,
+                        'blocks': sel.blocks,
+                        'excluded_block_ids': sel.excludedBlockIds,
+                    })
+                built_section['subsections'] = built_subsections
+                final_sections.append(built_section)
+
+            final_outline = dict(body.outline)
+            final_outline['sections'] = final_sections
+            final_outline['total_duration_minutes'] = total_duration
+
             # ── Save everything to Firestore ────────────────────────────────
             curriculum_id = await firebase.save_curriculum(
-                teacherUid=teacherUid,
+                teacherUid=body.teacherUid,
                 curriculum_data={
-                    'preset_course_id':     preset_course_id,
-                    'course_name':          course_name,
-                    'age_range_start':      age_range_start,
-                    'age_range_end':        age_range_end,
-                    'num_students':         num_students,
-                    'subject':              subject,
-                    'topic':                topic,
-                    'num_days':             num_days,
-                    'hours_per_day':        hours_per_day,
-                    'num_worksheets':       num_worksheets,
-                    'num_activities':       num_activities,
-                    'objectives':           objectives,  # raw objectives (without extracted file text)
-                    'course_attachments':   course_attachments,
+                    'preset_course_id':     body.presetCourseId,
+                    'course_name':          body.courseName,
+                    'age_range_start':      body.ageRangeStart,
+                    'age_range_end':        body.ageRangeEnd,
+                    'num_students':         body.numStudents,
+                    'subject':              body.subject,
+                    'topic':                body.topic,
+                    'num_days':             body.numDays,
+                    'hours_per_day':        body.hoursPerDay,
+                    'objectives':           body.objectives,
+                    'course_attachments':   body.courseAttachments,
                     'course_info_notes':    '',
-                    'outline':              outline_data,
-                    'sections':             outline_data.get('sections', []),
+                    'outline':              final_outline,
+                    'sections':             final_outline.get('sections', []),
                     'handsOnResources':     blocks_by_subsection,
                 },
-                organizationId=organizationId,
+                organizationId=body.organizationId,
             )
 
             yield f"data: {json.dumps({'phase': 2, 'message': 'Complete!', 'progress': 100, 'curriculum_id': curriculum_id, 'done': True})}\n\n"
 
         except Exception as e:
-            logger.error(f"generate-curriculum error: {e}", exc_info=True)
+            logger.error(f"generate-blocks error: {e}", exc_info=True)
             yield f"data: {json.dumps({'message': f'Error: {str(e)}', 'error': True})}\n\n"
-        finally:
-            for p in tmp_paths:
-                try:
-                    os.remove(p)
-                except OSError:
-                    pass
 
     return StreamingResponse(
         generate(),
