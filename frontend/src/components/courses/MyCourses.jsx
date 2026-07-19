@@ -102,8 +102,6 @@ const MyCourses = () => {
           ageRangeStart: curriculum.ageRangeStart || '',
           ageRangeEnd: curriculum.ageRangeEnd || '',
           numStudents: curriculum.numStudents || '',
-          subject: curriculum.subject,
-          topic: curriculum.topic,
           timeDuration: curriculum.timeDuration,
           objectives: curriculum.objectives || ''
         },

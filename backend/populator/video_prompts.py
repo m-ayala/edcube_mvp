@@ -21,9 +21,7 @@ def get_search_query_generation_prompt(section: Dict, grade_level: str, teacher_
     duration_minutes = section.get('duration_minutes', 0)
     subtopics = section.get('subtopics', [])
     
-    subject = section.get('subject', '')
     course_name = section.get('course_name', '')
-    course_topic = section.get('course_topic', '')
     # Extract detailed objectives and keywords from instruction
     instruction = section.get('components', {}).get('instruction', {})
     learning_objectives = instruction.get('learning_objectives', [])
@@ -61,9 +59,7 @@ TEACHER'S PRIORITY OBJECTIVES (HIGHEST PRIORITY):
 {teacher_comments if teacher_comments else "No special comments provided"}
 
 SECTION DETAILS:
-- Subject: {subject if subject else "Not specified"}
 - Course Name: {course_name if course_name else "Not specified"}
-- Course Topic: {course_topic if course_topic else "Not specified"}
 - Section Title: {section_title}
 - Description: {section_description}
 - Subtopics: {subtopics_text}
@@ -88,9 +84,7 @@ REQUIREMENTS FOR QUERY GENERATION:
 
 3. Each query should be 3-8 words maximum
 
-4. DO NOT use redundant terms:
-   - If course_name is "crochet" and subject is "Art", use ONLY "crochet" (not "art crochet")
-   - Remove generic subject if course_name is more specific
+4. DO NOT use redundant or generic terms — keep queries tightly focused on "{course_name}" itself
 
 EXAMPLE OUTPUT for course_name="crochet", section_title="Yarn Types and Uses":
 {{

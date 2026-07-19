@@ -246,8 +246,6 @@ const CourseViewPage = () => {
   // ── Editable formData fields ──────────────────────────────────────────
   const [editableFormData, setEditableFormData] = useState({
     courseName:    incomingFormData?.courseName    || '',
-    subject:       incomingFormData?.subject       || '',
-    topic:         incomingFormData?.topic         || '',
     ageRangeStart: incomingFormData?.ageRangeStart || '',
     ageRangeEnd:   incomingFormData?.ageRangeEnd   || '',
     numStudents:   incomingFormData?.numStudents   || '',
@@ -369,7 +367,6 @@ const CourseViewPage = () => {
     try {
       const result = await generateSynopsis({
         courseName,
-        subject: editableFormData.subject,
         classLevel: editableFormData.ageRangeStart && editableFormData.ageRangeEnd
           ? `${editableFormData.ageRangeStart}–${editableFormData.ageRangeEnd}`
           : incomingFormData?.class || '',
@@ -395,8 +392,6 @@ const CourseViewPage = () => {
     try {
       const result = await generateCourseDescription({
         courseName,
-        subject:       editableFormData.subject,
-        topic:         editableFormData.topic,
         ageRangeStart: editableFormData.ageRangeStart,
         ageRangeEnd:   editableFormData.ageRangeEnd,
         numStudents:   editableFormData.numStudents,
@@ -848,8 +843,6 @@ const CourseViewPage = () => {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               {[
                 { label: 'Course Name',  key: 'courseName',  multiline: false },
-                { label: 'Subject',      key: 'subject',     multiline: false },
-                { label: 'Topic',        key: 'topic',       multiline: false },
                 { label: 'Age Range (Start)', key: 'ageRangeStart', multiline: false },
                 { label: 'Age Range (End)',   key: 'ageRangeEnd',   multiline: false },
                 { label: 'No. of Students',  key: 'numStudents',   multiline: false },
@@ -881,14 +874,9 @@ const CourseViewPage = () => {
         {activeView === 'outline' && (
           <div ref={docRef} style={{ background: '#fff', borderRadius: '16px', padding: '48px 48px 64px', boxShadow: '0 2px 16px rgba(0,0,0,0.07)', border: '1px solid rgba(0,0,0,0.05)' }}>
 
-            {(editableFormData.subject || (editableFormData.ageRangeStart && editableFormData.ageRangeEnd)) && (
+            {(editableFormData.ageRangeStart && editableFormData.ageRangeEnd) && (
               <div style={{ fontSize: '11.5px', fontWeight: '500', letterSpacing: '0.8px', textTransform: 'uppercase', color: '#999', marginBottom: '10px', fontFamily: SANS }}>
-                {[
-                  editableFormData.subject,
-                  editableFormData.ageRangeStart && editableFormData.ageRangeEnd
-                    ? `Ages ${editableFormData.ageRangeStart}–${editableFormData.ageRangeEnd}`
-                    : null
-                ].filter(Boolean).join(' · ')}
+                {`Ages ${editableFormData.ageRangeStart}–${editableFormData.ageRangeEnd}`}
               </div>
             )}
 

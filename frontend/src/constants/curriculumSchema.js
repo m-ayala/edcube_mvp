@@ -15,8 +15,6 @@ export const CurriculumFields = {
   // Course metadata
   COURSE_NAME: 'courseName',
   CLASS: 'class',  // Grade level
-  SUBJECT: 'subject',
-  TOPIC: 'topic',
   TIME_DURATION: 'timeDuration',  // e.g., "6 hours"
   OBJECTIVES: 'objectives',
   

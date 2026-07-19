@@ -339,9 +339,7 @@ const useCourseActions = ({
             duration: `${subsection.duration_minutes || 20} min`,
             description: subsection.description || '',
             learningObjectives: subsection.learning_objectives || [],
-            subject: formData?.subject || '',
-            courseName: formData?.courseName || '',
-            courseTopic: formData?.topic || ''
+            courseName: formData?.courseName || ''
           },
           sectionId: subsection.id,
           gradeLevel: formData.class,

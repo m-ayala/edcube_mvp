@@ -22,8 +22,7 @@ def interpret_requirements(
     raw_requirements: str,
     num_days: int,
     hours_per_day: float,
-    subject: str = '',
-    topic: str = '',
+    course_name: str = '',
     age_range_start: str = '',
     age_range_end: str = '',
 ) -> Optional[Dict]:
@@ -45,8 +44,7 @@ def interpret_requirements(
             raw_requirements=raw_requirements,
             num_days=num_days,
             hours_per_day=hours_per_day,
-            subject=subject,
-            topic=topic,
+            course_name=course_name,
             age_range_start=age_range_start,
             age_range_end=age_range_end,
         )

@@ -119,7 +119,7 @@ def get_block_generation_prompt(
     subtypes only, decided in Phase 1.5) into full block content.
 
     Args:
-        teacher_input: Course-level info (topic, age_range_start/end, subject, requirements)
+        teacher_input: Course-level info (course_name, age_range_start/end, requirements)
         subsection: The subsection dict with title, description, core_concept, learning_objectives
         section_title: Title of the parent section
         block_specs: Ordered list of approved block-spec dicts (already exclusion-filtered),
@@ -132,8 +132,7 @@ def get_block_generation_prompt(
     age_range_start = teacher_input.get('age_range_start', '')
     age_range_end = teacher_input.get('age_range_end', '')
     age_range = f"{age_range_start}–{age_range_end} years old"
-    subject = teacher_input.get('subject', '')
-    topic = teacher_input.get('topic', '')
+    course_name = teacher_input.get('course_name', '')
     requirements = teacher_input.get('requirements', 'None')
 
     sub_title = subsection.get('title', '')
@@ -171,8 +170,7 @@ its full content. Do NOT add, remove, or reorder blocks, and do NOT change any b
 type, subtype, or title — use them exactly as given.
 
 COURSE CONTEXT:
-- Subject: {subject}
-- Topic: {topic}
+- Course Name: {course_name}
 - Student Age Range: {age_range}
 - Section: {section_title}
 - This Session: {sub_title}
@@ -260,7 +258,7 @@ Students will [verb] [specific thing].
 - [Tip 3: transition or early-finisher guidance]
 
 CONTENT QUALITY RULES:
-- Every block must be directly tied to "{topic}" for students aged {age_range}
+- Every block must be directly tied to "{course_name}" for students aged {age_range}
 - Worksheet and activity content must be COMPLETE verbatim text, not instructions about what to generate
 - Preserve the exact ids, types, subtypes, and titles given in the approved composition above
 

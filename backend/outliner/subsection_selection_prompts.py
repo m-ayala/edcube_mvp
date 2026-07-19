@@ -145,7 +145,7 @@ def get_subsection_ideation_prompt(
 
     Args:
         section: {'id'/'section_id', 'title', 'description', 'depth_ceiling'}
-        course_context: {'subject', 'topic', 'age_range_start', 'age_range_end', 'requirements'}
+        course_context: {'course_name', 'age_range_start', 'age_range_end', 'requirements'}
         other_subsections: [{'section': title, 'subsection': title}, ...] — subsections
             already proposed elsewhere (other sections, or this same section on a
             "generate more" request), same shape block_prompts.py uses.
@@ -171,8 +171,7 @@ def get_subsection_ideation_prompt(
     age_range_start = course_context.get('age_range_start', '')
     age_range_end = course_context.get('age_range_end', '')
     age_range = f"{age_range_start}–{age_range_end} years old"
-    subject = course_context.get('subject', '')
-    topic = course_context.get('topic', '')
+    course_name = course_context.get('course_name', '')
     requirements = course_context.get('requirements', 'None')
 
     already_covered_text = ""
@@ -212,8 +211,7 @@ You are an expert curriculum designer. Propose candidate SUBSECTIONS for one sec
 so a teacher can review and select which ones to actually teach before content is written.
 
 COURSE CONTEXT:
-- Subject: {subject}
-- Topic: {topic}
+- Course Name: {course_name}
 - Student Age Range: {age_range}
 - Special Requirements: {requirements}
 - Overall course pacing (a rough signal only, NOT a hard count): {num_days} day(s), roughly {hours_per_day} teaching hour(s)/day
@@ -278,7 +276,7 @@ RULES:
 - Never give a worksheet a subtype that doesn't fit its source content block's subtype.
 - Never include a worksheet or activity block type the teacher's budget above forbids (0 means zero,
   no exceptions), and never force one in just to "complete" a subsection.
-- Titles must be specific to "{topic}" for students aged {age_range} — never generic filler.
+- Titles must be specific to "{course_name}" for students aged {age_range} — never generic filler.
 - Every subsection across the whole course must be distinct — check against the
   "ALREADY PROPOSED" list above before finalizing.
 - If RECURRING DAILY ELEMENTS or TEACHER'S EXPLICIT ASKS were listed above, every one of them must

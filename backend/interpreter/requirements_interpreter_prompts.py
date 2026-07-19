@@ -13,8 +13,7 @@ def get_requirements_interpretation_prompt(
     raw_requirements: str,
     num_days: int,
     hours_per_day: float,
-    subject: str = '',
-    topic: str = '',
+    course_name: str = '',
     age_range_start: str = '',
     age_range_end: str = '',
 ) -> str:
@@ -35,8 +34,7 @@ course outline is generated. Do NOT generate a course outline yourself — only 
 teacher already wrote.
 
 COURSE CONTEXT:
-- Subject: {subject}
-- Topic: {topic}
+- Course Name: {course_name}
 - Student Age Range: {age_range}
 - Course Length: {num_days} day(s), roughly {hours_per_day} teaching hour(s) per day
 

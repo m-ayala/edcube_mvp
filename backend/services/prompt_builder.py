@@ -59,7 +59,6 @@ You are an expert curriculum designer following Peter Drucker's Management as Li
 Create a comprehensive curriculum structure for:
 - Course: {course.get('title', 'Unknown')}
 - Grade Level: {course.get('grade', 'Unknown')}
-- Subject: {course.get('subject', 'Unknown')}
 - Duration: {course.get('duration', 'Unknown')}
 
 Generate a complete course outline with sections, subsections, and topic boxes.
@@ -98,10 +97,9 @@ You are an expert curriculum designer following Peter Drucker's Management as Li
 COURSE CONTEXT:
 - Course: {course.get('title', 'Unknown')}
 - Grade Level: {course.get('grade', 'Unknown')}
-- Subject: {course.get('subject', 'Unknown')}
 - Description: {course.get('description', 'Not provided')}
 """
-        
+
         if existing_sections:
             prompt += f"""
 
@@ -133,7 +131,7 @@ IMPORTANT SPECIFICITY RULES:
 - For example, for a Grade 3 course on "The Water Cycle": use "How Water Moves Through Nature" NOT "Introduction to Topic"
 - For a Grade 5 course on "Fractions": use "Understanding Parts of a Whole" NOT "Foundational Concepts"
 - Descriptions must mention CONCRETE subtopics, skills, or activities students will engage with
-- Every section must be directly tied to the course subject "{course.get('title', '')}" and appropriate for Grade {course.get('grade', 'Unknown')}
+- Every section must be directly tied to the course "{course.get('title', '')}" and appropriate for Grade {course.get('grade', 'Unknown')}
 
 Each section should have:
 - A specific, content-rich title that tells the teacher exactly what will be taught

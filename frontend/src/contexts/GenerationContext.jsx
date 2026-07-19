@@ -73,8 +73,6 @@ export function GenerationProvider({ children }) {
     body.append('age_range_start',  String(parseInt(formData.ageRangeStart)));
     body.append('age_range_end',    String(parseInt(formData.ageRangeEnd)));
     body.append('num_students',     String(parseInt(formData.numStudents)));
-    body.append('subject',          formData.subject);
-    body.append('topic',            formData.topic);
     body.append('num_days',         String(parseInt(formData.numDays)));
     body.append('hours_per_day',    String(parseFloat(formData.hoursPerDay)));
     body.append('num_worksheets',   String(parseInt(formData.numWorksheets)));
@@ -185,8 +183,6 @@ export function GenerationProvider({ children }) {
       ageRangeStart: parseInt(formData.ageRangeStart),
       ageRangeEnd: parseInt(formData.ageRangeEnd),
       numStudents: parseInt(formData.numStudents),
-      subject: formData.subject,
-      topic: formData.topic,
       numDays: parseInt(formData.numDays),
       hoursPerDay: parseFloat(formData.hoursPerDay),
       objectives: formData.objectives || '',
@@ -282,8 +278,7 @@ export function GenerationProvider({ children }) {
         sectionTitle: section.title,
         sectionDescription: section.description || '',
         depthCeiling: section.depthCeiling || 'Basics',
-        subject: formData.subject,
-        topic: formData.topic,
+        courseName: formData.courseName,
         ageRangeStart: parseInt(formData.ageRangeStart),
         ageRangeEnd: parseInt(formData.ageRangeEnd),
         objectives: formData.objectives || '',

@@ -48,18 +48,6 @@ const ProfileCourseGrid = ({ courses, onCourseClick }) => {
           </h3>
 
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '10px' }}>
-            {course.subject && (
-              <span style={{
-                backgroundColor: 'rgba(0,0,0,0.05)',
-                color: '#222',
-                padding: '3px 10px',
-                borderRadius: '12px',
-                fontSize: '13px',
-                fontWeight: '500'
-              }}>
-                {course.subject}
-              </span>
-            )}
             {course.class && (
               <span style={{
                 backgroundColor: 'rgba(0,0,0,0.05)',
@@ -73,19 +61,6 @@ const ProfileCourseGrid = ({ courses, onCourseClick }) => {
               </span>
             )}
           </div>
-
-          {course.topic && (
-            <p style={{
-              margin: '0',
-              fontSize: '14px',
-              color: '#444',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap'
-            }}>
-              {course.topic}
-            </p>
-          )}
         </div>
       ))}
     </div>

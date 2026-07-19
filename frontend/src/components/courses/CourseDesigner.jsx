@@ -49,8 +49,6 @@ const CourseDesigner = () => {
     numStudents: '',
     numDays: '',
     hoursPerDay: '',
-    subject: '',
-    topic: '',
     numWorksheets: 1,
     numActivities: 1,
     objectives: ''
@@ -77,7 +75,7 @@ const CourseDesigner = () => {
   // up through candidate generation too (see `loading` above).
   useEffect(() => {
     if (genState.status === 'selection-pending') {
-      trackAiOutlineGenerated({ subject: formData.subject, grade: formData.ageRangeStart, sections_count: genState.sections.length });
+      trackAiOutlineGenerated({ courseName: formData.courseName, grade: formData.ageRangeStart, sections_count: genState.sections.length });
       navigate('/course-workspace', {
         state: {
           formData: genState.formData,
@@ -332,36 +330,6 @@ const CourseDesigner = () => {
                 max="8"
                 step="0.5"
                 placeholder="e.g., 2"
-                style={inputStyle}
-              />
-            </div>
-          </div>
-
-          {/* Subject + Topic */}
-          <div style={{ display: 'flex', gap: '16px', marginBottom: '18px' }}>
-            <div style={{ flex: 1 }}>
-              <label style={labelStyle}>Subject</label>
-              <input
-                type="text"
-                name="subject"
-                value={formData.subject}
-                onChange={handleChange}
-                required
-                disabled={loading}
-                placeholder="e.g., Science"
-                style={inputStyle}
-              />
-            </div>
-            <div style={{ flex: 1 }}>
-              <label style={labelStyle}>Topic</label>
-              <input
-                type="text"
-                name="topic"
-                value={formData.topic}
-                onChange={handleChange}
-                required
-                disabled={loading}
-                placeholder="e.g., The Water Cycle"
                 style={inputStyle}
               />
             </div>

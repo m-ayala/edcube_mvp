@@ -18,8 +18,6 @@ class CurriculumFields:
     # Course metadata
     COURSE_NAME = 'courseName'
     CLASS = 'class'  # Grade level
-    SUBJECT = 'subject'
-    TOPIC = 'topic'
     TIME_DURATION = 'timeDuration'  # e.g., "6 hours"
     OBJECTIVES = 'objectives'
     AGE_RANGE_START = 'ageRangeStart'
@@ -143,8 +141,6 @@ def format_curriculum_for_api(firestore_doc):
         F.ORGANIZATION_ID: firestore_doc.get(F.ORGANIZATION_ID),
         F.COURSE_NAME: firestore_doc.get(F.COURSE_NAME),
         F.CLASS: firestore_doc.get(F.CLASS),
-        F.SUBJECT: firestore_doc.get(F.SUBJECT),
-        F.TOPIC: firestore_doc.get(F.TOPIC),
         F.TIME_DURATION: firestore_doc.get(F.TIME_DURATION),
         F.OBJECTIVES: firestore_doc.get(F.OBJECTIVES),
         F.AGE_RANGE_START: firestore_doc.get(F.AGE_RANGE_START, ''),

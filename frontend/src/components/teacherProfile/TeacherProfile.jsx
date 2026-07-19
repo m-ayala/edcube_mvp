@@ -100,8 +100,6 @@ const TeacherProfile = () => {
         formData: {
           courseName: course.courseName,
           class: course.class,
-          subject: course.subject,
-          topic: course.topic,
           timeDuration: course.timeDuration,
           objectives: course.objectives || ''
         },
@@ -225,8 +223,6 @@ const TeacherProfile = () => {
                     formData: {
                       courseName: course.courseName,
                       class: course.class,
-                      subject: course.subject,
-                      topic: course.topic,
                     },
                     sections,
                     curriculumId: course.courseId || course.id,

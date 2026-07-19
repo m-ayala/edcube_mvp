@@ -49,8 +49,6 @@ const CourseWorkspace = () => {
   // ── Core State ────────────────────────────────────────────────────────
   const [courseName, setCourseName] = useState(formData?.courseName || '');
   const [courseClass, setCourseClass] = useState(formData?.class || '');
-  const [courseSubject, setCourseSubject] = useState(formData?.subject || '');
-  const [courseTopic, setCourseTopic] = useState(formData?.topic || '');
   const [courseTimeDuration, setCourseTimeDuration] = useState(formData?.timeDuration || '');
   const [courseObjectives, setCourseObjectives] = useState(formData?.objectives || '');
   const [courseDescription, setCourseDescription] = useState(formData?.courseDescription || '');
@@ -118,7 +116,6 @@ const CourseWorkspace = () => {
         topicTitle: activeSubsection?.title || '',
         topicDescription: activeSubsection?.description || '',
         gradeLevel: formData?.class || '',
-        subject: formData?.subject || '',
         teacherUid: currentUser?.uid || null,
       };
       console.log('[generateLinksForBlock] sending payload to backend:', payload);
@@ -268,7 +265,7 @@ const CourseWorkspace = () => {
   useEffect(() => {
     console.log('📦 CourseWorkspace loaded');
     if (readOnly && !isOwner && initialCurriculumId) {
-      trackPublicCourseViewed({ course_id: initialCurriculumId, subject: courseSubject, grade: courseClass });
+      trackPublicCourseViewed({ course_id: initialCurriculumId, courseName, grade: courseClass });
     }
 
     // Flatten old topicBoxes into subsection-level structure
@@ -445,8 +442,6 @@ const CourseWorkspace = () => {
     const courseData = {
       courseName,
       class: courseClass,
-      subject: courseSubject,
-      topic: courseTopic,
       timeDuration: courseTimeDuration,
       objectives: courseObjectives,
       courseDescription,
@@ -483,7 +478,7 @@ const CourseWorkspace = () => {
       }
       const totalDuration = sectionsForSave.reduce((acc, s) =>
         acc + (s.subsections || []).reduce((a, ss) => a + (ss.duration_minutes || 0), 0), 0);
-      trackCourseCreated({ subject: courseSubject, grade: courseClass, sections_count: sections.length, duration_minutes: totalDuration });
+      trackCourseCreated({ courseName, grade: courseClass, sections_count: sections.length, duration_minutes: totalDuration });
     } else if (hasExistingId) {
       trackCourseUpdated({ course_id: curriculumId, sections_count: sections.length });
     }
@@ -506,8 +501,6 @@ const CourseWorkspace = () => {
     ...formData,
     courseName,
     class: courseClass,
-    subject: courseSubject,
-    topic: courseTopic,
     timeDuration: courseTimeDuration,
     objectives: courseObjectives,
     courseDescription,
@@ -1004,8 +997,6 @@ const CourseWorkspace = () => {
               formData={{
                 ...formData,
                 courseName,
-                subject: courseSubject,
-                topic: courseTopic,
                 objectives: courseObjectives,
               }}
               courseAttachments={courseAttachments}

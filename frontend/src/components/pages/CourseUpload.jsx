@@ -66,8 +66,6 @@ const handleUpload = async () => {
         formData: {
           courseName: result.course_data.course_name,
           class: result.course_data.class || '',
-          subject: result.course_data.subject || '',
-          topic: result.course_data.topic || '',
           timeDuration: '',
           timeUnit: 'hours',
           numWorksheets: 0,

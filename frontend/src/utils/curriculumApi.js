@@ -131,7 +131,6 @@ export const generateBlockLinks = async ({
   topicTitle = '',
   topicDescription = '',
   gradeLevel = '',
-  subject = '',
   teacherUid = null,
 }) => {
   const response = await fetch(`${API_BASE_URL}/curriculum/generate-block-links`, {
@@ -144,7 +143,6 @@ export const generateBlockLinks = async ({
       topicTitle,
       topicDescription,
       gradeLevel,
-      subject,
       teacherUid,
     }),
   });
@@ -156,8 +154,6 @@ export const generateBlockLinks = async ({
  * Generate a one-paragraph course description from course info.
  * @param {Object} params
  * @param {string} params.courseName
- * @param {string} params.subject
- * @param {string} params.topic
  * @param {string} params.ageRangeStart
  * @param {string} params.ageRangeEnd
  * @param {string} params.numStudents
@@ -168,8 +164,6 @@ export const generateBlockLinks = async ({
  */
 export const generateCourseDescription = async ({
   courseName,
-  subject = '',
-  topic = '',
   ageRangeStart = '',
   ageRangeEnd = '',
   numStudents = '',
@@ -181,7 +175,7 @@ export const generateCourseDescription = async ({
   const response = await fetch(`${API_BASE_URL}/curriculum/generate-description`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ courseName, subject, topic, ageRangeStart, ageRangeEnd, numStudents, timeDuration, timeUnit, objectives, teacherUid }),
+    body: JSON.stringify({ courseName, ageRangeStart, ageRangeEnd, numStudents, timeDuration, timeUnit, objectives, teacherUid }),
   });
   if (!response.ok) throw new Error('Description generation failed');
   return await response.json(); // { success: true, description: string }
@@ -251,14 +245,12 @@ export const updateCourseInfoNotes = async (curriculumId, notes, teacherUid) => 
  * Generate a parent-facing narrative synopsis of a completed course.
  * @param {Object} params
  * @param {string} params.courseName
- * @param {string} params.subject
  * @param {string} params.classLevel
  * @param {string} params.teacherUid
  * @param {Array}  params.selectedBlocks - [{ sectionTitle, subsectionTitle, blockType, blockTitle, blockContent }]
  */
 export const generateSynopsis = async ({
   courseName,
-  subject = '',
   classLevel = '',
   teacherUid = null,
   selectedBlocks = [],
@@ -266,7 +258,7 @@ export const generateSynopsis = async ({
   const response = await fetch(`${API_BASE_URL}/curriculum/generate-synopsis`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ courseName, subject, classLevel, teacherUid, selectedBlocks }),
+    body: JSON.stringify({ courseName, classLevel, teacherUid, selectedBlocks }),
   });
   if (!response.ok) throw new Error('Synopsis generation failed');
   return await response.json(); // { success: true, synopsis: string }

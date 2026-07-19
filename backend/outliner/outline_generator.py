@@ -21,8 +21,7 @@ def generate_boxes(teacher_input: Dict, images: Optional[List[str]] = None) -> D
     Args:
         teacher_input: Teacher's requirements containing:
             - grade_level (str)
-            - subject (str)
-            - topic (str)
+            - course_name (str)
             - duration (str)
             - total_minutes (int)
             - requirements (str)
@@ -30,7 +29,7 @@ def generate_boxes(teacher_input: Dict, images: Optional[List[str]] = None) -> D
 
     Returns:
         dict: Outline data from LLM containing:
-            - topic, grade_level, subject
+            - course_name, grade_level
             - sections (list of section objects, each with subsections)
 
     Raises:
@@ -38,7 +37,7 @@ def generate_boxes(teacher_input: Dict, images: Optional[List[str]] = None) -> D
     """
     logger.info("="*70)
     logger.info("Generating course outline (sections + subsections)...")
-    logger.info(f"Topic: {teacher_input.get('topic', 'Unknown')}")
+    logger.info(f"Course: {teacher_input.get('course_name', 'Unknown')}")
     logger.info(f"Grade: {teacher_input.get('grade_level', 'Unknown')}")
     if images:
         logger.info(f"Reference images provided: {len(images)}")
@@ -63,7 +62,7 @@ def generate_boxes(teacher_input: Dict, images: Optional[List[str]] = None) -> D
     return outline_data
 
 
-def create_final_outline(outline_data: Dict) -> Dict:
+def create_final_outline(outline_data: Dict, course_name: str = '') -> Dict:
     """
     Pass through the LLM outline, adding computed fields.
     Sections only — subsections are proposed later in Phase 1.5 and merged in
@@ -71,6 +70,7 @@ def create_final_outline(outline_data: Dict) -> Dict:
 
     Args:
         outline_data: Raw LLM output with sections (title, description, depth_ceiling)
+        course_name: Teacher-provided course name, used for the display title
 
     Returns:
         dict: Final course outline ready for Phase 1.5
@@ -78,10 +78,8 @@ def create_final_outline(outline_data: Dict) -> Dict:
     logger.info("Building final outline from sections...")
 
     outline = {
-        "course_title": f"{outline_data.get('topic', '')} - {outline_data.get('age_range', '')}",
+        "course_title": f"{course_name} - {outline_data.get('age_range', '')}",
         "age_range": outline_data.get('age_range', ''),
-        "subject": outline_data.get('subject', ''),
-        "topic": outline_data.get('topic', ''),
         "sections": []
     }
 
@@ -174,7 +172,7 @@ def _validate_outline_response(outline_data: Dict) -> bool:
     Raises:
         ValueError: If validation fails
     """
-    required_top = ['topic', 'age_range', 'sections']
+    required_top = ['age_range', 'sections']
     validate_json_response(outline_data, required_top, "outline response")
 
     if not isinstance(outline_data['sections'], list):

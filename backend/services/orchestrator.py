@@ -46,18 +46,17 @@ class CurriculumOrchestrator:
         """
         from outliner.outline_generator import generate_boxes, create_final_outline
 
-        logger.info(f"Running Phase 1 for: {teacher_input.get('topic', 'Unknown')}")
+        logger.info(f"Running Phase 1 for: {teacher_input.get('course_name', 'Unknown')}")
 
         try:
             num_days = teacher_input.get('num_days', 1)
             hours_per_day = teacher_input.get('hours_per_day', 1.0)
 
             teacher_input_formatted = {
+                'course_name':     teacher_input.get('course_name', ''),
                 'age_range_start': teacher_input.get('age_range_start', ''),
                 'age_range_end':   teacher_input.get('age_range_end', ''),
                 'num_students':    teacher_input.get('num_students', ''),
-                'subject':         teacher_input.get('subject'),
-                'topic':           teacher_input.get('topic'),
                 'num_days':        num_days,
                 'hours_per_day':   hours_per_day,
                 'requirements':    teacher_input.get('objectives', 'None'),
@@ -71,7 +70,7 @@ class CurriculumOrchestrator:
                 raise ValueError("No outline generated")
 
             logger.info(f"Phase 1 complete: Generated {len(outline_data.get('sections', []))} sections")
-            return create_final_outline(outline_data)
+            return create_final_outline(outline_data, course_name=teacher_input.get('course_name', ''))
 
         except Exception as e:
             logger.error(f"Phase 1 error: {e}", exc_info=True)
@@ -101,8 +100,7 @@ class CurriculumOrchestrator:
             return
 
         course_context = {
-            'subject':          teacher_input.get('subject', ''),
-            'topic':            teacher_input.get('topic', ''),
+            'course_name':      teacher_input.get('course_name', ''),
             'age_range_start':  teacher_input.get('age_range_start', ''),
             'age_range_end':    teacher_input.get('age_range_end', ''),
             'requirements':     teacher_input.get('objectives', 'None'),
@@ -192,8 +190,7 @@ class CurriculumOrchestrator:
         from outliner.subsection_selection_generator import generate_subsection_candidates
 
         course_context = {
-            'subject':          teacher_input.get('subject', ''),
-            'topic':            teacher_input.get('topic', ''),
+            'course_name':      teacher_input.get('course_name', ''),
             'age_range_start':  teacher_input.get('age_range_start', ''),
             'age_range_end':    teacher_input.get('age_range_end', ''),
             'requirements':     teacher_input.get('objectives', 'None'),
@@ -289,10 +286,9 @@ class CurriculumOrchestrator:
             try:
                 prompt = get_block_generation_prompt(
                     teacher_input={
+                        'course_name':     teacher_input.get('course_name', ''),
                         'age_range_start': teacher_input.get('age_range_start', ''),
                         'age_range_end':   teacher_input.get('age_range_end', ''),
-                        'subject':         teacher_input.get('subject', ''),
-                        'topic':           teacher_input.get('topic', ''),
                         'requirements':    teacher_input.get('objectives', 'None'),
                     },
                     subsection=sub,

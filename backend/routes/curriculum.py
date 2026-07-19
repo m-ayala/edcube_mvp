@@ -35,8 +35,6 @@ async def generate_curriculum(
     age_range_start: int   = Form(...),
     age_range_end:   int   = Form(...),
     num_students:    int   = Form(...),
-    subject:         str   = Form(...),
-    topic:           str   = Form(...),
     num_days:        int   = Form(...),
     hours_per_day:   float = Form(...),
     num_worksheets:  int   = Form(...),
@@ -153,8 +151,7 @@ async def generate_curriculum(
                 raw_requirements=full_objectives,
                 num_days=num_days,
                 hours_per_day=hours_per_day,
-                subject=subject,
-                topic=topic,
+                course_name=course_name,
                 age_range_start=age_range_start,
                 age_range_end=age_range_end,
             )
@@ -164,11 +161,10 @@ async def generate_curriculum(
             yield f"data: {json.dumps({'phase': 1, 'message': 'Generating course outline...', 'progress': 10})}\n\n"
 
             teacher_input = {
+                'course_name':     course_name,
                 'age_range_start': age_range_start,
                 'age_range_end':   age_range_end,
                 'num_students':    num_students,
-                'subject':         subject,
-                'topic':           topic,
                 'num_days':        num_days,
                 'hours_per_day':   hours_per_day,
                 'num_worksheets':  num_worksheets,
@@ -229,8 +225,7 @@ class GenerateMoreSubsectionsRequest(BaseModel):
     sectionTitle: str
     sectionDescription: str = ""
     depthCeiling: str = "Basics"
-    subject: str
-    topic: str
+    courseName: str = ""
     ageRangeStart: int
     ageRangeEnd: int
     objectives: str = ""
@@ -257,8 +252,7 @@ async def generate_more_subsections(body: GenerateMoreSubsectionsRequest):
             'depth_ceiling': body.depthCeiling,
         }
         teacher_input = {
-            'subject':         body.subject,
-            'topic':           body.topic,
+            'course_name':     body.courseName,
             'age_range_start': body.ageRangeStart,
             'age_range_end':   body.ageRangeEnd,
             'objectives':      body.objectives,
@@ -303,8 +297,6 @@ class GenerateBlocksRequest(BaseModel):
     ageRangeStart: int
     ageRangeEnd: int
     numStudents: int
-    subject: str
-    topic: str
     numDays: int
     hoursPerDay: float
     objectives: str = ""
@@ -329,11 +321,10 @@ async def generate_blocks(body: GenerateBlocksRequest):
             await asyncio.sleep(0.1)
 
             teacher_input = {
+                'course_name':     body.courseName,
                 'age_range_start': body.ageRangeStart,
                 'age_range_end':   body.ageRangeEnd,
                 'num_students':    body.numStudents,
-                'subject':         body.subject,
-                'topic':           body.topic,
                 'num_days':        body.numDays,
                 'hours_per_day':   body.hoursPerDay,
                 'objectives':      body.objectives,
@@ -416,8 +407,6 @@ async def generate_blocks(body: GenerateBlocksRequest):
                     'age_range_start':      body.ageRangeStart,
                     'age_range_end':        body.ageRangeEnd,
                     'num_students':         body.numStudents,
-                    'subject':              body.subject,
-                    'topic':                body.topic,
                     'num_days':             body.numDays,
                     'hours_per_day':        body.hoursPerDay,
                     'objectives':           body.objectives,
@@ -610,8 +599,6 @@ async def save_course(course_data: dict, teacherUid: str, organizationId: str):
         curriculum_data = {
             'course_name': course_data.get('courseName'),  # Convert from frontend format
             'grade_level': course_data.get('class'),
-            'subject': course_data.get('subject'),
-            'topic': course_data.get('topic', ''),
             'duration': course_data.get('timeDuration'),  # This will become 'timeDuration' in Firebase
             'objectives': course_data.get('objectives', ''),
             'sections': course_data.get('sections', []),
@@ -684,9 +671,9 @@ async def update_course(course_data: dict, teacherUid: str):
         
         # Prepare update data — only include fields present in the request.
         # Using .get() with defaults would overwrite sections/outline with [] or {}
-        # when a partial save (e.g. saveField({ subject: '...' })) is sent.
+        # when a partial save (e.g. saveField({ courseName: '...' })) is sent.
         allowed_fields = [
-            'courseName', 'class', 'subject', 'topic', 'timeDuration',
+            'courseName', 'class', 'timeDuration',
             'objectives', 'sections', 'outline', 'generatedTopics',
             'handsOnResources', 'courseDescription', 'synopsis',
         ]
@@ -1090,18 +1077,14 @@ async def chat_with_edo(request: EdoChatRequest):
                 age_range = "unknown age"
 
             num_students = course.get("num_students", "")
-            subject = course.get("subject", "")
-            topic = course.get("topic", "")
             duration = course.get("duration", "")
 
-            subject_str = f" | Subject: {subject}" if subject else ""
-            topic_str = f" | Topic: {topic}" if topic else ""
             duration_str = f" | Duration: {duration}" if duration else ""
             students_str = f" | Class size: {num_students}" if num_students else ""
 
             static_course_info = (
                 f'Course: "{course.get("title", "Untitled")}"'
-                f' (Ages: {age_range}{subject_str}{topic_str}{duration_str}{students_str})\n'
+                f' (Ages: {age_range}{duration_str}{students_str})\n'
             )
             if course.get("description"):
                 static_course_info += f'Course objectives: {course["description"]}\n'
@@ -1533,7 +1516,6 @@ class GenerateBlockLinksRequest(BaseModel):
     topicTitle: Optional[str] = ""
     topicDescription: Optional[str] = ""
     gradeLevel: Optional[str] = ""
-    subject: Optional[str] = ""
     teacherUid: Optional[str] = None
 
 
@@ -1669,8 +1651,6 @@ class SynopsisBlock(BaseModel):
 
 class GenerateDescriptionRequest(BaseModel):
     courseName: str
-    subject: Optional[str] = ""
-    topic: Optional[str] = ""
     ageRangeStart: Optional[Any] = ""
     ageRangeEnd: Optional[Any] = ""
     numStudents: Optional[Any] = ""
@@ -1697,9 +1677,6 @@ async def generate_description(request: GenerateDescriptionRequest):
         elif age_start:
             age_info = f" designed for students aged {age_start}+"
 
-        subject_info = f" in {request.subject}" if request.subject else ""
-        topic_info = f", focusing on {request.topic}" if request.topic else ""
-
         duration_info = ""
         if duration and request.timeUnit:
             duration_info = f" The course spans {duration} {request.timeUnit}."
@@ -1712,12 +1689,12 @@ async def generate_description(request: GenerateDescriptionRequest):
             "You are an educational curriculum assistant writing professional course documentation. "
             "Write exactly one concise paragraph in a clear, informative, and engaging tone. "
             "The paragraph should describe what students will learn and what skills or understanding they will gain, "
-            "as well as the general theme or approach of the course. "
+            "as well as the general theme or approach of the course. Infer the subject and theme from the course name. "
             "Do not use bullet points or headers. Do not start with 'This course'. Refer to learners as 'students'."
         )
 
         user_prompt = (
-            f"Write a one-paragraph description for the course \"{request.courseName}\"{subject_info}{topic_info}{age_info}.{duration_info}"
+            f"Write a one-paragraph description for the course \"{request.courseName}\"{age_info}.{duration_info}"
             f"{objectives_info}\n\n"
             f"The paragraph should cover:\n"
             f"1. The general theme and focus of the course\n"
@@ -1749,7 +1726,6 @@ async def generate_description(request: GenerateDescriptionRequest):
 
 class GenerateSynopsisRequest(BaseModel):
     courseName: str
-    subject: Optional[str] = ""
     classLevel: Optional[str] = ""
     teacherUid: Optional[str] = None
     selectedBlocks: List[SynopsisBlock]
@@ -1785,16 +1761,16 @@ async def generate_synopsis(request: GenerateSynopsisRequest):
         structure_text = "\n".join(structure_lines)
 
         age_info = f" for students aged {request.classLevel}" if request.classLevel else ""
-        subject_info = f" in {request.subject}" if request.subject else ""
 
         system_prompt = (
             "You are an educational curriculum assistant writing professional course documentation. "
             "Write in a clear, informative, and professional tone. Refer to learners as 'students' throughout. "
+            "Infer the subject and theme from the course name. "
             "Do not use bullet points or headers — write flowing paragraphs."
         )
 
         user_prompt = (
-            f"Write a detailed synopsis for the course \"{request.courseName}\"{subject_info}{age_info}. "
+            f"Write a detailed synopsis for the course \"{request.courseName}\"{age_info}. "
             f"The following lessons and activities were completed:\n{structure_text}\n\n"
             f"Write 3–5 paragraphs that:\n"
             f"1. Open with a concise overview of what the course covered and its learning goals\n"

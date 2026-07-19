@@ -48,19 +48,11 @@ const CourseDetailsModal = ({ curriculum, onClose, onEdit }) => {
         <h2 style={{ marginTop: 0 }}>{curriculum.courseName}</h2>
 
         <div style={{ marginBottom: '15px' }}>
-          <strong>Subject:</strong> {curriculum.subject}
-        </div>
-
-        <div style={{ marginBottom: '15px' }}>
           <strong>Class:</strong> {curriculum.class}
         </div>
 
         <div style={{ marginBottom: '15px' }}>
           <strong>Duration:</strong> {curriculum.timeDuration}
-        </div>
-
-        <div style={{ marginBottom: '15px' }}>
-          <strong>Topic:</strong> {curriculum.topic}
         </div>
 
         {curriculum.objectives && (
