@@ -62,7 +62,7 @@ def generate_boxes(teacher_input: Dict, images: Optional[List[str]] = None) -> D
     return outline_data
 
 
-def create_final_outline(outline_data: Dict, course_name: str = '') -> Dict:
+def create_final_outline(outline_data: Dict, course_name: str = '', subject: str = '', topic: str = '') -> Dict:
     """
     Pass through the LLM outline, adding computed fields.
     Sections only — subsections are proposed later in Phase 1.5 and merged in
@@ -71,6 +71,9 @@ def create_final_outline(outline_data: Dict, course_name: str = '') -> Dict:
     Args:
         outline_data: Raw LLM output with sections (title, description, depth_ceiling)
         course_name: Teacher-provided course name, used for the display title
+        subject: Auto-detected broad discipline (e.g. "Biology"), from the Requirements
+            Interpreter — not re-derived here, just carried onto the outline.
+        topic: Auto-detected mid-level category (e.g. "Plants"), same source as subject.
 
     Returns:
         dict: Final course outline ready for Phase 1.5
@@ -80,6 +83,8 @@ def create_final_outline(outline_data: Dict, course_name: str = '') -> Dict:
     outline = {
         "course_title": f"{course_name} - {outline_data.get('age_range', '')}",
         "age_range": outline_data.get('age_range', ''),
+        "subject": subject,
+        "topic": topic,
         "sections": []
     }
 

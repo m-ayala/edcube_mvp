@@ -268,7 +268,7 @@ export function GenerationProvider({ children }) {
       return chains.flatMap(chain => chain.subsections.map(sub => ({ section: secTitle, subsection: sub.title })));
     });
 
-    const { formData } = genState;
+    const { formData, rawOutline } = genState;
     const dayNumber = genState.sections.findIndex(s => s.id === sectionId) + 1;
     const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/generate-more-subsections`, {
       method: 'POST',
@@ -279,6 +279,8 @@ export function GenerationProvider({ children }) {
         sectionDescription: section.description || '',
         depthCeiling: section.depthCeiling || 'Basics',
         courseName: formData.courseName,
+        subject: rawOutline?.subject || '',
+        topic: rawOutline?.topic || '',
         ageRangeStart: parseInt(formData.ageRangeStart),
         ageRangeEnd: parseInt(formData.ageRangeEnd),
         objectives: formData.objectives || '',

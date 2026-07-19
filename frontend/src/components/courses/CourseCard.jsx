@@ -89,6 +89,9 @@ const CourseCard = ({
         </h3>
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+          {curriculum.subject && (
+            <span style={chip}>{curriculum.subject}</span>
+          )}
           {curriculum.class && (
             <span style={chip}>Grade {curriculum.class}</span>
           )}

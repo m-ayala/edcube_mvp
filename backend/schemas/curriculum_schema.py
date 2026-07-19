@@ -17,6 +17,8 @@ class CurriculumFields:
     
     # Course metadata
     COURSE_NAME = 'courseName'
+    SUBJECT = 'subject'  # Auto-detected broad discipline, e.g. "Biology" — never manually typed
+    TOPIC = 'topic'  # Auto-detected mid-level category, e.g. "Plants" — never manually typed
     CLASS = 'class'  # Grade level
     TIME_DURATION = 'timeDuration'  # e.g., "6 hours"
     OBJECTIVES = 'objectives'
@@ -140,6 +142,8 @@ def format_curriculum_for_api(firestore_doc):
         F.TEACHER_EMAIL: firestore_doc.get(F.TEACHER_EMAIL),
         F.ORGANIZATION_ID: firestore_doc.get(F.ORGANIZATION_ID),
         F.COURSE_NAME: firestore_doc.get(F.COURSE_NAME),
+        F.SUBJECT: firestore_doc.get(F.SUBJECT, ''),
+        F.TOPIC: firestore_doc.get(F.TOPIC, ''),
         F.CLASS: firestore_doc.get(F.CLASS),
         F.TIME_DURATION: firestore_doc.get(F.TIME_DURATION),
         F.OBJECTIVES: firestore_doc.get(F.OBJECTIVES),

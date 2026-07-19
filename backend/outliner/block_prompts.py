@@ -133,6 +133,8 @@ def get_block_generation_prompt(
     age_range_end = teacher_input.get('age_range_end', '')
     age_range = f"{age_range_start}–{age_range_end} years old"
     course_name = teacher_input.get('course_name', '')
+    subject = teacher_input.get('subject', '')
+    topic = teacher_input.get('topic', '')
     requirements = teacher_input.get('requirements', 'None')
 
     sub_title = subsection.get('title', '')
@@ -151,6 +153,8 @@ def get_block_generation_prompt(
             + "\n".join(lines)
             + "\nYour blocks must cover content that is DISTINCT from all of the above.\n"
         )
+
+    subject_topic_line = f"- Subject / Topic: {subject} / {topic}\n" if (subject or topic) else ""
 
     id_by_index = {i: spec.get('id') for i, spec in enumerate(block_specs)}
     content_ids = {spec['id'] for spec in block_specs if spec.get('type') == 'content'}
@@ -171,7 +175,7 @@ type, subtype, or title — use them exactly as given.
 
 COURSE CONTEXT:
 - Course Name: {course_name}
-- Student Age Range: {age_range}
+{subject_topic_line}- Student Age Range: {age_range}
 - Section: {section_title}
 - This Session: {sub_title}
 - Session Description: {sub_description}

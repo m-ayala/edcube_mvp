@@ -99,6 +99,8 @@ const MyCourses = () => {
       state: {
         formData: {
           courseName: curriculum.courseName,
+          subject: curriculum.subject || '',
+          topic: curriculum.topic || '',
           ageRangeStart: curriculum.ageRangeStart || '',
           ageRangeEnd: curriculum.ageRangeEnd || '',
           numStudents: curriculum.numStudents || '',

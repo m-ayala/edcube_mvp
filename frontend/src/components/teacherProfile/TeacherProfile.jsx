@@ -99,6 +99,8 @@ const TeacherProfile = () => {
       state: {
         formData: {
           courseName: course.courseName,
+          subject: course.subject || '',
+          topic: course.topic || '',
           class: course.class,
           timeDuration: course.timeDuration,
           objectives: course.objectives || ''
@@ -222,6 +224,8 @@ const TeacherProfile = () => {
                   state: {
                     formData: {
                       courseName: course.courseName,
+                      subject: course.subject || '',
+                      topic: course.topic || '',
                       class: course.class,
                     },
                     sections,

@@ -172,7 +172,10 @@ def get_subsection_ideation_prompt(
     age_range_end = course_context.get('age_range_end', '')
     age_range = f"{age_range_start}–{age_range_end} years old"
     course_name = course_context.get('course_name', '')
+    subject = course_context.get('subject', '')
+    topic = course_context.get('topic', '')
     requirements = course_context.get('requirements', 'None')
+    subject_topic_line = f"- Subject / Topic: {subject} / {topic}\n" if (subject or topic) else ""
 
     already_covered_text = ""
     if other_subsections:
@@ -212,7 +215,7 @@ so a teacher can review and select which ones to actually teach before content i
 
 COURSE CONTEXT:
 - Course Name: {course_name}
-- Student Age Range: {age_range}
+{subject_topic_line}- Student Age Range: {age_range}
 - Special Requirements: {requirements}
 - Overall course pacing (a rough signal only, NOT a hard count): {num_days} day(s), roughly {hours_per_day} teaching hour(s)/day
 {already_covered_text}{recurring_and_day_text}

@@ -14,6 +14,8 @@ export const CurriculumFields = {
   
   // Course metadata
   COURSE_NAME: 'courseName',
+  SUBJECT: 'subject',  // Auto-detected broad discipline, e.g. "Biology" — never manually typed
+  TOPIC: 'topic',  // Auto-detected mid-level category, e.g. "Plants" — never manually typed
   CLASS: 'class',  // Grade level
   TIME_DURATION: 'timeDuration',  // e.g., "6 hours"
   OBJECTIVES: 'objectives',

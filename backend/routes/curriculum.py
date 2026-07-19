@@ -157,11 +157,18 @@ async def generate_curriculum(
             )
             yield f"data: {json.dumps({'type': 'requirements_interpreted', 'interpretation': interpreted_requirements, 'phase': 0.5, 'progress': 9})}\n\n"
 
+            # Subject/topic are auto-detected here (never typed by the teacher) — the
+            # Requirements Interpreter is the single source of truth for both.
+            detected_subject = (interpreted_requirements or {}).get('detected_subject', '') or ''
+            detected_topic = (interpreted_requirements or {}).get('detected_topic', '') or ''
+
             # ── Phase 1: Generate outline ───────────────────────────────────
             yield f"data: {json.dumps({'phase': 1, 'message': 'Generating course outline...', 'progress': 10})}\n\n"
 
             teacher_input = {
                 'course_name':     course_name,
+                'subject':         detected_subject,
+                'topic':           detected_topic,
                 'age_range_start': age_range_start,
                 'age_range_end':   age_range_end,
                 'num_students':    num_students,
@@ -226,6 +233,8 @@ class GenerateMoreSubsectionsRequest(BaseModel):
     sectionDescription: str = ""
     depthCeiling: str = "Basics"
     courseName: str = ""
+    subject: str = ""
+    topic: str = ""
     ageRangeStart: int
     ageRangeEnd: int
     objectives: str = ""
@@ -253,6 +262,8 @@ async def generate_more_subsections(body: GenerateMoreSubsectionsRequest):
         }
         teacher_input = {
             'course_name':     body.courseName,
+            'subject':         body.subject,
+            'topic':           body.topic,
             'age_range_start': body.ageRangeStart,
             'age_range_end':   body.ageRangeEnd,
             'objectives':      body.objectives,
@@ -320,8 +331,12 @@ async def generate_blocks(body: GenerateBlocksRequest):
             yield f"data: {json.dumps({'phase': 2, 'message': 'Starting block generation...', 'progress': 0})}\n\n"
             await asyncio.sleep(0.1)
 
+            # subject/topic aren't sent as separate wire fields — they were auto-detected
+            # in generate-curriculum and already live on the outline the teacher approved.
             teacher_input = {
                 'course_name':     body.courseName,
+                'subject':         body.outline.get('subject', ''),
+                'topic':           body.outline.get('topic', ''),
                 'age_range_start': body.ageRangeStart,
                 'age_range_end':   body.ageRangeEnd,
                 'num_students':    body.numStudents,
@@ -404,6 +419,8 @@ async def generate_blocks(body: GenerateBlocksRequest):
                 curriculum_data={
                     'preset_course_id':     body.presetCourseId,
                     'course_name':          body.courseName,
+                    'subject':              teacher_input['subject'],
+                    'topic':                teacher_input['topic'],
                     'age_range_start':      body.ageRangeStart,
                     'age_range_end':        body.ageRangeEnd,
                     'num_students':         body.numStudents,
@@ -598,6 +615,8 @@ async def save_course(course_data: dict, teacherUid: str, organizationId: str):
         # FIX: Ensure course_data has the right structure
         curriculum_data = {
             'course_name': course_data.get('courseName'),  # Convert from frontend format
+            'subject': course_data.get('subject', ''),
+            'topic': course_data.get('topic', ''),
             'grade_level': course_data.get('class'),
             'duration': course_data.get('timeDuration'),  # This will become 'timeDuration' in Firebase
             'objectives': course_data.get('objectives', ''),
@@ -673,7 +692,7 @@ async def update_course(course_data: dict, teacherUid: str):
         # Using .get() with defaults would overwrite sections/outline with [] or {}
         # when a partial save (e.g. saveField({ courseName: '...' })) is sent.
         allowed_fields = [
-            'courseName', 'class', 'timeDuration',
+            'courseName', 'subject', 'topic', 'class', 'timeDuration',
             'objectives', 'sections', 'outline', 'generatedTopics',
             'handsOnResources', 'courseDescription', 'synopsis',
         ]
@@ -1086,6 +1105,8 @@ async def chat_with_edo(request: EdoChatRequest):
                 f'Course: "{course.get("title", "Untitled")}"'
                 f' (Ages: {age_range}{duration_str}{students_str})\n'
             )
+            if course.get("subject") or course.get("topic"):
+                static_course_info += f'Subject / Topic: {course.get("subject", "")} / {course.get("topic", "")}\n'
             if course.get("description"):
                 static_course_info += f'Course objectives: {course["description"]}\n'
 
@@ -1515,6 +1536,8 @@ class GenerateBlockLinksRequest(BaseModel):
     blockContent: Optional[str] = ""
     topicTitle: Optional[str] = ""
     topicDescription: Optional[str] = ""
+    subject: Optional[str] = ""
+    topic: Optional[str] = ""
     gradeLevel: Optional[str] = ""
     teacherUid: Optional[str] = None
 
@@ -1544,8 +1567,13 @@ async def generate_block_links(request: GenerateBlockLinksRequest):
         clean_content = re.sub(r'^[-•]\s+', '', clean_content, flags=re.MULTILINE)
         content_snippet = clean_content[:400].strip()
 
-        # Combine topic description + block content into a meaningful description
+        # Combine topic description + block content into a meaningful description.
+        # Subject/topic go first — they scope the search to a category (e.g. "Biology,
+        # Plants") instead of letting a bare block title search too broadly.
         description_parts = []
+        category = " - ".join(p for p in (request.subject, request.topic) if p)
+        if category:
+            description_parts.append(category)
         if request.topicDescription:
             description_parts.append(request.topicDescription.strip())
         if content_snippet:
@@ -1651,6 +1679,8 @@ class SynopsisBlock(BaseModel):
 
 class GenerateDescriptionRequest(BaseModel):
     courseName: str
+    subject: Optional[str] = ""
+    topic: Optional[str] = ""
     ageRangeStart: Optional[Any] = ""
     ageRangeEnd: Optional[Any] = ""
     numStudents: Optional[Any] = ""
@@ -1684,17 +1714,18 @@ async def generate_description(request: GenerateDescriptionRequest):
             duration_info = f" The course runs for {duration}."
 
         objectives_info = f"\n\nThe teacher has outlined the following goals and notes:\n{request.objectives}" if request.objectives else ""
+        category_info = f" This course sits under {request.subject}, specifically {request.topic}." if (request.subject or request.topic) else ""
 
         system_prompt = (
             "You are an educational curriculum assistant writing professional course documentation. "
             "Write exactly one concise paragraph in a clear, informative, and engaging tone. "
             "The paragraph should describe what students will learn and what skills or understanding they will gain, "
-            "as well as the general theme or approach of the course. Infer the subject and theme from the course name. "
+            "as well as the general theme or approach of the course. "
             "Do not use bullet points or headers. Do not start with 'This course'. Refer to learners as 'students'."
         )
 
         user_prompt = (
-            f"Write a one-paragraph description for the course \"{request.courseName}\"{age_info}.{duration_info}"
+            f"Write a one-paragraph description for the course \"{request.courseName}\"{age_info}.{duration_info}{category_info}"
             f"{objectives_info}\n\n"
             f"The paragraph should cover:\n"
             f"1. The general theme and focus of the course\n"
@@ -1726,6 +1757,8 @@ async def generate_description(request: GenerateDescriptionRequest):
 
 class GenerateSynopsisRequest(BaseModel):
     courseName: str
+    subject: Optional[str] = ""
+    topic: Optional[str] = ""
     classLevel: Optional[str] = ""
     teacherUid: Optional[str] = None
     selectedBlocks: List[SynopsisBlock]
@@ -1761,19 +1794,21 @@ async def generate_synopsis(request: GenerateSynopsisRequest):
         structure_text = "\n".join(structure_lines)
 
         age_info = f" for students aged {request.classLevel}" if request.classLevel else ""
+        category_info = f" This course sits under {request.subject}, specifically {request.topic}." if (request.subject or request.topic) else ""
 
         system_prompt = (
             "You are an educational curriculum assistant writing professional course documentation. "
             "Write in a clear, informative, and professional tone. Refer to learners as 'students' throughout. "
-            "Infer the subject and theme from the course name. "
             "Do not use bullet points or headers — write flowing paragraphs."
         )
 
         user_prompt = (
-            f"Write a detailed synopsis for the course \"{request.courseName}\"{age_info}. "
+            f"Write a detailed synopsis for the course \"{request.courseName}\"{age_info}.{category_info} "
             f"The following lessons and activities were completed:\n{structure_text}\n\n"
             f"Write 3–5 paragraphs that:\n"
-            f"1. Open with a concise overview of what the course covered and its learning goals\n"
+            f"1. Open with a concise overview of what the course covered and its learning goals — situate it "
+            f"within its subject/topic category if given, so a parent understands what broader discipline this "
+            f"course belongs to\n"
             f"2. Describe the key lessons and concepts students engaged with in each section\n"
             f"3. Highlight the worksheets and hands-on activities that were completed (mention them by name)\n"
             f"4. Close with the skills and knowledge students have developed through this course\n\n"

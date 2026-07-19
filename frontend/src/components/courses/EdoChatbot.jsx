@@ -322,6 +322,8 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
   const buildAPIContext = () => {
     const course = {
       title: courseName || '',
+      subject: formData?.subject || '',
+      topic: formData?.topic || '',
       age_range_start: formData?.ageRangeStart || '',
       age_range_end: formData?.ageRangeEnd || '',
       num_students: formData?.numStudents || '',
@@ -470,7 +472,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
       const result = await actions.generateSectionsForTray({
         level: 'sections',
         context: {
-          course: { title: courseName, description: formData?.objectives || '', grade: formData?.class || '' },
+          course: { title: courseName, subject: formData?.subject || '', topic: formData?.topic || '', description: formData?.objectives || '', grade: formData?.class || '' },
           existing_sections: sections.filter(s => s.type !== 'break').map(s => ({ title: s.title, description: s.description || '' })),
         },
         count: 1,
@@ -494,7 +496,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
       const result = await actions.generateSubsectionsForTray({
         level: 'subsections',
         context: {
-          course: { title: courseName, description: formData?.objectives || '', grade: formData?.class || '' },
+          course: { title: courseName, subject: formData?.subject || '', topic: formData?.topic || '', description: formData?.objectives || '', grade: formData?.class || '' },
           target_section: {
             title: targetSection.title,
             description: targetSection.description || '',

@@ -75,10 +75,14 @@ const CourseDesigner = () => {
   // up through candidate generation too (see `loading` above).
   useEffect(() => {
     if (genState.status === 'selection-pending') {
-      trackAiOutlineGenerated({ courseName: formData.courseName, grade: formData.ageRangeStart, sections_count: genState.sections.length });
+      // Subject/topic are auto-detected during generation — not known at submit
+      // time, so they're read off the finished outline here, not `formData`.
+      const detectedSubject = genState.rawOutline?.subject || '';
+      const detectedTopic = genState.rawOutline?.topic || '';
+      trackAiOutlineGenerated({ courseName: formData.courseName, subject: detectedSubject, grade: formData.ageRangeStart, sections_count: genState.sections.length });
       navigate('/course-workspace', {
         state: {
-          formData: genState.formData,
+          formData: { ...genState.formData, subject: detectedSubject, topic: detectedTopic },
           sections: genState.sections,
           isEditing: true,
           isSelectingSubsections: true,

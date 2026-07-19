@@ -65,6 +65,8 @@ const handleUpload = async () => {
       state: {
         formData: {
           courseName: result.course_data.course_name,
+          subject: result.course_data.subject || '',
+          topic: result.course_data.topic || '',
           class: result.course_data.class || '',
           timeDuration: '',
           timeUnit: 'hours',

@@ -90,13 +90,17 @@ Return the complete course structure in JSON format.
         """Build prompt for generating new sections"""
         course = context.get('course', {})
         existing_sections = context.get('existing_sections', [])
-        
+        subject_topic_line = (
+            f"- Subject / Topic: {course.get('subject', '')} / {course.get('topic', '')}\n"
+            if (course.get('subject') or course.get('topic')) else ""
+        )
+
         prompt = f"""
 You are an expert curriculum designer following Peter Drucker's Management as Liberal Art framework.
 
 COURSE CONTEXT:
 - Course: {course.get('title', 'Unknown')}
-- Grade Level: {course.get('grade', 'Unknown')}
+{subject_topic_line}- Grade Level: {course.get('grade', 'Unknown')}
 - Description: {course.get('description', 'Not provided')}
 """
 
@@ -163,13 +167,17 @@ Return ONLY valid JSON in this exact format:
         all_section_names = context.get('all_section_names', [])
         existing_subsections = section.get('existingSubsections', [])
         other_sections = context.get('other_sections', [])
+        subject_topic_line = (
+            f"- Subject / Topic: {course.get('subject', '')} / {course.get('topic', '')}\n"
+            if (course.get('subject') or course.get('topic')) else ""
+        )
 
         prompt = f"""
 You are an expert curriculum designer following Peter Drucker's Management as Liberal Art framework.
 
 COURSE CONTEXT:
 - Course: {course.get('title', 'Unknown')}
-- Grade Level: {course.get('grade', 'Unknown')}
+{subject_topic_line}- Grade Level: {course.get('grade', 'Unknown')}
 - Description: {course.get('description', 'Not provided')}
 
 CURRENT SECTION (generate subsections for THIS section only):

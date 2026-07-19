@@ -218,6 +218,8 @@ const CourseInfoPanel = ({
             </h3>
             <div style={{ background: '#f7fafc', borderRadius: '10px', padding: '14px 16px' }}>
               <DetailRow label="Course name" value={formData?.courseName} />
+              <DetailRow label="Subject" value={formData?.subject} />
+              <DetailRow label="Topic" value={formData?.topic} />
               <DetailRow label="Age range" value={ageRange} />
               <DetailRow label="Students" value={formData?.numStudents} />
               <DetailRow label="Duration" value={duration} />

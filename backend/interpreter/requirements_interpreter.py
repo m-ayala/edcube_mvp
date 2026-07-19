@@ -60,7 +60,9 @@ def interpret_requirements(
 
         logger.info(
             f"Requirements Interpreter: extracted {len(result.get('days', []))} day slice(s), "
-            f"recurring_structure={'yes' if result.get('recurring_structure') else 'no'}"
+            f"recurring_structure={'yes' if result.get('recurring_structure') else 'no'}, "
+            f"detected_subject={result.get('detected_subject', '')!r}, "
+            f"detected_topic={result.get('detected_topic', '')!r}"
         )
         return result
 

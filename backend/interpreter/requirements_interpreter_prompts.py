@@ -45,6 +45,20 @@ TEACHER'S RAW REQUIREMENTS TEXT:
 
 YOUR TASK — read the text above and determine:
 
+0. SUBJECT & TOPIC DETECTION: infer this course's SUBJECT and TOPIC from the Course Name above and the
+   requirements text below — the teacher will not tell you these directly.
+   - SUBJECT = the broadest academic/programmatic discipline this course belongs to (e.g. "Biology",
+     "Theater Arts", "Mathematics", "Computer Science").
+   - TOPIC = the mid-level category under that subject this course sits inside — broader than the course
+     itself, narrower than the subject. Think of it as the shelf a librarian would file this course under.
+   - Course Name is always more specific than TOPIC.
+   Worked examples:
+     - Course Name "Photosynthesis" → topic "Plants", subject "Biology"
+     - Course Name "The Island of Cards Drama Camp" (staging a Tagore play, acting, prop-making)
+       → topic "Drama & Theater Production", subject "Theater Arts"
+   Use Title Case, 1-3 words each, no punctuation. Always make a best-effort inference, even from a weak
+   signal — never leave these blank.
+
 1. DAY-BY-DAY STRUCTURE: does the teacher describe distinct content for specific days or
    sessions (e.g. "Day 1: ...", "Monday we'll ...", "the first session covers ...")? If yes,
    produce EXACTLY {num_days} day slices (one per teaching day of this course — the same count
@@ -84,6 +98,8 @@ YOUR TASK — read the text above and determine:
 
 OUTPUT FORMAT (strict JSON, no other text):
 {{
+  "detected_subject": "string — e.g. 'Biology'",
+  "detected_topic": "string — e.g. 'Plants'",
   "recurring_structure": {{
     "track_1": {{"name": "string", "time_window": "string, e.g. 'first half of the day'"}},
     "track_2": {{"name": "string", "time_window": "string"}}

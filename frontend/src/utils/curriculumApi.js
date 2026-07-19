@@ -130,6 +130,8 @@ export const generateBlockLinks = async ({
   blockContent = '',
   topicTitle = '',
   topicDescription = '',
+  subject = '',
+  topic = '',
   gradeLevel = '',
   teacherUid = null,
 }) => {
@@ -142,6 +144,8 @@ export const generateBlockLinks = async ({
       blockContent,
       topicTitle,
       topicDescription,
+      subject,
+      topic,
       gradeLevel,
       teacherUid,
     }),
@@ -164,6 +168,8 @@ export const generateBlockLinks = async ({
  */
 export const generateCourseDescription = async ({
   courseName,
+  subject = '',
+  topic = '',
   ageRangeStart = '',
   ageRangeEnd = '',
   numStudents = '',
@@ -175,7 +181,7 @@ export const generateCourseDescription = async ({
   const response = await fetch(`${API_BASE_URL}/curriculum/generate-description`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ courseName, ageRangeStart, ageRangeEnd, numStudents, timeDuration, timeUnit, objectives, teacherUid }),
+    body: JSON.stringify({ courseName, subject, topic, ageRangeStart, ageRangeEnd, numStudents, timeDuration, timeUnit, objectives, teacherUid }),
   });
   if (!response.ok) throw new Error('Description generation failed');
   return await response.json(); // { success: true, description: string }
@@ -251,6 +257,8 @@ export const updateCourseInfoNotes = async (curriculumId, notes, teacherUid) => 
  */
 export const generateSynopsis = async ({
   courseName,
+  subject = '',
+  topic = '',
   classLevel = '',
   teacherUid = null,
   selectedBlocks = [],
@@ -258,7 +266,7 @@ export const generateSynopsis = async ({
   const response = await fetch(`${API_BASE_URL}/curriculum/generate-synopsis`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ courseName, classLevel, teacherUid, selectedBlocks }),
+    body: JSON.stringify({ courseName, subject, topic, classLevel, teacherUid, selectedBlocks }),
   });
   if (!response.ok) throw new Error('Synopsis generation failed');
   return await response.json(); // { success: true, synopsis: string }

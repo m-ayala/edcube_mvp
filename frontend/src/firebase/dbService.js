@@ -27,6 +27,8 @@ export const saveCurriculum = async (teacherUid, curriculumData, organizationId)
       teacherUid: teacherUid,
       organizationId: organizationId,
       courseName: curriculumData.courseName,
+      subject: curriculumData.subject || '',
+      topic: curriculumData.topic || '',
       class: curriculumData.class,
       timeDuration: curriculumData.timeDuration,
       numWorksheets: curriculumData.numWorksheets || 0,

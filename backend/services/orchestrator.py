@@ -70,7 +70,12 @@ class CurriculumOrchestrator:
                 raise ValueError("No outline generated")
 
             logger.info(f"Phase 1 complete: Generated {len(outline_data.get('sections', []))} sections")
-            return create_final_outline(outline_data, course_name=teacher_input.get('course_name', ''))
+            return create_final_outline(
+                outline_data,
+                course_name=teacher_input.get('course_name', ''),
+                subject=teacher_input.get('subject', ''),
+                topic=teacher_input.get('topic', ''),
+            )
 
         except Exception as e:
             logger.error(f"Phase 1 error: {e}", exc_info=True)
@@ -101,6 +106,8 @@ class CurriculumOrchestrator:
 
         course_context = {
             'course_name':      teacher_input.get('course_name', ''),
+            'subject':          teacher_input.get('subject', ''),
+            'topic':            teacher_input.get('topic', ''),
             'age_range_start':  teacher_input.get('age_range_start', ''),
             'age_range_end':    teacher_input.get('age_range_end', ''),
             'requirements':     teacher_input.get('objectives', 'None'),
@@ -191,6 +198,8 @@ class CurriculumOrchestrator:
 
         course_context = {
             'course_name':      teacher_input.get('course_name', ''),
+            'subject':          teacher_input.get('subject', ''),
+            'topic':            teacher_input.get('topic', ''),
             'age_range_start':  teacher_input.get('age_range_start', ''),
             'age_range_end':    teacher_input.get('age_range_end', ''),
             'requirements':     teacher_input.get('objectives', 'None'),
@@ -287,6 +296,8 @@ class CurriculumOrchestrator:
                 prompt = get_block_generation_prompt(
                     teacher_input={
                         'course_name':     teacher_input.get('course_name', ''),
+                        'subject':         teacher_input.get('subject', ''),
+                        'topic':           teacher_input.get('topic', ''),
                         'age_range_start': teacher_input.get('age_range_start', ''),
                         'age_range_end':   teacher_input.get('age_range_end', ''),
                         'requirements':    teacher_input.get('objectives', 'None'),

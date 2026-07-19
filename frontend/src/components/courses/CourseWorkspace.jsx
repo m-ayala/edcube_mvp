@@ -115,6 +115,8 @@ const CourseWorkspace = () => {
         blockContent: blockData.content || '',
         topicTitle: activeSubsection?.title || '',
         topicDescription: activeSubsection?.description || '',
+        subject: formData?.subject || '',
+        topic: formData?.topic || '',
         gradeLevel: formData?.class || '',
         teacherUid: currentUser?.uid || null,
       };
@@ -441,6 +443,8 @@ const CourseWorkspace = () => {
 
     const courseData = {
       courseName,
+      subject: formData?.subject || '',
+      topic: formData?.topic || '',
       class: courseClass,
       timeDuration: courseTimeDuration,
       objectives: courseObjectives,
@@ -478,7 +482,7 @@ const CourseWorkspace = () => {
       }
       const totalDuration = sectionsForSave.reduce((acc, s) =>
         acc + (s.subsections || []).reduce((a, ss) => a + (ss.duration_minutes || 0), 0), 0);
-      trackCourseCreated({ courseName, grade: courseClass, sections_count: sections.length, duration_minutes: totalDuration });
+      trackCourseCreated({ courseName, subject: formData?.subject || '', grade: courseClass, sections_count: sections.length, duration_minutes: totalDuration });
     } else if (hasExistingId) {
       trackCourseUpdated({ course_id: curriculumId, sections_count: sections.length });
     }
