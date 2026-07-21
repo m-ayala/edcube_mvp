@@ -7,13 +7,13 @@ import {
   VALID_DAYS,
   DAY_LABELS,
 } from '../../constants/synopsisSchema';
-import { Link, Trash2, ChevronDown } from 'lucide-react';
+import { Link, Trash2, ChevronDown, FolderUp } from 'lucide-react';
 import {
   updateWeek,
   updateCamp,
   createCamp,
   deleteCamp,
-  downloadGroupDoc,
+  saveGroupDocToDrive,
 } from '../../services/synopsisService';
 
 const FONT  = "'DM Sans', sans-serif";
@@ -192,19 +192,15 @@ export default function CampListView({
     } catch (err) { alert(err.message); }
   };
 
-  // ── Per-group download (admin) ─────────────────────────────────────────────
+  // ── Per-group save to Drive (admin) ─────────────────────────────────────────
   const [downloadingGroup, setDownloadingGroup] = useState(null);
 
-  const handleGroupDownload = async (groupName) => {
+  const handleGroupGenerate = async (groupName) => {
     setDownloadingGroup(groupName);
     try {
-      const blob = await downloadGroupDoc(currentUser, weekId, groupName);
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement('a');
-      a.href     = url;
-      a.download = `synopsis_${groupName.replace(/\s+/g, '_')}.docx`;
-      a.click();
-      URL.revokeObjectURL(url);
+      const { folder, files } = await saveGroupDocToDrive(currentUser, weekId, groupName);
+      if (files[0]?.link) window.open(files[0].link, '_blank', 'noopener');
+      else alert(`Saved to Drive folder "${folder.name}".`);
     } catch (err) { alert(err.message); }
     finally { setDownloadingGroup(null); }
   };
@@ -448,9 +444,9 @@ export default function CampListView({
               <button onClick={() => { setAddingToGroup(name); setNewCamp({ camp_name: '', teacher_name: '', time_start: '', time_end: '' }); }} style={pillBtn('rgba(178,232,200,0.6)', '#1a4a2a')}>
                 + Sub-camp
               </button>
-              <button onClick={() => handleGroupDownload(name)} disabled={downloadingGroup === name}
+              <button onClick={() => handleGroupGenerate(name)} disabled={downloadingGroup === name}
                 style={{ ...pillBtn('#ACD8F0', '#1e3a4a'), opacity: downloadingGroup === name ? 0.6 : 1, cursor: downloadingGroup === name ? 'wait' : 'pointer' }}>
-                {downloadingGroup === name ? '…' : '↓'} Download doc
+                {downloadingGroup === name ? '…' : <FolderUp size={13} />} Generate doc
               </button>
               <button
                 onClick={() => handleDeleteGroup(name, groupCamps)}

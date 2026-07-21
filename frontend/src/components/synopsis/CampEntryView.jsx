@@ -1,6 +1,6 @@
 // frontend/src/components/synopsis/CampEntryView.jsx
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Plus, X, Check } from 'lucide-react';
+import { ArrowLeft, Plus, X, Check, HardDriveDownload, Upload } from 'lucide-react';
 import {
   SynopsisWeekFields,
   SynopsisCampFields,
@@ -17,6 +17,13 @@ import {
   uploadPhoto,
   enhanceText,
 } from '../../services/synopsisService';
+import {
+  loadGoogleApis,
+  getDriveAccessToken,
+  extractDriveFolderId,
+  openDrivePicker,
+  fetchDriveFileAsFile,
+} from '../../utils/googleDrivePicker';
 
 const FONT  = "'DM Sans', sans-serif";
 const SERIF = "'DM Serif Display', serif";
@@ -201,6 +208,8 @@ export default function CampEntryView({ camp, week, onBack, isAdmin = false }) {
   };
 
   // ── Photos ────────────────────────────────────────────────────────────────
+  const [addMenuDay, setAddMenuDay] = useState(null);
+
   const handlePhotoAdd = async (day, files) => {
     const current = dayData[day].photo_urls.length;
     const toUpload = Array.from(files).slice(0, PHOTO_MAX - current);
@@ -221,6 +230,38 @@ export default function CampEntryView({ camp, week, onBack, isAdmin = false }) {
       }));
     }
     setUploading(prev => ({ ...prev, [day]: false }));
+  };
+
+  const handleDrivePick = async (day) => {
+    setAddMenuDay(null);
+    const current = dayData[day].photo_urls.length;
+    const remaining = PHOTO_MAX - current;
+    if (remaining <= 0) return;
+    try {
+      await loadGoogleApis();
+      const accessToken = await getDriveAccessToken();
+      const folderId = extractDriveFolderId(week?.[SynopsisWeekFields.DRIVE_LINK]);
+      openDrivePicker({
+        accessToken,
+        folderId,
+        maxItems: remaining,
+        onPicked: async (docs) => {
+          setUploading(prev => ({ ...prev, [day]: true }));
+          try {
+            const files = await Promise.all(docs.map(doc =>
+              fetchDriveFileAsFile(doc.id, doc.name, doc.mimeType, accessToken)
+            ));
+            await handlePhotoAdd(day, files);
+          } catch (err) {
+            alert(`Couldn't add photo from Drive: ${err.message}`);
+          } finally {
+            setUploading(prev => ({ ...prev, [day]: false }));
+          }
+        },
+      });
+    } catch (err) {
+      alert(`Google Drive sign-in failed: ${err.message}`);
+    }
   };
 
   const removePhoto = (day, idx) => {
@@ -356,20 +397,58 @@ export default function CampEntryView({ camp, week, onBack, isAdmin = false }) {
                     ))}
 
                     {photoCount < PHOTO_MAX && (
-                      <button
-                        onClick={() => fileRefs.current[day]?.click()}
-                        disabled={uploading[day]}
-                        style={{
-                          width: 72, height: 72, borderRadius: 10,
-                          border: '1.5px dashed #C8BFB5', background: '#FAF9F6',
-                          display: 'flex', flexDirection: 'column', alignItems: 'center',
-                          justifyContent: 'center', cursor: uploading[day] ? 'wait' : 'pointer', flexShrink: 0,
-                        }}
-                      >
-                        {uploading[day]
-                          ? <span style={{ fontSize: 10, color: '#8b7355' }}>Uploading…</span>
-                          : <Plus size={18} color="#8b7355" />}
-                      </button>
+                      <div style={{ position: 'relative', flexShrink: 0 }}>
+                        <button
+                          onClick={() => setAddMenuDay(prev => prev === day ? null : day)}
+                          disabled={uploading[day]}
+                          style={{
+                            width: 72, height: 72, borderRadius: 10,
+                            border: '1.5px dashed #C8BFB5', background: '#FAF9F6',
+                            display: 'flex', flexDirection: 'column', alignItems: 'center',
+                            justifyContent: 'center', cursor: uploading[day] ? 'wait' : 'pointer', flexShrink: 0,
+                          }}
+                        >
+                          {uploading[day]
+                            ? <span style={{ fontSize: 10, color: '#8b7355' }}>Uploading…</span>
+                            : <Plus size={18} color="#8b7355" />}
+                        </button>
+
+                        {addMenuDay === day && (
+                          <>
+                            <div
+                              onClick={() => setAddMenuDay(null)}
+                              style={{ position: 'fixed', inset: 0, zIndex: 9 }}
+                            />
+                            <div style={{
+                              position: 'absolute', top: 78, left: 0, zIndex: 10,
+                              background: '#fff', borderRadius: 10, overflow: 'hidden',
+                              boxShadow: '0 4px 18px rgba(0,0,0,0.15)', border: '1px solid #F0EDE8',
+                              width: 210,
+                            }}>
+                              <button
+                                onClick={() => handleDrivePick(day)}
+                                style={{
+                                  display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+                                  padding: '10px 14px', border: 'none', background: 'none',
+                                  cursor: 'pointer', fontSize: 13, fontFamily: FONT, color: '#1C1917', textAlign: 'left',
+                                }}
+                              >
+                                <HardDriveDownload size={15} color="#8b7355" /> Choose from Google Drive
+                              </button>
+                              <button
+                                onClick={() => { setAddMenuDay(null); fileRefs.current[day]?.click(); }}
+                                style={{
+                                  display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+                                  padding: '10px 14px', border: 'none', borderTop: '1px solid #F0EDE8', background: 'none',
+                                  cursor: 'pointer', fontSize: 13, fontFamily: FONT, color: '#1C1917', textAlign: 'left',
+                                }}
+                              >
+                                <Upload size={15} color="#8b7355" /> Upload from computer
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
                     )}
 
                     <input

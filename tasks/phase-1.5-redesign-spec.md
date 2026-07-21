@@ -70,3 +70,39 @@ IMPLEMENTATION NOTES:
 
 Let me know what you find for existing file structure before you start making 
 changes, so I can confirm you're extending the right place.
+
+---
+
+## Resolved after TASK-002 investigation (2026-07-19)
+
+The investigation into how subsections/topicBoxes flow through CourseWorkspace
+surfaced three things that change this spec's implementation notes. Decisions below
+are final — recorded here so any agent picking up TASK-002/003/004 doesn't need to
+re-derive them.
+
+1. **Drag-and-drop library:** `@hello-pangea/dnd` is already used throughout
+   `CourseWorkspace.jsx` (SECTION/SUBSECTION/BLOCK draggable types, `handleDragEnd`).
+   Per this spec's own fallback rule ("...unless there's already one in the
+   project"), TASK-002/003 use `@hello-pangea/dnd`, not raw HTML5 drag events.
+
+2. **Don't touch the existing Edo suggestion tray.** `CourseWorkspace.jsx` already
+   has a similar-looking pattern — an `edo-tray-*` droppable that teachers drag
+   Edo-suggested subsections/blocks out of into the course. That drag is a **cut**
+   (the item is removed from the tray on drop). This spec's library panel needs a
+   **copy**. Build the library panel's drag source as its own component — it may
+   share styling/visual patterns with the tray, but its drop handler is separate
+   code. Do not modify `handleDragEnd`'s existing `edo-tray-*` branch or change how
+   the tray behaves elsewhere in the app.
+
+3. **Format/type dropdown taxonomy (affects TASK-004):** `blockCategories.js` is
+   the wrong source — it holds pedagogical-objective clusters (e.g. "Critical
+   Thinking"), not format subtypes. The taxonomy this spec actually describes
+   ("Fill-in-the-blank," "text passage," etc.) already exists as `CONTENT_SUBTYPES`
+   / `WORKSHEET_SUBTYPES` / `ACTIVITY_SUBTYPES` in
+   `backend/outliner/block_prompts.py:15-43`, but isn't exposed to the frontend yet
+   — no route, no shared constants file (confirmed: `curriculumSchema.js` only
+   references the field name `SUBTYPE`, not the actual values). TASK-005 (new,
+   backend-agent) exposes these via a new FastAPI route, matching the pattern
+   already planned for TASK-001 — chosen over a shared constants file since no such
+   shared file currently exists between backend and frontend. TASK-004 is blocked
+   on TASK-005 landing first, not on `blockCategories.js`.

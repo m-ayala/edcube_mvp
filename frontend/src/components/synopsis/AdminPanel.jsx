@@ -1,8 +1,8 @@
 // frontend/src/components/synopsis/AdminPanel.jsx
 import { useState } from 'react';
-import { Plus, Download, ChevronDown, Trash2 } from 'lucide-react';
+import { Plus, FolderUp, ChevronDown, Trash2 } from 'lucide-react';
 import { SynopsisWeekFields } from '../../constants/synopsisSchema';
-import { updateWeek, deleteWeek, downloadWeeklyDoc } from '../../services/synopsisService';
+import { updateWeek, deleteWeek, saveWeeklyDocsToDrive } from '../../services/synopsisService';
 import AddWeekModal from './AddWeekModal';
 
 const FONT = "'DM Sans', sans-serif";
@@ -54,17 +54,13 @@ export default function AdminPanel({ currentUser, allWeeks, displayWeekId, activ
     finally { setDeleting(false); }
   };
 
-  const handleDownload = async () => {
+  const handleGenerateAll = async () => {
     if (!displayWeekId) return alert('Select a week first');
     setDownloading(true);
     try {
-      const blob = await downloadWeeklyDoc(currentUser, displayWeekId);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `synopsis_${displayWeekId}.zip`;
-      a.click();
-      URL.revokeObjectURL(url);
+      const { folder, files } = await saveWeeklyDocsToDrive(currentUser, displayWeekId);
+      alert(`Saved ${files.length} doc${files.length !== 1 ? 's' : ''} to Drive folder "${folder.name}".`);
+      if (folder.link) window.open(folder.link, '_blank', 'noopener');
     } catch (err) { alert(err.message); }
     finally { setDownloading(false); }
   };
@@ -178,13 +174,13 @@ export default function AdminPanel({ currentUser, allWeeks, displayWeekId, activ
           <Trash2 size={14} /> {deleting ? 'Deleting…' : 'Delete week'}
         </button>
 
-        {/* Download all */}
+        {/* Generate all — saves every group's doc to the week's Drive folder */}
         <button
-          onClick={handleDownload}
+          onClick={handleGenerateAll}
           disabled={downloading || !displayWeekId}
           style={BTN({ background: '#E8E0D5', color: '#5c4a32', opacity: (downloading || !displayWeekId) ? 0.5 : 1, cursor: (downloading || !displayWeekId) ? 'not-allowed' : 'pointer' })}
         >
-          <Download size={14} /> {downloading ? 'Generating…' : 'Download all'}
+          <FolderUp size={14} /> {downloading ? 'Generating…' : 'Generate All'}
         </button>
       </div>
 

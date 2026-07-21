@@ -21,7 +21,11 @@ class APIConfig:
     YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
     GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
     GOOGLE_CSE_ID = os.getenv("GOOGLE_CSE_ID")
-    
+
+    # Root "Synopsis" Drive folder camp docs get saved into, one subfolder per week.
+    # Must be shared as Editor with this service's Cloud Run runtime service account.
+    SYNOPSIS_DRIVE_FOLDER_ID = os.getenv("SYNOPSIS_DRIVE_FOLDER_ID")
+
     # OpenAI settings
     OPENAI_MODEL = "gpt-4o"
     OPENAI_TEMPERATURE = 0.7
@@ -179,3 +183,4 @@ OPENAI_TEMPERATURE = APIConfig.OPENAI_TEMPERATURE
 YOUTUBE_API_KEY = APIConfig.YOUTUBE_API_KEY
 GOOGLE_API_KEY = APIConfig.GOOGLE_API_KEY
 GOOGLE_CSE_ID = APIConfig.GOOGLE_CSE_ID
+SYNOPSIS_DRIVE_FOLDER_ID = APIConfig.SYNOPSIS_DRIVE_FOLDER_ID

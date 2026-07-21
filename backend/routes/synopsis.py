@@ -11,8 +11,8 @@ import re
 import urllib.parse
 import urllib.request
 import uuid
-import zipfile
 import datetime as _dt
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from html import escape as _html_escape
 from typing import Optional
@@ -24,7 +24,12 @@ from docx.oxml.ns import qn as _qn
 from docx.oxml import OxmlElement
 
 from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, UploadFile, status
-from fastapi.responses import StreamingResponse
+from fastapi.concurrency import run_in_threadpool
+
+import google.auth
+from googleapiclient.discovery import build as _drive_build
+from googleapiclient.errors import HttpError as _DriveHttpError
+from googleapiclient.http import MediaIoBaseUpload
 
 import firebase_admin
 from firebase_admin import auth
@@ -51,6 +56,7 @@ from schemas.synopsis_schema import (
     PHOTO_MAX,
     VALID_DAYS,
 )
+from config import SYNOPSIS_DRIVE_FOLDER_ID
 from services.firebase_service import FirebaseService
 from utils.llm_handler import call_openai, OpenAIServiceError
 
@@ -564,14 +570,19 @@ def _fetch_photo_bytes(url: str) -> bytes:
     return resp.content
 
 
+_PHOTO_MAX_DIM = 1600  # px — docx embeds these at 2.1in wide; full phone-camera resolution
+                       # (often 4000px+) just multiplies decode/re-encode memory for no visible gain
+
+
 def _fix_exif_rotation(img_bytes: bytes) -> bytes:
-    """Auto-rotate image based on EXIF orientation so it appears right-side up."""
+    """Auto-rotate image based on EXIF orientation and downscale it for embedding."""
     try:
         from PIL import Image as PILImage, ImageOps
         img = PILImage.open(io.BytesIO(img_bytes))
         img = ImageOps.exif_transpose(img)
         if img.mode in ('RGBA', 'LA', 'P'):
             img = img.convert('RGB')
+        img.thumbnail((_PHOTO_MAX_DIM, _PHOTO_MAX_DIM), PILImage.LANCZOS)
         out = io.BytesIO()
         img.save(out, format='JPEG', quality=85)
         out.seek(0)
@@ -732,6 +743,63 @@ _DAY_LABEL_SHORT = {'mon': 'Mon',    'tue': 'Tue',    'wed': 'Wed',    'thu': 'T
 _DAY_EMOJI       = {'mon': '🌟',     'tue': '⭐',     'wed': '🌈',     'thu': '🎉',     'fri': '🎊'}
 
 
+def _fetch_and_rotate_photo(url: str) -> bytes:
+    return _fix_exif_rotation(_fetch_photo_bytes(url))
+
+
+def _prefetch_notes_and_photos(group_camps: list, entries_by_camp: dict, day_order: list) -> tuple:
+    """Run every AI text-correction call and photo download for the doc up front, concurrently.
+
+    Previously these ran one at a time inline while building the doc — an OpenAI
+    call plus several photo fetches per entry, repeated on every download since
+    the corrected text was never cached — which made "download doc" take minutes
+    per group and appear to hang. Doing them in parallel here cuts that to the
+    duration of the single slowest call.
+    """
+    correction_jobs: dict = {}
+    photo_urls: set = set()
+
+    for camp in group_camps:
+        camp_id = camp.get(SynopsisCampFields.CAMP_ID)
+        camp_entries = entries_by_camp.get(camp_id, {})
+        for day_key in day_order:
+            entry = camp_entries.get(day_key)
+            if not entry:
+                continue
+            polished = entry.get(SynopsisEntryFields.POLISHED_TEXT) or ''
+            raw = entry.get(SynopsisEntryFields.RAW_TEXT) or ''
+            if not polished and raw:
+                correction_jobs[(camp_id, day_key)] = raw
+            for url in entry.get(SynopsisEntryFields.PHOTO_URLS, []) or []:
+                photo_urls.add(url)
+
+    notes_cache: dict = {}
+    photo_cache: dict = {}
+    if not correction_jobs and not photo_urls:
+        return notes_cache, photo_cache
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        future_map = {}
+        for key, raw in correction_jobs.items():
+            future_map[pool.submit(_light_correct, raw)] = ('notes', key)
+        for url in photo_urls:
+            future_map[pool.submit(_fetch_and_rotate_photo, url)] = ('photo', url)
+
+        for future in as_completed(future_map):
+            kind, key = future_map[future]
+            try:
+                result = future.result()
+            except Exception as exc:
+                logger.warning(f"Doc prefetch failed for {kind} {key}: {exc}")
+                result = None
+            if kind == 'notes':
+                notes_cache[key] = result
+            else:
+                photo_cache[key] = result
+
+    return notes_cache, photo_cache
+
+
 def _build_synopsis_doc(
     *,
     group_camps: list,
@@ -744,6 +812,8 @@ def _build_synopsis_doc(
     day_order: list = DAY_ORDER,
 ) -> bytes:
     """Build one synopsis .docx for a single camp group and return raw bytes."""
+    notes_cache, photo_cache = _prefetch_notes_and_photos(group_camps, entries_by_camp, day_order)
+
     doc     = Document()
     section = doc.sections[0]
     section.top_margin      = Inches(1.1)
@@ -829,7 +899,7 @@ def _build_synopsis_doc(
             if entry:
                 polished = entry.get(SynopsisEntryFields.POLISHED_TEXT) or ''
                 raw      = entry.get(SynopsisEntryFields.RAW_TEXT) or ''
-                notes_raw = polished if polished else (_light_correct(raw) if raw else '')
+                notes_raw = polished or notes_cache.get((camp_id, day_key)) or raw
 
             p_day = _para(doc, spc_b=12, spc_a=6)
             label = f'{emoji} Day {day_num}'
@@ -844,13 +914,15 @@ def _build_synopsis_doc(
                 _run(p_notes, 'No notes submitted for this day.', size_pt=11)
 
             if entry:
-                photo_urls = entry.get(SynopsisEntryFields.PHOTO_URLS, [])
+                photo_urls = entry.get(SynopsisEntryFields.PHOTO_URLS, []) or []
                 if photo_urls:
                     for row_start in range(0, len(photo_urls), 3):
                         p_photos = _para(doc, spc_b=4, spc_a=4, align=WD_ALIGN_PARAGRAPH.CENTER)
                         for url in photo_urls[row_start:row_start + 3]:
+                            img_b = photo_cache.get(url)
+                            if not img_b:
+                                continue
                             try:
-                                img_b = _fix_exif_rotation(_fetch_photo_bytes(url))
                                 p_photos.add_run().add_picture(io.BytesIO(img_b), width=Inches(2.1))
                             except Exception as exc:
                                 logger.warning(f"Could not embed photo {url}: {exc}")
@@ -946,12 +1018,81 @@ def _week_header_meta(week: dict) -> str:
     return week_label + (f' · {dates}' if dates else '')
 
 
-@router.get("/weeks/{week_id}/download")
-async def download_weekly_doc(
+_DRIVE_SCOPES       = ['https://www.googleapis.com/auth/drive']
+_DOCX_MIME          = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+_DRIVE_FOLDER_MIME  = 'application/vnd.google-apps.folder'
+
+_drive_service = None  # lazy singleton, built on first use
+
+
+def _get_drive_service():
+    """Drive v3 client using the same Application Default Credentials Firebase Admin
+    already runs under — the Cloud Run service account in prod, gcloud ADC locally."""
+    global _drive_service
+    if _drive_service is None:
+        creds, _ = google.auth.default(scopes=_DRIVE_SCOPES)
+        _drive_service = _drive_build('drive', 'v3', credentials=creds, cache_discovery=False)
+    return _drive_service
+
+
+def _drive_escape(value: str) -> str:
+    return (value or '').replace('\\', '\\\\').replace("'", "\\'")
+
+
+def _find_or_create_week_folder(service, parent_folder_id: str, week_label: str) -> dict:
+    """Find the Drive subfolder matching this week's label inside the synopsis root
+    folder, creating it if it doesn't exist yet."""
+    name  = week_label or 'Untitled Week'
+    query = (
+        f"name = '{_drive_escape(name)}' and '{parent_folder_id}' in parents "
+        f"and mimeType = '{_DRIVE_FOLDER_MIME}' and trashed = false"
+    )
+    existing = service.files().list(
+        q=query, spaces='drive', fields='files(id, webViewLink)', orderBy='createdTime',
+    ).execute().get('files', [])
+
+    if existing:
+        return {'id': existing[0]['id'], 'link': existing[0].get('webViewLink', '')}
+
+    folder = service.files().create(
+        body={'name': name, 'mimeType': _DRIVE_FOLDER_MIME, 'parents': [parent_folder_id]},
+        fields='id, webViewLink',
+    ).execute()
+    return {'id': folder['id'], 'link': folder.get('webViewLink', '')}
+
+
+def _upload_or_replace_drive_file(service, folder_id: str, filename: str, content: bytes, mime_type: str) -> dict:
+    """Create filename inside folder_id, or overwrite it in place if it's already there —
+    so re-generating a doc updates the same file instead of piling up duplicate copies."""
+    query = f"name = '{_drive_escape(filename)}' and '{folder_id}' in parents and trashed = false"
+    existing = service.files().list(
+        q=query, spaces='drive', fields='files(id)', orderBy='createdTime',
+    ).execute().get('files', [])
+
+    media = MediaIoBaseUpload(io.BytesIO(content), mimetype=mime_type, resumable=False)
+
+    if existing:
+        result = service.files().update(
+            fileId=existing[0]['id'], media_body=media, fields='id, name, webViewLink',
+        ).execute()
+    else:
+        result = service.files().create(
+            body={'name': filename, 'parents': [folder_id]},
+            media_body=media, fields='id, name, webViewLink',
+        ).execute()
+
+    return {'name': result.get('name', filename), 'link': result.get('webViewLink', '')}
+
+
+@router.post("/weeks/{week_id}/save-to-drive")
+async def save_synopsis_to_drive(
     week_id: str,
-    group_name: Optional[str] = Query(None, description="Download only this camp group"),
+    group_name: Optional[str] = Query(None, description="Save only this camp group"),
     admin: dict = Depends(verify_icc_admin),
 ):
+    if not SYNOPSIS_DRIVE_FOLDER_ID:
+        raise HTTPException(500, "SYNOPSIS_DRIVE_FOLDER_ID is not configured on the backend.")
+
     # ── Fetch shared data ──────────────────────────────────────────────────────
     weeks = await firebase.get_all_synopsis_weeks()
     week  = next((w for w in weeks if w.get(SynopsisWeekFields.WEEK_ID) == week_id or w.get('id') == week_id), None)
@@ -970,13 +1111,33 @@ async def download_weekly_doc(
     header_meta = _week_header_meta(week)
     year        = _dt.datetime.now().year
     day_order   = _week_day_keys(week)
+    week_label  = week.get(SynopsisWeekFields.LABEL) or week_id
 
-    # ── Single-group download → .docx ─────────────────────────────────────────
-    if group_name:
-        camps = [c for c in all_camps if c.get(SynopsisCampFields.GROUP_NAME) == group_name]
-        doc_bytes = _build_synopsis_doc(
+    try:
+        service = await run_in_threadpool(_get_drive_service)
+        folder  = await run_in_threadpool(_find_or_create_week_folder, service, SYNOPSIS_DRIVE_FOLDER_ID, week_label)
+    except _DriveHttpError as exc:
+        logger.error(f"Drive folder lookup failed for week {week_id}: {exc}")
+        raise HTTPException(
+            502, "Could not access the Synopsis Drive folder — make sure it's shared with the "
+                 "backend's service account as an Editor."
+        ) from exc
+
+    unique_groups = (
+        [group_name] if group_name else
+        list(dict.fromkeys(
+            c.get(SynopsisCampFields.GROUP_NAME, '') for c in all_camps
+            if c.get(SynopsisCampFields.GROUP_NAME)
+        ))
+    )
+
+    uploaded = []
+    for gname in unique_groups:
+        camps = [c for c in all_camps if c.get(SynopsisCampFields.GROUP_NAME) == gname]
+        doc_bytes = await run_in_threadpool(
+            _build_synopsis_doc,
             group_camps=camps,
-            doc_title=group_name,
+            doc_title=gname,
             header_meta=header_meta,
             drive_link=drive_link,
             entries_by_camp=entries_by_camp,
@@ -984,42 +1145,18 @@ async def download_weekly_doc(
             year=year,
             day_order=day_order,
         )
-        slug     = group_name.replace(' ', '_')
-        filename = f'synopsis_{slug}.docx'
-        return StreamingResponse(
-            io.BytesIO(doc_bytes),
-            media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            headers={'Content-Disposition': f'attachment; filename="{filename}"'},
-        )
-
-    # ── All-groups download → .zip of per-group .docx files ───────────────────
-    unique_groups = list(dict.fromkeys(
-        c.get(SynopsisCampFields.GROUP_NAME, '') for c in all_camps
-        if c.get(SynopsisCampFields.GROUP_NAME)
-    ))
-
-    zip_buf = io.BytesIO()
-    with zipfile.ZipFile(zip_buf, 'w', zipfile.ZIP_DEFLATED) as zf:
-        for gname in unique_groups:
-            camps = [c for c in all_camps if c.get(SynopsisCampFields.GROUP_NAME) == gname]
-            doc_bytes = _build_synopsis_doc(
-                group_camps=camps,
-                doc_title=gname,
-                header_meta=header_meta,
-                drive_link=drive_link,
-                entries_by_camp=entries_by_camp,
-                food_data=food_data,
-                year=year,
-                day_order=day_order,
+        try:
+            file_info = await run_in_threadpool(
+                _upload_or_replace_drive_file, service, folder['id'], f'{gname}.docx', doc_bytes, _DOCX_MIME,
             )
-            safe_name = re.sub(r'[^\w\s\-]', '', gname).strip().replace(' ', '_')
-            zf.writestr(f'{safe_name}.docx', doc_bytes)
+        except _DriveHttpError as exc:
+            logger.error(f"Drive upload failed for group {gname!r} in week {week_id}: {exc}")
+            raise HTTPException(502, f"Saved {len(uploaded)} doc(s), but failed to upload '{gname}' to Drive.") from exc
+        uploaded.append(file_info)
 
-    zip_buf.seek(0)
-    return StreamingResponse(
-        zip_buf,
-        media_type='application/zip',
-        headers={'Content-Disposition': f'attachment; filename="synopsis_{week_id}.zip"'},
-    )
+    return {
+        'folder': {'name': week_label, 'link': folder['link']},
+        'files': uploaded,
+    }
 
 

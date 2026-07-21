@@ -8,6 +8,7 @@ import CourseViewer from './CourseViewer';
 import SubsectionView from './SubsectionView';
 import BlockView from './BlockView';
 import SubsectionSelectionMatrix from './SubsectionSelectionMatrix';
+import ContentLibraryPanel from './ContentLibraryPanel';
 import EdoChatbot from './EdoChatbot';
 import CourseInfoPanel from './CourseInfoPanel';
 import useCourseActions from './useCourseActions';
@@ -70,6 +71,11 @@ const CourseWorkspace = () => {
   const [courseInfoNotes, setCourseInfoNotes] = useState('');
   const [trayItems, setTrayItems] = useState([]);
   const [linkGenJobs, setLinkGenJobs] = useState({}); // { [blockId]: 'generating'|'done'|'error' }
+
+  // Phase 1.5 redesign (TASK-002/003/004) — content library + day lanes view.
+  // Local feature flag only: gates the new panel alongside the existing
+  // CourseEditor render so the current flow keeps working untouched when off.
+  const [showLibraryView, setShowLibraryView] = useState(false);
 
   // ── Page Navigation ───────────────────────────────────────────────────
   // navPage: 'outline' | 'subsection' | 'block'
@@ -285,6 +291,9 @@ const CourseWorkspace = () => {
               description: sub.description || '',
               learning_objectives: sub.learning_objectives || [],
               duration_minutes: sub.duration_minutes ?? 20,
+              // Preserve the "suggested" origin tag (set when an Edo tray item is
+              // merged in — see handleDragEnd) across this migration/hydration pass.
+              ...(sub.source ? { source: sub.source } : {}),
             };
           }
           // Migrate: pull metadata from first topic box
@@ -297,6 +306,7 @@ const CourseWorkspace = () => {
               ? sub.learning_objectives
               : (first.learning_objectives || []),
             duration_minutes: sub.duration_minutes ?? first.duration_minutes ?? 20,
+            ...(sub.source ? { source: sub.source } : {}),
           };
         })
       };
@@ -438,6 +448,10 @@ const CourseWorkspace = () => {
         worksheets: (handsOnResources[sub.id] || []).filter(r => r.type === 'worksheet'),
         activities: (handsOnResources[sub.id] || []).filter(r => r.type === 'activity'),
         video_resources: videosByTopic[sub.id] || [],
+        // "Suggested" origin tag (content library badge) — additive field, backend
+        // stores/returns curricula.sections as a passthrough dict so this survives
+        // save/reload without needing a schema change.
+        ...(sub.source ? { source: sub.source } : {}),
       }))
     }));
 
@@ -492,7 +506,7 @@ const CourseWorkspace = () => {
   const sectionsWithBlocks = () => sections.map(section => ({
     ...section,
     subsections: (section.subsections || []).map(sub => ({
-      ...sub,
+      ...sub, // includes sub.source (suggested badge tag) if present, unchanged
       content_blocks: (handsOnResources[sub.id] || []).filter(r => r.type === 'content'),
       worksheets:     (handsOnResources[sub.id] || []).filter(r => r.type === 'worksheet'),
       activities:     (handsOnResources[sub.id] || []).filter(r => r.type === 'activity'),
@@ -593,7 +607,12 @@ const CourseWorkspace = () => {
       }
       if (type === 'SUBSECTION' && destination.droppableId.startsWith('subsections-')) {
         const sectionId = destination.droppableId.replace('subsections-', '');
-        actions.insertSubsectionAt(sectionId, trayItem.data, destination.index);
+        // Tag origin so the content library panel can show a "Suggested" badge —
+        // there's no persistent source/origin field on subsections today, so this
+        // is the one place we can reliably stamp it: the moment an Edo-suggested
+        // subsection (previously only living in transient trayItems) gets merged
+        // into the real sections[] state.
+        actions.insertSubsectionAt(sectionId, { ...trayItem.data, source: 'edo-suggested' }, destination.index);
         setTrayItems(prev => prev.filter(i => i.id !== draggableId));
         return;
       }
@@ -864,6 +883,23 @@ const CourseWorkspace = () => {
               Share
             </button>
 
+            {navPage === 'outline' && !isSelectingSubsections && (
+              <button
+                onClick={() => setShowLibraryView(p => !p)}
+                title={showLibraryView ? 'Switch back to the classic outline view' : 'Try the new content library view (beta)'}
+                style={{
+                  fontFamily: "'DM Sans', sans-serif", fontSize: '13.8px', fontWeight: '500',
+                  padding: '6px 13px', borderRadius: '8px', cursor: 'pointer',
+                  background: showLibraryView ? 'rgba(178,232,200,0.55)' : '#FFFFFF',
+                  border: `1px solid ${showLibraryView ? 'rgba(28,92,53,0.3)' : 'rgba(0,0,0,0.12)'}`,
+                  color: showLibraryView ? '#1C5C35' : '#111',
+                  whiteSpace: 'nowrap', flexShrink: 0,
+                }}
+              >
+                {showLibraryView ? '☰ Outline View' : '🗂 Library View (beta)'}
+              </button>
+            )}
+
             <div style={{ width: '1px', height: '22px', background: 'rgba(0,0,0,0.08)', flexShrink: 0 }} />
 
             <button
@@ -916,7 +952,7 @@ const CourseWorkspace = () => {
               )}
 
               {/* ── Course Outline Page ── */}
-              {navPage === 'outline' && !isSelectingSubsections && (
+              {navPage === 'outline' && !isSelectingSubsections && !showLibraryView && (
                 <CourseEditor
                   courseClass={courseClass}
                   setCourseClass={setCourseClass}
@@ -931,6 +967,17 @@ const CourseWorkspace = () => {
                   navigate={navigate}
                   onNavigateToSubsection={navigateToSubsection}
                   pendingSubsectionIds={isGenerating ? genState.pendingSubsectionIds : null}
+                />
+              )}
+
+              {/* ── Course Outline Page — Phase 1.5 redesign (TASK-002), gated by
+                    the local `showLibraryView` toggle. Built as a separate
+                    sibling view so the existing CourseEditor flow above is
+                    untouched when this is off. ── */}
+              {navPage === 'outline' && !isSelectingSubsections && showLibraryView && (
+                <ContentLibraryPanel
+                  sections={sections}
+                  handsOnResources={handsOnResources}
                 />
               )}
 
