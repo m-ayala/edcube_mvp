@@ -6,6 +6,11 @@
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 const API_KEY = import.meta.env.VITE_GOOGLE_API_KEY;
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+// GCP project number — same digits Google puts at the front of the OAuth client ID.
+// Required by PickerBuilder.setAppId() so a drive.file-scoped pick actually grants this
+// app per-file access; without it the picker still shows/selects files fine, but the
+// follow-up `files.get?alt=media` download 404s (Drive won't reveal *why* it's denied).
+const APP_ID = CLIENT_ID?.split('-')[0];
 
 let scriptsPromise = null;
 let tokenClient = null;
@@ -79,6 +84,7 @@ export const openDrivePicker = ({ accessToken, folderId, maxItems = 1, onPicked,
     .addView(view)
     .setOAuthToken(accessToken)
     .setDeveloperKey(API_KEY)
+    .setAppId(APP_ID)
     .setCallback((data) => {
       if (data.action === window.google.picker.Action.PICKED) {
         onPicked(data.docs.slice(0, maxItems));

@@ -167,26 +167,13 @@ export const deleteWeek = async (currentUser, weekId) => {
   return res.json();
 };
 
-// Both resolve to { folder: { name, link }, files: [{ name, link }] }
-export const saveWeeklyDocsToDrive = async (currentUser, weekId) => {
+export const downloadGroupDoc = async (currentUser, weekId, groupName) => {
   const headers = await authHeader(currentUser);
-  const res = await fetch(`${API_BASE}/weeks/${weekId}/save-to-drive`, { method: 'POST', headers });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || 'Failed to save docs to Drive');
-  }
-  return res.json();
-};
-
-export const saveGroupDocToDrive = async (currentUser, weekId, groupName) => {
-  const headers = await authHeader(currentUser);
-  const url = `${API_BASE}/weeks/${weekId}/save-to-drive?group_name=${encodeURIComponent(groupName)}`;
-  const res = await fetch(url, { method: 'POST', headers });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || 'Failed to save doc to Drive');
-  }
-  return res.json();
+  delete headers['Content-Type'];
+  const url = `${API_BASE}/weeks/${weekId}/download?group_name=${encodeURIComponent(groupName)}`;
+  const res = await fetch(url, { headers });
+  if (!res.ok) throw new Error('Failed to download doc');
+  return res.blob();
 };
 
 
@@ -229,11 +216,11 @@ export const parseFoodImage = async (currentUser, file) => {
   return res.json();
 };
 
-export const saveFoodForWeek = async (weekId, days) => {
+export const saveFoodForWeek = async (weekId, food) => {
   const res = await fetch(`${API_BASE}/weeks/${weekId}/food`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ days }),
+    body: JSON.stringify(food),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));

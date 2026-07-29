@@ -25,11 +25,7 @@ from docx.oxml import OxmlElement
 
 from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, UploadFile, status
 from fastapi.concurrency import run_in_threadpool
-
-import google.auth
-from googleapiclient.discovery import build as _drive_build
-from googleapiclient.errors import HttpError as _DriveHttpError
-from googleapiclient.http import MediaIoBaseUpload
+from fastapi.responses import Response
 
 import firebase_admin
 from firebase_admin import auth
@@ -41,7 +37,6 @@ from schemas.synopsis_schema import (
     EnhanceTextRequest,
     EntrySaveRequest,
     EntryDayInput,
-    FoodDayData,
     FoodUpdateRequest,
     SubCampInput,
     SynopsisCampFields,
@@ -56,7 +51,6 @@ from schemas.synopsis_schema import (
     PHOTO_MAX,
     VALID_DAYS,
 )
-from config import SYNOPSIS_DRIVE_FOLDER_ID
 from services.firebase_service import FirebaseService
 from utils.llm_handler import call_openai, OpenAIServiceError
 
@@ -125,12 +119,9 @@ def _annotate_week_days(week: dict) -> dict:
 PARSE_FOOD_PROMPT = (
     "You extract a weekly camp food menu from an image. "
     "Return JSON with exactly this structure (leave fields as empty strings if not found):\n"
-    '{"mon": {"morning_snack": "", "lunch": "", "afternoon_snack": ""}, '
-    '"tue": {"morning_snack": "", "lunch": "", "afternoon_snack": ""}, '
-    '"wed": {"morning_snack": "", "lunch": "", "afternoon_snack": ""}, '
-    '"thu": {"morning_snack": "", "lunch": "", "afternoon_snack": ""}, '
-    '"fri": {"morning_snack": "", "lunch": "", "afternoon_snack": ""}}\n\n'
+    '{"morning_snack": "", "lunch": "", "afternoon_snack": ""}\n\n'
     "Fill in every field you can read. Use short, plain descriptions (e.g. 'Fresh fruit and crackers'). "
+    "If the menu varies by day, combine the notable items into one summary per meal. "
     "Leave a field as an empty string if the menu does not mention it."
 )
 
@@ -340,7 +331,7 @@ async def parse_food_image(
     file: UploadFile = File(...),
     admin: dict = Depends(verify_icc_admin),
 ):
-    """Upload a menu photo; returns structured food data keyed by day."""
+    """Upload a menu photo; returns structured food data (morning snack, lunch, evening snack)."""
     import base64
     content_type = (file.content_type or "").lower()
     if not content_type.startswith("image/"):
@@ -354,8 +345,8 @@ async def parse_food_image(
         json_mode=True,
         images=[data_uri],
     )
-    for day in ("mon", "tue", "wed", "thu", "fri"):
-        result.setdefault(day, {"morning_snack": "", "lunch": "", "afternoon_snack": ""})
+    for key in ("morning_snack", "lunch", "afternoon_snack"):
+        result.setdefault(key, "")
     return result
 
 
@@ -443,8 +434,9 @@ async def save_entries(body: EntrySaveRequest):
     week = await firebase.get_synopsis_week(week_id)
     allowed_days = _week_day_keys(week) if week else list(VALID_DAYS)
 
-    saved_ids = []
-
+    # Validate every day up front so a bad day can't leave a partial save behind —
+    # without this, days earlier in body.entries were already written to Firestore
+    # by the time a later day's validation raised and aborted the request.
     for entry in body.entries:
         day = entry.day.lower()
         if day not in allowed_days:
@@ -457,6 +449,10 @@ async def save_entries(body: EntrySaveRequest):
                 f"Day '{day}': photos must be between {PHOTO_MIN} and {PHOTO_MAX} (got {photo_count})"
             )
 
+    saved_ids = []
+
+    for entry in body.entries:
+        day = entry.day.lower()
         now = datetime.utcnow().isoformat()
         data = {
             SynopsisEntryFields.DAY_TITLE: entry.day_title,
@@ -492,7 +488,26 @@ async def enhance_text(body: EnhanceTextRequest):
 # ── Photos ────────────────────────────────────────────────────────────────────
 
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"}
+# iPhones default to HEIC/HEIF; Drive reports these mime types for photos picked via
+# the "Choose from Google Drive" flow. Chrome/Firefox/Edge can't render HEIC in <img>
+# tags, so these are transcoded to JPEG below rather than added to ALLOWED_IMAGE_TYPES.
+HEIC_IMAGE_TYPES = {"image/heic", "image/heif"}
 MAX_PHOTO_BYTES = 10 * 1024 * 1024  # 10 MB
+
+
+def _heic_to_jpeg(data: bytes) -> bytes:
+    """Transcode HEIC/HEIF bytes to JPEG. Also applies EXIF-based rotation."""
+    import pillow_heif
+    from PIL import Image as PILImage, ImageOps
+
+    heif_file = pillow_heif.read_heif(data)
+    img = PILImage.frombytes(heif_file.mode, heif_file.size, heif_file.data, "raw")
+    img = ImageOps.exif_transpose(img) or img
+    if img.mode not in ("RGB", "L"):
+        img = img.convert("RGB")
+    out = io.BytesIO()
+    img.save(out, format="JPEG", quality=90)
+    return out.getvalue()
 
 
 @router.post("/photos")
@@ -506,14 +521,25 @@ async def upload_photo(
         raise HTTPException(400, f"Invalid day. Must be one of: {', '.join(VALID_DAYS)}")
 
     content_type = file.content_type or ""
-    if content_type not in ALLOWED_IMAGE_TYPES:
-        raise HTTPException(400, "Only JPEG, PNG, WebP, and GIF images are supported")
+    is_heic = content_type in HEIC_IMAGE_TYPES
+    if not is_heic and content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(400, "Only JPEG, PNG, WebP, GIF, and HEIC images are supported")
 
     data = await file.read()
     if len(data) > MAX_PHOTO_BYTES:
         raise HTTPException(400, "Image must be under 10 MB")
 
     ext = file.filename.rsplit(".", 1)[-1] if "." in file.filename else "jpg"
+
+    if is_heic:
+        try:
+            data = await run_in_threadpool(_heic_to_jpeg, data)
+        except Exception as exc:
+            logger.warning(f"HEIC conversion failed for {file.filename}: {exc}")
+            raise HTTPException(400, "Couldn't process this HEIC photo. Please try converting it to JPEG first.")
+        content_type = "image/jpeg"
+        ext = "jpg"
+
     photo_id = str(uuid.uuid4())
     storage_path = f"synopsis/{camp_id}/{day}/{photo_id}.{ext}"
 
@@ -538,8 +564,7 @@ async def get_food(week_id: str):
 
 @router.patch("/weeks/{week_id}/food")
 async def update_food(week_id: str, body: FoodUpdateRequest):
-    data = {day: vals.model_dump() for day, vals in body.days.items()}
-    await firebase.upsert_synopsis_food(week_id, data)
+    await firebase.upsert_synopsis_food(week_id, body.model_dump())
     return {"success": True}
 
 
@@ -570,7 +595,7 @@ def _fetch_photo_bytes(url: str) -> bytes:
     return resp.content
 
 
-_PHOTO_MAX_DIM = 1600  # px — docx embeds these at 2.1in wide; full phone-camera resolution
+_PHOTO_MAX_DIM = 1200  # px — docx embeds these at 2.1in wide; full phone-camera resolution
                        # (often 4000px+) just multiplies decode/re-encode memory for no visible gain
 
 
@@ -778,7 +803,7 @@ def _prefetch_notes_and_photos(group_camps: list, entries_by_camp: dict, day_ord
     if not correction_jobs and not photo_urls:
         return notes_cache, photo_cache
 
-    with ThreadPoolExecutor(max_workers=4) as pool:
+    with ThreadPoolExecutor(max_workers=2) as pool:
         future_map = {}
         for key, raw in correction_jobs.items():
             future_map[pool.submit(_light_correct, raw)] = ('notes', key)
@@ -940,34 +965,18 @@ def _build_synopsis_doc(
     _run(p_fhdr, '🍽️  This Week\'s Menu', bold=True, size_pt=15)
     _para_border_bottom(p_fhdr, '1a1a1a', sz='6')
 
-    num_days  = len(day_order)
-    USABLE_W  = 6.5
-    LABEL_COL = 1.3
-    DAY_COL   = (USABLE_W - LABEL_COL) / num_days
-
-    ftbl = doc.add_table(rows=4, cols=num_days + 1)
+    ftbl = doc.add_table(rows=3, cols=2)
     ftbl.style   = 'Table Grid'
     ftbl.autofit = False
-    ftbl.columns[0].width = Inches(LABEL_COL)
-    for i in range(1, num_days + 1):
-        ftbl.columns[i].width = Inches(DAY_COL)
-
-    _cell_bg(ftbl.cell(0, 0), 'f5f5f3')
-    for col_i, dk in enumerate(day_order):
-        cell = ftbl.cell(0, col_i + 1)
-        _cell_bg(cell, _DAY_C_HEX[dk])
-        p = cell.paragraphs[0]
-        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        r = p.add_run(_DAY_LABEL_SHORT[dk])
-        r.bold      = True
-        r.font.size = Pt(12)
+    ftbl.columns[0].width = Inches(1.8)
+    ftbl.columns[1].width = Inches(4.7)
 
     for row_i, (meal_key, meal_label, meal_emoji) in enumerate([
-        ('morning_snack',   'Morning Snack',   '🍎'),
-        ('lunch',           'Lunch',           '🥗'),
-        ('afternoon_snack', 'Afternoon Snack', '🍪'),
+        ('morning_snack',   'Morning Snack', '🍎'),
+        ('lunch',           'Lunch',         '🥗'),
+        ('afternoon_snack', 'Evening Snack', '🍪'),
     ]):
-        tbl_row  = ftbl.rows[row_i + 1]
+        tbl_row  = ftbl.rows[row_i]
         lbl_cell = tbl_row.cells[0]
         _cell_bg(lbl_cell, 'f5f5f3')
         p = lbl_cell.paragraphs[0]
@@ -976,14 +985,11 @@ def _build_synopsis_doc(
         r.font.size      = Pt(11)
         r.font.color.rgb = RGBColor(0x1a, 0x1a, 0x1a)
 
-        for col_i, dk in enumerate(day_order):
-            val  = (food_data.get(dk) or {}).get(meal_key, '') or '—'
-            cell = tbl_row.cells[col_i + 1]
-            p    = cell.paragraphs[0]
-            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            r = p.add_run(val)
-            r.font.size      = Pt(11)
-            r.font.color.rgb = RGBColor(0x1a, 0x1a, 0x1a)
+        val_cell = tbl_row.cells[1]
+        p = val_cell.paragraphs[0]
+        r = p.add_run(food_data.get(meal_key) or '—')
+        r.font.size      = Pt(11)
+        r.font.color.rgb = RGBColor(0x1a, 0x1a, 0x1a)
 
     buf = io.BytesIO()
     doc.save(buf)
@@ -1018,81 +1024,12 @@ def _week_header_meta(week: dict) -> str:
     return week_label + (f' · {dates}' if dates else '')
 
 
-_DRIVE_SCOPES       = ['https://www.googleapis.com/auth/drive']
-_DOCX_MIME          = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-_DRIVE_FOLDER_MIME  = 'application/vnd.google-apps.folder'
-
-_drive_service = None  # lazy singleton, built on first use
-
-
-def _get_drive_service():
-    """Drive v3 client using the same Application Default Credentials Firebase Admin
-    already runs under — the Cloud Run service account in prod, gcloud ADC locally."""
-    global _drive_service
-    if _drive_service is None:
-        creds, _ = google.auth.default(scopes=_DRIVE_SCOPES)
-        _drive_service = _drive_build('drive', 'v3', credentials=creds, cache_discovery=False)
-    return _drive_service
-
-
-def _drive_escape(value: str) -> str:
-    return (value or '').replace('\\', '\\\\').replace("'", "\\'")
-
-
-def _find_or_create_week_folder(service, parent_folder_id: str, week_label: str) -> dict:
-    """Find the Drive subfolder matching this week's label inside the synopsis root
-    folder, creating it if it doesn't exist yet."""
-    name  = week_label or 'Untitled Week'
-    query = (
-        f"name = '{_drive_escape(name)}' and '{parent_folder_id}' in parents "
-        f"and mimeType = '{_DRIVE_FOLDER_MIME}' and trashed = false"
-    )
-    existing = service.files().list(
-        q=query, spaces='drive', fields='files(id, webViewLink)', orderBy='createdTime',
-    ).execute().get('files', [])
-
-    if existing:
-        return {'id': existing[0]['id'], 'link': existing[0].get('webViewLink', '')}
-
-    folder = service.files().create(
-        body={'name': name, 'mimeType': _DRIVE_FOLDER_MIME, 'parents': [parent_folder_id]},
-        fields='id, webViewLink',
-    ).execute()
-    return {'id': folder['id'], 'link': folder.get('webViewLink', '')}
-
-
-def _upload_or_replace_drive_file(service, folder_id: str, filename: str, content: bytes, mime_type: str) -> dict:
-    """Create filename inside folder_id, or overwrite it in place if it's already there —
-    so re-generating a doc updates the same file instead of piling up duplicate copies."""
-    query = f"name = '{_drive_escape(filename)}' and '{folder_id}' in parents and trashed = false"
-    existing = service.files().list(
-        q=query, spaces='drive', fields='files(id)', orderBy='createdTime',
-    ).execute().get('files', [])
-
-    media = MediaIoBaseUpload(io.BytesIO(content), mimetype=mime_type, resumable=False)
-
-    if existing:
-        result = service.files().update(
-            fileId=existing[0]['id'], media_body=media, fields='id, name, webViewLink',
-        ).execute()
-    else:
-        result = service.files().create(
-            body={'name': filename, 'parents': [folder_id]},
-            media_body=media, fields='id, name, webViewLink',
-        ).execute()
-
-    return {'name': result.get('name', filename), 'link': result.get('webViewLink', '')}
-
-
-@router.post("/weeks/{week_id}/save-to-drive")
-async def save_synopsis_to_drive(
+@router.get("/weeks/{week_id}/download")
+async def download_weekly_doc(
     week_id: str,
-    group_name: Optional[str] = Query(None, description="Save only this camp group"),
+    group_name: str = Query(..., description="Camp group to download"),
     admin: dict = Depends(verify_icc_admin),
 ):
-    if not SYNOPSIS_DRIVE_FOLDER_ID:
-        raise HTTPException(500, "SYNOPSIS_DRIVE_FOLDER_ID is not configured on the backend.")
-
     # ── Fetch shared data ──────────────────────────────────────────────────────
     weeks = await firebase.get_all_synopsis_weeks()
     week  = next((w for w in weeks if w.get(SynopsisWeekFields.WEEK_ID) == week_id or w.get('id') == week_id), None)
@@ -1111,52 +1048,25 @@ async def save_synopsis_to_drive(
     header_meta = _week_header_meta(week)
     year        = _dt.datetime.now().year
     day_order   = _week_day_keys(week)
-    week_label  = week.get(SynopsisWeekFields.LABEL) or week_id
 
-    try:
-        service = await run_in_threadpool(_get_drive_service)
-        folder  = await run_in_threadpool(_find_or_create_week_folder, service, SYNOPSIS_DRIVE_FOLDER_ID, week_label)
-    except _DriveHttpError as exc:
-        logger.error(f"Drive folder lookup failed for week {week_id}: {exc}")
-        raise HTTPException(
-            502, "Could not access the Synopsis Drive folder — make sure it's shared with the "
-                 "backend's service account as an Editor."
-        ) from exc
-
-    unique_groups = (
-        [group_name] if group_name else
-        list(dict.fromkeys(
-            c.get(SynopsisCampFields.GROUP_NAME, '') for c in all_camps
-            if c.get(SynopsisCampFields.GROUP_NAME)
-        ))
+    camps = [c for c in all_camps if c.get(SynopsisCampFields.GROUP_NAME) == group_name]
+    doc_bytes = await run_in_threadpool(
+        _build_synopsis_doc,
+        group_camps=camps,
+        doc_title=group_name,
+        header_meta=header_meta,
+        drive_link=drive_link,
+        entries_by_camp=entries_by_camp,
+        food_data=food_data,
+        year=year,
+        day_order=day_order,
     )
-
-    uploaded = []
-    for gname in unique_groups:
-        camps = [c for c in all_camps if c.get(SynopsisCampFields.GROUP_NAME) == gname]
-        doc_bytes = await run_in_threadpool(
-            _build_synopsis_doc,
-            group_camps=camps,
-            doc_title=gname,
-            header_meta=header_meta,
-            drive_link=drive_link,
-            entries_by_camp=entries_by_camp,
-            food_data=food_data,
-            year=year,
-            day_order=day_order,
-        )
-        try:
-            file_info = await run_in_threadpool(
-                _upload_or_replace_drive_file, service, folder['id'], f'{gname}.docx', doc_bytes, _DOCX_MIME,
-            )
-        except _DriveHttpError as exc:
-            logger.error(f"Drive upload failed for group {gname!r} in week {week_id}: {exc}")
-            raise HTTPException(502, f"Saved {len(uploaded)} doc(s), but failed to upload '{gname}' to Drive.") from exc
-        uploaded.append(file_info)
-
-    return {
-        'folder': {'name': week_label, 'link': folder['link']},
-        'files': uploaded,
-    }
+    slug     = group_name.replace(' ', '_')
+    filename = f'synopsis_{slug}.docx'
+    return Response(
+        content=doc_bytes,
+        media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+    )
 
 

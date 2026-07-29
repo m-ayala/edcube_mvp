@@ -3,8 +3,6 @@ import { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Check } from 'lucide-react';
 import {
   SynopsisWeekFields,
-  VALID_DAYS,
-  DAY_LABELS,
   FoodFields,
 } from '../../constants/synopsisSchema';
 import {
@@ -16,10 +14,7 @@ import {
 const FONT  = "'DM Sans', sans-serif";
 const SERIF = "'DM Serif Display', serif";
 
-const DAY_ORDINAL = { mon: 'Day 1', tue: 'Day 2', wed: 'Day 3', thu: 'Day 4', fri: 'Day 5' };
-const BLANK_FOOD  = () => Object.fromEntries(
-  VALID_DAYS.map(d => [d, { morning_snack: '', lunch: '', afternoon_snack: '' }])
-);
+const BLANK_FOOD = { morning_snack: '', lunch: '', afternoon_snack: '' };
 
 export default function FoodMenuPage({ week, isAdmin, currentUser, onBack }) {
   const weekId    = week?.[SynopsisWeekFields.WEEK_ID];
@@ -35,18 +30,12 @@ export default function FoodMenuPage({ week, isAdmin, currentUser, onBack }) {
     if (!weekId) return;
     getFoodForWeek(weekId).then(({ food }) => {
       if (!food) return;
-      setFoodData(prev => {
-        const next = { ...prev };
-        for (const day of VALID_DAYS) {
-          if (food[day]) next[day] = { morning_snack: '', lunch: '', afternoon_snack: '', ...food[day] };
-        }
-        return next;
-      });
+      setFoodData(prev => ({ ...prev, ...food }));
     }).catch(() => {});
   }, [weekId]);
 
-  const setField = (day, field, val) =>
-    setFoodData(prev => ({ ...prev, [day]: { ...prev[day], [field]: val } }));
+  const setField = (field, val) =>
+    setFoodData(prev => ({ ...prev, [field]: val }));
 
   const handleSave = async () => {
     setSaving(true);
@@ -66,13 +55,7 @@ export default function FoodMenuPage({ week, isAdmin, currentUser, onBack }) {
     setParsing(true);
     try {
       const result = await parseFoodImage(currentUser, file);
-      setFoodData(prev => {
-        const next = { ...prev };
-        for (const day of VALID_DAYS) {
-          if (result[day]) next[day] = { ...next[day], ...result[day] };
-        }
-        return next;
-      });
+      setFoodData(prev => ({ ...prev, ...result }));
     } catch (err) {
       alert(`Could not read image: ${err.message}`);
     } finally {
@@ -157,49 +140,43 @@ export default function FoodMenuPage({ week, isAdmin, currentUser, onBack }) {
         </div>
       )}
 
-      {/* Per-day food */}
-      {VALID_DAYS.map(day => (
-        <div key={day} style={{ marginBottom: 32, paddingBottom: 32, borderBottom: '1px solid #F0EDE8' }}>
-          <div style={{ fontFamily: SERIF, fontSize: 16, fontWeight: 600, color: '#1C1917', marginBottom: 16 }}>
-            {DAY_ORDINAL[day]} — {DAY_LABELS[day]}
-          </div>
-
-          {[
-            [FoodFields.MORNING_SNACK,   '🍎 Morning Snack'],
-            [FoodFields.LUNCH,           '🥗 Lunch'],
-            [FoodFields.AFTERNOON_SNACK, '🍪 Afternoon Snack'],
-          ].map(([field, label]) => (
-            <div key={field} style={{ marginBottom: 14 }}>
-              <label style={{
-                display: 'block', fontSize: 11, fontWeight: 700, color: '#8b7355',
-                textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6,
+      {/* Food */}
+      <div style={{ marginBottom: 32, paddingBottom: 32, borderBottom: '1px solid #F0EDE8' }}>
+        {[
+          [FoodFields.MORNING_SNACK,   '🍎 Morning Snack'],
+          [FoodFields.LUNCH,           '🥗 Lunch'],
+          [FoodFields.AFTERNOON_SNACK, '🍪 Evening Snack'],
+        ].map(([field, label]) => (
+          <div key={field} style={{ marginBottom: 14 }}>
+            <label style={{
+              display: 'block', fontSize: 11, fontWeight: 700, color: '#8b7355',
+              textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6,
+            }}>
+              {label}
+            </label>
+            {isAdmin ? (
+              <input
+                type="text"
+                value={foodData[field] || ''}
+                onChange={e => setField(field, e.target.value)}
+                placeholder={field === 'lunch' ? 'e.g. Rice, dal, and roasted vegetables' : 'e.g. Fresh fruit and crackers'}
+                style={fieldInput}
+                onFocus={e => { e.target.style.borderColor = '#f6b26b'; e.target.style.boxShadow = '0 0 0 3px rgba(246,178,107,0.2)'; }}
+                onBlur={e => { e.target.style.borderColor = 'rgba(255,255,255,0.9)'; e.target.style.boxShadow = 'none'; }}
+              />
+            ) : (
+              <div style={{
+                ...fieldInput,
+                background: 'rgba(255,255,255,0.5)',
+                color: foodData[field] ? '#1e1e2e' : '#bbb',
+                cursor: 'default',
               }}>
-                {label}
-              </label>
-              {isAdmin ? (
-                <input
-                  type="text"
-                  value={foodData[day]?.[field] || ''}
-                  onChange={e => setField(day, field, e.target.value)}
-                  placeholder={field === 'lunch' ? 'e.g. Rice, dal, and roasted vegetables' : 'e.g. Fresh fruit and crackers'}
-                  style={fieldInput}
-                  onFocus={e => { e.target.style.borderColor = '#f6b26b'; e.target.style.boxShadow = '0 0 0 3px rgba(246,178,107,0.2)'; }}
-                  onBlur={e => { e.target.style.borderColor = 'rgba(255,255,255,0.9)'; e.target.style.boxShadow = 'none'; }}
-                />
-              ) : (
-                <div style={{
-                  ...fieldInput,
-                  background: 'rgba(255,255,255,0.5)',
-                  color: foodData[day]?.[field] ? '#1e1e2e' : '#bbb',
-                  cursor: 'default',
-                }}>
-                  {foodData[day]?.[field] || 'Not set yet'}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      ))}
+                {foodData[field] || 'Not set yet'}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
 
       {/* Save bar — admin only */}
       {isAdmin && (

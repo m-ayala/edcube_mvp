@@ -5,7 +5,7 @@ Synopsis Schema - Single Source of Truth for Field Names
 Any changes here MUST be reflected in the frontend constants file.
 """
 
-from typing import Dict, List, Optional
+from typing import List, Optional
 from pydantic import BaseModel
 
 
@@ -53,7 +53,7 @@ class SynopsisEntryFields:
 VALID_DAYS = ('mon', 'tue', 'wed', 'thu', 'fri')
 ENTRY_STATUS_DRAFT = 'draft'
 ENTRY_STATUS_SAVED = 'saved'
-PHOTO_MIN = 3
+PHOTO_MIN = 0
 PHOTO_MAX = 6
 
 ICC_ADMIN_DOMAIN = 'indiacc.org'
@@ -141,11 +141,7 @@ class EntrySaveRequest(BaseModel):
     entries: List[EntryDayInput]
 
 
-class FoodDayData(BaseModel):
+class FoodUpdateRequest(BaseModel):
     morning_snack: str = ""
     lunch: str = ""
     afternoon_snack: str = ""
-
-
-class FoodUpdateRequest(BaseModel):
-    days: Dict[str, FoodDayData]

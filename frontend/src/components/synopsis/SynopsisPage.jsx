@@ -279,6 +279,7 @@ export default function SynopsisPage() {
               <AdminPanel
                 currentUser={currentUser}
                 allWeeks={allWeeks}
+                camps={camps}
                 displayWeekId={displayWeekId}
                 activeWeekId={activeWeekId}
                 onWeekChange={handleWeekChange}

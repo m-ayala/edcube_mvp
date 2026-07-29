@@ -1,9 +1,10 @@
 // frontend/src/components/synopsis/AdminPanel.jsx
 import { useState } from 'react';
-import { Plus, FolderUp, ChevronDown, Trash2 } from 'lucide-react';
-import { SynopsisWeekFields } from '../../constants/synopsisSchema';
-import { updateWeek, deleteWeek, saveWeeklyDocsToDrive } from '../../services/synopsisService';
+import { Plus, Download, ChevronDown, Trash2 } from 'lucide-react';
+import { SynopsisWeekFields, SynopsisCampFields } from '../../constants/synopsisSchema';
+import { updateWeek, deleteWeek, downloadGroupDoc } from '../../services/synopsisService';
 import AddWeekModal from './AddWeekModal';
+import ProgressBar from './ProgressBar';
 
 const FONT = "'DM Sans', sans-serif";
 
@@ -14,9 +15,10 @@ const BTN = (extra = {}) => ({
   ...extra,
 });
 
-export default function AdminPanel({ currentUser, allWeeks, displayWeekId, activeWeekId, onWeekChange, onDataRefresh, onWeekReset }) {
+export default function AdminPanel({ currentUser, allWeeks, camps, displayWeekId, activeWeekId, onWeekChange, onDataRefresh, onWeekReset }) {
   const [showAddWeek, setShowAddWeek] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(null); // { done, total } | null
   const [deleting, setDeleting] = useState(false);
   const [weekMenuOpen, setWeekMenuOpen] = useState(false);
   const [togglingVisible, setTogglingVisible] = useState(null);
@@ -54,15 +56,44 @@ export default function AdminPanel({ currentUser, allWeeks, displayWeekId, activ
     finally { setDeleting(false); }
   };
 
-  const handleGenerateAll = async () => {
+  // Downloads each camp group's doc as a separate request, one after another,
+  // instead of asking the backend to bundle them into one zip. A single big zip
+  // for a camp-heavy week can exceed Cloud Run's response size limit and fail
+  // outright even though every individual doc is well within it.
+  const handleDownload = async () => {
     if (!displayWeekId) return alert('Select a week first');
+    const groupNames = [...new Set(
+      (camps || [])
+        .map(c => c[SynopsisCampFields.GROUP_NAME])
+        .filter(Boolean)
+    )];
+    if (groupNames.length === 0) return alert('No camp groups to download for this week');
+
     setDownloading(true);
+    const failed = [];
     try {
-      const { folder, files } = await saveWeeklyDocsToDrive(currentUser, displayWeekId);
-      alert(`Saved ${files.length} doc${files.length !== 1 ? 's' : ''} to Drive folder "${folder.name}".`);
-      if (folder.link) window.open(folder.link, '_blank', 'noopener');
-    } catch (err) { alert(err.message); }
-    finally { setDownloading(false); }
+      for (let i = 0; i < groupNames.length; i++) {
+        const groupName = groupNames[i];
+        setDownloadProgress({ done: i, total: groupNames.length });
+        try {
+          const blob = await downloadGroupDoc(currentUser, displayWeekId, groupName);
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `synopsis_${groupName.replace(/\s+/g, '_')}.docx`;
+          a.click();
+          URL.revokeObjectURL(url);
+        } catch {
+          failed.push(groupName);
+        }
+      }
+      if (failed.length > 0) {
+        alert(`Downloaded ${groupNames.length - failed.length} of ${groupNames.length} docs. Failed: ${failed.join(', ')}`);
+      }
+    } finally {
+      setDownloading(false);
+      setDownloadProgress(null);
+    }
   };
 
   return (
@@ -174,14 +205,26 @@ export default function AdminPanel({ currentUser, allWeeks, displayWeekId, activ
           <Trash2 size={14} /> {deleting ? 'Deleting…' : 'Delete week'}
         </button>
 
-        {/* Generate all — saves every group's doc to the week's Drive folder */}
+        {/* Download all */}
         <button
-          onClick={handleGenerateAll}
+          onClick={handleDownload}
           disabled={downloading || !displayWeekId}
           style={BTN({ background: '#E8E0D5', color: '#5c4a32', opacity: (downloading || !displayWeekId) ? 0.5 : 1, cursor: (downloading || !displayWeekId) ? 'not-allowed' : 'pointer' })}
         >
-          <FolderUp size={14} /> {downloading ? 'Generating…' : 'Generate All'}
+          <Download size={14} />
+          {downloading
+            ? `Downloading ${downloadProgress ? downloadProgress.done + 1 : 1}/${downloadProgress?.total ?? '…'}…`
+            : 'Download all'}
         </button>
+
+        {downloading && (
+          <div style={{ flexBasis: '100%', paddingTop: 2 }}>
+            <ProgressBar
+              progress={downloadProgress ? (downloadProgress.done / downloadProgress.total) * 100 : null}
+              color="#5c4a32"
+            />
+          </div>
+        )}
       </div>
 
       {showAddWeek && (
