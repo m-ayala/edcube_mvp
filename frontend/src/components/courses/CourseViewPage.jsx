@@ -1,13 +1,44 @@
 // src/components/courses/CourseViewPage.jsx
+//
+// Redesign note (2026-08-22, frontend-agent): this page's Outline view was reskinned
+// to match the confirmed Figma "Course Outline" screen (file W6EmBQhcVXKgFQa9kMwZID,
+// node 28:139), validated with the user as a click-through HTML prototype before this
+// port. The Course Outline / Description / Synopsis / Course Information control
+// (node 28:1345) is an in-page 4-way switcher, not navigation — see `activeView`
+// below, unchanged in spirit from the pre-existing tab implementation, just reskinned.
+// Section accordions are per-section expand/collapse only (see `collapsedSections`) —
+// all sections always render stacked on this same page; the chevron never swaps which
+// section's content is visible.
 import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import {
+  FileText, AlignLeft, ScrollText, Info, ChevronDown, ChevronRight,
+  Clock, Grid2x2, Pencil,
+} from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { generateSynopsis, generateCourseDescription } from '../../utils/curriculumApi';
 import html2pdf from 'html2pdf.js';
 
 const SERIF = "'DM Serif Display', serif";
+const SERIF_TEXT = "'DM Serif Text', Georgia, serif";
 const SANS  = "'DM Sans', sans-serif";
 const API_BASE = import.meta.env.VITE_API_BASE_URL;
+
+// ── Palette — pulled from the confirmed Figma design context (node 28:139) ────
+const BLUE            = '#3e62bc';
+const BLUE_SOFT_BG    = '#edf2fe';
+const BLUE_BORDER     = '#dce6ff';
+const MAGENTA_BTN_BG  = '#954baf';
+const MAGENTA_SOFT_BG = '#f4edf7';
+const PURPLE_TEXT     = '#954baf';
+const GREEN_TEXT      = '#249800';
+const GREEN_BG        = '#eef5f0';
+const CARD_HIGHLIGHT  = 'rgba(234,240,255,0.6)';
+const CARD_BORDER     = '#eaf0ff';
+const TEXT_BODY       = '#5c5c62';
+const TEXT_MUTE       = '#8e8e8e';
+const PILL_NEUTRAL_BG   = '#f7f7f7';
+const PILL_NEUTRAL_TEXT = '#8e8e8e';
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const SECTION_GRADIENTS = [
@@ -15,17 +46,6 @@ const SECTION_GRADIENTS = [
   'linear-gradient(90deg,#F2C0D4,#F7E4A0)',
   'linear-gradient(90deg,#ACD8F0,#B2E8C8)',
   'linear-gradient(90deg,#F7E4A0,#F2C0D4)',
-];
-
-const LESSON_GRADIENTS = [
-  'linear-gradient(180deg,#ACD8F0,#B2E8C8)',
-  'linear-gradient(180deg,#B2E8C8,#F7E4A0)',
-  'linear-gradient(180deg,#F2C0D4,#F7E4A0)',
-  'linear-gradient(180deg,#F7E4A0,#F2C0D4)',
-  'linear-gradient(180deg,#ACD8F0,#F2C0D4)',
-  '#ACD8F0',
-  '#B2E8C8',
-  '#F7E4A0',
 ];
 
 const BADGE_STYLES = {
@@ -41,6 +61,17 @@ const BLOCK_CONFIG = {
   activity:  { label: 'Activity',  bg: '#EDFFF3', color: '#5CC97C' },
 };
 
+// ── Course Outline / Description / Synopsis / Course Information switcher ──────
+// Source: Figma node 28:1345 — a single control with 4 variants; whichever is
+// "active" renders filled-blue on top, the other 3 as bordered options below.
+// This swaps `activeView` in place — it is not navigation (no route change).
+const TAB_ITEMS = {
+  outline:       { key: 'outline',       label: 'Course Outline',      icon: FileText },
+  description:   { key: 'description',   label: 'Description',        icon: AlignLeft },
+  synopsis:      { key: 'synopsis',      label: 'Synopsis',           icon: ScrollText },
+  'course-info': { key: 'course-info',   label: 'Course Information', icon: Info },
+};
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const getYouTubeThumbnail = (url) => {
   try {
@@ -54,10 +85,48 @@ const getYouTubeThumbnail = (url) => {
 };
 
 // ── Resource row ──────────────────────────────────────────────────────────────
-const ResourceItem = ({ resource, type }) => {
+const ResourceItem = ({ resource, type, tile = false }) => {
   const thumb = type === 'video' ? getYouTubeThumbnail(resource.url) : null;
   const badge = BADGE_STYLES[type] || BADGE_STYLES.video;
   const [hovered, setHovered] = useState(false);
+
+  if (tile) {
+    return (
+      <a
+        href={resource.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          gap: '7px', aspectRatio: '1 / 1', padding: '12px 8px', textAlign: 'center',
+          background: hovered ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.7)',
+          border: `1px solid ${hovered ? 'rgba(0,0,0,0.12)' : 'rgba(0,0,0,0.07)'}`,
+          borderRadius: '10px',
+          textDecoration: 'none',
+          transition: 'background 0.15s, border-color 0.15s',
+        }}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+      >
+        <div style={{
+          width: '32px', height: '32px', borderRadius: '8px', flexShrink: 0,
+          background: type === 'worksheet' ? '#EAF3DE' : type === 'activity' ? '#FFF3DC' : badge.bg,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '15px',
+        }}>
+          {type === 'worksheet' ? '📄' : type === 'activity' ? '🔧' : '📘'}
+        </div>
+        <div style={{
+          fontSize: '11px', color: '#222', fontFamily: SANS, lineHeight: '1.3',
+          display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+        }}>
+          {resource.title}
+        </div>
+        <span style={{ fontSize: '9px', fontWeight: '500', fontFamily: SANS, padding: '1px 7px', borderRadius: '5px', flexShrink: 0, background: badge.bg, color: badge.color }}>
+          {badge.label}
+        </span>
+      </a>
+    );
+  }
 
   return (
     <a
@@ -107,55 +176,125 @@ const ResourceItem = ({ resource, type }) => {
   );
 };
 
-// ── Lesson row (subsection) ───────────────────────────────────────────────────
-const LessonRow = ({ sub, gradient, handsOnResources, isLast }) => {
+// ── Lesson card (subsection) ────────────────────────────────────────────────
+// Single-column layout: title + duration, then Summary and Objectives sharing
+// one row (Objectives on the right), then the "Content" dropdown (that
+// lesson's content/worksheet/activity blocks), then video resources.
+const LessonCard = ({ sub, handsOnResources, modulesExpanded, onToggleModules }) => {
   const blocks = handsOnResources[sub.id] || [];
   const allVideos     = sub.video_resources || [];
   const allWorksheets = blocks.filter(b => b.type === 'worksheet');
   const allActivities = blocks.filter(b => b.type === 'activity');
   const allContent    = blocks.filter(b => b.type === 'content');
-  const hasResources = allVideos.length > 0 || allContent.length > 0 || allWorksheets.length > 0 || allActivities.length > 0;
+  const hasVideos = allVideos.length > 0;
+  const hasContentBlocks = allContent.length > 0 || allWorksheets.length > 0 || allActivities.length > 0;
+
+  const hasSummary = !!sub.description;
+  const hasObjectives = (sub.learning_objectives || []).length > 0;
 
   return (
-    <div style={{
-      display: 'flex', alignItems: 'flex-start', gap: '16px',
-      padding: '20px 0',
-      borderTop: '1px solid rgba(0,0,0,0.06)',
-      ...(isLast ? { borderBottom: '1px solid rgba(0,0,0,0.06)' } : {}),
+    <article style={{
+      background: '#fff',
+      border: `1.5px solid ${CARD_BORDER}`,
+      borderRadius: '16px',
+      padding: '24px 28px',
+      boxShadow: '0 1px 2px rgba(20,20,30,0.04)',
+      fontFamily: SANS,
     }}>
-      <div style={{ width: '2px', flexShrink: 0, borderRadius: '2px', alignSelf: 'stretch', minHeight: '40px', background: gradient }} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: '15.5px', fontWeight: '500', color: '#111', marginBottom: '5px', lineHeight: '1.35', fontFamily: SANS }}>
-          {sub.title}
-        </div>
-        {sub.description && (
-          <div style={{ fontSize: '13.5px', color: '#666', lineHeight: '1.65', marginBottom: '12px', fontFamily: SANS }}>
-            {sub.description}
-          </div>
-        )}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', marginBottom: '14px' }}>
+        <h3 style={{ fontSize: '24px', fontWeight: '600', margin: 0, color: '#111' }}>{sub.title}</h3>
         {sub.duration_minutes > 0 && (
-          <div style={{ fontSize: '12px', color: '#AAA', marginBottom: hasResources ? '14px' : 0, fontFamily: SANS }}>
-            🕐 {sub.duration_minutes} min
-          </div>
-        )}
-        {(sub.learning_objectives || []).length > 0 && (
-          <ul style={{ margin: '0 0 14px', paddingLeft: '18px', fontSize: '13px', color: '#555', lineHeight: '1.65', fontFamily: SANS }}>
-            {sub.learning_objectives.map((obj, i) => <li key={i}>{obj}</li>)}
-          </ul>
-        )}
-        {hasResources && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <div style={{ fontSize: '10.5px', fontWeight: '600', letterSpacing: '0.8px', textTransform: 'uppercase', color: '#C0BAB0', marginBottom: '4px', fontFamily: SANS }}>
-              Resources
-            </div>
-            {allVideos.map((v, i)     => <ResourceItem key={`v${i}`} resource={v} type="video"     />)}
-            {allContent.map((c, i)    => <ResourceItem key={`c${i}`} resource={c} type="content"   />)}
-            {allWorksheets.map((w, i) => <ResourceItem key={`w${i}`} resource={w} type="worksheet" />)}
-            {allActivities.map((a, i) => <ResourceItem key={`a${i}`} resource={a} type="activity"  />)}
-          </div>
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: '6px', height: '27px',
+            padding: '0 12px', borderRadius: '7px', background: BLUE_SOFT_BG, color: '#3083ff',
+            fontSize: '13px', fontWeight: '600', flexShrink: 0, whiteSpace: 'nowrap',
+          }}>
+            <Clock size={13} /> {sub.duration_minutes} Mins
+          </span>
         )}
       </div>
-    </div>
+
+      {/* Summary and Objectives share one row — Objectives on the right of Summary. */}
+      {(hasSummary || hasObjectives) && (
+        <div style={{ display: 'flex', gap: '28px', marginBottom: '16px', flexWrap: 'wrap' }}>
+          {hasSummary && (
+            <div style={{ flex: '1 1 300px', minWidth: 0 }}>
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', height: '25px', padding: '0 11px',
+                borderRadius: '7px', fontSize: '11px', fontWeight: '600', letterSpacing: '0.04em',
+                textTransform: 'uppercase', background: GREEN_BG, color: GREEN_TEXT, marginBottom: '8px',
+              }}>
+                Summary
+              </span>
+              <p style={{ margin: '8px 0 0', fontSize: '13.5px', lineHeight: '1.65', color: TEXT_BODY }}>
+                {sub.description}
+              </p>
+            </div>
+          )}
+          {hasObjectives && (
+            <div style={{ flex: '1 1 240px', minWidth: 0 }}>
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', height: '25px', padding: '0 11px',
+                borderRadius: '7px', fontSize: '11px', fontWeight: '600', letterSpacing: '0.04em',
+                textTransform: 'uppercase', background: MAGENTA_SOFT_BG, color: PURPLE_TEXT, marginBottom: '8px',
+              }}>
+                Objectives
+              </span>
+              <ul style={{ margin: '8px 0 0', paddingLeft: '18px', fontSize: '13.5px', lineHeight: '1.75', color: TEXT_BODY }}>
+                {sub.learning_objectives.map((obj, i) => <li key={i} style={{ marginBottom: '2px' }}>{obj}</li>)}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/*
+        "Content" dropdown — the content/worksheet/activity blocks generated for
+        this lesson (video stays below, since it comes from a separate source —
+        video search — not the generated block set).
+      */}
+      <div style={{ marginBottom: '16px' }}>
+        <div style={{ background: '#fff', border: `1px solid ${CARD_BORDER}`, borderRadius: '12px', padding: '6px', maxWidth: '373px' }}>
+          <button
+            onClick={() => onToggleModules(sub.id)}
+            aria-expanded={!!modulesExpanded}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px',
+              background: '#fbf4ec', color: '#d28e3c', fontSize: '11px', fontWeight: '600',
+              letterSpacing: '0.04em', textTransform: 'uppercase', padding: '8px 14px',
+              borderRadius: '7px', cursor: 'pointer', border: 'none', width: '100%', fontFamily: SANS,
+            }}
+          >
+            Content
+            <ChevronDown size={12} style={{ transform: modulesExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s ease', flexShrink: 0 }} />
+          </button>
+          {modulesExpanded && (
+            <div style={{ padding: '10px 4px 4px' }}>
+              {hasContentBlocks ? (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(84px, 1fr))', gap: '8px' }}>
+                  {allContent.map((c, i)    => <ResourceItem key={`c${i}`} resource={c} type="content"   tile />)}
+                  {allWorksheets.map((w, i) => <ResourceItem key={`w${i}`} resource={w} type="worksheet" tile />)}
+                  {allActivities.map((a, i) => <ResourceItem key={`a${i}`} resource={a} type="activity"  tile />)}
+                </div>
+              ) : (
+                <div style={{ padding: '4px 10px', fontSize: '12.5px', color: TEXT_MUTE, lineHeight: '1.6' }}>
+                  No content, worksheet, or activity blocks generated yet for this lesson.
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {hasVideos && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <div style={{ fontSize: '10.5px', fontWeight: '600', letterSpacing: '0.8px', textTransform: 'uppercase', color: '#C0BAB0', marginBottom: '4px' }}>
+            Resources
+          </div>
+          {allVideos.map((v, i) => <ResourceItem key={`v${i}`} resource={v} type="video" />)}
+        </div>
+      )}
+    </article>
   );
 };
 
@@ -243,6 +382,29 @@ const CourseViewPage = () => {
   const [activeView, setActiveView] = useState('outline');
   const docRef = useRef(null);
 
+  // ── Course Outline / Description / Synopsis / Course Information switcher ──
+  // Node 28:1345 — a single control, not navigation. `activeView` above already
+  // drives which panel renders; `switcherOpen` just controls the dropdown itself.
+  const [switcherOpen, setSwitcherOpen] = useState(false);
+  const switcherRef = useRef(null);
+  useEffect(() => {
+    const onDocClick = (e) => {
+      if (switcherRef.current && !switcherRef.current.contains(e.target)) setSwitcherOpen(false);
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, []);
+
+  // ── Section accordions — per-section expand/collapse only. All sections always
+  // render stacked on this page; toggling one never hides/switches any other. ──
+  const [collapsedSections, setCollapsedSections] = useState({});
+  const toggleSection = (id) => setCollapsedSections(prev => ({ ...prev, [id]: !prev[id] }));
+
+  // ── Per-lesson "Information modules" expand/collapse (placeholder body — see
+  // LessonCard for the TODO on real content). ──
+  const [expandedModules, setExpandedModules] = useState({});
+  const toggleModules = (id) => setExpandedModules(prev => ({ ...prev, [id]: !prev[id] }));
+
   // ── Editable formData fields ──────────────────────────────────────────
   const [editableFormData, setEditableFormData] = useState({
     courseName:    incomingFormData?.courseName    || '',
@@ -303,6 +465,20 @@ const CourseViewPage = () => {
   const handleDownloadPdf = async () => {
     if (!docRef.current) return;
     setDownloading(true);
+
+    // The PDF should always capture the full course, not just whatever the
+    // user currently has expanded on screen — sections and each lesson's
+    // Content dropdown only render their contents into the DOM when open, so
+    // force everything open first and restore the user's view afterward.
+    const prevCollapsedSections = collapsedSections;
+    const prevExpandedModules = expandedModules;
+    const allSubsectionIds = sections.flatMap(s => (s.subsections || []).map(sub => sub.id));
+    setCollapsedSections({});
+    setExpandedModules(Object.fromEntries(allSubsectionIds.map(id => [id, true])));
+
+    // Wait for that state change to actually paint before snapshotting the DOM.
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
     try {
       await html2pdf()
         .set({
@@ -316,6 +492,8 @@ const CourseViewPage = () => {
         .from(docRef.current)
         .save();
     } finally {
+      setCollapsedSections(prevCollapsedSections);
+      setExpandedModules(prevExpandedModules);
       setDownloading(false);
     }
   };
@@ -432,14 +610,7 @@ const CourseViewPage = () => {
       ? `${totalMins / 60} hr`
       : `${Math.floor(totalMins / 60)} hr ${totalMins % 60} min`;
 
-  let lessonGIdx = 0;
-
-  const tabs = [
-    { id: 'outline',     label: 'Course Outline' },
-    { id: 'description', label: 'Description' },
-    { id: 'synopsis',    label: 'Synopsis' },
-    { id: 'course-info', label: 'Course Info' },
-  ];
+  const ActiveTabIcon = TAB_ITEMS[activeView]?.icon || FileText;
 
   return (
     <div style={{
@@ -455,80 +626,111 @@ const CourseViewPage = () => {
       fontFamily: SANS,
     }}>
 
-      {/* ── Sticky topbar ────────────────────────────────────────────────── */}
+      {/*
+        ── Action row: breadcrumb + Course Outline/Description/Synopsis/Course
+        Information switcher + Edit Workspace ──────────────────────────────
+        Persists identically across all 4 switcher states, per the confirmed
+        Figma design (node 28:139) — only the panel below it swaps.
+      */}
       <div style={{
         position: 'sticky', top: 0, zIndex: 9,
-        background: 'rgba(255,255,255,0.7)',
+        background: 'rgba(255,255,255,0.88)',
         backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
         borderBottom: '1px solid rgba(0,0,0,0.06)',
-        padding: '0 32px', height: '58px',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '14px 32px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '18px', fontWeight: '600', fontFamily: SANS, flexWrap: 'wrap' }}>
           <button
             onClick={() => navigate('/my-courses')}
-            style={{ fontFamily: SANS, fontSize: '12.5px', fontWeight: '500', padding: '6px 13px', borderRadius: '8px', cursor: 'pointer', background: 'transparent', border: '1px solid rgba(0,0,0,0.12)', color: '#555', transition: 'background 0.15s' }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(0,0,0,0.04)'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+            style={{ color: '#a3a3a3', background: 'none', border: 'none', font: 'inherit', fontWeight: '600', cursor: 'pointer', padding: 0 }}
           >
-            ← My Courses
+            My courses
           </button>
-          <span style={{ fontSize: '14px', fontWeight: '500', color: '#111', fontFamily: SANS }}>{courseName}</span>
+          <span style={{ color: '#c6c6c6' }}>‹</span>
+          <span style={{ color: BLUE }}>Course Outline</span>
           {!isOwner && ownerName && (
-            <span style={{ fontSize: '12.5px', color: '#888', fontFamily: SANS }}>by {ownerName}</span>
+            <span style={{ fontSize: '12.5px', fontWeight: '400', color: '#888', marginLeft: '4px' }}>by {ownerName}</span>
           )}
         </div>
 
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {/* Course Outline / Description / Synopsis / Course Information switcher */}
+          <div style={{ position: 'relative' }} ref={switcherRef}>
+            <button
+              onClick={() => setSwitcherOpen(o => !o)}
+              aria-expanded={switcherOpen}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: '9px', height: '37px', padding: '0 16px',
+                borderRadius: '10px', fontSize: '14px', fontWeight: '500', border: 'none', cursor: 'pointer',
+                whiteSpace: 'nowrap', background: BLUE, color: '#fff', fontFamily: SANS,
+              }}
+            >
+              <ActiveTabIcon size={17} />
+              {TAB_ITEMS[activeView]?.label}
+              <ChevronDown size={13} style={{ transform: switcherOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s ease', marginLeft: '2px' }} />
+            </button>
+            {switcherOpen && (
+              <div style={{
+                position: 'absolute', top: 'calc(100% + 8px)', right: 0, width: '234px', background: '#fff',
+                border: `1px solid ${CARD_BORDER}`, borderRadius: '12px', padding: '8px',
+                boxShadow: '0 12px 28px rgba(20,20,40,0.14)', display: 'flex', flexDirection: 'column', gap: '8px', zIndex: 20,
+              }}>
+                {Object.values(TAB_ITEMS).filter(t => t.key !== activeView).map(t => {
+                  const OptIcon = t.icon;
+                  return (
+                    <button
+                      key={t.key}
+                      onClick={() => { setActiveView(t.key); setSwitcherOpen(false); }}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: '12px', height: '37px', padding: '0 12px',
+                        borderRadius: '10px', border: `1px solid ${BLUE_BORDER}`, background: '#fff', color: BLUE,
+                        fontSize: '14px', fontWeight: '500', cursor: 'pointer', width: '100%', fontFamily: SANS,
+                      }}
+                    >
+                      <OptIcon size={18} />
+                      {t.label}
+                      <ChevronRight size={14} style={{ marginLeft: 'auto', flexShrink: 0 }} />
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           {isOwner && (
             <button
               onClick={handleEditInWorkspace}
-              style={{ fontFamily: SANS, fontSize: '12.5px', fontWeight: '500', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', background: '#111', border: '1px solid #111', color: '#fff' }}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: '9px', height: '37px', padding: '0 16px',
+                borderRadius: '10px', fontSize: '14px', fontWeight: '500', border: 'none', cursor: 'pointer',
+                whiteSpace: 'nowrap', background: MAGENTA_BTN_BG, color: '#fff', fontFamily: SANS,
+              }}
             >
-              ✎ Edit in Workspace
+              <Pencil size={15} /> Edit Workspace
             </button>
           )}
           {isCollaborator && (
             <button
               onClick={handleEditAsCollaborator}
-              style={{ fontFamily: SANS, fontSize: '12.5px', fontWeight: '500', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', background: '#111', border: '1px solid #111', color: '#fff' }}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: '9px', height: '37px', padding: '0 16px',
+                borderRadius: '10px', fontSize: '14px', fontWeight: '500', border: 'none', cursor: 'pointer',
+                whiteSpace: 'nowrap', background: MAGENTA_BTN_BG, color: '#fff', fontFamily: SANS,
+              }}
             >
-              ✎ Edit as Collaborator
+              <Pencil size={15} /> Edit as Collaborator
             </button>
           )}
         </div>
       </div>
 
-      {/* ── Tab bar ──────────────────────────────────────────────────────── */}
+      {/* ── Panel body — swaps in place based on `activeView`, no navigation ── */}
       <div style={{
-        position: 'sticky', top: '58px', zIndex: 8,
-        background: 'rgba(255,255,255,0.85)',
-        backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
-        borderBottom: '1px solid rgba(0,0,0,0.06)',
-        padding: '0 32px',
-        display: 'flex', gap: '0',
+        maxWidth: activeView === 'outline' ? '1400px' : '740px',
+        margin: '0 auto',
+        padding: activeView === 'outline' ? '26px 40px 60px' : '40px 24px 100px',
       }}>
-        {tabs.map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveView(tab.id)}
-            style={{
-              fontFamily: SANS, fontSize: '13px', fontWeight: activeView === tab.id ? '600' : '400',
-              padding: '12px 18px',
-              background: 'transparent', border: 'none',
-              borderBottom: activeView === tab.id ? '2px solid #111' : '2px solid transparent',
-              color: activeView === tab.id ? '#111' : '#888',
-              cursor: 'pointer', transition: 'color 0.15s',
-              marginBottom: '-1px',
-            }}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {/* ── Document body ─────────────────────────────────────────────────── */}
-      <div style={{ maxWidth: '740px', margin: '0 auto', padding: '40px 24px 100px' }}>
 
         {/* ── Description tab ──────────────────────────────────────────────── */}
         {activeView === 'description' && (
@@ -880,64 +1082,78 @@ const CourseViewPage = () => {
 
         {/* ── Outline view ─────────────────────────────────────────────────── */}
         {activeView === 'outline' && (
-          <div ref={docRef} style={{ background: '#fff', borderRadius: '16px', padding: '48px 48px 64px', boxShadow: '0 2px 16px rgba(0,0,0,0.07)', border: '1px solid rgba(0,0,0,0.05)' }}>
+          <div ref={docRef}>
 
-            {(editableFormData.subject || editableFormData.topic) && (
-              <div style={{ fontSize: '11.5px', fontWeight: '500', letterSpacing: '0.8px', textTransform: 'uppercase', color: '#999', marginBottom: '4px', fontFamily: SANS }}>
-                {[editableFormData.subject, editableFormData.topic].filter(Boolean).join(' · ')}
-              </div>
-            )}
-
-            {(editableFormData.ageRangeStart && editableFormData.ageRangeEnd) && (
-              <div style={{ fontSize: '11.5px', fontWeight: '500', letterSpacing: '0.8px', textTransform: 'uppercase', color: '#999', marginBottom: '10px', fontFamily: SANS }}>
-                {`Ages ${editableFormData.ageRangeStart}–${editableFormData.ageRangeEnd}`}
-              </div>
-            )}
-
-            <h1 style={{ fontFamily: SERIF, fontSize: '40px', color: '#111', letterSpacing: '-1px', lineHeight: '1.1', margin: '0 0 16px' }}>
-              {courseName}
-            </h1>
-
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px', marginBottom: '40px', flexWrap: 'wrap' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '14px', fontSize: '13px', color: '#888', flexWrap: 'wrap', fontFamily: SANS }}>
-                <span>{sectionCount} section{sectionCount !== 1 ? 's' : ''}</span>
-                <Dot />
-                <span>{lessonCount} lesson{lessonCount !== 1 ? 's' : ''}</span>
-                {totalMins > 0 && (
-                  <>
-                    <Dot />
-                    <span>{durationLabel} total</span>
-                  </>
-                )}
-                {!isOwner && (
-                  <>
-                    <Dot />
-                    <span style={{ background: '#f3f4f6', padding: '2px 8px', borderRadius: '8px', fontSize: '11.5px' }}>
+            {/* ── Course head: title + subject/age pills + section/lesson/duration stats ── */}
+            <div style={{ marginBottom: '18px' }}>
+              <h1 style={{ fontFamily: SERIF_TEXT, fontWeight: '400', fontSize: '36px', color: '#111', margin: '0 0 12px', lineHeight: '1.15' }}>
+                {courseName}
+              </h1>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '20px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                  {(editableFormData.subject || editableFormData.topic) && (
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', height: '32px', padding: '0 16px',
+                      borderRadius: '32px', fontSize: '13px', fontWeight: '600', letterSpacing: '0.03em',
+                      textTransform: 'uppercase', whiteSpace: 'nowrap', background: GREEN_BG, color: GREEN_TEXT,
+                    }}>
+                      {[editableFormData.subject, editableFormData.topic].filter(Boolean).join(' · ')}
+                    </span>
+                  )}
+                  {(editableFormData.ageRangeStart && editableFormData.ageRangeEnd) && (
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', height: '32px', padding: '0 16px',
+                      borderRadius: '32px', fontSize: '13px', fontWeight: '600', letterSpacing: '0.03em',
+                      textTransform: 'uppercase', whiteSpace: 'nowrap', background: BLUE_SOFT_BG, color: '#3083ff',
+                    }}>
+                      {`Ages ${editableFormData.ageRangeStart}–${editableFormData.ageRangeEnd}`}
+                    </span>
+                  )}
+                  {!isOwner && (
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', height: '32px', padding: '0 16px',
+                      borderRadius: '32px', fontSize: '12px', fontWeight: '500', background: '#f3f4f6', color: '#666',
+                    }}>
                       {isCollaborator ? 'Collaborator' : 'View Only'}
                     </span>
-                  </>
-                )}
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', height: '34px', padding: '0 14px', borderRadius: '30px', background: PILL_NEUTRAL_BG, color: PILL_NEUTRAL_TEXT, fontSize: '13px', fontWeight: '500', whiteSpace: 'nowrap' }}>
+                    <Grid2x2 size={16} color="#a3a3a3" /> {sectionCount} Section{sectionCount !== 1 ? 's' : ''}
+                  </span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', height: '34px', padding: '0 14px', borderRadius: '30px', background: PILL_NEUTRAL_BG, color: PILL_NEUTRAL_TEXT, fontSize: '13px', fontWeight: '500', whiteSpace: 'nowrap' }}>
+                    <FileText size={16} color="#a3a3a3" /> {lessonCount} Lesson{lessonCount !== 1 ? 's' : ''}
+                  </span>
+                  {totalMins > 0 && (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', height: '34px', padding: '0 14px', borderRadius: '30px', background: PILL_NEUTRAL_BG, color: PILL_NEUTRAL_TEXT, fontSize: '13px', fontWeight: '500', whiteSpace: 'nowrap' }}>
+                      <Clock size={16} color="#a3a3a3" /> {durationLabel}
+                    </span>
+                  )}
+                  {isOwner && (
+                    <button
+                      onClick={handleDownloadPdf}
+                      disabled={downloading}
+                      style={{ fontFamily: SANS, fontSize: '12.5px', fontWeight: '500', padding: '0 14px', height: '34px', borderRadius: '30px', cursor: downloading ? 'default' : 'pointer', background: 'transparent', border: '1px solid rgba(0,0,0,0.12)', color: '#555', opacity: downloading ? 0.6 : 1, flexShrink: 0, whiteSpace: 'nowrap' }}
+                    >
+                      {downloading ? 'Generating…' : '↓ Download PDF'}
+                    </button>
+                  )}
+                </div>
               </div>
-              {isOwner && (
-                <button
-                  onClick={handleDownloadPdf}
-                  disabled={downloading}
-                  style={{ fontFamily: SANS, fontSize: '12.5px', fontWeight: '500', padding: '6px 14px', borderRadius: '8px', cursor: downloading ? 'default' : 'pointer', background: 'transparent', border: '1px solid rgba(0,0,0,0.12)', color: '#555', opacity: downloading ? 0.6 : 1, flexShrink: 0 }}
-                >
-                  {downloading ? 'Generating…' : '↓ Download PDF'}
-                </button>
-              )}
             </div>
 
-            <div style={{ height: '1px', background: 'rgba(0,0,0,0.07)', marginBottom: '48px' }} />
-
+            {/* ── Sections — all render stacked here. Each "Section N ▾" toggle only
+                 expands/collapses that section's own day-card + lesson list; it never
+                 switches which section is visible (confirmed behavior, not a switcher). ── */}
             {sections.length === 0 ? (
-              <p style={{ color: '#aaa', fontSize: '15px', fontFamily: SANS }}>This course has no sections yet.</p>
+              <p style={{ color: '#aaa', fontSize: '15px', fontFamily: SANS, marginTop: '22px' }}>This course has no sections yet.</p>
             ) : sections.map((section, sIdx) => {
 
               if (section.type === 'break') {
                 return (
-                  <div key={section.id} style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '48px' }}>
+                  <div key={section.id} style={{ display: 'flex', alignItems: 'center', gap: '14px', margin: '22px 0' }}>
                     <div style={{ flex: 1, height: '1px', background: 'rgba(0,0,0,0.07)' }} />
                     <span style={{ fontSize: '13px', color: '#aaa', fontFamily: SANS, whiteSpace: 'nowrap' }}>⏸ Break — {section.duration}</span>
                     <div style={{ flex: 1, height: '1px', background: 'rgba(0,0,0,0.07)' }} />
@@ -945,40 +1161,56 @@ const CourseViewPage = () => {
                 );
               }
 
-              const secGrad = SECTION_GRADIENTS[sIdx % SECTION_GRADIENTS.length];
+              const isCollapsed = !!collapsedSections[section.id];
 
               return (
-                <div key={section.id} style={{ marginBottom: '52px' }}>
-                  <div style={{ fontSize: '10px', fontWeight: '600', letterSpacing: '1.2px', textTransform: 'uppercase', color: '#B0A898', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '8px', fontFamily: SANS }}>
-                    <span style={{ display: 'inline-block', width: '24px', height: '2px', borderRadius: '1px', background: secGrad }} />
+                <div key={section.id} style={{ marginBottom: '26px' }}>
+                  <button
+                    onClick={() => toggleSection(section.id)}
+                    aria-expanded={!isCollapsed}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: '6px', color: BLUE, fontSize: '15px',
+                      fontWeight: '600', letterSpacing: '0.03em', textTransform: 'uppercase', margin: '22px 0 16px',
+                      cursor: 'pointer', background: 'none', border: 'none', padding: 0, fontFamily: SANS,
+                    }}
+                  >
                     Section {sIdx + 1}
+                    <ChevronDown size={13} style={{ transform: isCollapsed ? 'none' : 'rotate(180deg)', transition: 'transform 0.15s ease' }} />
+                  </button>
+
+                  {/*
+                    Highlighted section summary card — section.title / section.description.
+                    Always visible, even when the section is collapsed: collapsing only
+                    hides the lesson cards below, not the section's own day info.
+                  */}
+                  <div style={{ background: CARD_HIGHLIGHT, borderRadius: '16px', padding: '26px 32px', marginBottom: isCollapsed ? 0 : '22px' }}>
+                    <h2 style={{ fontFamily: SANS, fontWeight: '600', fontSize: '26px', color: '#111', margin: '0 0 10px', lineHeight: '1.25' }}>
+                      {section.title}
+                    </h2>
+                    {section.description && (
+                      <p style={{ margin: 0, fontSize: '16px', lineHeight: '1.65', color: TEXT_BODY, maxWidth: '78ch' }}>
+                        {section.description}
+                      </p>
+                    )}
                   </div>
 
-                  <h2 style={{ fontFamily: SERIF, fontSize: '26px', color: '#111', letterSpacing: '-0.4px', lineHeight: '1.2', margin: '0 0 10px' }}>
-                    {section.title}
-                  </h2>
-
-                  {section.description && (
-                    <p style={{ fontSize: '14px', color: '#666', lineHeight: '1.7', margin: '0 0 28px', fontFamily: SANS }}>
-                      {section.description}
-                    </p>
+                  {!isCollapsed && (
+                    (section.subsections || []).length === 0 ? (
+                      <p style={{ fontSize: '14px', color: '#aaa', fontStyle: 'italic', fontFamily: SANS }}>No lessons in this section.</p>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                        {(section.subsections || []).map(sub => (
+                          <LessonCard
+                            key={sub.id}
+                            sub={sub}
+                            handsOnResources={handsOnResources}
+                            modulesExpanded={!!expandedModules[sub.id]}
+                            onToggleModules={toggleModules}
+                          />
+                        ))}
+                      </div>
+                    )
                   )}
-
-                  {(section.subsections || []).length === 0 ? (
-                    <p style={{ fontSize: '14px', color: '#aaa', fontStyle: 'italic', fontFamily: SANS }}>No lessons in this section.</p>
-                  ) : (section.subsections || []).map((sub, subIdx) => {
-                    const gradient = LESSON_GRADIENTS[lessonGIdx++ % LESSON_GRADIENTS.length];
-                    const isLast = subIdx === (section.subsections.length - 1);
-                    return (
-                      <LessonRow
-                        key={sub.id}
-                        sub={sub}
-                        gradient={gradient}
-                        handsOnResources={handsOnResources}
-                        isLast={isLast}
-                      />
-                    );
-                  })}
                 </div>
               );
             })}
@@ -993,9 +1225,5 @@ const CourseViewPage = () => {
     </div>
   );
 };
-
-const Dot = () => (
-  <div style={{ width: '3px', height: '3px', borderRadius: '50%', background: '#CCC', flexShrink: 0 }} />
-);
 
 export default CourseViewPage;

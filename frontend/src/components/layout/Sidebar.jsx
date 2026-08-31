@@ -101,69 +101,77 @@ const Sidebar = () => {
 
       {/* Nav */}
       <nav style={{ flex: 1, padding: '14px 6px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-        {navItems.map(({ to, label }) => (
-          <NavLink
-            key={to}
-            to={to}
-            onMouseEnter={() => setHoveredItem(to)}
-            onMouseLeave={() => setHoveredItem(null)}
-            style={({ isActive }) => ({
-              display: 'flex',
-              alignItems: 'center',
-              gap: expanded ? '9px' : '0',
-              padding: '9px',
-              justifyContent: expanded ? 'flex-start' : 'center',
-              borderRadius: '8px',
-              textDecoration: 'none',
-              color: isActive ? '#111' : hoveredItem === to ? '#111' : '#333',
-              backgroundColor: isActive ? 'rgba(255,255,255,0.85)' : hoveredItem === to ? 'rgba(255,255,255,0.45)' : 'transparent',
-              boxShadow: isActive ? '0 0 0 1px rgba(0,0,0,0.08)' : 'none',
-              fontWeight: isActive ? '500' : '400',
-              fontSize: '14.9px',
-              transition: 'all 0.15s ease',
-              position: 'relative',
-              overflow: 'hidden',
-              whiteSpace: 'nowrap',
-            })}
-          >
-            <div style={{
-              width: '7px',
-              height: '7px',
-              borderRadius: '50%',
-              backgroundColor: dotColors[to] || '#D1D5DB',
-              flexShrink: 0,
-            }} />
-            <span style={{
-              opacity: expanded ? 1 : 0,
-              maxWidth: expanded ? '160px' : '0px',
-              transition: 'opacity 0.18s ease, max-width 0.22s ease',
-              overflow: 'hidden',
-            }}>
-              {label}
-            </span>
-            {to === '/profile' && unreadCount > 0 && (
+        {navItems.map(({ to, label }) => {
+          const itemInner = (
+            <>
+              <div style={{
+                width: '7px',
+                height: '7px',
+                borderRadius: '50%',
+                backgroundColor: dotColors[to] || '#D1D5DB',
+                flexShrink: 0,
+              }} />
               <span style={{
-                position: 'absolute',
-                top: '5px',
-                right: expanded ? '8px' : '4px',
-                minWidth: '16px',
-                height: '16px',
-                borderRadius: '8px',
-                backgroundColor: '#EF4444',
-                color: '#FFFFFF',
-                fontSize: '9.9px',
-                fontWeight: '700',
+                opacity: expanded ? 1 : 0,
+                maxWidth: expanded ? '160px' : '0px',
+                transition: 'opacity 0.18s ease, max-width 0.22s ease',
+                overflow: 'hidden',
+              }}>
+                {label}
+              </span>
+              {to === '/profile' && unreadCount > 0 && (
+                <span style={{
+                  position: 'absolute',
+                  top: '5px',
+                  right: expanded ? '8px' : '4px',
+                  minWidth: '16px',
+                  height: '16px',
+                  borderRadius: '8px',
+                  backgroundColor: '#EF4444',
+                  color: '#FFFFFF',
+                  fontSize: '9.9px',
+                  fontWeight: '700',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '0 3px',
+                  lineHeight: 1,
+                }}>
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+            </>
+          );
+
+          return (
+            <NavLink
+              key={label}
+              to={to}
+              onMouseEnter={() => setHoveredItem(label)}
+              onMouseLeave={() => setHoveredItem(null)}
+              style={({ isActive }) => ({
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                padding: '0 3px',
-                lineHeight: 1,
-              }}>
-                {unreadCount > 99 ? '99+' : unreadCount}
-              </span>
-            )}
-          </NavLink>
-        ))}
+                gap: expanded ? '9px' : '0',
+                padding: '9px',
+                justifyContent: expanded ? 'flex-start' : 'center',
+                borderRadius: '8px',
+                textDecoration: 'none',
+                color: isActive ? '#111' : hoveredItem === label ? '#111' : '#333',
+                backgroundColor: isActive ? 'rgba(255,255,255,0.85)' : hoveredItem === label ? 'rgba(255,255,255,0.45)' : 'transparent',
+                boxShadow: isActive ? '0 0 0 1px rgba(0,0,0,0.08)' : 'none',
+                fontWeight: isActive ? '500' : '400',
+                fontSize: '14.9px',
+                transition: 'all 0.15s ease',
+                position: 'relative',
+                overflow: 'hidden',
+                whiteSpace: 'nowrap',
+              })}
+            >
+              {itemInner}
+            </NavLink>
+          );
+        })}
       </nav>
 
       {/* Footer: user + logout */}
