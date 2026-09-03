@@ -205,10 +205,26 @@ export const getCourseFolders = async (teacherUid) => {
   return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 };
 
-export const createCourseFolder = async (teacherUid, name, parentId = null) => {
+export const createCourseFolder = async (teacherUid, name, parentId = null, extras = {}) => {
+  const {
+    description = '',
+    labels = [],
+    collaborators = [],
+    color = null,
+  } = extras;
   const ref = doc(collection(db, 'teachers', teacherUid, 'courseFolders'));
-  await setDoc(ref, { name, courseIds: [], parentId, createdAt: serverTimestamp() });
-  return { id: ref.id, name, courseIds: [], parentId };
+  const data = {
+    name,
+    courseIds: [],
+    parentId,
+    description,
+    labels,
+    collaborators,
+    color,
+    createdAt: serverTimestamp(),
+  };
+  await setDoc(ref, data);
+  return { id: ref.id, ...data, createdAt: null };
 };
 
 export const deleteCourseFolder = async (teacherUid, folderId) => {
@@ -217,6 +233,14 @@ export const deleteCourseFolder = async (teacherUid, folderId) => {
 
 export const renameCourseFolder = async (teacherUid, folderId, newName) => {
   await updateDoc(doc(db, 'teachers', teacherUid, 'courseFolders', folderId), { name: newName });
+};
+
+/**
+ * Patch any editable fields on a course folder
+ * (name, description, labels, collaborators, color).
+ */
+export const updateCourseFolder = async (teacherUid, folderId, patch) => {
+  await updateDoc(doc(db, 'teachers', teacherUid, 'courseFolders', folderId), patch);
 };
 
 export const addCourseToFolder = async (teacherUid, folderId, courseId) => {

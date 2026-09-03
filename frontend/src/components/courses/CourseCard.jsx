@@ -1,15 +1,41 @@
 import { useState } from 'react';
-import { Eye, EyeOff, Trash2, X } from 'lucide-react';
+import { Trash2, X, Pencil, Lock } from 'lucide-react';
+import {
+  descriptionText,
+  durationText,
+  lastModifiedText,
+  lessonCount,
+  levelLine,
+} from '../../utils/courseCardMeta';
 
-const CARD_COLORS = ['#B2E8C8', '#ACD8F0', '#F2C0D4', '#F7E4A0'];
+// Placeholder thumbnail palette — no course cover images exist yet, so the
+// thumbnail is a gradient keyed to the course name plus a subject glyph.
+const THUMBS = [
+  ['#F6A8BC', '#E15C7E'],
+  ['#4E7FB5', '#274C7A'],
+  ['#8FC64A', '#4C942E'],
+  ['#58C3BE', '#2C8683'],
+  ['#E79A46', '#C05F1E'],
+  ['#B79AE0', '#6F52C2'],
+];
+const thumbFor = (name = '') => THUMBS[(name.charCodeAt(0) || 0) % THUMBS.length];
 
-const cardColor = (name = '') => CARD_COLORS[name.charCodeAt(0) % CARD_COLORS.length];
+const SUBJECT_GLYPH = {
+  math: '∑', mathematics: '∑', science: '⚗', biology: '🧬', chemistry: '⚗',
+  physics: '⚛', geography: '🌍', history: '📜', english: '✍', language: '✍',
+  art: '🎨', arts: '🎨', music: '♪', computer: '💻', 'computer science': '💻',
+};
+const glyphFor = (c) => {
+  const key = String(c.subject || c.topic || '').toLowerCase().trim();
+  return SUBJECT_GLYPH[key] || Object.entries(SUBJECT_GLYPH).find(([k]) => key.includes(k))?.[1] || '📘';
+};
+
+const getCourseId = (c) => c.courseId || c.id;
 
 const CourseCard = ({
   curriculum,
   onCardClick,
   onDelete,
-  onToggleVisibility,
   draggable: isDraggable,
   onDragStart,
   onDragEnd,
@@ -18,18 +44,14 @@ const CourseCard = ({
 }) => {
   const [hovered, setHovered] = useState(false);
 
-  const handleDelete = (e) => {
-    e.stopPropagation();
-    onDelete(curriculum.id, curriculum.courseName);
-  };
-
-  const handleToggle = (e) => {
-    e.stopPropagation();
-    onToggleVisibility(curriculum);
-  };
-
-  const isPublic = curriculum.isPublic || false;
-  const accent = cardColor(curriculum.courseName);
+  const isPublic = !!curriculum.isPublic;
+  const [c1, c2] = thumbFor(curriculum.courseName);
+  const desc = descriptionText(curriculum);
+  const duration = durationText(curriculum);
+  const lessons = lessonCount(curriculum);
+  const modified = lastModifiedText(curriculum);
+  const level = isPublic ? levelLine(curriculum) : '';
+  const shared = curriculum.sharedWith || [];
 
   return (
     <div
@@ -41,123 +63,153 @@ const CourseCard = ({
       onMouseLeave={() => setHovered(false)}
       style={{
         position: 'relative',
+        flex: 'none',
+        width: '340px',
         display: 'flex',
         flexDirection: 'column',
-        borderRadius: '12px',
-        background: 'rgba(255,255,255,0.72)',
-        backdropFilter: 'blur(16px)',
-        WebkitBackdropFilter: 'blur(16px)',
-        border: '1px solid rgba(255,255,255,0.88)',
-        boxShadow: hovered
-          ? '0 6px 24px rgba(0,0,0,0.10)'
-          : '0 1px 4px rgba(0,0,0,0.05)',
+        borderRadius: '16px',
+        background: '#fff',
+        border: '1px solid #ECE6EB',
+        boxShadow: hovered ? '0 10px 28px rgba(30,20,35,0.12)' : '0 1px 4px rgba(0,0,0,0.05)',
         cursor: isDraggable ? 'grab' : 'pointer',
         transition: 'box-shadow 0.18s, opacity 0.18s',
         overflow: 'hidden',
         opacity: isDragging ? 0.45 : 1,
+        fontFamily: "'DM Sans', sans-serif",
       }}
     >
-      {onRemoveFromFolder && hovered && (
-        <button
-          onClick={(e) => { e.stopPropagation(); onRemoveFromFolder(); }}
-          title="Remove from folder"
-          style={{
-            position: 'absolute', top: '8px', right: '8px', zIndex: 2,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            width: '22px', height: '22px',
-            background: 'rgba(255,255,255,0.95)', border: '1px solid rgba(0,0,0,0.12)',
-            borderRadius: '50%', cursor: 'pointer', color: '#6B7280',
-          }}
-        >
-          <X size={12} />
-        </button>
-      )}
-      {/* Coloured top strip */}
-      <div style={{ height: '6px', background: accent }} />
+      {/* Thumbnail */}
+      <div style={{
+        position: 'relative',
+        height: '176px',
+        margin: '12px 12px 0',
+        borderRadius: '12px',
+        overflow: 'hidden',
+        display: 'grid',
+        placeItems: 'center',
+        background: `linear-gradient(140deg, ${c1}, ${c2})`,
+      }}>
+        <span style={{ fontSize: '84px', color: 'rgba(255,255,255,0.42)', lineHeight: 1 }}>
+          {glyphFor(curriculum)}
+        </span>
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(0,0,0,0) 55%, rgba(0,0,0,0.28))' }} />
+
+        {shared.length > 0 && (
+          <div style={{ position: 'absolute', top: '12px', left: '12px', display: 'flex' }}>
+            {shared.slice(0, 3).map((s, i) => (
+              <span key={s.uid || i} style={{
+                width: '26px', height: '26px', borderRadius: '50%',
+                background: '#CBB9C6', border: '2px solid rgba(255,255,255,0.9)',
+                marginLeft: i ? '-9px' : 0,
+              }} />
+            ))}
+            {shared.length > 3 && (
+              <span style={{
+                display: 'grid', placeItems: 'center',
+                width: '26px', height: '26px', borderRadius: '50%',
+                background: 'rgba(255,255,255,0.92)', border: '2px solid rgba(255,255,255,0.9)',
+                marginLeft: '-9px', fontSize: '10px', fontWeight: 700, color: '#6B5566',
+              }}>+{shared.length - 3}</span>
+            )}
+          </div>
+        )}
+
+        {!isPublic && (
+          <div style={{
+            position: 'absolute', top: '11px', right: '11px',
+            width: '28px', height: '28px', borderRadius: '8px',
+            background: 'rgba(255,255,255,0.92)', display: 'grid', placeItems: 'center', color: '#6B7280',
+          }}>
+            <Pencil size={14} />
+          </div>
+        )}
+
+        {onRemoveFromFolder && hovered && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onRemoveFromFolder(); }}
+            title="Remove from folder"
+            style={{
+              position: 'absolute', top: '11px', right: isPublic ? '11px' : '47px', zIndex: 2,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              width: '26px', height: '26px',
+              background: 'rgba(255,255,255,0.95)', border: '1px solid rgba(0,0,0,0.12)',
+              borderRadius: '50%', cursor: 'pointer', color: '#6B7280',
+            }}
+          >
+            <X size={12} />
+          </button>
+        )}
+      </div>
 
       {/* Body */}
-      <div style={{ flex: 1, padding: '16px 16px 12px' }}>
+      <div style={{ padding: '14px 16px 16px', flex: 1, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '9px', marginBottom: '10px' }}>
+          <span style={{
+            width: '26px', height: '26px', borderRadius: '7px', background: '#F4ECF1',
+            display: 'grid', placeItems: 'center', fontSize: '13px',
+          }}>{glyphFor(curriculum)}</span>
+          <span style={{
+            fontSize: '13px', fontWeight: 500, padding: '4px 11px', borderRadius: '7px',
+            display: 'inline-flex', alignItems: 'center', gap: '5px',
+            background: isPublic ? '#F0F4FF' : '#EDEDF1',
+            color: isPublic ? '#3E62BC' : '#4E4E4E',
+          }}>
+            {!isPublic && <Lock size={11} />}
+            {isPublic ? 'Published' : 'Unpublished'}
+          </span>
+        </div>
+
         <h3 style={{
-          margin: '0 0 10px',
-          fontSize: '19px',
-          fontWeight: '600',
-          color: '#111',
-          lineHeight: '1.35',
-          fontFamily: "'DM Serif Display', serif",
+          margin: '0 0 8px', fontSize: '20px', fontWeight: 500, lineHeight: 1.25, color: '#0E1620',
         }}>
           {curriculum.courseName}
         </h3>
 
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-          {curriculum.subject && (
-            <span style={chip}>{curriculum.subject}</span>
-          )}
-          {curriculum.class && (
-            <span style={chip}>Grade {curriculum.class}</span>
-          )}
-          {curriculum.timeDuration && (
-            <span style={chip}>⏱ {curriculum.timeDuration}</span>
-          )}
+        {desc && (
+          <p style={{
+            margin: '0 0 14px', fontSize: '14.5px', lineHeight: 1.4, color: '#878787',
+            display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+          }}>
+            {desc}
+          </p>
+        )}
+
+        <div style={{ marginTop: 'auto', display: 'grid', gap: '5px', fontSize: '14px' }}>
+          {isPublic && duration && <div style={metaRow}><b style={metaLabel}>Duration:</b> {duration}</div>}
+          {modified && <div style={metaRow}><b style={metaLabel}>Last Modified:</b> {modified}</div>}
+          {isPublic && lessons > 0 && <div style={metaRow}><b style={metaLabel}>Lessons:</b> {lessons}</div>}
         </div>
+
+        {level && (
+          <div style={{
+            marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #F1EBF0',
+            fontSize: '14.5px', fontWeight: 500, color: '#6E7F1B',
+          }}>
+            {level}
+          </div>
+        )}
       </div>
 
-      {/* Footer row */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '8px 12px',
-        borderTop: '1px solid rgba(0,0,0,0.05)',
-        background: 'rgba(255,255,255,0.4)',
-      }}>
-        {/* Visibility toggle */}
-        <button
-          onClick={handleToggle}
-          title={isPublic ? 'Public — click to make Private' : 'Private — click to make Public'}
-          style={{
-            display: 'flex', alignItems: 'center', gap: '5px',
-            padding: '4px 9px',
-            background: isPublic ? 'rgba(178,232,200,0.45)' : 'rgba(0,0,0,0.04)',
-            color: isPublic ? '#1C5C35' : '#444',
-            border: `1px solid ${isPublic ? 'rgba(178,232,200,0.8)' : 'rgba(0,0,0,0.1)'}`,
-            borderRadius: '6px', cursor: 'pointer',
-            fontSize: '12.1px', fontWeight: '500',
-            fontFamily: "'DM Sans', sans-serif",
-            transition: 'all 0.15s',
-          }}
-        >
-          {isPublic ? <Eye size={12} /> : <EyeOff size={12} />}
-          {isPublic ? 'Public' : 'Private'}
-        </button>
-
-        {/* Delete */}
-        <button
-          onClick={handleDelete}
-          style={{
-            display: 'flex', alignItems: 'center',
-            background: 'none', border: 'none',
-            color: '#F87171', cursor: 'pointer',
-            padding: '4px 5px', borderRadius: '5px',
-            opacity: hovered ? 1 : 0,
-            transition: 'opacity 0.15s',
-          }}
-          title="Delete course"
-        >
-          <Trash2 size={14} />
-        </button>
-      </div>
+      {/* Delete (hover) */}
+      <button
+        className="mc-btn"
+        onClick={(e) => { e.stopPropagation(); onDelete(getCourseId(curriculum), curriculum.courseName); }}
+        title="Delete course"
+        style={{
+          position: 'absolute', bottom: '10px', right: '10px',
+          display: 'flex', alignItems: 'center', background: 'rgba(255,255,255,0.9)',
+          border: '1px solid rgba(0,0,0,0.08)', borderRadius: '7px',
+          color: '#F87171', cursor: 'pointer', padding: '5px',
+          opacity: hovered ? 1 : 0, transition: 'opacity 0.15s',
+        }}
+      >
+        <Trash2 size={14} />
+      </button>
     </div>
   );
 };
 
-const chip = {
-  display: 'inline-block',
-  padding: '2px 8px',
-  borderRadius: '20px',
-  fontSize: '12px',
-  fontWeight: '500',
-  background: 'rgba(0,0,0,0.07)',
-  color: '#222',
-};
+const metaRow = { color: '#878787' };
+const metaLabel = { color: '#122E75', fontWeight: 600 };
 
 export default CourseCard;

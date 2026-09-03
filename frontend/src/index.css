@@ -127,10 +127,18 @@ button:focus-visible {
 .glass-btn:active:not(:disabled),
 .add-dashed-btn,
 .add-dashed-btn:hover:not(:disabled),
-.add-dashed-btn:active:not(:disabled) {
+.add-dashed-btn:active:not(:disabled),
+.mc-btn,
+.mc-btn:hover:not(:disabled),
+.mc-btn:active:not(:disabled) {
   transform: none !important;
   background-color: unset;
   color: unset;
+}
+
+/* My Courses horizontal card rows — hide the scrollbar, keep scrollability */
+.card-row-track::-webkit-scrollbar {
+  display: none;
 }
 
 /* Blob background container */

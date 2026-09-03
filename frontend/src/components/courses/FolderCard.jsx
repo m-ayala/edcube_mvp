@@ -1,27 +1,36 @@
 import { useState } from 'react';
-import { Folder, FolderOpen, Pencil, Trash2 } from 'lucide-react';
+import { Pencil, Trash2, ChevronRight, FolderOpen } from 'lucide-react';
+import { resolveFolderColor } from './folderColors';
+
+const getInitials = (name) => {
+  if (!name) return '?';
+  const p = name.trim().split(/\s+/);
+  return (p.length === 1 ? p[0][0] : p[0][0] + p[p.length - 1][0]).toUpperCase();
+};
 
 const FolderCard = ({
   folder,
-  courseCount,
+  courseCount = 0,
   subFolderCount = 0,
   isDragOver,
   onOpen,
-  onRename,
+  onEdit,
   onDelete,
   onDragOver,
   onDragLeave,
   onDrop,
 }) => {
   const [hovered, setHovered] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [editName, setEditName] = useState(folder.name);
+  const c = resolveFolderColor(folder.color);
 
-  const commitRename = () => {
-    const trimmed = editName.trim();
-    if (trimmed && trimmed !== folder.name) onRename(folder.id, trimmed);
-    setEditing(false);
-  };
+  const collaborators = folder.collaborators || [];
+  const labels = folder.labels || [];
+  const countLine =
+    courseCount > 0
+      ? `${courseCount} ${courseCount === 1 ? 'course' : 'courses'}`
+      : subFolderCount > 0
+        ? `${subFolderCount} ${subFolderCount === 1 ? 'folder' : 'folders'}`
+        : 'Empty';
 
   const handleDragLeave = (e) => {
     if (!e.currentTarget.contains(e.relatedTarget)) onDragLeave();
@@ -34,100 +43,109 @@ const FolderCard = ({
       onDragOver={(e) => { e.preventDefault(); onDragOver(folder.id); }}
       onDragLeave={handleDragLeave}
       onDrop={(e) => { e.preventDefault(); onDrop(folder.id); }}
-      onClick={() => !editing && onOpen(folder.id)}
+      onClick={() => onOpen(folder.id)}
       style={{
         position: 'relative',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: '6px',
-        padding: '20px 16px 14px',
-        borderRadius: '12px',
-        background: isDragOver ? 'rgba(44,95,58,0.08)' : 'rgba(255,255,255,0.72)',
-        backdropFilter: 'blur(16px)',
-        WebkitBackdropFilter: 'blur(16px)',
-        border: isDragOver ? '2px dashed #2C5F3A' : '1px solid rgba(255,255,255,0.88)',
+        flex: 'none',
+        width: '340px',
+        borderRadius: '16px',
+        background: '#fff',
+        border: isDragOver ? '2px dashed #2C5F3A' : '1px solid #EFE7EC',
         boxShadow: isDragOver
           ? '0 0 0 3px rgba(44,95,58,0.15)'
-          : hovered ? '0 6px 24px rgba(0,0,0,0.10)' : '0 1px 6px rgba(0,0,0,0.07)',
+          : hovered ? '0 10px 28px rgba(30,20,35,0.12)' : '0 1px 4px rgba(0,0,0,0.05)',
         cursor: 'pointer',
-        transition: 'all 0.18s',
-        width: '130px',
-        minHeight: '110px',
-        textAlign: 'center',
-        userSelect: 'none',
-        boxSizing: 'border-box',
+        transition: 'box-shadow 0.18s',
+        overflow: 'hidden',
+        fontFamily: "'DM Sans', sans-serif",
       }}
     >
-      {isDragOver
-        ? <FolderOpen size={36} color="#2C5F3A" />
-        : <Folder size={36} color={hovered ? '#2C5F3A' : '#9CA3AF'} />
-      }
-
-      {editing ? (
-        <div
-          style={{ display: 'flex', flexDirection: 'column', gap: '5px', width: '100%' }}
-          onClick={e => e.stopPropagation()}
-        >
-          <input
-            autoFocus
-            value={editName}
-            onChange={e => setEditName(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter') commitRename();
-              if (e.key === 'Escape') { setEditing(false); setEditName(folder.name); }
-            }}
-            onBlur={commitRename}
-            style={{
-              width: '100%', padding: '3px 6px', fontSize: '12px',
-              borderRadius: '4px', border: '1px solid #2C5F3A',
-              outline: 'none', textAlign: 'center', boxSizing: 'border-box',
-              fontFamily: "'DM Sans', sans-serif",
-            }}
-          />
+      {/* Tinted panel */}
+      <div style={{ margin: '13px 13px 0', borderRadius: '12px', padding: '18px 20px 20px', background: c.panel }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+          <h3 style={{
+            margin: 0, flex: 1, fontSize: '26px', fontWeight: 500, lineHeight: 1.1,
+            letterSpacing: '-0.01em', color: c.title, wordBreak: 'break-word',
+          }}>
+            {folder.name}
+          </h3>
+          {collaborators.length > 0 && (
+            <div style={{ display: 'flex', flexShrink: 0 }}>
+              {collaborators.slice(0, 3).map((p, i) => (
+                p.profile_picture_url ? (
+                  <img
+                    key={p.uid || i}
+                    src={p.profile_picture_url}
+                    alt={p.display_name}
+                    style={{
+                      width: '27px', height: '27px', borderRadius: '50%', objectFit: 'cover',
+                      border: '2px solid #fff', marginLeft: i ? '-9px' : 0,
+                    }}
+                  />
+                ) : (
+                  <span key={p.uid || i} style={{
+                    width: '27px', height: '27px', borderRadius: '50%',
+                    display: 'grid', placeItems: 'center',
+                    background: c.chipBg, color: c.chipText, fontSize: '10px', fontWeight: 700,
+                    border: '2px solid #fff', marginLeft: i ? '-9px' : 0,
+                  }}>{getInitials(p.display_name)}</span>
+                )
+              ))}
+              {collaborators.length > 3 && (
+                <span style={{
+                  width: '27px', height: '27px', borderRadius: '50%', display: 'grid', placeItems: 'center',
+                  background: '#fff', color: c.chipText, fontSize: '10px', fontWeight: 700,
+                  border: '2px solid #fff', marginLeft: '-9px',
+                }}>+{collaborators.length - 3}</span>
+              )}
+            </div>
+          )}
         </div>
-      ) : (
-        <span style={{ fontSize: '13px', fontWeight: '600', color: '#111', lineHeight: '1.3', wordBreak: 'break-word' }}>
-          {folder.name}
+
+        <p style={{
+          margin: '10px 0 14px', fontSize: '14.5px', lineHeight: 1.4, color: '#7A7580',
+          display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+        }}>
+          {folder.description?.trim() || countLine}
+        </p>
+
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+          {labels.map((l) => (
+            <span key={l} style={{
+              fontSize: '13px', fontWeight: 500, padding: '5px 12px', borderRadius: '20px',
+              background: c.chipBg, color: c.chipText,
+            }}>{l}</span>
+          ))}
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: '10px',
+        padding: '15px 18px 16px', fontSize: '18px', fontWeight: 500, color: '#383838',
+      }}>
+        {isDragOver ? <><FolderOpen size={18} color="#2C5F3A" /> Drop here</> : 'View Folder'}
+        <span style={{
+          marginLeft: 'auto', width: '30px', height: '30px', borderRadius: '8px',
+          background: 'rgba(0,0,0,0.05)', display: 'grid', placeItems: 'center', color: '#6B7280',
+        }}>
+          <ChevronRight size={16} />
         </span>
-      )}
+      </div>
 
-      <span style={{ fontSize: '11px', color: '#9CA3AF' }}>
-        {courseCount > 0
-          ? `${courseCount} ${courseCount === 1 ? 'course' : 'courses'}`
-          : subFolderCount > 0
-            ? `${subFolderCount} ${subFolderCount === 1 ? 'folder' : 'folders'}`
-            : 'Empty'
-        }
-      </span>
-
-      {hovered && !editing && (
+      {/* Hover controls */}
+      {hovered && !isDragOver && (
         <div
-          style={{ position: 'absolute', top: '7px', right: '7px', display: 'flex', gap: '3px' }}
-          onClick={e => e.stopPropagation()}
+          style={{ position: 'absolute', top: '8px', right: '8px', display: 'flex', gap: '4px' }}
+          onClick={(e) => e.stopPropagation()}
         >
-          <button
-            onClick={() => { setEditing(true); setEditName(folder.name); }}
-            style={actionBtn}
-            title="Rename folder"
-          >
-            <Pencil size={10} color="#6B7280" />
+          <button className="mc-btn" onClick={() => onEdit(folder)} style={actionBtn} title="Edit folder">
+            <Pencil size={12} color="#6B7280" />
           </button>
-          <button
-            onClick={() => onDelete(folder.id, folder.name)}
-            style={actionBtn}
-            title="Delete folder"
-          >
-            <Trash2 size={10} color="#F87171" />
+          <button className="mc-btn" onClick={() => onDelete(folder.id, folder.name)} style={actionBtn} title="Delete folder">
+            <Trash2 size={12} color="#F87171" />
           </button>
         </div>
-      )}
-
-      {isDragOver && (
-        <span style={{ fontSize: '11px', color: '#2C5F3A', fontWeight: '500', marginTop: '2px' }}>
-          Drop here
-        </span>
       )}
     </div>
   );
@@ -135,9 +153,9 @@ const FolderCard = ({
 
 const actionBtn = {
   display: 'flex', alignItems: 'center', justifyContent: 'center',
-  width: '20px', height: '20px',
-  background: 'rgba(255,255,255,0.95)', border: '1px solid rgba(0,0,0,0.1)',
-  borderRadius: '4px', padding: '0', cursor: 'pointer',
+  width: '24px', height: '24px',
+  background: 'rgba(255,255,255,0.96)', border: '1px solid rgba(0,0,0,0.1)',
+  borderRadius: '6px', padding: '0', cursor: 'pointer',
 };
 
 export default FolderCard;
