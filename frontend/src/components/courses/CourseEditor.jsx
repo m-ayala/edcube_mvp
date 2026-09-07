@@ -1,6 +1,6 @@
 // src/components/courses/CourseEditor.jsx
 import { Droppable, Draggable } from '@hello-pangea/dnd';
-import { GripVertical, Edit2, Check, Trash2, Plus } from 'lucide-react';
+import { GripVertical, Edit2, Check, Trash2, Plus, ChevronDown, ChevronLeft, Pencil } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 
 // Extracted outside CourseEditor so React keeps stable identity across renders
@@ -199,542 +199,470 @@ export const EditableField = ({
   );
 };
 
+// ── Redesigned outline palette (Figma "Edit workspace") ─────────────────
+const FONT = "'DM Sans', sans-serif";
+const T = {
+  crumbMuted: '#8a8a8a',
+  crumbActive: '#3e62bc',
+  sectionTag: '#3e62bc',
+  heading: '#1f1f1f',
+  desc: '#727272',
+  rowBorder: '#d7e1fb',
+  numBg: '#ebf0ff',
+  numFg: '#3e62bc',
+  cardBorder: '#e4e4e4',
+  cardTitle: '#262626',
+  cardDesc: '#8f8f8f',
+  primary: '#bf2066',
+  dashed: '#cdd7ee',
+  addPillBg: '#f1f1f1',
+  addPillFg: '#9b9b9b',
+  iconEditBg: '#fff2f8', iconEditFg: '#bf2066',
+  iconDelBg: '#fff3dc', iconDelFg: '#c0871d',
+};
+
+const BLOCK_TAG = {
+  content:   { bg: '#fff2f8', fg: '#ad004b', label: 'Content' },
+  worksheet: { bg: '#fff3dc', fg: '#a9761b', label: 'Worksheet' },
+  activity:  { bg: '#e7f7ee', fg: '#1a7a40', label: 'Activity' },
+};
+
+const iconBtn = (bg, fg, size = 30) => ({
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  width: `${size}px`, height: `${size}px`, borderRadius: size >= 30 ? '8px' : '7px',
+  border: 'none', padding: 0,
+  background: bg, color: fg, cursor: 'pointer', flexShrink: 0,
+});
+
+const menuActionStyle = {
+  display: 'flex', width: '100%', alignItems: 'center', gap: '8px',
+  padding: '9px 10px', border: 'none', borderRadius: '8px', cursor: 'pointer',
+  background: 'transparent', color: '#3e62bc', fontFamily: FONT, fontSize: '13px', fontWeight: 600, textAlign: 'left',
+};
+
+const addPill = {
+  display: 'inline-flex', alignItems: 'center', gap: '6px',
+  padding: '6px 16px', borderRadius: '7px', background: T.addPillBg,
+  color: T.addPillFg, fontFamily: FONT, fontWeight: 600, fontSize: '11px',
+};
+
+const EmptyState = ({ onAdd }) => (
+  <div style={{
+    textAlign: 'center', padding: '90px 20px', marginTop: '30px',
+    border: '1px solid #ececec', borderRadius: '16px', background: '#FFFFFF',
+  }}>
+    <p style={{ fontSize: '30px', margin: '0 0 8px' }}>📚</p>
+    <p style={{ fontSize: '20px', fontWeight: 600, color: T.heading, margin: '0 0 4px' }}>No sections yet</p>
+    <p style={{ fontSize: '14px', color: T.desc, margin: '0 0 16px' }}>Start building your course outline.</p>
+    <button
+      onClick={onAdd}
+      style={{ padding: '8px 18px', borderRadius: '8px', border: 'none', background: T.primary, color: '#fff', fontWeight: 600, cursor: 'pointer', fontFamily: FONT }}
+    >
+      + Add section
+    </button>
+  </div>
+);
+
+const ConfirmDialog = ({ isOpen, onConfirm, onCancel, title, message }) => {
+  if (!isOpen) return null;
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+    }}>
+      <div style={{
+        backgroundColor: 'white', borderRadius: '12px', padding: '24px',
+        maxWidth: '400px', boxShadow: '0 8px 32px rgba(0,0,0,0.2)', fontFamily: FONT,
+      }}>
+        <h3 style={{ margin: '0 0 12px', fontSize: '19px', color: T.heading }}>{title}</h3>
+        <p style={{ margin: '0 0 20px', fontSize: '15px', color: '#444' }}>{message}</p>
+        <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+          <button
+            onClick={onCancel}
+            style={{ padding: '8px 16px', backgroundColor: '#f3f4f6', color: T.heading, border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px', fontWeight: 600 }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            style={{ padding: '8px 16px', backgroundColor: '#F87171', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px', fontWeight: 600 }}
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+let _blockSeq = 0;
+const nextBlockId = () => `block-${Date.now()}-${(_blockSeq += 1)}`;
+
 const CourseEditor = ({
-  courseClass,
-  setCourseClass,
   sections,
-  setSections,
-  videosByTopic,
   handsOnResources,
   formData,
-  currentUser,
   actions,
   onAddBreak,
   navigate,
   onNavigateToSubsection,
+  onNavigateToBlock,
+  onBack,
+  courseName,
   pendingSubsectionIds,
 }) => {
+  const [activeId, setActiveId] = useState(sections[0]?.id || null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [hoveredSub, setHoveredSub] = useState(null);
 
-  // ── Colors ────────────────────────────────────────────────────────────
-  const colors = {
-    bg: '#FAFAF9',
-    card: 'rgba(255,255,255,0.70)',
-    sectionBorder: 'rgba(255,255,255,0.88)',
-    sectionBg: 'rgba(255,255,255,0.70)',
-    sectionBodyBg: 'rgba(255,255,255,0.30)',
-    subsectionBg: 'rgba(255,255,255,0.78)',
-    subsectionBorder: 'rgba(255,255,255,0.92)',
-    topicBg: '#FFFFFF',
-    topicBorder: 'rgba(200,200,200,0.4)',
-    textPrimary: '#111',
-    textSecondary: '#111',
-    pillBg: '#F5F5F4',
-    pillText: '#333',
-    dangerBtn: '#F87171',
-    aiBtn: '#7C3AED',
-    sectionGradients: [
-      'linear-gradient(180deg,#B2E8C8,#ACD8F0)',
-      'linear-gradient(180deg,#F2C0D4,#F7E4A0)',
-      'linear-gradient(180deg,#ACD8F0,#B2E8C8)',
-      'linear-gradient(180deg,#F7E4A0,#F2C0D4)',
-    ],
-    topicBorderColors: ['#ACD8F0', '#F2C0D4', '#B2E8C8', '#F7E4A0'],
-    topicTints: [
-      'rgba(172,216,240,0.14)',
-      'rgba(242,192,212,0.14)',
-      'rgba(178,232,200,0.14)',
-      'rgba(247,228,160,0.14)',
-    ],
-    topicDeepColors: ['#2A6A8A', '#7A2A4A', '#1C5C35', '#5C3A08'],
-    pla: {
-      'Personal Growth': '#F2C0D4',
-      'Core Learning': '#ACD8F0',
-      'Critical Thinking': '#F7E4A0',
-      'Application & Impact': '#B2E8C8'
-    },
-    plaText: {
-      'Personal Growth': '#7A1A3A',
-      'Core Learning': '#0C3A5A',
-      'Critical Thinking': '#5C3A08',
-      'Application & Impact': '#1C5C35'
-    }
+  // Resolve the visible section from the stored id, falling back to the first
+  // section when the stored id no longer exists (e.g. it was just deleted).
+  const activeIndex = Math.max(0, sections.findIndex(s => s.id === activeId));
+  const section = sections[activeIndex] || null;
+  const secNum = activeIndex + 1;
+
+  const addBlockToSub = (subId) => {
+    if (!section) return;
+    const id = nextBlockId();
+    actions.addBlock(subId, { id, type: 'content', title: 'New block', content: '' });
+    onNavigateToBlock?.(section.id, subId, id);
   };
 
-  // Hover tracking for sections/subsections (for reveal-on-hover buttons)
-  const [hoveredSection, setHoveredSection] = useState(null);
-  const [hoveredSubsection, setHoveredSubsection] = useState(null);
+  return (
+    <div style={{ flex: 1, overflowY: 'auto', background: '#FFFFFF', fontFamily: FONT, position: 'relative', zIndex: 1 }}>
+      <div style={{ maxWidth: 1240, margin: '0 auto', padding: '26px 44px 120px' }}>
 
-  // ── Inline Components ─────────────────────────────────────────────────
-  const ConfirmDialog = ({ isOpen, onConfirm, onCancel, title, message }) => {
-    if (!isOpen) return null;
-    
-    return (
-      <div style={{
-        position: 'fixed',
-        inset: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1000
-      }}>
-        <div style={{
-          backgroundColor: 'white',
-          borderRadius: '12px',
-          padding: '24px',
-          maxWidth: '400px',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)'
-        }}>
-          <h3 style={{ margin: '0 0 12px', fontSize: '19.8px', color: colors.textPrimary }}>
-            {title}
-          </h3>
-          <p style={{ margin: '0 0 20px', fontSize: '15.4px', color: colors.textSecondary }}>
-            {message}
-          </p>
-          <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-            <button
-              onClick={onCancel}
-              style={{
-                padding: '8px 16px',
-                backgroundColor: '#f3f4f6',
-                color: colors.textPrimary,
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontSize: '15.4px',
-                fontWeight: '600'
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              onClick={onConfirm}
-              style={{
-                padding: '8px 16px',
-                backgroundColor: colors.dangerBtn,
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontSize: '15.4px',
-                fontWeight: '600'
-              }}
-            >
-              Delete
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // ── Section Block (render function, NOT a component — avoids remount on parent re-render) ──
-  const renderSectionBlock = (section, index, dragHandleProps) => {
-    if (section.type === 'break') {
-      return (
-        <div style={{
-          padding: '12px 16px', marginBottom: '18px',
-          background: '#FFFDF0', border: '1px solid rgba(0,0,0,0.09)',
-          borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div {...dragHandleProps} style={{ cursor: 'grab', display: 'flex', alignItems: 'center' }}>
-              <GripVertical size={18} style={{ color: '#666' }} />
-            </div>
-            <span style={{ fontWeight: '500', fontSize: '15.4px', color: '#111' }}>⏸ Break — {section.duration}</span>
-          </div>
-          <button
-            onClick={() => actions.confirmDeleteSection(section.id)}
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              padding: '4px',
-              display: 'flex',
-              alignItems: 'center',
-              color: colors.dangerBtn
-            }}
-            title="Delete break"
-          >
-            <Trash2 size={16} />
-          </button>
-        </div>
-      );
-    }
-
-    const isCollapsed = actions.collapsedSections[section.id];
-
-    return (
-      <div
-        onMouseEnter={() => setHoveredSection(section.id)}
-        onMouseLeave={() => setHoveredSection(null)}
-        style={{ marginBottom: '18px' }}
-      >
-        {/* SEC-HEAD: rounded top 12 12 0 0 */}
-        <div
-          onClick={() => actions.toggleSection(section.id)}
-          style={{
-            display: 'flex', alignItems: 'center', gap: '12px', padding: '13px 16px',
-            background: '#FFFFFF',
-            border: '1px solid rgba(0,0,0,0.09)',
-            borderBottom: isCollapsed ? '1px solid rgba(0,0,0,0.09)' : '1px solid rgba(0,0,0,0.07)',
-            borderRadius: isCollapsed ? '12px' : '12px 12px 0 0',
-            cursor: 'pointer', transition: 'background 0.15s'
-          }}
-        >
-          {/* Gradient accent pill — 4px × 36px */}
-          <div style={{
-            width: '4px', height: '36px', borderRadius: '3px', flexShrink: 0,
-            background: colors.sectionGradients[index % 4]
-          }} />
-
-          {/* Drag handle */}
-          <div {...dragHandleProps} onClick={e => e.stopPropagation()} style={{ cursor: 'grab', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-            <GripVertical size={14} style={{ color: '#999' }} />
-          </div>
-
-          {/* Section metadata */}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '1.1px', color: '#555' }}>
-              Section {index + 1}
-            </div>
-            <EditableField
-              value={section.title}
-              onChange={val => actions.updateSectionTitle(section.id, val)}
-              placeholder="Section title"
-              accentColor="#666"
-              maxLength={80}
-              style={{ flex: 1 }}
-              inputStyle={{
-                fontFamily: "'DM Serif Display', serif",
-                fontSize: '17.6px',
-                color: '#111',
-              }}
-            />
-          </div>
-
-          {/* Hover-only action buttons */}
-          <div style={{
-            display: 'flex', gap: '4px', alignItems: 'center',
-            opacity: hoveredSection === section.id ? 1 : 0,
-            transition: 'opacity 0.15s',
-            pointerEvents: hoveredSection === section.id ? 'auto' : 'none'
-          }}>
-            <button
-              onClick={(e) => { e.stopPropagation(); actions.addSection(); }}
-              style={{
-                padding: '3px 8px', background: '#FFFFFF', color: '#333',
-                border: '1px solid rgba(0,0,0,0.1)', borderRadius: '4px',
-                cursor: 'pointer', fontSize: '11px', fontWeight: '600',
-                display: 'flex', alignItems: 'center', gap: '3px',
-                fontFamily: "'DM Sans', sans-serif"
-              }}
-              title="Add section"
-            >
-              <Plus size={10} /> Sec
-            </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); actions.confirmDeleteSection(section.id); }}
-              style={{
-                background: 'none', border: 'none', cursor: 'pointer', padding: '3px 5px',
-                display: 'flex', alignItems: 'center', color: '#F87171', borderRadius: '5px'
-              }}
-              title="Delete section"
-            >
-              <Trash2 size={13} />
-            </button>
-          </div>
-
-          {/* Chevron */}
-          <div style={{ color: '#555', fontSize: '14.3px', flexShrink: 0, transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▾</div>
+        {/* ── Breadcrumb ── */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '15px', fontWeight: 600 }}>
+          <span onClick={() => navigate?.('/my-courses')} style={{ color: T.crumbMuted, cursor: 'pointer' }}>My courses</span>
+          <ChevronLeft size={15} style={{ color: '#c7c7c7' }} />
+          <span onClick={() => onBack?.()} style={{ color: T.crumbMuted, cursor: 'pointer' }}>Course Outline</span>
+          <ChevronLeft size={15} style={{ color: '#c7c7c7' }} />
+          <span style={{ color: T.crumbActive, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {courseName || formData?.courseName || 'Untitled course'}
+          </span>
         </div>
 
-        {!isCollapsed && (
-          <div style={{
-            background: '#FAFAFA',
-            border: '1px solid rgba(0,0,0,0.09)',
-            borderTop: 'none',
-            borderRadius: '0 0 12px 12px',
-            padding: '18px 16px 14px'
-          }}>
-            {/* Description edit — inline inside body */}
-            <div style={{ marginBottom: '12px' }}>
-              <EditableField
-                value={section.description}
-                onChange={val => actions.updateSectionDescription(section.id, val)}
-                placeholder="Add a description…"
-                accentColor="#666"
-                maxLength={400}
-                multiline
-                style={{ flex: 1 }}
-                inputStyle={{
-                  fontSize: '14px',
-                  color: '#333',
-                  fontStyle: section.description ? 'normal' : 'italic',
-                  fontWeight: '400'
+        {sections.length === 0 ? (
+          <EmptyState onAdd={() => actions.addSection()} />
+        ) : (
+          <>
+            {/* ── Section switcher ── */}
+            <div style={{ position: 'relative', marginTop: '22px' }}>
+              <button
+                onClick={() => setMenuOpen(o => !o)}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '6px',
+                  background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px 0',
+                  color: T.sectionTag, fontFamily: FONT, fontWeight: 600, fontSize: '15px',
+                  textTransform: 'uppercase', letterSpacing: '0.5px',
                 }}
-              />
-            </div>
-            {/* Subsections */}
-            <Droppable droppableId={`subsections-${section.id}`} type="SUBSECTION">
-              {(provided) => (
-                <div
-                  ref={provided.innerRef}
-                  {...provided.droppableProps}
-                >
-                  {(section.subsections || []).length === 0 && (
-                    <div style={{
-                      textAlign: 'center',
-                      padding: '20px 0',
-                      color: '#444',
-                      fontSize: '14px',
-                      marginBottom: '12px'
-                    }}>
-                      <p style={{ margin: '0 0 10px' }}>No subsections yet</p>
+              >
+                {section?.type === 'break' ? 'Break' : `Section ${secNum}`}
+                <ChevronDown size={15} style={{ transform: menuOpen ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
+              </button>
+
+              {menuOpen && (
+                <>
+                  <div onClick={() => setMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
+                  <div style={{
+                    position: 'absolute', top: '34px', left: 0, zIndex: 41,
+                    minWidth: '280px', maxHeight: '340px', overflowY: 'auto',
+                    background: '#FFFFFF', border: '1px solid #e6e6e6', borderRadius: '12px',
+                    boxShadow: '0 12px 32px rgba(0,0,0,0.12)', padding: '6px',
+                  }}>
+                    {sections.map((s, i) => (
                       <button
-                        onClick={() => actions.addSubsection(section.id)}
+                        key={s.id}
+                        onClick={() => { setActiveId(s.id); setMenuOpen(false); }}
                         style={{
-                          background: 'transparent',
-                          border: '1px dashed rgba(0,0,0,0.2)',
-                          borderRadius: '6px',
-                          padding: '5px 20px',
-                          cursor: 'pointer',
-                          fontSize: '14px',
-                          color: '#444',
-                          fontFamily: "'DM Sans', sans-serif",
-                          display: 'inline-block'
+                          display: 'flex', width: '100%', alignItems: 'center', gap: '10px',
+                          padding: '9px 10px', border: 'none', borderRadius: '8px', cursor: 'pointer',
+                          background: s.id === section?.id ? '#f2f5ff' : 'transparent',
+                          color: '#262626', fontFamily: FONT, fontSize: '13.5px', textAlign: 'left',
                         }}
                       >
-                        + Add Subsection
+                        <span style={{
+                          flexShrink: 0, width: '22px', height: '22px', borderRadius: '6px',
+                          background: T.numBg, color: T.numFg, fontSize: '11px', fontWeight: 600,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>{i + 1}</span>
+                        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {s.type === 'break' ? `Break — ${s.duration}` : (s.title || 'Untitled section')}
+                        </span>
                       </button>
+                    ))}
+                    <div style={{ height: '1px', background: '#efefef', margin: '6px 4px' }} />
+                    <button onClick={() => { actions.addSection(); setMenuOpen(false); }} style={menuActionStyle}>
+                      <Plus size={14} /> Add section
+                    </button>
+                    {onAddBreak && (
+                      <button onClick={() => { onAddBreak(); setMenuOpen(false); }} style={menuActionStyle}>
+                        <Plus size={14} /> Add break
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* ── Section body ── */}
+            {section?.type === 'break' ? (
+              <div style={{
+                marginTop: '14px', padding: '18px 20px', borderRadius: '12px',
+                background: '#FFFDF0', border: '1px solid #efe6c8',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              }}>
+                <span style={{ fontSize: '16px', fontWeight: 600, color: '#7a5c12' }}>⏸ Break — {section.duration}</span>
+                <button onClick={() => actions.confirmDeleteSection(section.id)} style={iconBtn(T.iconDelBg, T.iconDelFg)} title="Delete break">
+                  <Trash2 size={15} />
+                </button>
+              </div>
+            ) : section ? (
+              <>
+                <div style={{ marginTop: '10px' }}>
+                  <EditableField
+                    value={section.title}
+                    onChange={(v) => actions.updateSectionTitle(section.id, v)}
+                    placeholder="Section title"
+                    accentColor={T.primary}
+                    maxLength={120}
+                    style={{ flex: 1 }}
+                    inputStyle={{ fontFamily: FONT, fontWeight: 600, fontSize: '25px', color: T.heading }}
+                  />
+                </div>
+                <div style={{ marginTop: '6px', maxWidth: '900px' }}>
+                  <EditableField
+                    value={section.description}
+                    onChange={(v) => actions.updateSectionDescription(section.id, v)}
+                    placeholder="Add a section description…"
+                    accentColor={T.primary}
+                    maxLength={600}
+                    multiline
+                    style={{ flex: 1 }}
+                    inputStyle={{ fontFamily: FONT, fontWeight: 500, fontSize: '15px', lineHeight: '1.65', color: T.desc }}
+                  />
+                </div>
+
+                {/* ── Subsection rows ── */}
+                <Droppable droppableId={`subsections-${section.id}`} type="SUBSECTION">
+                  {(dropProv) => (
+                    <div ref={dropProv.innerRef} {...dropProv.droppableProps} style={{ marginTop: '24px' }}>
+                      {(section.subsections || []).map((sub, subIdx) => {
+                        const blocks = handsOnResources[sub.id] || [];
+                        const pending = pendingSubsectionIds?.has(sub.id);
+                        return (
+                          <Draggable key={sub.id} draggableId={sub.id} index={subIdx}>
+                            {(dragProv, dragSnap) => (
+                              <div
+                                ref={dragProv.innerRef}
+                                {...dragProv.draggableProps}
+                                onMouseEnter={() => setHoveredSub(sub.id)}
+                                onMouseLeave={() => setHoveredSub(null)}
+                                onClick={() => onNavigateToSubsection?.(section.id, sub.id)}
+                                style={{
+                                  ...dragProv.draggableProps.style,
+                                  border: `1px solid ${T.rowBorder}`,
+                                  borderRadius: '12px',
+                                  background: '#FFFFFF',
+                                  padding: '20px 22px',
+                                  marginBottom: '20px',
+                                  cursor: 'pointer',
+                                  boxShadow: dragSnap.isDragging
+                                    ? '0 8px 24px rgba(0,0,0,0.12)'
+                                    : hoveredSub === sub.id ? '0 2px 12px rgba(0,0,0,0.07)' : 'none',
+                                  transition: 'box-shadow .15s',
+                                }}
+                              >
+                                {/* Row header */}
+                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                                  <div
+                                    {...dragProv.dragHandleProps}
+                                    onClick={(e) => e.stopPropagation()}
+                                    style={{ cursor: 'grab', display: 'flex', alignItems: 'center', paddingTop: '5px', opacity: hoveredSub === sub.id ? 1 : 0.25, transition: 'opacity .15s' }}
+                                  >
+                                    <GripVertical size={16} style={{ color: '#b6b6b6' }} />
+                                  </div>
+                                  <span style={{
+                                    flexShrink: 0, width: '30px', height: '30px', borderRadius: '8px',
+                                    background: T.numBg, color: T.numFg, fontSize: '13px', fontWeight: 600,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '2px',
+                                  }}>{secNum}.{subIdx + 1}</span>
+                                  <div style={{ flex: 1, minWidth: 0, paddingTop: '3px' }}>
+                                    <div style={{
+                                      fontFamily: FONT, fontWeight: 700, fontSize: '20px', lineHeight: 1.3,
+                                      color: T.cardTitle, textTransform: 'capitalize',
+                                    }}>
+                                      {sub.title || 'Untitled subsection'}
+                                    </div>
+                                    {pending && (
+                                      <span style={{
+                                        display: 'inline-flex', alignItems: 'center', gap: '6px', marginTop: '6px',
+                                        fontSize: '11px', padding: '2px 8px', borderRadius: '6px',
+                                        background: 'rgba(56,161,105,0.10)', color: '#276749',
+                                      }}>
+                                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#38A169', animation: 'pulse 1.2s ease-in-out infinite' }} />
+                                        Generating…
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div style={{ display: 'flex', gap: '8px', flexShrink: 0, marginTop: '2px' }}>
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); onNavigateToSubsection?.(section.id, sub.id); }}
+                                      style={iconBtn(T.iconEditBg, T.iconEditFg)}
+                                      title="Open subsection to edit"
+                                    >
+                                      <Pencil size={16} />
+                                    </button>
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); actions.confirmDeleteSubsection(section.id, sub.id); }}
+                                      style={iconBtn(T.iconDelBg, T.iconDelFg)}
+                                      title="Delete subsection"
+                                    >
+                                      <Trash2 size={16} />
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* Block cards */}
+                                <Droppable droppableId={`blocks-${sub.id}`} type="BLOCK" direction="horizontal">
+                                  {(blockDrop, blockSnap) => (
+                                    <div
+                                      ref={blockDrop.innerRef}
+                                      {...blockDrop.droppableProps}
+                                      style={{
+                                        display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'stretch',
+                                        marginTop: '18px',
+                                        background: blockSnap.isDraggingOver ? 'rgba(62,98,188,0.04)' : 'transparent',
+                                        borderRadius: '10px', transition: 'background .15s',
+                                      }}
+                                    >
+                                      {blocks.map((block, blockIdx) => {
+                                        const tag = BLOCK_TAG[block.type] || BLOCK_TAG.content;
+                                        const preview = (block.content || block.description || '').replace(/[#*_`>[\]]/g, '').trim();
+                                        const dur = block.duration_minutes || block.duration;
+                                        return (
+                                          <Draggable key={block.id} draggableId={block.id} index={blockIdx}>
+                                            {(bProv, bSnap) => (
+                                              <div
+                                                ref={bProv.innerRef}
+                                                {...bProv.draggableProps}
+                                                onClick={(e) => { e.stopPropagation(); onNavigateToBlock?.(section.id, sub.id, block.id); }}
+                                                style={{
+                                                  ...bProv.draggableProps.style,
+                                                  width: '236px', display: 'flex', flexDirection: 'column',
+                                                  border: `1px solid ${T.cardBorder}`, borderRadius: '12px',
+                                                  background: '#FFFFFF', padding: '15px 16px', cursor: 'pointer',
+                                                  boxShadow: bSnap.isDragging ? '0 10px 26px rgba(0,0,0,0.14)' : 'none',
+                                                }}
+                                              >
+                                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '4px' }}>
+                                                  <div style={{
+                                                    flex: 1, minWidth: 0,
+                                                    fontFamily: FONT, fontWeight: 700, fontSize: '16px', lineHeight: 1.3,
+                                                    color: T.cardTitle, textTransform: 'capitalize',
+                                                  }}>
+                                                    {block.title || 'Untitled block'}
+                                                  </div>
+                                                  <button
+                                                    {...bProv.dragHandleProps}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    style={{ background: 'none', border: 'none', cursor: 'grab', padding: '2px', color: '#c4c4c4', flexShrink: 0 }}
+                                                    title="Drag to reorder"
+                                                  >
+                                                    <GripVertical size={13} />
+                                                  </button>
+                                                  <button
+                                                    onClick={(e) => { e.stopPropagation(); onNavigateToBlock?.(section.id, sub.id, block.id); }}
+                                                    style={iconBtn(T.iconEditBg, T.iconEditFg, 24)}
+                                                    title="Open block to edit"
+                                                  >
+                                                    <Pencil size={13} />
+                                                  </button>
+                                                  <button
+                                                    onClick={(e) => { e.stopPropagation(); actions.removeBlock(sub.id, block.id); }}
+                                                    style={iconBtn(T.iconDelBg, T.iconDelFg, 24)}
+                                                    title="Remove block"
+                                                  >
+                                                    <Trash2 size={13} />
+                                                  </button>
+                                                </div>
+
+                                                <p style={{
+                                                  margin: '10px 0 0', fontSize: '12px', fontWeight: 500, lineHeight: '1.5',
+                                                  color: T.cardDesc, display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical',
+                                                  overflow: 'hidden',
+                                                }}>
+                                                  {preview || 'No description yet.'}
+                                                </p>
+
+                                                <div style={{ flex: 1, minHeight: '10px' }} />
+
+                                                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '12px' }}>
+                                                  <span style={{ fontSize: '10.5px', fontWeight: 600, padding: '3px 9px', borderRadius: '6px', background: tag.bg, color: tag.fg }}>{tag.label}</span>
+                                                  {dur ? (
+                                                    <span style={{ fontSize: '10.5px', fontWeight: 500, padding: '3px 9px', borderRadius: '6px', background: '#efefef', color: '#828282' }}>
+                                                      {typeof dur === 'number' ? `${dur} mins` : dur}
+                                                    </span>
+                                                  ) : null}
+                                                </div>
+                                              </div>
+                                            )}
+                                          </Draggable>
+                                        );
+                                      })}
+                                      {blockDrop.placeholder}
+
+                                      {pending && blocks.length === 0 ? (
+                                        [0, 1, 2].map(i => (
+                                          <div key={i} style={{
+                                            width: '236px', height: '210px', borderRadius: '12px',
+                                            background: `rgba(56,161,105,${0.06 + i * 0.02})`,
+                                            animation: 'pulse 1.4s ease-in-out infinite', animationDelay: `${i * 0.15}s`,
+                                          }} />
+                                        ))
+                                      ) : (
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); addBlockToSub(sub.id); }}
+                                          style={{
+                                            width: '236px', minHeight: '210px', borderRadius: '12px',
+                                            border: `1.5px dashed ${T.dashed}`, background: 'transparent', cursor: 'pointer',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                          }}
+                                        >
+                                          <span style={addPill}><Plus size={15} /> Add Block</span>
+                                        </button>
+                                      )}
+                                    </div>
+                                  )}
+                                </Droppable>
+                              </div>
+                            )}
+                          </Draggable>
+                        );
+                      })}
+                      {dropProv.placeholder}
                     </div>
                   )}
-                  {(section.subsections || []).map((sub, subIdx) => {
-                    const subBlocks = handsOnResources[sub.id] || [];
-                    const blockTypeStyle = {
-                      content:   { bg: 'rgba(59,95,187,0.10)',  dot: '#3B5FBB' },
-                      worksheet: { bg: 'rgba(176,90,26,0.10)',  dot: '#B05A1A' },
-                      activity:  { bg: 'rgba(26,122,64,0.10)',  dot: '#1A7A40' },
-                    };
+                </Droppable>
 
-                    return (
-                      <Draggable key={sub.id} draggableId={sub.id} index={subIdx}>
-                        {(provided, snapshot) => (
-                          <div
-                            ref={provided.innerRef}
-                            {...provided.draggableProps}
-                            onMouseEnter={() => setHoveredSubsection(sub.id)}
-                            onMouseLeave={() => setHoveredSubsection(null)}
-                            style={{
-                              ...provided.draggableProps.style,
-                              marginLeft: '24px',
-                              marginBottom: '10px',
-                              borderRadius: '9px',
-                              border: '1px solid rgba(0,0,0,0.08)',
-                              background: '#FFFFFF',
-                              overflow: 'hidden',
-                              boxShadow: hoveredSubsection === sub.id
-                                ? '0 2px 8px rgba(0,0,0,0.10)'
-                                : '0 1px 4px rgba(0,0,0,0.05)',
-                              opacity: snapshot.isDragging ? 0.85 : 1,
-                              transition: 'box-shadow 0.15s',
-                            }}
-                          >
-                            {/* Header row — clickable to navigate */}
-                            <div
-                              onClick={() => onNavigateToSubsection?.(section.id, sub.id)}
-                              style={{
-                                display: 'flex', alignItems: 'center', gap: '10px', padding: '11px 14px',
-                                cursor: 'pointer',
-                                borderBottom: subBlocks.length > 0 ? '1px solid rgba(0,0,0,0.05)' : 'none',
-                              }}
-                            >
-                              <div style={{ width: '3px', height: '28px', borderRadius: '2px', flexShrink: 0, background: colors.sectionGradients[index % 4] }} />
-                              <div
-                                {...provided.dragHandleProps}
-                                onClick={e => e.stopPropagation()}
-                                style={{ cursor: 'grab', display: 'flex', alignItems: 'center', flexShrink: 0 }}
-                              >
-                                <GripVertical size={13} style={{ color: '#999' }} />
-                              </div>
-                              <div style={{ fontSize: '13px', fontWeight: '500', color: '#555', minWidth: '20px', flexShrink: 0 }}>
-                                {index + 1}.{subIdx + 1}
-                              </div>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontSize: '15px', fontWeight: '600', color: '#111', lineHeight: '1.35' }}>
-                                  {sub.title || 'Untitled subsection'}
-                                </div>
-                              </div>
-                              {pendingSubsectionIds?.has(sub.id) ? (
-                                <span style={{
-                                  fontSize: '11px', flexShrink: 0, padding: '2px 8px', borderRadius: '6px',
-                                  background: 'rgba(56,161,105,0.10)', color: '#276749',
-                                  display: 'flex', alignItems: 'center', gap: '5px',
-                                }}>
-                                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#38A169', display: 'inline-block', animation: 'pulse 1.2s ease-in-out infinite' }} />
-                                  Generating…
-                                </span>
-                              ) : subBlocks.length > 0 ? (
-                                <span style={{ fontSize: '11px', color: '#999', flexShrink: 0, background: '#F5F5F4', padding: '2px 7px', borderRadius: '6px' }}>
-                                  {subBlocks.length} block{subBlocks.length !== 1 ? 's' : ''}
-                                </span>
-                              ) : null}
-                              <button
-                                onClick={e => { e.stopPropagation(); actions.confirmDeleteSubsection(section.id, sub.id); }}
-                                style={{
-                                  background: 'none', border: 'none', cursor: 'pointer', padding: '3px 5px',
-                                  display: 'flex', alignItems: 'center', color: '#F87171', borderRadius: '5px', flexShrink: 0,
-                                  opacity: hoveredSubsection === sub.id ? 1 : 0,
-                                  transition: 'opacity 0.15s',
-                                  pointerEvents: hoveredSubsection === sub.id ? 'auto' : 'none',
-                                }}
-                                title="Delete subsection"
-                              >
-                                <Trash2 size={13} />
-                              </button>
-                              <span style={{ color: '#bbb', fontSize: '14px', flexShrink: 0 }}>›</span>
-                            </div>
-
-                            {/* Block list — drag target */}
-                            <Droppable droppableId={`blocks-${sub.id}`} type="BLOCK">
-                              {(blockProv, blockSnap) => (
-                                <div
-                                  ref={blockProv.innerRef}
-                                  {...blockProv.droppableProps}
-                                  style={{
-                                    padding: '6px 14px',
-                                    minHeight: '34px',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    gap: '4px',
-                                    background: blockSnap.isDraggingOver ? 'rgba(172,216,240,0.13)' : 'transparent',
-                                    transition: 'background 0.15s',
-                                  }}
-                                >
-                                  {subBlocks.length === 0 && !blockSnap.isDraggingOver && (
-                                    pendingSubsectionIds?.has(sub.id) ? (
-                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', padding: '4px 0' }}>
-                                        {[1, 2, 3].map(i => (
-                                          <div key={i} style={{
-                                            height: '24px', borderRadius: '6px',
-                                            background: `rgba(56,161,105,${0.08 + i * 0.02})`,
-                                            animation: 'pulse 1.4s ease-in-out infinite',
-                                            animationDelay: `${i * 0.15}s`,
-                                          }} />
-                                        ))}
-                                      </div>
-                                    ) : (
-                                      <div style={{ fontSize: '11.5px', color: '#CCC', fontStyle: 'italic', padding: '4px 0', fontFamily: "'DM Sans', sans-serif" }}>
-                                        No blocks — drag one here
-                                      </div>
-                                    )
-                                  )}
-                                  {subBlocks.map((block, blockIdx) => {
-                                    const bStyle = blockTypeStyle[block.type] || blockTypeStyle.content;
-                                    return (
-                                      <Draggable key={block.id} draggableId={block.id} index={blockIdx}>
-                                        {(bProv, bSnap) => (
-                                          <div
-                                            ref={bProv.innerRef}
-                                            {...bProv.draggableProps}
-                                            {...bProv.dragHandleProps}
-                                            style={{
-                                              ...bProv.draggableProps.style,
-                                              display: 'flex',
-                                              alignItems: 'center',
-                                              gap: '7px',
-                                              padding: '5px 8px',
-                                              borderRadius: '6px',
-                                              background: bSnap.isDragging ? bStyle.bg : 'rgba(0,0,0,0.03)',
-                                              border: `1px solid ${bSnap.isDragging ? bStyle.dot + '40' : 'rgba(0,0,0,0.06)'}`,
-                                              cursor: 'grab',
-                                              opacity: bSnap.isDragging ? 0.85 : 1,
-                                            }}
-                                          >
-                                            <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: bStyle.dot, flexShrink: 0 }} />
-                                            <span style={{ fontSize: '12px', color: '#444', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: "'DM Sans', sans-serif" }}>
-                                              {block.title || 'Untitled block'}
-                                            </span>
-                                            <GripVertical size={11} style={{ color: '#CCC', flexShrink: 0 }} />
-                                          </div>
-                                        )}
-                                      </Draggable>
-                                    );
-                                  })}
-                                  {blockProv.placeholder}
-                                </div>
-                              )}
-                            </Droppable>
-                          </div>
-                        )}
-                      </Draggable>
-                    );
-                  })}
-                  {provided.placeholder}
-                </div>
-              )}
-            </Droppable>
-            {/* Add subsection button at bottom of section body */}
-            <button
-              onClick={() => actions.addSubsection(section.id)}
-              style={{
-                fontFamily: "'DM Sans', sans-serif", fontSize: '14px', color: '#444',
-                background: '#FFFFFF', border: '1px dashed rgba(0,0,0,0.2)',
-                borderRadius: '8px', padding: '7px 14px', cursor: 'pointer',
-                width: 'calc(100% - 24px)', marginLeft: '24px', textAlign: 'left',
-                marginTop: '10px', display: 'block'
-              }}
-            >
-              + Add subsection
-            </button>
-          </div>
+                {/* ── Add subsection (full-width dashed) ── */}
+                <button
+                  onClick={() => actions.addSubsection(section.id)}
+                  style={{
+                    width: '100%', padding: '30px', borderRadius: '12px',
+                    border: `1.5px dashed ${T.dashed}`, background: 'transparent', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '4px',
+                  }}
+                >
+                  <span style={addPill}><Plus size={15} /> Add Subsection</span>
+                </button>
+              </>
+            ) : null}
+          </>
         )}
       </div>
-    );
-  };
 
-  // ── RENDER ────────────────────────────────────────────────────────────
-  return (
-    <>
-      {/* Course Outline — sections and subsections only */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '24px 48px 80px', position: 'relative', zIndex: 1 }}>
-        <div style={{ maxWidth: '860px', margin: '0 auto' }}>
-        {sections.length === 0 ? (
-          <div style={{
-            textAlign: 'center', padding: '80px 20px',
-            border: '1px solid rgba(0,0,0,0.08)', borderRadius: '16px',
-            background: '#FFFFFF'
-          }}>
-            <p style={{ fontSize: '30.8px', marginBottom: '8px' }}>📚</p>
-            <p style={{ fontSize: '22px', color: colors.textPrimary, fontWeight: '600', margin: '0 0 4px' }}>No sections yet</p>
-            <p style={{ fontSize: '14.3px', color: colors.textSecondary, margin: 0 }}>Click "+ Section" above to start building your course</p>
-          </div>
-        ) : (
-          <Droppable droppableId="all-sections" type="SECTION">
-            {(provided) => (
-              <div ref={provided.innerRef} {...provided.droppableProps}>
-                {sections.map((section, idx) => (
-                  <Draggable key={section.id} draggableId={section.id} index={idx}>
-                    {(provided, snapshot) => (
-                      <div
-                        ref={provided.innerRef}
-                        {...provided.draggableProps}
-                        style={{ ...provided.draggableProps.style, opacity: snapshot.isDragging ? 0.8 : 1 }}
-                      >
-                        {renderSectionBlock(section, idx, provided.dragHandleProps)}
-                      </div>
-                    )}
-                  </Draggable>
-                ))}
-                {provided.placeholder}
-              </div>
-            )}
-          </Droppable>
-        )}
-        </div>
-      </div>
-
-      {/* Modals */}
       <ConfirmDialog
         isOpen={actions.deleteConfirm !== null}
         onConfirm={actions.handleConfirmDelete}
@@ -742,8 +670,7 @@ const CourseEditor = ({
         title={actions.deleteConfirm?.title || ''}
         message={actions.deleteConfirm?.message || ''}
       />
-
-    </>
+    </div>
   );
 };
 

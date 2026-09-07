@@ -1,6 +1,7 @@
 // src/components/courses/CourseWorkspace.jsx
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { DragDropContext } from '@hello-pangea/dnd';
+import { ChevronLeft, Undo2, Check as CheckIcon, ToggleLeft, ToggleRight, Share2, Info, Sparkles } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import CourseEditor, { EditableField } from './CourseEditor';
@@ -586,6 +587,21 @@ const CourseWorkspace = () => {
   });
 
   // ── Drag and Drop ──────────────────────────────��──────────────────────
+  // ── Redesigned top-bar pill styles (Figma "Edit workspace") ──────────
+  const pillStyle = (variant, disabled = false) => {
+    const base = {
+      display: 'flex', alignItems: 'center', gap: '6px',
+      height: '34px', padding: '0 12px', borderRadius: '10px',
+      background: '#FFFFFF', cursor: disabled ? 'not-allowed' : 'pointer',
+      fontFamily: "'DM Sans', sans-serif", fontSize: '13.5px', fontWeight: '500',
+      whiteSpace: 'nowrap', flexShrink: 0, opacity: disabled ? 0.5 : 1,
+    };
+    if (variant === 'pink') return { ...base, border: '1px solid #eecff8', color: '#954baf' };
+    if (variant === 'blueActive') return { ...base, border: '1px solid #3e62bc', color: '#3e62bc', background: '#f2f5ff' };
+    if (variant === 'plain') return { ...base, border: '1px solid rgba(0,0,0,0.12)', color: '#333' };
+    return { ...base, border: '1px solid #dce6ff', color: '#3e62bc' }; // blue
+  };
+
   const handleDragEnd = (result) => {
     const { source, destination, draggableId, type } = result;
 
@@ -736,7 +752,7 @@ const CourseWorkspace = () => {
           navigate={navigate}
         />
       ) : (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#FFFFFF' }}>
           <style>{`
             @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
             @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
@@ -764,177 +780,111 @@ const CourseWorkspace = () => {
             </div>
           )}
 
-          {/* ── Persistent workspace top bar ── */}
+          {/* ── Persistent workspace top bar (Figma "Edit workspace") ── */}
           <div style={{
-            padding: '0 28px', height: '68px',
-            display: 'flex', alignItems: 'center', gap: '8px',
-            background: '#FFFFFF', borderBottom: '1px solid rgba(0,0,0,0.08)',
-            flexShrink: 0, zIndex: 10,
+            padding: '0 22px', minHeight: '58px',
+            display: 'flex', alignItems: 'center', gap: '9px',
+            background: '#FFFFFF', borderBottom: '1px solid #EEF1F6',
+            flexShrink: 0, zIndex: 10, fontFamily: "'DM Sans', sans-serif",
           }}>
             <button
               onClick={isSelectingSubsections ? handleBackToGeneration : (navPage === 'outline' ? handleBack : navigateBack)}
+              title={isSelectingSubsections ? 'Back to course generation' : navPage === 'outline' ? 'Back to course view' : navPage === 'block' ? 'Back to topic' : 'Back to sections'}
               style={{
-                fontFamily: "'DM Sans', sans-serif", fontSize: '13.8px', fontWeight: '500',
-                padding: '6px 13px', borderRadius: '8px', cursor: 'pointer',
-                background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.12)',
-                color: '#111', whiteSpace: 'nowrap', flexShrink: 0,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                width: '32px', height: '32px', borderRadius: '9px', flexShrink: 0,
+                background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.10)', cursor: 'pointer', color: '#333',
               }}
             >
-              {isSelectingSubsections
-                ? '← Phase 1: Course Generation'
-                : navPage === 'outline' ? '← Course View' : navPage === 'block' ? '← Topic' : '← Sections'}
+              <ChevronLeft size={18} />
             </button>
 
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 0 }}>
+            {/* Breadcrumb */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, flex: 1 }}>
+              <span onClick={() => navigate('/my-courses')} style={{ color: '#8a8a8a', fontSize: '13.5px', fontWeight: '600', cursor: 'pointer', whiteSpace: 'nowrap' }}>My courses</span>
+              <ChevronLeft size={13} style={{ color: '#c7c7c7', flexShrink: 0 }} />
+              <span onClick={handleBack} style={{ color: '#8a8a8a', fontSize: '13.5px', fontWeight: '600', cursor: 'pointer', whiteSpace: 'nowrap' }}>Course Outline</span>
+              <ChevronLeft size={13} style={{ color: '#c7c7c7', flexShrink: 0 }} />
               <EditableField
                 value={courseName}
                 onChange={val => setCourseName(val)}
                 placeholder="Course name"
-                accentColor="#666"
+                accentColor="#3e62bc"
                 maxLength={60}
-                style={{ display: 'flex', alignItems: 'center' }}
-                inputStyle={{ fontFamily: "'DM Serif Display', serif", fontSize: '20.9px', color: '#111', letterSpacing: '-0.3px' }}
+                style={{ display: 'flex', alignItems: 'center', minWidth: 0 }}
+                inputStyle={{ fontFamily: "'DM Sans', sans-serif", fontWeight: '600', fontSize: '15px', color: '#3e62bc' }}
               />
             </div>
 
-            <button
-              onClick={undo}
-              disabled={historyIndex <= 0}
-              style={{
-                fontFamily: "'DM Sans', sans-serif", fontSize: '13.8px', fontWeight: '500',
-                padding: '6px 13px', borderRadius: '8px', cursor: historyIndex <= 0 ? 'not-allowed' : 'pointer',
-                background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.12)',
-                color: historyIndex <= 0 ? '#999' : '#111', whiteSpace: 'nowrap', flexShrink: 0,
-              }}
-            >
-              ↶ Undo
-            </button>
+            {!isSelectingSubsections && (
+              <>
+                <button onClick={undo} disabled={historyIndex <= 0} style={pillStyle('pink', historyIndex <= 0)}>
+                  <Undo2 size={15} /> Undo
+                </button>
 
-            <div style={{
-              fontFamily: "'DM Sans', sans-serif", fontSize: '13.8px', fontWeight: '500',
-              padding: '6px 13px', borderRadius: '8px',
-              background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.12)',
-              color: saveStatus === 'saving' ? '#6B7280' : '#1C5C35',
-              whiteSpace: 'nowrap', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '5px',
-            }}>
-              {saveStatus === 'saving' && (
-                <span style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: '#9CA3AF', display: 'inline-block', animation: 'pulse 1.5s ease-in-out infinite', flexShrink: 0 }} />
-              )}
-              {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'error' ? '✕ Error' : '✓ Saved'}
-            </div>
+                <div style={{ ...pillStyle('pink'), cursor: 'default', color: saveStatus === 'error' ? '#d64545' : saveStatus === 'saving' ? '#8a8a8a' : '#954baf' }}>
+                  {saveStatus === 'saving'
+                    ? <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#9CA3AF', display: 'inline-block', animation: 'pulse 1.5s ease-in-out infinite' }} />
+                    : saveStatus === 'error' ? null : <CheckIcon size={15} />}
+                  {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'error' ? 'Error' : 'Saved'}
+                </div>
 
-            {Object.values(linkGenJobs).some(s => s === 'generating') && (
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: '5px',
-                padding: '5px 11px', borderRadius: '8px',
-                background: '#F0F4FF', border: '1px solid rgba(99,102,241,0.25)',
-                color: '#4338CA', fontSize: '13px', fontWeight: '500',
-                fontFamily: "'DM Sans', sans-serif", whiteSpace: 'nowrap', flexShrink: 0,
-              }}>
-                <span style={{
-                  animation: 'pulse 1.5s ease-in-out infinite', display: 'inline-block',
-                  width: '7px', height: '7px', borderRadius: '50%', background: '#6366F1',
-                }} />
-                Generating links…
-              </div>
-            )}
+                {Object.values(linkGenJobs).some(s => s === 'generating') && (
+                  <div style={{ ...pillStyle('blueActive'), cursor: 'default' }}>
+                    <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#6366F1', display: 'inline-block', animation: 'pulse 1.5s ease-in-out infinite' }} />
+                    Links…
+                  </div>
+                )}
 
-            <div
-              onClick={handleToggleVisibility}
-              style={{
-                display: 'flex', alignItems: 'center', gap: '7px', cursor: 'pointer',
-                padding: '5px 11px', borderRadius: '8px',
-                background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.12)',
-                whiteSpace: 'nowrap', flexShrink: 0,
-                fontFamily: "'DM Sans', sans-serif", fontSize: '13.8px', fontWeight: '500', color: '#111',
-              }}
-            >
-              <div style={{
-                width: '28px', height: '16px', borderRadius: '8px',
-                background: isPublic ? '#86EFAC' : '#D1D5DB',
-                position: 'relative', transition: 'background 0.2s', flexShrink: 0,
-              }}>
+                <div onClick={handleToggleVisibility} style={pillStyle('blue')}>
+                  {isPublic ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
+                  {isPublic ? 'Public' : 'Private'}
+                </div>
+
+                <button onClick={() => setShowShareModal(true)} style={pillStyle('blue')}>
+                  <Share2 size={15} /> Share
+                </button>
+
+                {navPage === 'outline' && (
+                  <button
+                    onClick={() => setShowLibraryView(p => !p)}
+                    title={showLibraryView ? 'Switch back to the classic outline view' : 'Try the content library view (beta)'}
+                    style={pillStyle(showLibraryView ? 'blueActive' : 'plain')}
+                  >
+                    {showLibraryView ? 'Outline' : 'Library'}
+                  </button>
+                )}
+
+                <button onClick={() => setShowCourseInfo(p => !p)} title="Course Info" style={pillStyle(showCourseInfo ? 'blueActive' : 'blue')}>
+                  <Info size={15} /> Info
+                </button>
+
+                <button
+                  onClick={() => setIsEdoOpen(p => !p)}
+                  title={isEdoOpen ? 'Close Edo AI' : 'Open Edo AI'}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '6px',
+                    height: '34px', padding: '0 13px', borderRadius: '10px', flexShrink: 0,
+                    border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
+                    color: '#FFFFFF', fontFamily: "'DM Sans', sans-serif", fontSize: '13.5px', fontWeight: '600',
+                    background: isEdoOpen
+                      ? 'linear-gradient(104deg, #a51b58 2%, #34549f 100%)'
+                      : 'linear-gradient(104deg, #bf2066 2%, #3e62bc 100%)',
+                  }}
+                >
+                  <Sparkles size={15} /> Edo
+                </button>
+
                 <div style={{
-                  position: 'absolute', top: '2px',
-                  left: isPublic ? '14px' : '2px',
-                  width: '12px', height: '12px', borderRadius: '50%',
-                  background: 'white', transition: 'left 0.2s',
-                  boxShadow: '0 1px 2px rgba(0,0,0,0.15)',
-                }} />
-              </div>
-              <span>{isPublic ? 'Public' : 'Private'}</span>
-            </div>
-
-            <button
-              onClick={() => setShowShareModal(true)}
-              style={{
-                fontFamily: "'DM Sans', sans-serif", fontSize: '13.8px', fontWeight: '500',
-                padding: '6px 13px', borderRadius: '8px', cursor: 'pointer',
-                background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.12)',
-                color: '#111', whiteSpace: 'nowrap', flexShrink: 0,
-                display: 'flex', alignItems: 'center', gap: '5px',
-              }}
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
-                <polyline points="16 6 12 2 8 6"/>
-                <line x1="12" y1="2" x2="12" y2="15"/>
-              </svg>
-              Share
-            </button>
-
-            {navPage === 'outline' && !isSelectingSubsections && (
-              <button
-                onClick={() => setShowLibraryView(p => !p)}
-                title={showLibraryView ? 'Switch back to the classic outline view' : 'Try the new content library view (beta)'}
-                style={{
-                  fontFamily: "'DM Sans', sans-serif", fontSize: '13.8px', fontWeight: '500',
-                  padding: '6px 13px', borderRadius: '8px', cursor: 'pointer',
-                  background: showLibraryView ? 'rgba(178,232,200,0.55)' : '#FFFFFF',
-                  border: `1px solid ${showLibraryView ? 'rgba(28,92,53,0.3)' : 'rgba(0,0,0,0.12)'}`,
-                  color: showLibraryView ? '#1C5C35' : '#111',
-                  whiteSpace: 'nowrap', flexShrink: 0,
-                }}
-              >
-                {showLibraryView ? '☰ Outline View' : '🗂 Library View (beta)'}
-              </button>
+                  width: '34px', height: '34px', borderRadius: '50%', flexShrink: 0, marginLeft: '2px',
+                  background: '#d1deff', color: '#3e62bc',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontFamily: "'DM Sans', sans-serif", fontSize: '15px', fontWeight: '600',
+                }}>
+                  {(currentUser?.displayName || currentUser?.email || 'T').slice(0, 1).toUpperCase()}
+                </div>
+              </>
             )}
-
-            <div style={{ width: '1px', height: '22px', background: 'rgba(0,0,0,0.08)', flexShrink: 0 }} />
-
-            <button
-              onClick={() => setShowCourseInfo(p => !p)}
-              title="Course Info"
-              style={{
-                fontFamily: "'DM Sans', sans-serif", fontSize: '13.8px', fontWeight: '500',
-                padding: '6px 13px', borderRadius: '8px', cursor: 'pointer',
-                background: showCourseInfo ? 'rgba(235,248,255,0.9)' : '#FFFFFF',
-                border: `1px solid ${showCourseInfo ? 'rgba(66,153,225,0.35)' : 'rgba(0,0,0,0.12)'}`,
-                color: showCourseInfo ? '#2b6cb0' : '#111',
-                whiteSpace: 'nowrap', flexShrink: 0,
-                display: 'flex', alignItems: 'center', gap: '5px',
-              }}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
-              </svg>
-              Course Info
-            </button>
-
-            <button
-              onClick={() => setIsEdoOpen(p => !p)}
-              title={isEdoOpen ? 'Close Edo AI' : 'Open Edo AI'}
-              style={{
-                fontFamily: "'DM Sans', sans-serif", fontSize: '13.8px', fontWeight: '500',
-                padding: '6px 13px', borderRadius: '8px', cursor: 'pointer',
-                background: isEdoOpen ? 'rgba(247,228,160,0.85)' : 'rgba(247,228,160,0.6)',
-                border: '1px solid rgba(180,150,30,0.25)',
-                color: '#5C460A', whiteSpace: 'nowrap', flexShrink: 0,
-                display: 'flex', alignItems: 'center', gap: '5px',
-              }}
-            >
-              ✦ Edo
-            </button>
           </div>
 
           {/* ── Page + Edo row ── */}
@@ -956,6 +906,9 @@ const CourseWorkspace = () => {
                 <CourseEditor
                   courseClass={courseClass}
                   setCourseClass={setCourseClass}
+                  courseName={courseName}
+                  onBack={handleBack}
+                  onNavigateToBlock={navigateToBlock}
                   sections={sections}
                   setSections={setSections}
                   videosByTopic={videosByTopic}
