@@ -1,96 +1,118 @@
 // src/components/courses/SubsectionView.jsx
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, GripVertical } from 'lucide-react';
-import { Droppable, Draggable } from '@hello-pangea/dnd';
+import { Plus, Trash2, ChevronRight } from 'lucide-react';
+import CardRow from './CardRow';
 
+// Per-type card styling.
 const TYPE_STYLES = {
-  content:   { bg: '#EAF0FF', border: '#BFD0FF', text: '#2A4A9A', badgeBg: '#6B8FE8', accentBorder: '#6B8FE8', label: 'Content' },
-  worksheet: { bg: '#FFF3E8', border: '#F5C98A', text: '#9A5C12', badgeBg: '#E8A55C', accentBorder: '#E8A55C', label: 'Worksheet' },
-  activity:  { bg: '#EDFFF3', border: '#86EFAC', text: '#1E7C43', badgeBg: '#5CC97C', accentBorder: '#5CC97C', label: 'Activity' },
+  content:   { innerBg: '#FFF1E9', accent: '#FF5900', pillBg: '#FFDCCB', label: 'Content',   defaultDuration: 15 },
+  worksheet: { innerBg: '#FFF2F8', accent: '#FF006E', pillBg: 'rgba(255,0,110,0.13)', label: 'Worksheet', defaultDuration: 20 },
+  activity:  { innerBg: '#F4F4E4', accent: '#768B00', pillBg: 'rgba(118,139,0,0.20)', label: 'Activity',  defaultDuration: 20 },
 };
 
-const TypeBadge = ({ type }) => {
-  const s = TYPE_STYLES[type] || TYPE_STYLES.content;
-  return (
-    <span style={{
-      display: 'inline-block', padding: '2px 8px',
-      background: s.badgeBg, color: '#fff',
-      borderRadius: '5px', fontSize: '10px', fontWeight: '700',
-      textTransform: 'uppercase', letterSpacing: '.05em',
-      fontFamily: "'DM Sans', sans-serif",
-    }}>{s.label}</span>
-  );
-};
+const Pill = ({ style, children }) => (
+  <span style={{
+    display: 'inline-block', padding: '4px 12px', borderRadius: '20px',
+    fontSize: '11px', fontWeight: '600', fontFamily: "'DM Sans', sans-serif",
+    lineHeight: 1.2, whiteSpace: 'nowrap', ...style,
+  }}>{children}</span>
+);
 
-// ── Linked block card (worksheet / activity on the right column) ──────────────
-const LinkedCard = ({ block, subsectionId, sectionId, actions, onNavigateToBlock, provided, snapshot }) => {
+// ── Card geometry ──────────────────────────────────────────────────────────
+const CARD_W = 272;   // sized so ~4 tiles fit per row in the 1180px content area
+const CARD_H = 168;
+const FOOTER_H = 44;
+
+// ── Block card ─────────────────────────────────────────────────────────────
+const BlockCard = ({ block, subsectionId, sectionId, actions, onNavigateToBlock }) => {
   const s = TYPE_STYLES[block.type] || TYPE_STYLES.content;
-  const [hovered, setHovered] = useState(false);
+  const [hov, setHov] = useState(false);
+
+  const open = () => onNavigateToBlock?.(sectionId, subsectionId, block.id);
 
   return (
     <div
-      ref={provided.innerRef}
-      {...provided.draggableProps}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      onClick={() => { if (!snapshot.isDragging) onNavigateToBlock?.(sectionId, subsectionId, block.id); }}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      onClick={open}
       style={{
-        ...provided.draggableProps.style,
-        background: snapshot.isDragging ? 'transparent' : s.bg,
-        border: `1.5px solid ${snapshot.isDragging ? 'rgba(0,0,0,0.08)' : s.border}`,
-        borderRadius: '10px',
-        padding: '11px 14px',
-        cursor: 'grab',
-        userSelect: 'none',
-        opacity: snapshot.isDragging ? 0 : 1,
-        boxShadow: hovered && !snapshot.isDragging ? '0 3px 12px rgba(0,0,0,0.10)' : '0 1px 3px rgba(0,0,0,0.05)',
-        transition: provided.draggableProps.style?.transition || 'box-shadow .15s',
+        width: CARD_W, height: CARD_H, flexShrink: 0, boxSizing: 'border-box',
+        background: '#FFFFFF', border: '1px solid #C8CDD6', borderRadius: '16px',
+        overflow: 'hidden', cursor: 'pointer',
+        boxShadow: hov ? '0 8px 22px rgba(0,0,0,0.14)' : '0 2px 6px rgba(0,0,0,0.08)',
+        transition: 'box-shadow .15s',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <div {...provided.dragHandleProps} style={{ color: '#CCC', cursor: 'grab', display: 'flex', alignItems: 'center' }}>
-            <GripVertical size={12} />
-          </div>
-          <TypeBadge type={block.type} />
+      <div style={{
+        margin: '8px 8px 0', height: CARD_H - 8 - FOOTER_H, boxSizing: 'border-box',
+        borderRadius: '12px', background: s.innerBg, padding: '14px 16px',
+        display: 'flex', flexDirection: 'column', justifyContent: 'space-between', overflow: 'hidden',
+      }}>
+        <p style={{
+          margin: 0, fontFamily: "'DM Sans', sans-serif", fontStyle: 'italic',
+          fontWeight: '500', fontSize: '16px', lineHeight: '1.3', color: s.accent,
+          overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+        }}>
+          {block.title || <span style={{ opacity: .55 }}>Untitled {s.label}</span>}
+        </p>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <Pill style={{ background: s.pillBg, color: s.accent }}>{s.label}</Pill>
+          <Pill style={{ background: s.pillBg, color: s.accent }}>
+            {block.duration_minutes ?? s.defaultDuration} Mins
+          </Pill>
         </div>
+      </div>
+
+      <div style={{
+        height: FOOTER_H, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '0 14px',
+      }}>
+        <button
+          onClick={e => { e.stopPropagation(); open(); }}
+          style={{
+            background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+            fontFamily: "'DM Sans', sans-serif", fontSize: '13.5px', fontWeight: '500', color: '#383838',
+          }}
+        >
+          Edit {s.label}
+        </button>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <span style={{ fontSize: '11px', fontWeight: '600', color: '#AAA' }}>{block.duration_minutes ?? 15} min</span>
           <button
-            onMouseDown={e => e.stopPropagation()}
             onClick={e => { e.stopPropagation(); actions.removeBlock(subsectionId, block.id); }}
+            title="Delete block"
             style={{
-              background: 'none', border: 'none', cursor: 'pointer',
-              color: '#F87171', padding: '2px', display: 'flex', alignItems: 'center',
-              opacity: hovered ? 0.8 : 0, transition: 'opacity .15s',
+              background: 'none', border: 'none', cursor: 'pointer', padding: '4px',
+              display: 'flex', alignItems: 'center', color: '#F87171',
+              opacity: hov ? 0.9 : 0, transition: 'opacity .15s',
             }}
-            title="Delete"
           >
-            <Trash2 size={11} />
+            <Trash2 size={14} />
+          </button>
+          <button
+            onClick={e => { e.stopPropagation(); open(); }}
+            title="Open block"
+            style={{
+              width: '28px', height: '28px', borderRadius: '6px', flexShrink: 0,
+              background: '#EBEBEB', border: 'none', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#555',
+            }}
+          >
+            <ChevronRight size={18} />
           </button>
         </div>
       </div>
-      <p style={{
-        margin: 0, fontSize: '13px', fontWeight: '600', color: s.text,
-        lineHeight: '1.35',
-        overflow: 'hidden', display: '-webkit-box',
-        WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
-        fontFamily: "'DM Sans', sans-serif",
-      }}>
-        {block.title || <span style={{ fontStyle: 'italic', opacity: .5 }}>Untitled</span>}
-      </p>
-      {hovered && !snapshot.isDragging && (
-        <div style={{ marginTop: '6px', fontSize: '11px', fontWeight: '600', color: s.text, opacity: .5, textAlign: 'right' }}>
-          Open →
-        </div>
-      )}
     </div>
   );
 };
 
-// ── Add slot ghost button ─────────────────────────────────────────────────────
-const AddSlot = ({ type, onClick }) => {
-  const s = TYPE_STYLES[type] || TYPE_STYLES.content;
+// Outlined "Add …" buttons.
+const ADD_BUTTONS = [
+  { type: 'content',   label: 'Add Content Block',   accent: '#3E62BC' },
+  { type: 'worksheet', label: 'Add Worksheet Block', accent: '#D28E3C' },
+  { type: 'activity',  label: 'Add Activity Block',  accent: '#768B00' },
+];
+
+const AddButton = ({ label, accent, onClick }) => {
   const [hov, setHov] = useState(false);
   return (
     <button
@@ -98,339 +120,81 @@ const AddSlot = ({ type, onClick }) => {
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       style={{
-        width: '100%', padding: '8px 12px',
-        border: `1.5px dashed ${s.border}`,
-        borderRadius: '9px', cursor: 'pointer',
-        background: hov ? s.bg : 'transparent',
-        color: s.text, fontSize: '12px', fontWeight: '600',
-        display: 'flex', alignItems: 'center', gap: '5px',
-        fontFamily: "'DM Sans', sans-serif",
+        display: 'inline-flex', alignItems: 'center', gap: '5px',
+        padding: '6px 12px', borderRadius: '6.4px', cursor: 'pointer',
+        background: hov ? `${accent}14` : 'transparent',
+        border: `1px solid ${accent}`,
+        color: accent, fontSize: '12.5px', fontWeight: '500',
+        fontFamily: "'DM Sans', sans-serif", whiteSpace: 'nowrap',
         transition: 'background .15s',
       }}
     >
-      <Plus size={12} /> Add {s.label}
+      <Plus size={13} /> {label}
     </button>
   );
 };
 
-// ── Content block card (left column) ─────────────────────────────────────────
-const ContentCard = ({ block, index, subsectionId, sectionId, actions, onNavigateToBlock, provided, snapshot }) => {
-  const s = TYPE_STYLES.content;
-  const [hov, setHov] = useState(false);
+// ── Block section — three horizontally-scrolling type rows ─────────────────
+// Reuses <CardRow> (the same pager component as the My Courses page): a native
+// horizontal scroll track that shows ~4 tiles and reveals circular prev/next
+// pagers only when the row overflows.
+const BLOCK_ROWS = [
+  { type: 'content',   label: 'Content' },
+  { type: 'worksheet', label: 'Worksheets' },
+  { type: 'activity',  label: 'Activities' },
+];
 
-  return (
-    <div
-      ref={provided.innerRef}
-      {...provided.draggableProps}
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
-      style={{
-        ...provided.draggableProps.style,
-        background: snapshot.isDragging ? 'transparent' : '#fff',
-        border: `1.5px solid ${snapshot.isDragging ? 'rgba(0,0,0,0.08)' : s.border}`,
-        borderLeft: snapshot.isDragging ? `1.5px solid rgba(0,0,0,0.08)` : `4px solid ${s.accentBorder}`,
-        borderRadius: '12px',
-        padding: '14px 16px',
-        cursor: 'pointer',
-        userSelect: 'none',
-        opacity: snapshot.isDragging ? 0 : 1,
-        boxShadow: hov && !snapshot.isDragging
-          ? '0 4px 16px rgba(42,74,154,0.12)'
-          : '0 1px 4px rgba(0,0,0,0.05)',
-        transition: provided.draggableProps.style?.transition || 'box-shadow .15s',
-      }}
-      onClick={() => { if (!snapshot.isDragging) onNavigateToBlock?.(sectionId, subsectionId, block.id); }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div {...provided.dragHandleProps}
-            style={{ color: '#C5CFEC', cursor: 'grab', display: 'flex', alignItems: 'center' }}
-            onClick={e => e.stopPropagation()}
-          >
-            <GripVertical size={14} />
-          </div>
-          <TypeBadge type="content" />
-          <span style={{ fontSize: '11px', fontWeight: '700', color: '#D0D8F0', fontFamily: "'DM Sans', sans-serif" }}>
-            {index + 1}
-          </span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {block.subcategory && (
-            <span style={{
-              display: 'inline-block', padding: '2px 8px',
-              background: '#EAF0FF', border: '1px solid #BFD0FF',
-              borderRadius: '20px', fontSize: '11px', fontWeight: '600',
-              color: '#2A4A9A', fontFamily: "'DM Sans', sans-serif",
-            }}>{block.subcategory}</span>
-          )}
-          <button
-            onMouseDown={e => e.stopPropagation()}
-            onClick={e => { e.stopPropagation(); actions.removeBlock(subsectionId, block.id); }}
-            style={{
-              background: 'none', border: 'none', cursor: 'pointer',
-              color: '#F87171', padding: '2px', display: 'flex', alignItems: 'center',
-              opacity: hov ? 0.8 : 0, transition: 'opacity .15s',
-            }}
-            title="Delete"
-          >
-            <Trash2 size={12} />
-          </button>
-        </div>
-      </div>
-
-      <h3 style={{
-        margin: '0 0 10px', fontSize: '15px', fontWeight: '700',
-        color: '#111', lineHeight: '1.35', fontFamily: "'DM Sans', sans-serif",
-      }}>
-        {block.title || <span style={{ color: '#AAA', fontStyle: 'italic', fontWeight: '400' }}>Untitled Block</span>}
-      </h3>
-
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{
-          display: 'inline-flex', alignItems: 'center', gap: '4px',
-          padding: '2px 9px', background: '#F1F5F9', border: '1px solid #E2E8F0',
-          borderRadius: '20px', fontSize: '11.5px', fontWeight: '600', color: '#555',
-        }}>⏱ {block.duration_minutes ?? 15} min</span>
-        <span style={{ fontSize: '11px', fontWeight: '600', color: s.text, opacity: hov ? .6 : .3, transition: 'opacity .15s' }}>
-          Open →
-        </span>
-      </div>
-    </div>
-  );
-};
-
-// ── Prerequisite divider ──────────────────────────────────────────────────────
-const PrereqDivider = () => (
-  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 0 8px 20px' }}>
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
-      <div style={{ width: '1.5px', height: '10px', background: '#E5E7EB' }} />
-      <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#D1D5DB' }} />
-      <div style={{ width: '1.5px', height: '10px', background: '#E5E7EB' }} />
-    </div>
-    <span style={{
-      fontSize: '10.5px', fontWeight: '700', color: '#C5CAD3',
-      letterSpacing: '.05em', textTransform: 'uppercase',
-      fontFamily: "'DM Sans', sans-serif",
-    }}>taught before</span>
+const EmptyRow = ({ label, accent }) => (
+  <div style={{
+    width: CARD_W, height: CARD_H, flexShrink: 0, boxSizing: 'border-box',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center',
+    padding: '20px', borderRadius: '16px', border: `1.5px dashed ${accent}55`,
+    color: '#AAB0BC', fontSize: '12.5px', fontStyle: 'italic', fontFamily: "'DM Sans', sans-serif",
+  }}>
+    No {label.toLowerCase()} yet
   </div>
 );
 
-// ── Two-column block group grid ───────────────────────────────────────────────
-const BlockGroupGrid = ({ contentBlocks, allBlocks, subsectionId, sectionId, actions, onNavigateToBlock }) => {
-  const addLinkedBlock = (type, parentContentBlockId) => {
-    const newId = `block-${Date.now()}`;
-    actions.addBlock(subsectionId, { id: newId, type, title: '', content: '', parentContentBlockId });
-    onNavigateToBlock?.(sectionId, subsectionId, newId);
+const BlockGroupGrid = ({ allBlocks, subsectionId, sectionId, actions, onNavigateToBlock }) => {
+  // Add the block into its row and stay on the page — the new card shows up in
+  // the matching row; click it to open the editor.
+  const addBlock = (type) => {
+    actions.addBlock(subsectionId, { id: `block-${Date.now()}`, type, title: '', content: '' });
   };
-
-  const addContentBlock = () => {
-    const newId = `block-${Date.now()}`;
-    actions.addBlock(subsectionId, { id: newId, type: 'content', title: '', content: '' });
-    onNavigateToBlock?.(sectionId, subsectionId, newId);
-  };
-
-  // Unlinked worksheet/activity blocks (no parentContentBlockId or parent deleted)
-  const contentIds = new Set(contentBlocks.map(b => b.id));
-  const unlinkedBlocks = allBlocks.filter(b =>
-    b.type !== 'content' &&
-    (!b.parentContentBlockId || !contentIds.has(b.parentContentBlockId))
-  );
 
   return (
     <div>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-        <div>
-          <span style={{ fontSize: '16px', fontWeight: '700', color: '#111', fontFamily: "'DM Sans', sans-serif" }}>
-            Blocks
-          </span>
-          {allBlocks.length > 0 && (
-            <span style={{ marginLeft: '8px', fontSize: '13px', fontWeight: '500', color: '#AAA' }}>
-              {allBlocks.length}
-            </span>
-          )}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '22px', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: '16px', fontWeight: '700', color: '#111', fontFamily: "'DM Sans', sans-serif" }}>
+          Blocks
+        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          {ADD_BUTTONS.map(b => (
+            <AddButton key={b.type} label={b.label} accent={b.accent} onClick={() => addBlock(b.type)} />
+          ))}
         </div>
-        <button
-          onClick={addContentBlock}
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: '5px',
-            padding: '6px 14px', borderRadius: '8px', cursor: 'pointer',
-            background: '#EAF0FF', border: '1.5px solid #BFD0FF',
-            color: '#2A4A9A', fontSize: '12.5px', fontWeight: '600',
-            fontFamily: "'DM Sans', sans-serif",
-          }}
-        >
-          <Plus size={13} /> Add Content Block
-        </button>
       </div>
 
-      {/* Content block groups */}
-      <Droppable droppableId={`content-col-${subsectionId}`} type={`CONTENT_COL_${subsectionId}`}>
-        {(colProvided) => (
-          <div ref={colProvided.innerRef} {...colProvided.droppableProps}>
-            {contentBlocks.length === 0 && (
-              <div style={{
-                padding: '32px', textAlign: 'center',
-                border: '1.5px dashed #BFD0FF', borderRadius: '12px',
-                color: '#7B9FE8', fontSize: '13.5px', fontStyle: 'italic',
-                fontFamily: "'DM Sans', sans-serif",
-              }}>
-                No content blocks yet — click "Add Content Block" to start
-              </div>
-            )}
-
-            {contentBlocks.map((contentBlock, idx) => {
-              const linkedBlocks = allBlocks.filter(
-                b => b.type !== 'content' && b.parentContentBlockId === contentBlock.id
-              );
-
-              return (
-                <div key={contentBlock.id}>
-                  {idx > 0 && <PrereqDivider />}
-
-                  {/* Row: content card (left) + linked column (right) */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 220px', gap: '14px', alignItems: 'start' }}>
-
-                    {/* Left: Content block card */}
-                    <Draggable draggableId={contentBlock.id} index={idx}>
-                      {(provided, snapshot) => (
-                        <ContentCard
-                          block={contentBlock}
-                          index={idx}
-                          subsectionId={subsectionId}
-                          sectionId={sectionId}
-                          actions={actions}
-                          onNavigateToBlock={onNavigateToBlock}
-                          provided={provided}
-                          snapshot={snapshot}
-                        />
-                      )}
-                    </Draggable>
-
-                    {/* Right: linked worksheet/activity + add slots */}
-                    <Droppable
-                      droppableId={`linked-col-${contentBlock.id}`}
-                      type={`LINKED_${subsectionId}`}
-                    >
-                      {(linkProvided, linkSnap) => (
-                        <div
-                          ref={linkProvided.innerRef}
-                          {...linkProvided.droppableProps}
-                          style={{
-                            display: 'flex', flexDirection: 'column', gap: '8px',
-                            minHeight: '52px',
-                            position: 'relative',
-                            background: linkSnap.isDraggingOver ? 'rgba(241,245,249,0.6)' : 'transparent',
-                            borderRadius: '10px',
-                            transition: 'background .2s',
-                          }}
-                        >
-                          {/* Connector line from content card */}
-                          <div style={{
-                            position: 'absolute',
-                            top: '20px', left: '-14px',
-                            width: '14px', height: '1.5px',
-                            background: '#D1D5DB',
-                            pointerEvents: 'none',
-                          }} />
-
-                          {linkedBlocks.map((lb, lbIdx) => (
-                            <Draggable key={lb.id} draggableId={lb.id} index={lbIdx}>
-                              {(lbProv, lbSnap) => (
-                                <LinkedCard
-                                  block={lb}
-                                  subsectionId={subsectionId}
-                                  sectionId={sectionId}
-                                  actions={actions}
-                                  onNavigateToBlock={onNavigateToBlock}
-                                  provided={lbProv}
-                                  snapshot={lbSnap}
-                                />
-                              )}
-                            </Draggable>
-                          ))}
-                          {linkProvided.placeholder}
-
-                          {/* Add worksheet slot if none linked */}
-                          {!linkedBlocks.some(b => b.type === 'worksheet') && (
-                            <AddSlot type="worksheet" onClick={() => addLinkedBlock('worksheet', contentBlock.id)} />
-                          )}
-                          {/* Add activity slot if none linked */}
-                          {!linkedBlocks.some(b => b.type === 'activity') && (
-                            <AddSlot type="activity" onClick={() => addLinkedBlock('activity', contentBlock.id)} />
-                          )}
-                        </div>
-                      )}
-                    </Droppable>
-                  </div>
-                </div>
-              );
-            })}
-            {colProvided.placeholder}
-          </div>
-        )}
-      </Droppable>
-
-      {/* Unlinked blocks section — draggable into content block rows */}
-      {unlinkedBlocks.length > 0 && (
-        <div style={{ marginTop: '32px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-            <p style={{
-              margin: 0,
-              fontSize: '11px', fontWeight: '700', color: '#BBB',
-              textTransform: 'uppercase', letterSpacing: '.06em',
-              fontFamily: "'DM Sans', sans-serif",
-            }}>
-              Unlinked Blocks
-            </p>
-            <span style={{ fontSize: '11px', color: '#CCC', fontStyle: 'italic', fontFamily: "'DM Sans', sans-serif" }}>
-              — drag into a content row to link
-            </span>
-          </div>
-          <Droppable droppableId="linked-col-unlinked" type={`LINKED_${subsectionId}`}>
-            {(uprov, usnap) => (
-              <div
-                ref={uprov.innerRef}
-                {...uprov.droppableProps}
-                style={{
-                  display: 'flex', flexDirection: 'column', gap: '8px',
-                  minHeight: '52px', padding: '8px',
-                  border: `1.5px dashed ${usnap.isDraggingOver ? '#6B8FE8' : '#E5E7EB'}`,
-                  borderRadius: '10px',
-                  background: usnap.isDraggingOver ? 'rgba(107,143,232,0.05)' : 'transparent',
-                  transition: 'border-color .2s, background .2s',
-                }}
-              >
-                {unlinkedBlocks.map((block, idx) => (
-                  <Draggable key={block.id} draggableId={block.id} index={idx}>
-                    {(prov, snap) => (
-                      <LinkedCard
-                        block={block}
-                        subsectionId={subsectionId}
-                        sectionId={sectionId}
-                        actions={actions}
-                        onNavigateToBlock={onNavigateToBlock}
-                        provided={prov}
-                        snapshot={snap}
-                      />
-                    )}
-                  </Draggable>
-                ))}
-                {uprov.placeholder}
-                {usnap.isDraggingOver && (
-                  <div style={{
-                    padding: '8px', textAlign: 'center',
-                    fontSize: '11.5px', fontWeight: '600', color: '#6B8FE8',
-                    fontFamily: "'DM Sans', sans-serif",
-                  }}>
-                    Drop here to unlink
-                  </div>
-                )}
-              </div>
-            )}
-          </Droppable>
-        </div>
-      )}
+      {BLOCK_ROWS.map(row => {
+        const rowBlocks = allBlocks.filter(b => b.type === row.type);
+        const accent = (TYPE_STYLES[row.type] || TYPE_STYLES.content).accent;
+        return (
+          <CardRow key={row.type} label={row.label} count={rowBlocks.length}>
+            {rowBlocks.length === 0
+              ? <EmptyRow label={row.label} accent={accent} />
+              : rowBlocks.map(block => (
+                <BlockCard
+                  key={block.id}
+                  block={block}
+                  subsectionId={subsectionId}
+                  sectionId={sectionId}
+                  actions={actions}
+                  onNavigateToBlock={onNavigateToBlock}
+                />
+              ))}
+          </CardRow>
+        );
+      })}
     </div>
   );
 };
@@ -465,7 +229,6 @@ const SubsectionView = ({
   useEffect(() => { if (!editingObjectives) setLocalObjectives(subsection.learning_objectives || []); }, [subsection.learning_objectives, editingObjectives]);
 
   const allBlocks = handsOnResources?.[subsection.id] || [];
-  const contentBlocks = allBlocks.filter(b => b.type === 'content');
 
   const handleTitleBlur = () => {
     setEditingTitle(false);
@@ -516,7 +279,7 @@ const SubsectionView = ({
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: '24px 48px 80px', position: 'relative', zIndex: 1 }}>
-      <div style={{ maxWidth: '860px', margin: '0 auto' }}>
+      <div style={{ maxWidth: '1180px', margin: '0 auto' }}>
 
         {/* Top bar */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
@@ -564,10 +327,10 @@ const SubsectionView = ({
           </div>
         )}
 
-        {/* Subsection info card */}
+        {/* Subsection info card — full-width header per the Figma spec */}
         <div style={{
-          background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.08)', borderRadius: '12px',
-          padding: '20px 24px', marginBottom: '28px', boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+          width: '100%', background: '#FFFFFF', border: '2px solid #D1DEFF', borderRadius: '8px',
+          padding: '22px 26px', marginBottom: '28px',
         }}>
           <p style={{ margin: '0 0 4px', fontSize: '12px', fontWeight: '600', color: '#999', textTransform: 'uppercase', letterSpacing: '.05em', fontFamily: "'DM Sans', sans-serif" }}>
             Subsection {sectionNumber}.{subsectionNumber}
@@ -702,9 +465,8 @@ const SubsectionView = ({
           </div>
         </div>
 
-        {/* Block group grid */}
+        {/* Blocks */}
         <BlockGroupGrid
-          contentBlocks={contentBlocks}
           allBlocks={allBlocks}
           subsectionId={subsection.id}
           sectionId={sectionId}

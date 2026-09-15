@@ -698,42 +698,6 @@ const CourseWorkspace = () => {
       return;
     }
 
-    // SubsectionView: reorder content blocks within the left column
-    if (type.startsWith('CONTENT_COL_')) {
-      const subId = source.droppableId.replace('content-col-', '');
-      const allBlocks = [...(handsOnResources[subId] || [])];
-      const contentBlocks = allBlocks.filter(b => b.type === 'content');
-      const others = allBlocks.filter(b => b.type !== 'content');
-      const [moved] = contentBlocks.splice(source.index, 1);
-      contentBlocks.splice(destination.index, 0, moved);
-      setHandsOnResources(prev => ({ ...prev, [subId]: [...contentBlocks, ...others] }));
-      return;
-    }
-
-    // SubsectionView: move a linked worksheet/activity between content block groups
-    if (type.startsWith('LINKED_')) {
-      const subId = type.replace('LINKED_', '');
-      const srcContentBlockId = source.droppableId.replace('linked-col-', '');
-      const dstContentBlockId = destination.droppableId.replace('linked-col-', '');
-      if (srcContentBlockId === dstContentBlockId) return; // same group, no-op (single item per slot)
-
-      // Update parentContentBlockId on the moved block
-      const blocks = [...(handsOnResources[subId] || [])];
-      const blockIdx = blocks.findIndex(b => b.id === draggableId);
-      if (blockIdx === -1) return;
-      let updatedBlock;
-      if (dstContentBlockId === 'unlinked') {
-        // Dropping into the unlinked zone removes the parent link
-        const { parentContentBlockId: _removed, ...rest } = blocks[blockIdx];
-        updatedBlock = rest;
-      } else {
-        updatedBlock = { ...blocks[blockIdx], parentContentBlockId: dstContentBlockId };
-      }
-      const newBlocks = [...blocks];
-      newBlocks[blockIdx] = updatedBlock;
-      setHandsOnResources(prev => ({ ...prev, [subId]: newBlocks }));
-      return;
-    }
   };
 
   // ── Render ──────────────────────────────────────────────────────────���─

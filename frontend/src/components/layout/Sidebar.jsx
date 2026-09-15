@@ -2,27 +2,41 @@
 
 import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
+import { BookOpen, FilePlus, User, Search as SearchIcon, LogOut } from 'lucide-react';
 import edcubeLogo from '../../assets/edcube_logo.png';
-import { useAuth } from '../../contexts/AuthContext';
 import { logoutTeacher } from '../../firebase/authService';
 import { useNotifications } from '../../contexts/NotificationContext';
 
-const dotColors = {
-  '/profile':          '#F2C0D4',
-  '/my-courses':       '#ACD8F0',
-  '/course-designer':  '#F7E4A0',
-  '/course-workspace': '#B2E8C8',
-  '/search':           '#F2C0D4',
-};
-
 const COLLAPSED_W = 48;
-const EXPANDED_W  = 220;
+const EXPANDED_W = 237;
+const ACTIVE = '#AD004B';
+const INACTIVE = '#C8CDD6';
+
+const navItems = [
+  { to: '/my-courses',      label: 'My Courses',    Icon: BookOpen },
+  { to: '/course-designer', label: 'Create Course', Icon: FilePlus },
+  { to: '/profile',         label: 'Profile',       Icon: User },
+  { to: '/search',          label: 'Search',        Icon: SearchIcon },
+];
+
+const Divider = ({ expanded }) => (
+  <div style={{ height: 1, background: '#DFDFDF', margin: expanded ? '0 14px' : '0 8px' }} />
+);
+
+const label = (expanded) => ({
+  fontSize: 14,
+  fontWeight: 500,
+  whiteSpace: 'nowrap',
+  opacity: expanded ? 1 : 0,
+  maxWidth: expanded ? 160 : 0,
+  overflow: 'hidden',
+  transition: 'opacity 0.18s ease, max-width 0.22s ease',
+});
 
 const Sidebar = () => {
-  const { currentUser } = useAuth();
   const navigate = useNavigate();
   const [expanded, setExpanded] = useState(false);
-  const [hoveredItem, setHoveredItem] = useState(null);
+  const [hovered, setHovered] = useState(null);
   const { unreadCount } = useNotifications();
 
   const handleLogout = async () => {
@@ -34,214 +48,143 @@ const Sidebar = () => {
     }
   };
 
-  const navItems = [
-    { to: '/profile',           label: 'My Profile' },
-    { to: '/my-courses',        label: 'My Courses' },
-    { to: '/course-designer',   label: 'Course Designer' },
-    { to: '/course-workspace',  label: 'Workspace' },
-    { to: '/search',            label: 'Search' },
-  ];
-
-  const displayName = currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Teacher';
-  const initials = displayName.slice(0, 1).toUpperCase();
-
   return (
     <aside
       onMouseEnter={() => setExpanded(true)}
-      onMouseLeave={() => { setExpanded(false); setHoveredItem(null); }}
+      onMouseLeave={() => { setExpanded(false); setHovered(null); }}
       style={{
-        width: expanded ? `${EXPANDED_W}px` : `${COLLAPSED_W}px`,
-        minWidth: expanded ? `${EXPANDED_W}px` : `${COLLAPSED_W}px`,
+        width: expanded ? EXPANDED_W : COLLAPSED_W,
+        minWidth: expanded ? EXPANDED_W : COLLAPSED_W,
         height: '100vh',
-        background: 'rgba(255,255,255,0.52)',
-        backdropFilter: 'blur(24px)',
-        WebkitBackdropFilter: 'blur(24px)',
-        borderRight: '1px solid rgba(255,255,255,0.75)',
+        background: '#FFF4F8',
+        borderRight: '1px solid rgba(0,0,0,0.06)',
         display: 'flex',
         flexDirection: 'column',
         userSelect: 'none',
         fontFamily: "'DM Sans', sans-serif",
         position: 'relative',
         zIndex: 10,
-        transition: 'width 0.22s ease, min-width 0.22s ease',
         overflow: 'hidden',
+        transition: 'width 0.22s ease, min-width 0.22s ease',
       }}
     >
       {/* Logo */}
       <div style={{
-        padding: '18px 0',
-        borderBottom: '1px solid rgba(0,0,0,0.07)',
         display: 'flex',
         alignItems: 'center',
+        gap: 10,
+        padding: expanded ? '16px 20px 14px' : '16px 0 14px',
         justifyContent: expanded ? 'flex-start' : 'center',
-        paddingLeft: expanded ? '14px' : '0',
-        gap: '8px',
         transition: 'padding 0.22s ease',
-        overflow: 'hidden',
-        whiteSpace: 'nowrap',
       }}>
         <img
           src={edcubeLogo}
           alt="EdCube"
-          style={{ height: '28px', width: '28px', objectFit: 'contain', flexShrink: 0 }}
+          style={{ width: expanded ? 40 : 30, height: expanded ? 40 : 30, objectFit: 'contain', flexShrink: 0, transition: 'width 0.22s ease, height 0.22s ease' }}
         />
         <span style={{
           fontFamily: "'DM Serif Display', serif",
-          fontSize: '24.2px',
-          color: '#111',
-          letterSpacing: '-0.3px',
+          fontSize: 25,
+          color: '#000',
+          textTransform: 'capitalize',
+          lineHeight: 1,
+          whiteSpace: 'nowrap',
           opacity: expanded ? 1 : 0,
-          maxWidth: expanded ? '160px' : '0px',
-          transition: 'opacity 0.18s ease, max-width 0.22s ease',
+          maxWidth: expanded ? 170 : 0,
           overflow: 'hidden',
+          transition: 'opacity 0.18s ease, max-width 0.22s ease',
         }}>
           EdCube
         </span>
       </div>
 
-      {/* Nav */}
-      <nav style={{ flex: 1, padding: '14px 6px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-        {navItems.map(({ to, label }) => {
-          const itemInner = (
-            <>
-              <div style={{
-                width: '7px',
-                height: '7px',
-                borderRadius: '50%',
-                backgroundColor: dotColors[to] || '#D1D5DB',
-                flexShrink: 0,
-              }} />
-              <span style={{
-                opacity: expanded ? 1 : 0,
-                maxWidth: expanded ? '160px' : '0px',
-                transition: 'opacity 0.18s ease, max-width 0.22s ease',
-                overflow: 'hidden',
-              }}>
-                {label}
-              </span>
-              {to === '/profile' && unreadCount > 0 && (
-                <span style={{
-                  position: 'absolute',
-                  top: '5px',
-                  right: expanded ? '8px' : '4px',
-                  minWidth: '16px',
-                  height: '16px',
-                  borderRadius: '8px',
-                  backgroundColor: '#EF4444',
-                  color: '#FFFFFF',
-                  fontSize: '9.9px',
-                  fontWeight: '700',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  padding: '0 3px',
-                  lineHeight: 1,
-                }}>
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </span>
-              )}
-            </>
-          );
+      <Divider expanded={expanded} />
 
+      {/* Nav */}
+      <nav style={{ flex: 1, padding: '16px 0', display: 'flex', flexDirection: 'column' }}>
+        {navItems.map(({ to, label: text, Icon }) => {
+          const IconComp = Icon;
           return (
             <NavLink
-              key={label}
+              key={to}
               to={to}
-              onMouseEnter={() => setHoveredItem(label)}
-              onMouseLeave={() => setHoveredItem(null)}
+              end={to === '/profile'}
+              onMouseEnter={() => setHovered(text)}
+              onMouseLeave={() => setHovered(null)}
               style={({ isActive }) => ({
                 display: 'flex',
                 alignItems: 'center',
-                gap: expanded ? '9px' : '0',
-                padding: '9px',
-                justifyContent: expanded ? 'flex-start' : 'center',
-                borderRadius: '8px',
+                gap: expanded ? 12 : 0,
+                padding: expanded ? '13px 16px' : '13px 0',
+                margin: expanded ? '2px 14px' : '2px 8px',
+                borderRadius: 10,
                 textDecoration: 'none',
-                color: isActive ? '#111' : hoveredItem === label ? '#111' : '#333',
-                backgroundColor: isActive ? 'rgba(255,255,255,0.85)' : hoveredItem === label ? 'rgba(255,255,255,0.45)' : 'transparent',
-                boxShadow: isActive ? '0 0 0 1px rgba(0,0,0,0.08)' : 'none',
-                fontWeight: isActive ? '500' : '400',
-                fontSize: '14.9px',
-                transition: 'all 0.15s ease',
                 position: 'relative',
-                overflow: 'hidden',
-                whiteSpace: 'nowrap',
+                justifyContent: expanded ? 'flex-start' : 'center',
+                background: hovered === text && !isActive ? 'rgba(173,0,75,0.05)' : 'transparent',
+                transition: 'color .15s ease, background .15s ease',
               })}
             >
-              {itemInner}
+              {({ isActive }) => {
+                const color = isActive || hovered === text ? ACTIVE : INACTIVE;
+                return (
+                  <>
+                    <IconComp size={20} strokeWidth={1.75} color={color} style={{ flexShrink: 0 }} />
+                    <span style={{ ...label(expanded), color }}>{text}</span>
+                    {to === '/profile' && unreadCount > 0 && (
+                      <span style={{
+                        position: 'absolute',
+                        top: expanded ? 8 : 5,
+                        right: expanded ? 12 : 6,
+                        minWidth: 16,
+                        height: 16,
+                        borderRadius: 8,
+                        background: '#EF4444',
+                        color: '#FFFFFF',
+                        fontSize: 10,
+                        fontWeight: 700,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '0 3px',
+                        lineHeight: 1,
+                      }}>
+                        {unreadCount > 99 ? '99+' : unreadCount}
+                      </span>
+                    )}
+                  </>
+                );
+              }}
             </NavLink>
           );
         })}
       </nav>
 
-      {/* Footer: user + logout */}
-      <div style={{ borderTop: '1px solid rgba(0,0,0,0.07)', padding: '14px 6px' }}>
-        <div style={{
+      {/* Footer: Sign Out */}
+      <Divider expanded={expanded} />
+      <button
+        onClick={handleLogout}
+        onMouseEnter={() => setHovered('__signout')}
+        onMouseLeave={() => setHovered(null)}
+        style={{
           display: 'flex',
           alignItems: 'center',
-          gap: '10px',
-          padding: '8px',
-          marginBottom: '6px',
+          gap: expanded ? 12 : 0,
+          padding: expanded ? '14px 16px' : '14px 0',
+          margin: expanded ? '10px 14px 16px' : '10px 8px 16px',
           justifyContent: expanded ? 'flex-start' : 'center',
-          overflow: 'hidden',
-          whiteSpace: 'nowrap',
-        }}>
-          <div style={{
-            width: '30px',
-            height: '30px',
-            borderRadius: '50%',
-            background: '#B2E8C8',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '13.2px',
-            fontWeight: '600',
-            color: '#1C5C35',
-            flexShrink: 0,
-          }}>
-            {initials}
-          </div>
-          <div style={{
-            overflow: 'hidden',
-            opacity: expanded ? 1 : 0,
-            maxWidth: expanded ? '140px' : '0px',
-            transition: 'opacity 0.18s ease, max-width 0.22s ease',
-          }}>
-            <div style={{ fontSize: '14.3px', color: '#111', fontWeight: '500', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {displayName}
-            </div>
-            <div style={{ fontSize: '12.1px', color: '#555' }}>ICC Teacher</div>
-          </div>
-        </div>
-
-        <div style={{
-          overflow: 'hidden',
-          opacity: expanded ? 1 : 0,
-          maxHeight: expanded ? '40px' : '0px',
-          transition: 'opacity 0.18s ease, max-height 0.22s ease',
-        }}>
-          <button
-            onClick={handleLogout}
-            style={{
-              width: '100%',
-              padding: '7px 12px',
-              backgroundColor: 'transparent',
-              color: '#444',
-              border: '1px solid rgba(0,0,0,0.1)',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '13.8px',
-              textAlign: 'left',
-              transition: 'all 0.15s ease',
-              fontFamily: "'DM Sans', sans-serif",
-            }}
-            onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.6)'; e.currentTarget.style.color = '#E57373'; }}
-            onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#444'; }}
-          >
-            Sign Out
-          </button>
-        </div>
-      </div>
+          border: 'none',
+          borderRadius: 10,
+          cursor: 'pointer',
+          background: hovered === '__signout' ? 'rgba(173,0,75,0.05)' : 'transparent',
+          color: ACTIVE,
+          fontFamily: "'DM Sans', sans-serif",
+          transition: 'background .15s ease',
+        }}
+      >
+        <LogOut size={20} strokeWidth={1.75} color={ACTIVE} style={{ flexShrink: 0 }} />
+        <span style={{ ...label(expanded) }}>Sign Out</span>
+      </button>
     </aside>
   );
 };

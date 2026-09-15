@@ -4,7 +4,7 @@ import { Droppable, Draggable } from '@hello-pangea/dnd';
 import { X, Send, Check, Copy, Minus, GripVertical } from 'lucide-react';
 import { chatWithEdo, generateEdoChips } from '../../utils/curriculumApi';
 import { trackEdoMessageSent } from '../../firebase/analytics';
-import { getSubcategoriesForType } from '../../constants/blockCategories';
+import { getSubcategoriesForType, getCategoryColor } from '../../constants/blockCategories';
 
 const EDO_GREEN = '#2C5F3A';
 const EDO_ORANGE = '#E8761A';
@@ -1230,6 +1230,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
           activity:  { label: 'Activity', color: '#1E7C43', bg: '#EDFFF3', border: '#86EFAC' },
         };
         const meta = TYPE_META[selectedBlockType];
+        const taxonomyCategories = getSubcategoriesForType(selectedBlockType);
 
         return (
           <div style={{ borderTop: '1px solid #E7E5E4', flexShrink: 0, backgroundColor: '#FAFAF8' }}>
@@ -1308,6 +1309,69 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
                 ))
               ) : null}
             </div>
+
+            {/* Taxonomy pills grouped by PLA-pillar category, from kb_objectives */}
+            {taxonomyCategories.length > 0 && (
+              <div style={{ padding: '2px 10px 8px', borderTop: '1px solid #F0EDE8' }}>
+                <div style={{
+                  fontSize: '10px', fontWeight: '700', color: '#9CA3AF',
+                  fontFamily: "'DM Sans', sans-serif", textTransform: 'uppercase',
+                  letterSpacing: '0.4px', margin: '6px 0 5px',
+                }}>
+                  Knowledge base categories
+                </div>
+                <div style={{
+                  maxHeight: '130px', overflowY: 'auto',
+                  display: 'flex', flexDirection: 'column', gap: '6px',
+                  scrollbarWidth: 'thin', scrollbarColor: '#E8E6E1 transparent',
+                }}>
+                  {taxonomyCategories.map(cat => {
+                    const catColor = getCategoryColor(cat.categoryLabel) || { bg: '#F3F4F6', text: '#6B7280', border: '#E5E7EB' };
+                    return (
+                      <div key={cat.categoryId}>
+                        <span style={{
+                          display: 'inline-block',
+                          padding: '2px 8px',
+                          backgroundColor: catColor.bg,
+                          color: catColor.text,
+                          border: `1px solid ${catColor.border}`,
+                          borderRadius: '20px',
+                          fontSize: '10.5px', fontWeight: '700',
+                          fontFamily: "'DM Sans', sans-serif",
+                        }}>
+                          {cat.categoryLabel}
+                        </span>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
+                          {cat.subcategories.map(sub => (
+                            <button
+                              key={sub}
+                              onClick={() => handleGenerateBlock(selectedBlockType, sub)}
+                              disabled={isTyping}
+                              style={{
+                                padding: '3px 9px',
+                                backgroundColor: '#FFFFFF',
+                                border: `1px solid ${catColor.border}`,
+                                borderRadius: '20px',
+                                cursor: isTyping ? 'not-allowed' : 'pointer',
+                                fontSize: '11.5px', fontWeight: '600', color: catColor.text,
+                                fontFamily: "'DM Sans', sans-serif",
+                                opacity: isTyping ? 0.55 : 1,
+                                whiteSpace: 'nowrap',
+                                transition: 'all 0.12s',
+                              }}
+                              onMouseEnter={e => { if (!isTyping) e.currentTarget.style.backgroundColor = catColor.bg; }}
+                              onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#FFFFFF'; }}
+                            >
+                              {sub}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         );
       })()}
