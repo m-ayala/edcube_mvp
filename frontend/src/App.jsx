@@ -17,6 +17,7 @@ import TeacherProfile from './components/teacherProfile/TeacherProfile';
 import Search from './components/search/Search';
 import ContactPage from './components/pages/ContactPage';
 import SynopsisPage from './components/synopsis/SynopsisPage';
+import AfterschoolSynopsisPage from './components/afterschoolSynopsis/AfterschoolSynopsisPage';
 
 function App() {
   return (
@@ -51,6 +52,7 @@ function App() {
           {/* Standalone public routes — no sidebar, no auth required */}
           <Route path="/synopsis" element={<SynopsisPage />} />
           <Route path="/synopsis/:campSlug" element={<SynopsisPage />} />
+          <Route path="/afterschool-synopsis" element={<AfterschoolSynopsisPage />} />
 
           {/* Catch all - redirect to landing */}
           <Route path="*" element={<Navigate to="/" replace />} />

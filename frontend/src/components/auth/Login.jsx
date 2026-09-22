@@ -97,7 +97,9 @@ const Login = () => {
         <div style={{ fontFamily: "'Sora', sans-serif", fontWeight: 800, fontSize: 18, color: '#1C1917', letterSpacing: '-0.5px' }}>
           EdCube
         </div>
-        <div style={{ width: 60 }} />
+        <button className="li-back" onClick={() => navigate('/afterschool-synopsis')}>
+          Synopsis
+        </button>
       </div>
 
       {/* Form */}

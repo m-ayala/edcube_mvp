@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { BookOpen, FilePlus, User, Search as SearchIcon, LogOut } from 'lucide-react';
+import { BookOpen, FilePlus, User, Search as SearchIcon, LogOut, FileText } from 'lucide-react';
 import edcubeLogo from '../../assets/edcube_logo.png';
 import { logoutTeacher } from '../../firebase/authService';
 import { useNotifications } from '../../contexts/NotificationContext';
@@ -158,6 +158,37 @@ const Sidebar = () => {
             </NavLink>
           );
         })}
+
+        {/* Navigates OUT of the app shell (no sidebar/layout on that route) —
+            deliberately a plain button, not a NavLink/navItems entry. */}
+        <button
+          onClick={() => navigate('/afterschool-synopsis')}
+          onMouseEnter={() => setHovered('__afterschool-synopsis')}
+          onMouseLeave={() => setHovered(null)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: expanded ? 12 : 0,
+            padding: expanded ? '13px 16px' : '13px 0',
+            margin: expanded ? '2px 14px' : '2px 8px',
+            borderRadius: 10,
+            border: 'none',
+            cursor: 'pointer',
+            justifyContent: expanded ? 'flex-start' : 'center',
+            background: hovered === '__afterschool-synopsis' ? 'rgba(173,0,75,0.05)' : 'transparent',
+            transition: 'color .15s ease, background .15s ease',
+          }}
+        >
+          <FileText
+            size={20}
+            strokeWidth={1.75}
+            color={hovered === '__afterschool-synopsis' ? ACTIVE : INACTIVE}
+            style={{ flexShrink: 0 }}
+          />
+          <span style={{ ...label(expanded), color: hovered === '__afterschool-synopsis' ? ACTIVE : INACTIVE }}>
+            Synopsis
+          </span>
+        </button>
       </nav>
 
       {/* Footer: Sign Out */}

@@ -6,6 +6,7 @@ import { updateOwnProfile } from '../../utils/teacherService';
 import { uploadProfilePicture } from '../../firebase/storageService';
 import ChangePasswordModal from './ChangePasswordModal';
 import MultiSelectDropdown from './MultiSelectDropdown';
+import { GRADE_OPTIONS } from '../../constants/afterschoolSynopsisSchema';
 import './EditProfileModal.css';
 
 const EditProfileModal = ({ isOpen, onClose, currentProfile, onProfileUpdated }) => {
@@ -40,17 +41,12 @@ const EditProfileModal = ({ isOpen, onClose, currentProfile, onProfileUpdated })
     'Sanskrit'
   ];
 
-  const gradeOptions = [
-    'Kindergarten',
-    '1st Grade',
-    '2nd Grade',
-    '3rd Grade',
-    '4th Grade',
-    '5th Grade',
-    '6th Grade',
-    '7th Grade',
-    '8th Grade'
-  ];
+  // Swapped in from the after-school/ECA synopsis feature's grade-batch
+  // taxonomy (frontend/src/constants/afterschoolSynopsisSchema.js) — the only
+  // other place a grade list existed in the app. These 5 batches are a
+  // different taxonomy than the old K-8th list this replaces (straight
+  // swap-in, not a merge — see the afterschool synopsis feature's plan notes).
+  const gradeOptions = GRADE_OPTIONS;
 
   const handleChange = (e) => {
     const { name, value } = e.target;

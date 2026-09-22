@@ -763,3 +763,80 @@ class FirebaseService:
 
     async def upsert_synopsis_food(self, week_id: str, data: Dict) -> None:
         self._weeks_col().document(week_id).set({'food': data}, merge=True)
+
+    # ── Afterschool Synopsis Months ───────────────────────────────────────────
+    # New, top-level collection — `afterschool_synopsis_months` — separate from
+    # the camp-synopsis `synopsis/{ICC}/weeks` subcollection above. month_id is
+    # always deterministic ("YYYY-MM"), so these use direct document-path
+    # lookups (no composite index / collection scan needed), same posture as
+    # the direct-path synopsis camp/entry lookups above.
+
+    def _afterschool_months_col(self):
+        return self.db.collection('afterschool_synopsis_months')
+
+    async def get_month(self, month_id: str) -> Optional[Dict]:
+        doc = self._afterschool_months_col().document(month_id).get()
+        if not doc.exists:
+            return None
+        return {'id': doc.id, **doc.to_dict()}
+
+    async def list_months(self) -> List[Dict]:
+        docs = self._afterschool_months_col().stream()
+        months = [{'id': d.id, **d.to_dict()} for d in docs]
+        months.sort(key=lambda m: (m.get('year', 0), m.get('month', 0)))
+        return months
+
+    async def list_visible_months(self) -> List[Dict]:
+        docs = self._afterschool_months_col().where('is_visible', '==', True).stream()
+        months = [{'id': d.id, **d.to_dict()} for d in docs]
+        months.sort(key=lambda m: (m.get('year', 0), m.get('month', 0)))
+        return months
+
+    async def get_active_month(self) -> Optional[Dict]:
+        docs = list(self._afterschool_months_col().where('is_active', '==', True).limit(1).stream())
+        if not docs:
+            return None
+        return {'id': docs[0].id, **docs[0].to_dict()}
+
+    async def create_month(self, month_id: str, data: Dict) -> str:
+        self._afterschool_months_col().document(month_id).set(data)
+        print(f"✅ Created afterschool synopsis month: {month_id}")
+        return month_id
+
+    async def update_month(self, month_id: str, updates: Dict) -> bool:
+        ref = self._afterschool_months_col().document(month_id)
+        if not ref.get().exists:
+            return False
+        ref.update(updates)
+        return True
+
+    async def delete_month(self, month_id: str) -> bool:
+        ref = self._afterschool_months_col().document(month_id)
+        if not ref.get().exists:
+            return False
+        # No cascading delete of entries referencing this month, per spec.
+        ref.delete()
+        return True
+
+    async def deactivate_all_afterschool_months(self) -> None:
+        docs = self._afterschool_months_col().where('is_active', '==', True).stream()
+        for doc in docs:
+            doc.reference.update({'is_active': False})
+
+    # ── Afterschool Synopsis Entries ──────────────────────────────────────────
+    # New, top-level collection — `afterschool_synopsis` — doc id is the
+    # deterministic composite key "{grade_slug}__{type_slug}__{month_id}",
+    # same last-write-wins upsert posture as the camp feature's entries.
+
+    def _afterschool_entries_col(self):
+        return self.db.collection('afterschool_synopsis')
+
+    async def get_afterschool_entry(self, entry_id: str) -> Optional[Dict]:
+        doc = self._afterschool_entries_col().document(entry_id).get()
+        if not doc.exists:
+            return None
+        return {'id': doc.id, **doc.to_dict()}
+
+    async def upsert_afterschool_entry(self, entry_id: str, data: Dict) -> str:
+        self._afterschool_entries_col().document(entry_id).set(data)
+        return entry_id

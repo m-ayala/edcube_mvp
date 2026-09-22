@@ -156,6 +156,22 @@ class HandsOnConfig:
 
 
 # ============================================================================
+# AFTER-SCHOOL / ECA SYNOPSIS CONFIGURATION
+# ============================================================================
+
+class AfterschoolSynopsisConfig:
+    """Shared teacher-portal credential for the after-school/ECA synopsis feature.
+
+    Not a per-teacher Firebase login — a single shared username/password gate,
+    separate from the ICC-admin (@indiacc.org Firebase) login used for the
+    admin side of this same feature. Env-overridable; the literal defaults
+    below are the actual credential the feature owner specified.
+    """
+    PORTAL_USERNAME = os.getenv("AFTERSCHOOL_PORTAL_USERNAME", "iccschool2627")
+    PORTAL_PASSWORD = os.getenv("AFTERSCHOOL_PORTAL_PASSWORD", "awesome2627")
+
+
+# ============================================================================
 # LOGGING CONFIGURATION
 # ============================================================================
 
