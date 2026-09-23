@@ -48,11 +48,14 @@ export const getEntry = async (gradeSlug, typeSlug, monthId) => {
 };
 
 // entries POST always upserts the full entry — pass the complete blocks array.
-export const saveEntry = async ({ grade, synopsisType, monthId, blocks }) => {
+// drive_link is entry-level (one per grade+activity+month, not per block) and
+// is written back verbatim by the backend, so callers must resend the current
+// value on every save (same round-trip pattern as `blocks`) or it gets cleared.
+export const saveEntry = async ({ grade, synopsisType, monthId, blocks, driveLink }) => {
   const res = await fetch(`${API_BASE}/entries`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ grade, synopsis_type: synopsisType, month_id: monthId, blocks }),
+    body: JSON.stringify({ grade, synopsis_type: synopsisType, month_id: monthId, blocks, drive_link: driveLink }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));

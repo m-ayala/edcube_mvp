@@ -47,6 +47,11 @@ export default function AdminClassView({ currentUser, monthId, monthLabel }) {
   const [expanded, setExpanded] = useState({});
   const [editing, setEditing] = useState(null); // { type, blockIndex } | null
   const [editDraft, setEditDraft] = useState(null);
+  // Entry-level (not block-level) drive-link editing — kept separate from
+  // editing/editDraft above since it's a different granularity (whole entry).
+  const [editingDriveLinkType, setEditingDriveLinkType] = useState(null);
+  const [driveLinkDraft, setDriveLinkDraft] = useState('');
+  const [savingDriveLink, setSavingDriveLink] = useState(false);
   const [saving, setSaving] = useState(false);
   const [downloading, setDownloading] = useState(null); // 'after-school' | 'eca' | null
 
@@ -94,6 +99,35 @@ export default function AdminClassView({ currentUser, monthId, monthLabel }) {
     }
   };
 
+  const startEditDriveLink = (type, currentValue) => {
+    setEditingDriveLinkType(type);
+    setDriveLinkDraft(currentValue || '');
+  };
+
+  const cancelEditDriveLink = () => { setEditingDriveLinkType(null); setDriveLinkDraft(''); };
+
+  const saveDriveLink = async (type) => {
+    const entry = lookupEntry(entriesByType, type);
+    setSavingDriveLink(true);
+    try {
+      await saveEntry({
+        grade: entry?.grade || grade,
+        synopsisType: type,
+        monthId,
+        blocks: entry?.blocks || [],
+        driveLink: driveLinkDraft,
+      });
+      cancelEditDriveLink();
+      await load();
+    } catch (err) {
+      alert(`Save failed: ${err.message}`);
+    } finally {
+      setSavingDriveLink(false);
+    }
+  };
+
+  const driveLinkLabel = (type) => (type === SINGLE_BLOCK_TYPE ? 'Class Photos' : type);
+
   const handleDownload = async (kind) => {
     setDownloading(kind);
     try {
@@ -114,7 +148,7 @@ export default function AdminClassView({ currentUser, monthId, monthLabel }) {
   };
 
   const fillStatus = (entry) => {
-    if (!entry || !entry.blocks?.length) return { label: 'No weeks logged yet', color: '#8b7355', bg: '#F0EDE8' };
+    if (!entry || !entry.blocks?.length) return { label: 'Nothing logged yet', color: '#8b7355', bg: '#F0EDE8' };
     const anyFilled = entry.blocks.some((b) => (b.raw_text || '').trim());
     return anyFilled
       ? { label: '✓ Filled', color: '#2d7a47', bg: '#d4f4dd' }
@@ -198,87 +232,158 @@ export default function AdminClassView({ currentUser, monthId, monthLabel }) {
 
                 {isOpen && (
                   <div style={{ padding: '0 16px 16px' }}>
+                    <div style={{ paddingBottom: 12, marginBottom: 12, borderBottom: '1px solid #F0EDE8' }}>
+                      {editingDriveLinkType === type ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <input
+                            type="text"
+                            value={driveLinkDraft}
+                            onChange={(e) => setDriveLinkDraft(e.target.value)}
+                            placeholder="Paste a shareable Google Drive folder link"
+                            style={{
+                              flex: 1, minWidth: 220, padding: '8px 12px', borderRadius: 10,
+                              border: '1.5px solid #E5E0D8', fontSize: 13,
+                              fontFamily: FONT, color: '#1e1e2e', background: '#fff', outline: 'none',
+                            }}
+                          />
+                          <button
+                            onClick={() => saveDriveLink(type)}
+                            disabled={savingDriveLink}
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 6,
+                              padding: '8px 16px', borderRadius: 100, border: 'none',
+                              background: savingDriveLink ? '#c8bfb5' : '#1C1917', color: '#FAF8F4',
+                              cursor: savingDriveLink ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 500, fontFamily: FONT,
+                            }}
+                          >
+                            <Check size={12} /> {savingDriveLink ? 'Saving…' : 'Save'}
+                          </button>
+                          <button
+                            onClick={cancelEditDriveLink}
+                            disabled={savingDriveLink}
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 6,
+                              padding: '8px 16px', borderRadius: 100, border: '1px solid #E5E0D8',
+                              background: 'transparent', color: '#6B6459',
+                              cursor: savingDriveLink ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 500, fontFamily: FONT,
+                            }}
+                          >
+                            <X size={12} /> Cancel
+                          </button>
+                        </div>
+                      ) : entry?.drive_link ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <a
+                            href={entry.drive_link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ fontSize: 13, color: '#3a6ea5', textDecoration: 'none' }}
+                          >
+                            🔗 Google Drive for {driveLinkLabel(type)}
+                          </a>
+                          <button
+                            onClick={() => startEditDriveLink(type, entry.drive_link)}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8b7355', display: 'flex' }}
+                            title="Edit Google Drive link"
+                          >
+                            <Pencil size={13} />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => startEditDriveLink(type, '')}
+                          style={{
+                            background: 'none', border: 'none', cursor: 'pointer',
+                            color: '#8b7355', fontSize: 13, fontFamily: FONT, padding: 0,
+                          }}
+                        >
+                          + Add Google Drive link
+                        </button>
+                      )}
+                    </div>
+
                     {!entry || !entry.blocks?.length ? (
                       <div style={{ fontSize: 13, color: '#8b7355', padding: '8px 0' }}>Nothing submitted yet.</div>
-                    ) : (
-                      entry.blocks.map((block, idx) => {
-                        const isEditingThis = editing?.type === type && editing.blockIndex === idx;
-                        return (
-                          <div key={idx} style={{ paddingTop: 12, marginTop: idx > 0 ? 12 : 0, borderTop: idx > 0 ? '1px solid #F0EDE8' : 'none' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                              <div style={{ fontSize: 13, fontWeight: 600, color: '#1C1917' }}>
-                                {type === SINGLE_BLOCK_TYPE
-                                  ? (block.title || 'This month')
-                                  : `Week ${idx + 1}${block.title ? ' — ' + block.title : ''}`}
-                              </div>
-                              {!isEditingThis && (
-                                <button
-                                  onClick={() => startEdit(type, idx, block)}
-                                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8b7355', display: 'flex' }}
-                                  title="Edit"
-                                >
-                                  <Pencil size={14} />
-                                </button>
-                              )}
+                    ) : (() => {
+                      // Every entry has exactly one block now. If stale
+                      // multi-block test data from before this change is
+                      // still present, only render/edit the first one.
+                      const block = entry.blocks[0];
+                      const idx = 0;
+                      const isEditingThis = editing?.type === type && editing.blockIndex === idx;
+                      return (
+                        <div style={{ paddingTop: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: '#1C1917' }}>
+                              {block.title || 'This month'}
                             </div>
-
-                            {isEditingThis ? (
-                              <>
-                                <BlockFields
-                                  value={editDraft}
-                                  onChange={(field, val) => setEditDraft((prev) => ({ ...prev, [field]: val }))}
-                                  gradeSlug={gradeSlug}
-                                  typeSlug={slugify(type)}
-                                  monthId={monthId}
-                                  blockIndex={idx}
-                                />
-                                <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                                  <button
-                                    onClick={saveEdit}
-                                    disabled={saving}
-                                    style={{
-                                      display: 'inline-flex', alignItems: 'center', gap: 6,
-                                      padding: '8px 16px', borderRadius: 100, border: 'none',
-                                      background: saving ? '#c8bfb5' : '#1C1917', color: '#FAF8F4',
-                                      cursor: saving ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 500, fontFamily: FONT,
-                                    }}
-                                  >
-                                    <Check size={12} /> {saving ? 'Saving…' : 'Save'}
-                                  </button>
-                                  <button
-                                    onClick={cancelEdit}
-                                    disabled={saving}
-                                    style={{
-                                      display: 'inline-flex', alignItems: 'center', gap: 6,
-                                      padding: '8px 16px', borderRadius: 100, border: '1px solid #E5E0D8',
-                                      background: 'transparent', color: '#6B6459',
-                                      cursor: saving ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 500, fontFamily: FONT,
-                                    }}
-                                  >
-                                    <X size={12} /> Cancel
-                                  </button>
-                                </div>
-                              </>
-                            ) : (
-                              <>
-                                {block.raw_text && (
-                                  <div style={{ fontSize: 13, color: '#3a352e', lineHeight: 1.6, whiteSpace: 'pre-wrap', marginBottom: 8 }}>
-                                    {block.raw_text}
-                                  </div>
-                                )}
-                                {block.photo_urls?.length > 0 && (
-                                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                                    {block.photo_urls.map((url, i) => (
-                                      <img key={i} src={url} alt="" style={{ width: 56, height: 56, borderRadius: 8, objectFit: 'cover' }} />
-                                    ))}
-                                  </div>
-                                )}
-                              </>
+                            {!isEditingThis && (
+                              <button
+                                onClick={() => startEdit(type, idx, block)}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8b7355', display: 'flex' }}
+                                title="Edit"
+                              >
+                                <Pencil size={14} />
+                              </button>
                             )}
                           </div>
-                        );
-                      })
-                    )}
+
+                          {isEditingThis ? (
+                            <>
+                              <BlockFields
+                                value={editDraft}
+                                onChange={(field, val) => setEditDraft((prev) => ({ ...prev, [field]: val }))}
+                                gradeSlug={gradeSlug}
+                                typeSlug={slugify(type)}
+                                monthId={monthId}
+                                blockIndex={idx}
+                              />
+                              <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                                <button
+                                  onClick={saveEdit}
+                                  disabled={saving}
+                                  style={{
+                                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                                    padding: '8px 16px', borderRadius: 100, border: 'none',
+                                    background: saving ? '#c8bfb5' : '#1C1917', color: '#FAF8F4',
+                                    cursor: saving ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 500, fontFamily: FONT,
+                                  }}
+                                >
+                                  <Check size={12} /> {saving ? 'Saving…' : 'Save'}
+                                </button>
+                                <button
+                                  onClick={cancelEdit}
+                                  disabled={saving}
+                                  style={{
+                                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                                    padding: '8px 16px', borderRadius: 100, border: '1px solid #E5E0D8',
+                                    background: 'transparent', color: '#6B6459',
+                                    cursor: saving ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 500, fontFamily: FONT,
+                                  }}
+                                >
+                                  <X size={12} /> Cancel
+                                </button>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              {block.raw_text && (
+                                <div style={{ fontSize: 13, color: '#3a352e', lineHeight: 1.6, whiteSpace: 'pre-wrap', marginBottom: 8 }}>
+                                  {block.raw_text}
+                                </div>
+                              )}
+                              {block.photo_urls?.length > 0 && (
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                  {block.photo_urls.map((url, i) => (
+                                    <img key={i} src={url} alt="" style={{ width: 56, height: 56, borderRadius: 8, objectFit: 'cover' }} />
+                                  ))}
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
               </div>

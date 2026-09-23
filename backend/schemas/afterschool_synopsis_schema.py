@@ -45,6 +45,7 @@ class AfterschoolEntryFields:
     MONTH_ID = 'month_id'
     MONTH_LABEL = 'month_label'
     BLOCKS = 'blocks'
+    DRIVE_LINK = 'drive_link'      # optional, one per entry (grade+type+month) — not per block
     CREATED_AT = 'created_at'
     UPDATED_AT = 'updated_at'
 
@@ -83,8 +84,10 @@ SYNOPSIS_TYPE_OPTIONS = [AFTER_SCHOOL_CLASS_TYPE] + ECA_TYPE_OPTIONS
 # Fixed order the ECA newsletter doc walks sections in.
 ECA_TYPE_ORDER = list(ECA_TYPE_OPTIONS)
 
-# Types that always have exactly 1 block with week=None.
-SINGLE_BLOCK_TYPES = {AFTER_SCHOOL_CLASS_TYPE}
+# Every synopsis_type always has exactly 1 block with week=None — kept as a
+# named set (rather than inlining `in SYNOPSIS_TYPE_OPTIONS` at call sites) so
+# the "single block" rule stays a distinct, greppable concept from "valid type".
+SINGLE_BLOCK_TYPES = set(SYNOPSIS_TYPE_OPTIONS)
 
 # The 9 allowed (year, month) pairs — September 2026 through May 2027.
 ALLOWED_MONTHS = [
@@ -175,6 +178,7 @@ class EntrySaveRequest(BaseModel):
     synopsis_type: str
     month_id: str
     blocks: List[BlockInput] = Field(default_factory=list)
+    drive_link: Optional[str] = None
 
 
 class EnhanceTextRequest(BaseModel):

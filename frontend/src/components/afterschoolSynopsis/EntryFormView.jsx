@@ -1,15 +1,13 @@
 // frontend/src/components/afterschoolSynopsis/EntryFormView.jsx
 //
-// Single block for After School Class; for an ECA, renders `blocks` (loaded
-// via getEntry, defaulting to one blank block if none saved yet) plus an
-// "Add another week" button the teacher clicks to append blocks themselves —
-// there is no system-computed week count. Each block has its own photo grid
-// (BlockFields.jsx) + Enhance/Save/status-pill row, mirroring the camp
-// feature's CampEntryView.jsx per-day pattern.
+// Every synopsis type (After School Class and all ECAs alike) has exactly one
+// block (title/description/photos) per entry — no teacher-added "weeks". The
+// single block has its own photo grid (BlockFields.jsx) + Enhance/Save/
+// status-pill row, mirroring the camp feature's CampEntryView.jsx pattern.
 
 import { useState, useEffect, useCallback } from 'react';
-import { ArrowLeft, Plus, Sparkles } from 'lucide-react';
-import { slugify, SINGLE_BLOCK_TYPE } from '../../constants/afterschoolSynopsisSchema';
+import { ArrowLeft, Sparkles } from 'lucide-react';
+import { slugify } from '../../constants/afterschoolSynopsisSchema';
 import { getEntry, saveEntry, enhanceText } from '../../services/afterschoolSynopsisService';
 import BlockFields from './BlockFields';
 
@@ -19,12 +17,12 @@ const SERIF = "'DM Serif Display', serif";
 const blankBlock = (week) => ({ week, title: '', raw_text: '', photo_urls: [] });
 
 export default function EntryFormView({ grade, synopsisType, monthId, monthLabel, onBack }) {
-  const isSingleBlock = synopsisType === SINGLE_BLOCK_TYPE;
   const gradeSlug = slugify(grade);
   const typeSlug = slugify(synopsisType);
 
-  const [blocks, setBlocks] = useState([blankBlock(isSingleBlock ? null : 'week1')]);
+  const [blocks, setBlocks] = useState([blankBlock(null)]);
   const [status, setStatus] = useState({}); // { [index]: 'draft' | 'saved' } — UI-only, not persisted
+  const [driveLink, setDriveLink] = useState('');
   const [loading, setLoading] = useState(true);
   const [savingIdx, setSavingIdx] = useState(null);
   const [enhancingIdx, setEnhancingIdx] = useState(null);
@@ -36,22 +34,26 @@ export default function EntryFormView({ grade, synopsisType, monthId, monthLabel
       .then(({ entry }) => {
         if (cancelled) return;
         if (entry?.blocks?.length) {
-          setBlocks(entry.blocks.map((b) => ({
+          // Only ever 0 or 1 block per entry now; if stale multi-block test
+          // data exists from before this change, take just the first block.
+          const b = entry.blocks[0];
+          setBlocks([{
             week: b.week ?? null,
             title: b.title || '',
             raw_text: b.raw_text || '',
             photo_urls: b.photo_urls || [],
-          })));
-          setStatus(Object.fromEntries(entry.blocks.map((_, i) => [i, 'saved'])));
+          }]);
+          setStatus({ 0: 'saved' });
+          setDriveLink(entry?.drive_link || '');
         } else {
-          setBlocks([blankBlock(isSingleBlock ? null : 'week1')]);
+          setBlocks([blankBlock(null)]);
           setStatus({});
+          setDriveLink('');
         }
       })
       .catch(() => {})
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gradeSlug, typeSlug, monthId]);
 
   const updateBlock = (idx, field, val) => {
@@ -59,7 +61,7 @@ export default function EntryFormView({ grade, synopsisType, monthId, monthLabel
     setStatus((prev) => ({ ...prev, [idx]: 'draft' }));
   };
 
-  const persist = useCallback((nextBlocks) => saveEntry({ grade, synopsisType, monthId, blocks: nextBlocks }), [grade, synopsisType, monthId]);
+  const persist = useCallback((nextBlocks) => saveEntry({ grade, synopsisType, monthId, blocks: nextBlocks, driveLink }), [grade, synopsisType, monthId, driveLink]);
 
   const handleSaveBlock = async (idx) => {
     setSavingIdx(idx);
@@ -90,10 +92,6 @@ export default function EntryFormView({ grade, synopsisType, monthId, monthLabel
     }
   };
 
-  const handleAddWeek = () => {
-    setBlocks((prev) => [...prev, blankBlock(`week${prev.length + 1}`)]);
-  };
-
   if (loading) {
     return <div style={{ padding: 60, textAlign: 'center', color: '#8b7355', fontFamily: FONT }}>Loading…</div>;
   }
@@ -115,6 +113,24 @@ export default function EntryFormView({ grade, synopsisType, monthId, monthLabel
         <div style={{ fontSize: 13, color: '#6B6459' }}>{grade} · {monthLabel}</div>
       </div>
 
+      <div style={{ marginBottom: 28 }}>
+        <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: '#1C1917', marginBottom: 6 }}>
+          Google Drive link (optional)
+        </label>
+        <input
+          type="text"
+          value={driveLink}
+          onChange={(e) => setDriveLink(e.target.value)}
+          placeholder="Paste a shareable Google Drive folder link for this month's photos"
+          style={{
+            width: '100%', padding: '11px 14px', borderRadius: 10,
+            border: '1.5px solid #E5E0D8', fontSize: 14,
+            fontFamily: FONT, color: '#1e1e2e',
+            background: '#fff', outline: 'none', boxSizing: 'border-box',
+          }}
+        />
+      </div>
+
       {blocks.map((block, idx) => {
         const st = status[idx] || 'draft';
         const hasContent = block.raw_text.trim() || block.title.trim();
@@ -122,7 +138,7 @@ export default function EntryFormView({ grade, synopsisType, monthId, monthLabel
           <div key={idx} style={{ marginBottom: 28, paddingBottom: 28, borderBottom: '1px solid #F0EDE8' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
               <div style={{ fontFamily: SERIF, fontSize: 16, fontWeight: 600, color: '#1C1917' }}>
-                {isSingleBlock ? 'This month' : `Week ${idx + 1}`}
+                This month
               </div>
               {hasContent && (
                 <span style={{
@@ -142,8 +158,8 @@ export default function EntryFormView({ grade, synopsisType, monthId, monthLabel
               typeSlug={typeSlug}
               monthId={monthId}
               blockIndex={idx}
-              titlePlaceholder={isSingleBlock ? 'Title (optional)' : `Title for Week ${idx + 1} (optional)`}
-              descPlaceholder={isSingleBlock ? 'What did your class do this month?' : `What happened in Week ${idx + 1}?`}
+              titlePlaceholder="Title (optional)"
+              descPlaceholder="What did your class do this month?"
             />
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14 }}>
@@ -181,20 +197,6 @@ export default function EntryFormView({ grade, synopsisType, monthId, monthLabel
           </div>
         );
       })}
-
-      {!isSingleBlock && (
-        <button
-          onClick={handleAddWeek}
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            padding: '10px 20px', borderRadius: 100, border: '1.5px dashed #C8BFB5',
-            background: 'transparent', color: '#5c4a32', cursor: 'pointer',
-            fontSize: 13, fontWeight: 500, fontFamily: FONT,
-          }}
-        >
-          <Plus size={14} /> Add another week
-        </button>
-      )}
     </div>
   );
 }

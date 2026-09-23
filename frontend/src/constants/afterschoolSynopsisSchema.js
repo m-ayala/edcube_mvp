@@ -22,9 +22,11 @@ export const GRADE_OPTIONS = [
   'Fourth/Fifth/Sixth Grade',
 ];
 
-// The one synopsis type whose entry always has exactly one block (week: null).
-// Every ECA type instead grows however many blocks the teacher adds via
-// "Add another week" — there is no fixed or computed week count.
+// Every synopsis type's entry has exactly one block (week: null) now — no
+// more teacher-added "weeks" for ECAs. This constant no longer distinguishes
+// block-count behavior; it's kept only because the admin view's Google Drive
+// link label ("Class Photos" vs. the ECA's own name) still needs to identify
+// the After School Class type specifically.
 export const SINGLE_BLOCK_TYPE = 'After School Class';
 
 export const SYNOPSIS_TYPE_OPTIONS = [
@@ -65,7 +67,7 @@ export const AfterschoolEntryFields = {
 };
 
 export const AfterschoolBlockFields = {
-  WEEK: 'week', // "week1", "week2", ... or null for After School Class
+  WEEK: 'week', // always null now — every entry has exactly one block, no teacher-added weeks
   TITLE: 'title',
   RAW_TEXT: 'raw_text',
   PHOTO_URLS: 'photo_urls',

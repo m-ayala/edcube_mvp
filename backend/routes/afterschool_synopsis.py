@@ -28,6 +28,8 @@ from typing import Optional
 from docx import Document
 from docx.shared import Inches, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn as _qn
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.concurrency import run_in_threadpool
@@ -40,7 +42,6 @@ from schemas.afterschool_synopsis_schema import (
     ECA_TYPE_ORDER,
     GRADE_SLUG_TO_LABEL,
     PHOTO_MAX,
-    SINGLE_BLOCK_TYPES,
     SYNOPSIS_TYPE_OPTIONS,
     AfterschoolBlockFields as BF,
     AfterschoolEntryFields as EF,
@@ -70,7 +71,7 @@ from routes.synopsis import (
     _para_border_bottom,
     _cell_bg,          # noqa: F401 — imported for parity/future use, not currently called
     _remove_table_borders,
-    _add_hyperlink,     # noqa: F401 — imported for parity/future use, not currently called
+    _add_hyperlink,
     _add_md_text,
     _fetch_photo_bytes,
     _fix_exif_rotation,
@@ -148,22 +149,11 @@ async def save_entry(body: EntrySaveRequest):
 
     blocks = body.blocks
 
-    if body.synopsis_type in SINGLE_BLOCK_TYPES:
-        if len(blocks) != 1:
-            raise HTTPException(400, "After School Class must have exactly 1 block")
-        b = blocks[0]
-        blocks = [BlockInput(week=None, title=b.title, raw_text=b.raw_text, photo_urls=b.photo_urls)]
-    else:
-        if not blocks:
-            raise HTTPException(400, "At least 1 week block is required")
-        expected_weeks = [f"week{i}" for i in range(1, len(blocks) + 1)]
-        submitted_weeks = [b.week for b in blocks]
-        if submitted_weeks != expected_weeks:
-            raise HTTPException(
-                400,
-                f"Week keys must be sequential with no gaps or duplicates. "
-                f"Expected {expected_weeks}, got {submitted_weeks}",
-            )
+    # Every synopsis_type is single-block now (SINGLE_BLOCK_TYPES == all types).
+    if len(blocks) != 1:
+        raise HTTPException(400, "Exactly 1 entry block is required")
+    b = blocks[0]
+    blocks = [BlockInput(week=None, title=b.title, raw_text=b.raw_text, photo_urls=b.photo_urls)]
 
     for b in blocks:
         if len(b.photo_urls) > PHOTO_MAX:
@@ -185,6 +175,7 @@ async def save_entry(body: EntrySaveRequest):
         EF.MONTH_ID: body.month_id,
         EF.MONTH_LABEL: month_label,
         EF.BLOCKS: [b.model_dump() for b in blocks],
+        EF.DRIVE_LINK: (body.drive_link or ''),
         EF.CREATED_AT: (existing or {}).get(EF.CREATED_AT, now),
         EF.UPDATED_AT: now,
     }
@@ -417,6 +408,21 @@ def _add_section_heading(doc: Document, text: str, band_hex: str, page_break: bo
     _para_border_bottom(p, '1a1a1a', sz='6')
 
 
+def _add_drive_link_bar(doc: Document, label: str, url: str) -> None:
+    """One Google Drive link bar — mirrors routes/synopsis.py's gallery-bar
+    pattern exactly (same A5C9E8 shading, same 📷 emoji convention, 10pt Lora
+    text), just with an entry-level label instead of a per-week one."""
+    p_link = _para(doc, spc_b=4, spc_a=8)
+    pPr = p_link._p.get_or_add_pPr()
+    shd = OxmlElement('w:shd')
+    shd.set(_qn('w:val'), 'clear')
+    shd.set(_qn('w:color'), 'auto')
+    shd.set(_qn('w:fill'), 'A5C9E8')
+    pPr.append(shd)
+    _run(p_link, f'📷  Google Drive for {label} — ', size_pt=10)
+    _add_hyperlink(p_link, url, url, size_pt=10, bold=True)
+
+
 def _add_block_entry(doc: Document, block: dict, *, week_index: int, label_text: str) -> None:
     color_hex, emoji = _WEEK_COLOR_EMOJI[week_index % 5]
     p_label = _para(doc, spc_b=12, spc_a=6)
@@ -458,6 +464,10 @@ def _build_after_school_doc(*, grade_label: str, month: dict, entry: Optional[di
         school_year_label=school_year_label,
     )
 
+    drive_link = (entry or {}).get(EF.DRIVE_LINK)
+    if drive_link:
+        _add_drive_link_bar(doc, 'Class Photos', drive_link)
+
     _add_section_heading(doc, AFTER_SCHOOL_CLASS_TYPE, band_hex, page_break=False)
 
     blocks = (entry or {}).get(EF.BLOCKS) or []
@@ -477,7 +487,8 @@ def _build_after_school_doc(*, grade_label: str, month: dict, entry: Optional[di
 
 def _build_eca_doc(*, grade_label: str, month: dict, entries_by_type: dict) -> bytes:
     """ECA newsletter — one section per ECA (fixed order), page break before
-    each after the first; one entry per week actually logged."""
+    each after the first; one title+description+photos block per ECA, same
+    shape as _build_after_school_doc()'s single-block treatment."""
     band_hex = _resolve_band_color(month)
     month_label = month.get(MF.LABEL, '')
     school_year_label = _school_year_label(month.get(MF.YEAR), month.get(MF.MONTH))
@@ -490,18 +501,26 @@ def _build_eca_doc(*, grade_label: str, month: dict, entries_by_type: dict) -> b
         school_year_label=school_year_label,
     )
 
+    # All Google Drive link bars grouped together at the very top of the doc —
+    # before any ECA's section heading — not one bar per section/page.
+    for eca_type in ECA_TYPE_ORDER:
+        link_entry = entries_by_type.get(eca_type)
+        drive_link = (link_entry or {}).get(EF.DRIVE_LINK)
+        if drive_link:
+            _add_drive_link_bar(doc, eca_type, drive_link)
+
     for idx, eca_type in enumerate(ECA_TYPE_ORDER):
         entry = entries_by_type.get(eca_type)
         _add_section_heading(doc, eca_type, band_hex, page_break=(idx > 0))
 
         blocks = (entry or {}).get(EF.BLOCKS) or []
-        if not blocks:
+        if blocks:
+            block = blocks[0]
+            label_text = block.get(BF.TITLE) or eca_type
+            _add_block_entry(doc, block, week_index=0, label_text=label_text)
+        else:
             p_notes = _para(doc, spc_b=6, spc_a=12, line=1.5, align=WD_ALIGN_PARAGRAPH.JUSTIFY)
             _run(p_notes, 'No notes submitted for this month.', size_pt=11)
-            continue
-
-        for week_index, block in enumerate(blocks):
-            _add_block_entry(doc, block, week_index=week_index, label_text=f'Week {week_index + 1}')
 
     buf = io.BytesIO()
     doc.save(buf)
