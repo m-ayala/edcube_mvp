@@ -76,7 +76,14 @@ export default function AfterschoolSynopsisPage() {
     setView(teacherEntryView());
   };
 
-  const selectedMonthLabel = adminMonths.find((m) => m.month_id === adminMonthId)?.label;
+  const selectedMonth = adminMonths.find((m) => m.month_id === adminMonthId);
+  const selectedMonthLabel = selectedMonth?.label;
+
+  // Keeps the page's copy of a month in sync after an in-place edit (e.g. the
+  // intro paragraph) without re-fetching; AdminMonthDropdown's own reloads
+  // overwrite this with server data via onMonthsChange anyway.
+  const handleMonthPatched = (monthId, patch) =>
+    setAdminMonths((prev) => prev.map((m) => (m.month_id === monthId ? { ...m, ...patch } : m)));
 
   return (
     <div style={{
@@ -185,6 +192,8 @@ export default function AfterschoolSynopsisPage() {
               currentUser={currentUser}
               monthId={adminMonthId}
               monthLabel={selectedMonthLabel}
+              month={selectedMonth}
+              onMonthPatched={handleMonthPatched}
             />
           )}
         </div>

@@ -29,6 +29,11 @@ class AfterschoolMonthFields:
     IS_ACTIVE = 'is_active'
     IS_VISIBLE = 'is_visible'
     COLOR_THEME = 'color_theme'    # one of COLOR_THEME_PALETTE keys
+    # Admin-written intro paragraph for the month — shared by every grade's
+    # After School Class newsletter (not the ECA newsletter). Optional/absent
+    # on months created before this field existed.
+    INTRO_TITLE = 'intro_title'
+    INTRO_TEXT = 'intro_text'
     CREATED_BY = 'created_by'
     CREATED_AT = 'created_at'
 
@@ -80,6 +85,15 @@ ECA_TYPE_OPTIONS = [
 ]
 
 SYNOPSIS_TYPE_OPTIONS = [AFTER_SCHOOL_CLASS_TYPE] + ECA_TYPE_OPTIONS
+
+# Grades that take no ECAs — only the After School Class exists for them.
+GRADES_WITHOUT_ECA = {"Transitional Kindergarten (TK)"}
+
+
+def synopsis_types_for_grade(grade_label: str) -> List[str]:
+    if grade_label in GRADES_WITHOUT_ECA:
+        return [AFTER_SCHOOL_CLASS_TYPE]
+    return list(SYNOPSIS_TYPE_OPTIONS)
 
 # Fixed order the ECA newsletter doc walks sections in.
 ECA_TYPE_ORDER = list(ECA_TYPE_OPTIONS)
@@ -164,6 +178,8 @@ class MonthUpdate(BaseModel):
     is_active: Optional[bool] = None
     is_visible: Optional[bool] = None
     color_theme: Optional[str] = None
+    intro_title: Optional[str] = None
+    intro_text: Optional[str] = None
 
 
 class BlockInput(BaseModel):

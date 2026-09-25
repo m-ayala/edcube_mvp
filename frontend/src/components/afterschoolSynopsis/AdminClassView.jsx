@@ -14,9 +14,10 @@ import { useState, useEffect, useCallback } from 'react';
 import { ChevronDown, ChevronRight, Pencil, Download, X, Check } from 'lucide-react';
 import {
   GRADE_OPTIONS,
-  SYNOPSIS_TYPE_OPTIONS,
+  GRADES_WITHOUT_ECA,
   SINGLE_BLOCK_TYPE,
   slugify,
+  synopsisTypesForGrade,
 } from '../../constants/afterschoolSynopsisSchema';
 import {
   getClassStatus,
@@ -25,6 +26,7 @@ import {
   downloadEcaDoc,
 } from '../../services/afterschoolSynopsisService';
 import BlockFields from './BlockFields';
+import AdminIntroView from './AdminIntroView';
 
 const FONT = "'DM Sans', sans-serif";
 const SERIF = "'DM Serif Display', serif";
@@ -39,7 +41,11 @@ const lookupEntry = (entriesByType, type) => {
   return entriesByType?.[slug] ?? entriesByType?.[slug.replace(/-/g, '_')] ?? null;
 };
 
-export default function AdminClassView({ currentUser, monthId, monthLabel }) {
+// Sentinel value for the batch <select>'s "Intro paragraph" option — the
+// month-level intro editor, not a grade.
+const INTRO_OPTION = '__intro__';
+
+export default function AdminClassView({ currentUser, monthId, monthLabel, month, onMonthPatched }) {
   const [grade, setGrade] = useState(GRADE_OPTIONS[0]);
   const [entriesByType, setEntriesByType] = useState({});
   const [loading, setLoading] = useState(true);
@@ -55,10 +61,13 @@ export default function AdminClassView({ currentUser, monthId, monthLabel }) {
   const [saving, setSaving] = useState(false);
   const [downloading, setDownloading] = useState(null); // 'after-school' | 'eca' | null
 
+  const isIntro = grade === INTRO_OPTION;
   const gradeSlug = slugify(grade);
+  const synopsisTypes = synopsisTypesForGrade(grade);
+  const hasEca = !GRADES_WITHOUT_ECA.includes(grade);
 
   const load = useCallback(async () => {
-    if (!monthId) return;
+    if (!monthId || isIntro) return;
     setLoading(true);
     setError('');
     try {
@@ -69,7 +78,7 @@ export default function AdminClassView({ currentUser, monthId, monthLabel }) {
     } finally {
       setLoading(false);
     }
-  }, [currentUser, gradeSlug, monthId]);
+  }, [currentUser, gradeSlug, monthId, isIntro]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -171,11 +180,13 @@ export default function AdminClassView({ currentUser, monthId, monthLabel }) {
             outline: 'none', cursor: 'pointer', minWidth: 220,
           }}
         >
+          <option value={INTRO_OPTION}>✎ Intro paragraph for {monthLabel || monthId}</option>
           {GRADE_OPTIONS.map((g) => <option key={g} value={g}>{g}</option>)}
         </select>
 
         <div style={{ flex: 1 }} />
 
+        {!isIntro && (<>
         <button
           onClick={() => handleDownload('after-school')}
           disabled={downloading !== null}
@@ -188,7 +199,7 @@ export default function AdminClassView({ currentUser, monthId, monthLabel }) {
         >
           <Download size={14} /> {downloading === 'after-school' ? 'Downloading…' : 'After School newsletter'}
         </button>
-        <button
+        {hasEca && <button
           onClick={() => handleDownload('eca')}
           disabled={downloading !== null}
           style={{
@@ -199,16 +210,24 @@ export default function AdminClassView({ currentUser, monthId, monthLabel }) {
           }}
         >
           <Download size={14} /> {downloading === 'eca' ? 'Downloading…' : 'ECA newsletter'}
-        </button>
+        </button>}
+        </>)}
       </div>
 
-      {loading ? (
+      {isIntro ? (
+        <AdminIntroView
+          currentUser={currentUser}
+          month={month}
+          monthLabel={monthLabel || monthId}
+          onSaved={onMonthPatched}
+        />
+      ) : loading ? (
         <div style={{ fontSize: 13, color: '#8b7355', padding: '20px 0' }}>Loading…</div>
       ) : error ? (
         <div style={{ fontSize: 13, color: '#c0392b' }}>{error}</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {SYNOPSIS_TYPE_OPTIONS.map((type) => {
+          {synopsisTypes.map((type) => {
             const entry = lookupEntry(entriesByType, type);
             const status = fillStatus(entry);
             const isOpen = !!expanded[type];

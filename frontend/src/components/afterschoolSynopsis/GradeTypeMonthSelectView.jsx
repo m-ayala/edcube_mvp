@@ -4,7 +4,7 @@
 // to AfterschoolSynopsisPage, which switches to the entry view.
 
 import { useState, useEffect } from 'react';
-import { GRADE_OPTIONS, SYNOPSIS_TYPE_OPTIONS } from '../../constants/afterschoolSynopsisSchema';
+import { GRADE_OPTIONS, GRADES_WITHOUT_ECA, SINGLE_BLOCK_TYPE, SYNOPSIS_TYPE_OPTIONS } from '../../constants/afterschoolSynopsisSchema';
 import { getVisibleMonths, getActiveMonth } from '../../services/afterschoolSynopsisService';
 
 const FONT = "'DM Sans', sans-serif";
@@ -48,13 +48,18 @@ export default function GradeTypeMonthSelectView({ onSubmit }) {
     return () => { cancelled = true; };
   }, []);
 
-  const canSubmit = grade && synopsisType && monthId;
+  // Grades without ECAs (TK) only have the After School Class, so the
+  // synopsis-type dropdown is hidden and the type is fixed.
+  const hasEca = !GRADES_WITHOUT_ECA.includes(grade);
+  const effectiveType = hasEca ? synopsisType : SINGLE_BLOCK_TYPE;
+
+  const canSubmit = grade && effectiveType && monthId;
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!canSubmit) return;
     const month = months.find((m) => m.month_id === monthId);
-    onSubmit({ grade, synopsisType, monthId, monthLabel: month?.label || monthId });
+    onSubmit({ grade, synopsisType: effectiveType, monthId, monthLabel: month?.label || monthId });
   };
 
   return (
@@ -80,13 +85,15 @@ export default function GradeTypeMonthSelectView({ onSubmit }) {
           </select>
         </div>
 
-        <div style={{ marginBottom: 18 }}>
-          <label style={labelStyle}>Synopsis type</label>
-          <select value={synopsisType} onChange={(e) => setSynopsisType(e.target.value)} style={selectStyle} required>
-            <option value="" disabled>Select a class…</option>
-            {SYNOPSIS_TYPE_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
-          </select>
-        </div>
+        {hasEca && (
+          <div style={{ marginBottom: 18 }}>
+            <label style={labelStyle}>Synopsis type</label>
+            <select value={synopsisType} onChange={(e) => setSynopsisType(e.target.value)} style={selectStyle} required>
+              <option value="" disabled>Select a class…</option>
+              {SYNOPSIS_TYPE_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+        )}
 
         <div style={{ marginBottom: 24 }}>
           <label style={labelStyle}>Month</label>

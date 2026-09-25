@@ -39,6 +39,13 @@ export const SYNOPSIS_TYPE_OPTIONS = [
   'Dance',
 ];
 
+// Grades that take no ECAs — only the After School Class exists for them.
+// Mirrors backend's GRADES_WITHOUT_ECA.
+export const GRADES_WITHOUT_ECA = ['Transitional Kindergarten (TK)'];
+
+export const synopsisTypesForGrade = (grade) =>
+  (GRADES_WITHOUT_ECA.includes(grade) ? [SINGLE_BLOCK_TYPE] : SYNOPSIS_TYPE_OPTIONS);
+
 // ── Firestore field names ─────────────────────────────────────────────────────
 
 export const AfterschoolMonthFields = {
@@ -49,6 +56,8 @@ export const AfterschoolMonthFields = {
   IS_ACTIVE: 'is_active',
   IS_VISIBLE: 'is_visible',
   COLOR_THEME: 'color_theme',
+  INTRO_TITLE: 'intro_title', // admin-written monthly intro, After School newsletter only
+  INTRO_TEXT: 'intro_text',
   CREATED_BY: 'created_by',
   CREATED_AT: 'created_at',
 };

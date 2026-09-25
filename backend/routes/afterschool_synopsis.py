@@ -41,6 +41,7 @@ from schemas.afterschool_synopsis_schema import (
     COLOR_THEME_PALETTE,
     ECA_TYPE_ORDER,
     GRADE_SLUG_TO_LABEL,
+    GRADES_WITHOUT_ECA,
     PHOTO_MAX,
     SYNOPSIS_TYPE_OPTIONS,
     AfterschoolBlockFields as BF,
@@ -57,6 +58,7 @@ from schemas.afterschool_synopsis_schema import (
     month_id_for,
     month_label_for,
     slugify,
+    synopsis_types_for_grade,
 )
 from services.firebase_service import FirebaseService
 from utils.llm_handler import call_openai, OpenAIServiceError
@@ -145,6 +147,8 @@ async def save_entry(body: EntrySaveRequest):
     grade_slug = slugify(body.grade)
     if grade_slug not in GRADE_SLUG_TO_LABEL:
         raise HTTPException(400, f"Invalid grade '{body.grade}'")
+    if body.synopsis_type not in synopsis_types_for_grade(GRADE_SLUG_TO_LABEL[grade_slug]):
+        raise HTTPException(400, f"{GRADE_SLUG_TO_LABEL[grade_slug]} has no {body.synopsis_type} synopsis")
     type_slug = slugify(body.synopsis_type)
 
     blocks = body.blocks
@@ -315,7 +319,7 @@ async def get_class_entries(
     month = await firebase.get_month(month_id)
 
     entries = {}
-    for synopsis_type in SYNOPSIS_TYPE_OPTIONS:
+    for synopsis_type in synopsis_types_for_grade(grade_label):
         type_slug = slugify(synopsis_type)
         entry_id = f"{grade_slug}__{type_slug}__{month_id}"
         entries[_entry_key(synopsis_type)] = await firebase.get_afterschool_entry(entry_id)
@@ -409,9 +413,10 @@ def _add_section_heading(doc: Document, text: str, band_hex: str, page_break: bo
 
 
 def _add_drive_link_bar(doc: Document, label: str, url: str) -> None:
-    """One Google Drive link bar — mirrors routes/synopsis.py's gallery-bar
-    pattern exactly (same A5C9E8 shading, same 📷 emoji convention, 10pt Lora
-    text), just with an entry-level label instead of a per-week one."""
+    """One Google Drive link bar, placed directly under its section heading.
+    Same A5C9E8 shading / 📷 convention as routes/synopsis.py's gallery bar,
+    but the "Google Drive link" label is set large and bold on its own line so
+    it stands out in the doc; the URL itself stays at 10pt below it."""
     p_link = _para(doc, spc_b=4, spc_a=8)
     pPr = p_link._p.get_or_add_pPr()
     shd = OxmlElement('w:shd')
@@ -419,8 +424,20 @@ def _add_drive_link_bar(doc: Document, label: str, url: str) -> None:
     shd.set(_qn('w:color'), 'auto')
     shd.set(_qn('w:fill'), 'A5C9E8')
     pPr.append(shd)
-    _run(p_link, f'📷  Google Drive for {label} — ', size_pt=10)
+    _run(p_link, f'📷  Google Drive link for {label}', bold=True, size_pt=15)
+    p_link.add_run().add_break()
     _add_hyperlink(p_link, url, url, size_pt=10, bold=True)
+
+
+def _add_intro(doc: Document, title: str, text: str) -> None:
+    """Admin-written monthly intro paragraph — sits between the title/logo
+    block and the first section heading of the After School newsletter."""
+    if title:
+        p_title = _para(doc, spc_b=4, spc_a=6)
+        _run(p_title, title, bold=True, size_pt=16)
+    if text:
+        p_text = _para(doc, spc_b=2, spc_a=12, line=1.5, align=WD_ALIGN_PARAGRAPH.JUSTIFY)
+        _add_md_text(p_text, text, size_pt=11)
 
 
 def _add_block_entry(doc: Document, block: dict, *, week_index: int, label_text: str) -> None:
@@ -464,11 +481,16 @@ def _build_after_school_doc(*, grade_label: str, month: dict, entry: Optional[di
         school_year_label=school_year_label,
     )
 
+    intro_title = (month.get(MF.INTRO_TITLE) or '').strip()
+    intro_text = (month.get(MF.INTRO_TEXT) or '').strip()
+    if intro_title or intro_text:
+        _add_intro(doc, intro_title, intro_text)
+
+    _add_section_heading(doc, AFTER_SCHOOL_CLASS_TYPE, band_hex, page_break=False)
+
     drive_link = (entry or {}).get(EF.DRIVE_LINK)
     if drive_link:
         _add_drive_link_bar(doc, 'Class Photos', drive_link)
-
-    _add_section_heading(doc, AFTER_SCHOOL_CLASS_TYPE, band_hex, page_break=False)
 
     blocks = (entry or {}).get(EF.BLOCKS) or []
     if blocks:
@@ -501,17 +523,14 @@ def _build_eca_doc(*, grade_label: str, month: dict, entries_by_type: dict) -> b
         school_year_label=school_year_label,
     )
 
-    # All Google Drive link bars grouped together at the very top of the doc —
-    # before any ECA's section heading — not one bar per section/page.
-    for eca_type in ECA_TYPE_ORDER:
-        link_entry = entries_by_type.get(eca_type)
-        drive_link = (link_entry or {}).get(EF.DRIVE_LINK)
-        if drive_link:
-            _add_drive_link_bar(doc, eca_type, drive_link)
-
     for idx, eca_type in enumerate(ECA_TYPE_ORDER):
         entry = entries_by_type.get(eca_type)
         _add_section_heading(doc, eca_type, band_hex, page_break=(idx > 0))
+
+        # Each ECA's Google Drive link sits directly under its own heading.
+        drive_link = (entry or {}).get(EF.DRIVE_LINK)
+        if drive_link:
+            _add_drive_link_bar(doc, eca_type, drive_link)
 
         blocks = (entry or {}).get(EF.BLOCKS) or []
         if blocks:
@@ -566,6 +585,8 @@ async def download_eca_doc(
     if grade_slug not in GRADE_SLUG_TO_LABEL:
         raise HTTPException(404, "Unknown grade")
     grade_label = GRADE_SLUG_TO_LABEL[grade_slug]
+    if grade_label in GRADES_WITHOUT_ECA:
+        raise HTTPException(400, f"{grade_label} has no ECAs")
     month = await firebase.get_month(month_id)
     if not month:
         raise HTTPException(404, "Month not found")

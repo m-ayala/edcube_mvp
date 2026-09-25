@@ -42,6 +42,7 @@ export default function BlockFields({
   blockIndex,
   titlePlaceholder = 'Title (optional)',
   descPlaceholder = 'What happened?',
+  showPhotos = true, // false for the admin's monthly intro (title + description only)
 }) {
   const [uploading, setUploading] = useState(false);
   const [addMenuOpen, setAddMenuOpen] = useState(false);
@@ -129,7 +130,7 @@ export default function BlockFields({
         onBlur={blurField}
       />
 
-      <div style={{ marginTop: 12 }}>
+      {showPhotos && <div style={{ marginTop: 12 }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 6 }}>
           {photoUrls.map((url, i) => (
             <div key={i} style={{ position: 'relative', width: 72, height: 72, borderRadius: 10, overflow: 'hidden', flexShrink: 0 }}>
@@ -213,7 +214,7 @@ export default function BlockFields({
         <div style={{ fontSize: 11, color: '#8b7355' }}>
           {photoCount} of {PHOTO_MAX} photos
         </div>
-      </div>
+      </div>}
     </div>
   );
 }
