@@ -45,6 +45,10 @@ const lookupEntry = (entriesByType, type) => {
 // month-level intro editor, not a grade.
 const INTRO_OPTION = '__intro__';
 
+// Same shape EntryFormView.jsx starts a teacher with — lets the admin fill in
+// an entry the teacher hasn't submitted yet.
+const blankBlock = () => ({ week: null, title: '', raw_text: '', photo_urls: [] });
+
 export default function AdminClassView({ currentUser, monthId, monthLabel, month, onMonthPatched }) {
   const [grade, setGrade] = useState(GRADE_OPTIONS[0]);
   const [entriesByType, setEntriesByType] = useState({});
@@ -94,11 +98,17 @@ export default function AdminClassView({ currentUser, monthId, monthLabel, month
   const saveEdit = async () => {
     if (!editing) return;
     const entry = lookupEntry(entriesByType, editing.type);
-    if (!entry) return;
-    const nextBlocks = (entry.blocks || []).map((b, i) => (i === editing.blockIndex ? { ...b, ...editDraft } : b));
+    const existingBlocks = entry?.blocks?.length ? entry.blocks : [blankBlock()];
+    const nextBlocks = existingBlocks.map((b, i) => (i === editing.blockIndex ? { ...b, ...editDraft } : b));
     setSaving(true);
     try {
-      await saveEntry({ grade: entry.grade || grade, synopsisType: editing.type, monthId, blocks: nextBlocks });
+      await saveEntry({
+        grade: entry?.grade || grade,
+        synopsisType: editing.type,
+        monthId,
+        blocks: nextBlocks,
+        driveLink: entry?.drive_link || '',
+      });
       cancelEdit();
       await load();
     } catch (err) {
@@ -321,13 +331,14 @@ export default function AdminClassView({ currentUser, monthId, monthLabel, month
                       )}
                     </div>
 
-                    {!entry || !entry.blocks?.length ? (
-                      <div style={{ fontSize: 13, color: '#8b7355', padding: '8px 0' }}>Nothing submitted yet.</div>
-                    ) : (() => {
+                    {(() => {
                       // Every entry has exactly one block now. If stale
                       // multi-block test data from before this change is
-                      // still present, only render/edit the first one.
-                      const block = entry.blocks[0];
+                      // still present, only render/edit the first one. If the
+                      // teacher hasn't submitted anything, fall back to a
+                      // blank block so the admin can still fill it in.
+                      const hasBlock = !!entry?.blocks?.length;
+                      const block = hasBlock ? entry.blocks[0] : blankBlock();
                       const idx = 0;
                       const isEditingThis = editing?.type === type && editing.blockIndex === idx;
                       return (
@@ -386,6 +397,11 @@ export default function AdminClassView({ currentUser, monthId, monthLabel, month
                             </>
                           ) : (
                             <>
+                              {!hasBlock && (
+                                <div style={{ fontSize: 13, color: '#8b7355', padding: '4px 0' }}>
+                                  Nothing submitted yet — use the pencil to add a title and description.
+                                </div>
+                              )}
                               {block.raw_text && (
                                 <div style={{ fontSize: 13, color: '#3a352e', lineHeight: 1.6, whiteSpace: 'pre-wrap', marginBottom: 8 }}>
                                   {block.raw_text}

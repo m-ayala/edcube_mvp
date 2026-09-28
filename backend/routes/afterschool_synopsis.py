@@ -88,17 +88,42 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/afterschool-synopsis", tags=["afterschool_synopsis"])
 firebase = FirebaseService()
 
+# Deliberately different from the summer camp ENHANCE_SYSTEM_PROMPT in
+# synopsis.py: after-school synopses showcase everything students covered, so
+# this prompt must be comprehensive and structured, never condensed. Output
+# formatting is limited to **bold**, "•" bullets and line breaks because that is
+# all the textarea and the DOCX export (_add_md_text) render cleanly.
 AFTERSCHOOL_ENHANCE_SYSTEM_PROMPT = (
-    "You help teachers write clear, friendly after-school program summaries for parents "
-    "at a K-6 after-school and enrichment program. Paraphrase the teacher's note in plain, "
-    "warm language. Rules:\n"
-    "- Only include what the teacher wrote. Do not add, invent, or elaborate on anything.\n"
-    "- Keep it concise: 1 to 2 short paragraphs.\n"
-    "- Do not use em dashes (—). Use commas or short sentences instead.\n"
-    "- Add 1 to 2 relevant emojis placed naturally within the text.\n"
-    "- Bold 1 to 2 key phrases using markdown bold (**like this**).\n"
-    "- Keep a warm, first-person plural voice (e.g. 'we practiced...', 'our students...').\n"
-    "- Return only the paraphrased text, no preamble, no quotes around it."
+    "You help teachers turn their notes into polished, parent-facing summaries for a K-6 "
+    "after-school and enrichment program. The goal is to showcase EVERYTHING the students "
+    "learned and did, so the result must be comprehensive, not a condensed summary.\n\n"
+    "Completeness (most important):\n"
+    "- Keep every single piece of information the teacher wrote: every concept, idea, skill, "
+    "activity, project, tool, material, book, game, name, number, date, and outcome.\n"
+    "- Never drop, merge away, or generalize a detail to make the text shorter. If the teacher "
+    "listed five items, all five must appear. Length is not a concern.\n"
+    "- Do not add, invent, or elaborate on anything the teacher did not write.\n\n"
+    "Style:\n"
+    "- Paraphrase only to make the writing professional, clean, and easy to read, and fix "
+    "spelling and grammar.\n"
+    "- Use a warm, first-person plural voice (e.g. 'we practiced...', 'our students...').\n"
+    "- Do not use em dashes (—). Use commas or short sentences instead.\n\n"
+    "Structure:\n"
+    "- Open with one short sentence introducing what the class explored.\n"
+    "- Then group the content into clear sections that fit the material, such as "
+    "Concepts & Ideas, Skills Practiced, Activities & Projects (only use sections the "
+    "teacher's note actually supports).\n"
+    "- Put each section label on its own line in bold with a fitting emoji, e.g. "
+    "'🧠 **Concepts & Ideas**'.\n"
+    "- Under each label, list the items as bullet lines starting with '• ', one item per line, "
+    "each a short, complete phrase or sentence.\n"
+    "- Leave a blank line between sections.\n"
+    "- If the note is very short and covers only one idea, a single well-written paragraph "
+    "is fine instead of sections.\n"
+    "- Use relevant emojis on section labels and where they naturally fit; do not overdo it.\n"
+    "- Formatting is limited to **bold**, '• ' bullets, and line breaks. Do not use '#' "
+    "headings, '-' or '*' list markers, numbered lists, or tables.\n\n"
+    "Return only the finished text, with no preamble and no quotes around it."
 )
 
 
@@ -198,7 +223,7 @@ async def enhance_text(body: EnhanceTextRequest):
             prompt=body.raw_text,
             system_message=AFTERSCHOOL_ENHANCE_SYSTEM_PROMPT,
             json_mode=False,
-            temperature=0.7,
+            temperature=0.3,
         )
     except OpenAIServiceError as e:
         raise HTTPException(status_code=503, detail=str(e))
