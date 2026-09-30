@@ -441,8 +441,13 @@ def _add_section_heading(doc: Document, text: str, band_hex: str, page_break: bo
 def _add_drive_link_bar(doc: Document, label: str, url: str) -> None:
     """One Google Drive link bar, placed directly under its section heading.
     Same A5C9E8 shading / 📷 convention as routes/synopsis.py's gallery bar,
-    but the "Google Drive link" label is set large and bold on its own line so
-    it stands out in the doc; the URL itself stays at 10pt below it."""
+    but the "Google Drive link" label is set large and bold so it stands out in
+    the doc, and is itself the clickable hyperlink — the raw URL isn't shown."""
+    url = url.strip()
+    # A pasted "drive.google.com/..." with no scheme would become a broken
+    # relative link in Word, so default it to https.
+    if not re.match(r'^[a-zA-Z][a-zA-Z0-9+.-]*://', url):
+        url = f'https://{url}'
     p_link = _para(doc, spc_b=4, spc_a=8)
     pPr = p_link._p.get_or_add_pPr()
     shd = OxmlElement('w:shd')
@@ -450,9 +455,8 @@ def _add_drive_link_bar(doc: Document, label: str, url: str) -> None:
     shd.set(_qn('w:color'), 'auto')
     shd.set(_qn('w:fill'), 'A5C9E8')
     pPr.append(shd)
-    _run(p_link, f'📷  Google Drive link for {label}', bold=True, size_pt=15)
-    p_link.add_run().add_break()
-    _add_hyperlink(p_link, url, url, size_pt=10, bold=True)
+    _run(p_link, '📷  ', bold=True, size_pt=15)
+    _add_hyperlink(p_link, url, f'Google Drive link for {label}', size_pt=15, bold=True)
 
 
 # A line that is only a bold label, optionally led by an emoji — e.g.
