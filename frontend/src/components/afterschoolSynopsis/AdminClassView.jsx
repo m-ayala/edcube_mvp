@@ -14,7 +14,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { ChevronDown, ChevronRight, Pencil, Download, X, Check } from 'lucide-react';
 import {
   GRADE_OPTIONS,
-  GRADES_WITHOUT_ECA,
   SINGLE_BLOCK_TYPE,
   slugify,
   synopsisTypesForGrade,
@@ -22,8 +21,7 @@ import {
 import {
   getClassStatus,
   saveEntry,
-  downloadAfterSchoolDoc,
-  downloadEcaDoc,
+  downloadNewsletterDoc,
 } from '../../services/afterschoolSynopsisService';
 import BlockFields from './BlockFields';
 import AdminIntroView from './AdminIntroView';
@@ -40,6 +38,28 @@ const lookupEntry = (entriesByType, type) => {
   const slug = slugify(type);
   return entriesByType?.[slug] ?? entriesByType?.[slug.replace(/-/g, '_')] ?? null;
 };
+
+// Mirrors the backend newsletter export (_add_afterschool_md_text): a line
+// that is only a bold label (optionally emoji-led) is a section title, shown
+// bold and larger than the body; other **bold** spans render inline.
+const TITLE_LINE_RE = /^[^\p{L}\p{N}_*]*\*\*[^*]+\*\*\s*:?\s*$/u;
+
+const renderInlineBold = (line) =>
+  line.split('**').map((part, i) => (i % 2 === 1 ? <strong key={i}>{part}</strong> : part));
+
+const FormattedText = ({ text }) => (
+  <>
+    {text.split('\n').map((line, i) =>
+      TITLE_LINE_RE.test(line) ? (
+        <div key={i} style={{ fontSize: 15, fontWeight: 700, color: '#1C1917', marginTop: 4 }}>
+          {line.replace(/\*\*/g, '').trim()}
+        </div>
+      ) : (
+        <div key={i}>{line ? renderInlineBold(line) : ' '}</div>
+      )
+    )}
+  </>
+);
 
 // Sentinel value for the batch <select>'s "Intro paragraph" option — the
 // month-level intro editor, not a grade.
@@ -63,12 +83,11 @@ export default function AdminClassView({ currentUser, monthId, monthLabel, month
   const [driveLinkDraft, setDriveLinkDraft] = useState('');
   const [savingDriveLink, setSavingDriveLink] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [downloading, setDownloading] = useState(null); // 'after-school' | 'eca' | null
+  const [downloading, setDownloading] = useState(false);
 
   const isIntro = grade === INTRO_OPTION;
   const gradeSlug = slugify(grade);
   const synopsisTypes = synopsisTypesForGrade(grade);
-  const hasEca = !GRADES_WITHOUT_ECA.includes(grade);
 
   const load = useCallback(async () => {
     if (!monthId || isIntro) return;
@@ -147,22 +166,20 @@ export default function AdminClassView({ currentUser, monthId, monthLabel, month
 
   const driveLinkLabel = (type) => (type === SINGLE_BLOCK_TYPE ? 'Class Photos' : type);
 
-  const handleDownload = async (kind) => {
-    setDownloading(kind);
+  const handleDownload = async () => {
+    setDownloading(true);
     try {
-      const blob = kind === 'after-school'
-        ? await downloadAfterSchoolDoc(currentUser, gradeSlug, monthId)
-        : await downloadEcaDoc(currentUser, gradeSlug, monthId);
+      const blob = await downloadNewsletterDoc(currentUser, gradeSlug, monthId);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${gradeSlug}_${kind}_${monthId}.docx`;
+      a.download = `${gradeSlug}_newsletter_${monthId}.docx`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
       alert(`Download failed: ${err.message}`);
     } finally {
-      setDownloading(null);
+      setDownloading(false);
     }
   };
 
@@ -196,10 +213,10 @@ export default function AdminClassView({ currentUser, monthId, monthLabel, month
 
         <div style={{ flex: 1 }} />
 
-        {!isIntro && (<>
+        {!isIntro && (
         <button
-          onClick={() => handleDownload('after-school')}
-          disabled={downloading !== null}
+          onClick={handleDownload}
+          disabled={downloading}
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 6,
             padding: '9px 16px', borderRadius: 100, border: 'none', cursor: downloading ? 'not-allowed' : 'pointer',
@@ -207,21 +224,9 @@ export default function AdminClassView({ currentUser, monthId, monthLabel, month
             opacity: downloading ? 0.6 : 1,
           }}
         >
-          <Download size={14} /> {downloading === 'after-school' ? 'Downloading…' : 'After School newsletter'}
+          <Download size={14} /> {downloading ? 'Downloading…' : 'Download newsletter'}
         </button>
-        {hasEca && <button
-          onClick={() => handleDownload('eca')}
-          disabled={downloading !== null}
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            padding: '9px 16px', borderRadius: 100, border: 'none', cursor: downloading ? 'not-allowed' : 'pointer',
-            background: '#E8E0D5', color: '#5c4a32', fontSize: 13, fontWeight: 500, fontFamily: FONT,
-            opacity: downloading ? 0.6 : 1,
-          }}
-        >
-          <Download size={14} /> {downloading === 'eca' ? 'Downloading…' : 'ECA newsletter'}
-        </button>}
-        </>)}
+        )}
       </div>
 
       {isIntro ? (
@@ -343,20 +348,28 @@ export default function AdminClassView({ currentUser, monthId, monthLabel, month
                       const isEditingThis = editing?.type === type && editing.blockIndex === idx;
                       return (
                         <div style={{ paddingTop: 0 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                            <div style={{ fontSize: 13, fontWeight: 600, color: '#1C1917' }}>
-                              {block.title || 'This month'}
-                            </div>
-                            {!isEditingThis && (
+                          {/* Read-only title preview only when NOT editing —
+                              while editing, nothing sits above the Title
+                              field (a pasted-in paragraph title used to show
+                              here as uneditable text). Clamped so a long
+                              title can't take over the row. */}
+                          {!isEditingThis && (
+                            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
+                              <div style={{
+                                fontSize: 13, fontWeight: 600, color: '#1C1917',
+                                display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                              }}>
+                                {block.title || 'This month'}
+                              </div>
                               <button
                                 onClick={() => startEdit(type, idx, block)}
-                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8b7355', display: 'flex' }}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8b7355', display: 'flex', flexShrink: 0 }}
                                 title="Edit"
                               >
                                 <Pencil size={14} />
                               </button>
-                            )}
-                          </div>
+                            </div>
+                          )}
 
                           {isEditingThis ? (
                             <>
@@ -404,7 +417,7 @@ export default function AdminClassView({ currentUser, monthId, monthLabel, month
                               )}
                               {block.raw_text && (
                                 <div style={{ fontSize: 13, color: '#3a352e', lineHeight: 1.6, whiteSpace: 'pre-wrap', marginBottom: 8 }}>
-                                  {block.raw_text}
+                                  <FormattedText text={block.raw_text} />
                                 </div>
                               )}
                               {block.photo_urls?.length > 0 && (

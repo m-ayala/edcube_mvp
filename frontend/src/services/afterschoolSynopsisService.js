@@ -165,14 +165,9 @@ const downloadBlob = async (currentUser, url) => {
   return res.blob();
 };
 
-export const downloadAfterSchoolDoc = (currentUser, gradeSlug, monthId) =>
+// After School Class + all ECAs merged into one .docx.
+export const downloadNewsletterDoc = (currentUser, gradeSlug, monthId) =>
   downloadBlob(
     currentUser,
-    `${API_BASE}/classes/${encodeURIComponent(gradeSlug)}/download/after-school?month_id=${encodeURIComponent(monthId)}`
-  );
-
-export const downloadEcaDoc = (currentUser, gradeSlug, monthId) =>
-  downloadBlob(
-    currentUser,
-    `${API_BASE}/classes/${encodeURIComponent(gradeSlug)}/download/eca?month_id=${encodeURIComponent(monthId)}`
+    `${API_BASE}/classes/${encodeURIComponent(gradeSlug)}/download/newsletter?month_id=${encodeURIComponent(monthId)}`
   );

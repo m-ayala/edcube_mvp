@@ -21,6 +21,7 @@ import hmac
 import io
 import logging
 import os as _os
+import re
 import uuid
 from datetime import datetime
 from typing import Optional
@@ -454,6 +455,28 @@ def _add_drive_link_bar(doc: Document, label: str, url: str) -> None:
     _add_hyperlink(p_link, url, url, size_pt=10, bold=True)
 
 
+# A line that is only a bold label, optionally led by an emoji — e.g.
+# "🧠 **Concepts & Ideas**" from AFTERSCHOOL_ENHANCE_SYSTEM_PROMPT's section
+# labels, or a teacher-typed "**Highlights:**".
+_TITLE_LINE_RE = re.compile(r'^[^\w*]*\*\*[^*]+\*\*\s*:?\s*$')
+
+_BODY_SIZE_PT = 11
+_TITLE_SIZE_PT = 13
+
+
+def _add_afterschool_md_text(para, text: str) -> None:
+    """Like routes/synopsis.py's _add_md_text, but title lines are set bold at
+    a larger size than the body so section labels stand out in the doc."""
+    lines = (text or '').split('\n')
+    for i, line in enumerate(lines):
+        if _TITLE_LINE_RE.match(line):
+            _run(para, line.replace('**', '').strip(), bold=True, size_pt=_TITLE_SIZE_PT)
+        else:
+            _add_md_text(para, line, size_pt=_BODY_SIZE_PT)
+        if i < len(lines) - 1:
+            para.add_run().add_break()
+
+
 def _add_intro(doc: Document, title: str, text: str) -> None:
     """Admin-written monthly intro paragraph — sits between the title/logo
     block and the first section heading of the After School newsletter."""
@@ -462,7 +485,7 @@ def _add_intro(doc: Document, title: str, text: str) -> None:
         _run(p_title, title, bold=True, size_pt=16)
     if text:
         p_text = _para(doc, spc_b=2, spc_a=12, line=1.5, align=WD_ALIGN_PARAGRAPH.JUSTIFY)
-        _add_md_text(p_text, text, size_pt=11)
+        _add_afterschool_md_text(p_text, text)
 
 
 def _add_block_entry(doc: Document, block: dict, *, week_index: int, label_text: str) -> None:
@@ -473,7 +496,7 @@ def _add_block_entry(doc: Document, block: dict, *, week_index: int, label_text:
     raw_text = (block or {}).get(BF.RAW_TEXT) or ''
     p_notes = _para(doc, spc_b=6, spc_a=12, line=1.5, align=WD_ALIGN_PARAGRAPH.JUSTIFY)
     if raw_text:
-        _add_md_text(p_notes, raw_text, size_pt=11)
+        _add_afterschool_md_text(p_notes, raw_text)
     else:
         _run(p_notes, 'No notes submitted for this month.', size_pt=11)
 
@@ -492,6 +515,47 @@ def _add_block_entry(doc: Document, block: dict, *, week_index: int, label_text:
     _para_border_bottom(p_sep, 'e5e5e5', sz='2')
 
 
+def _add_entry_section(
+    doc: Document,
+    *,
+    synopsis_type: str,
+    drive_label: str,
+    entry: Optional[dict],
+    band_hex: str,
+    page_break: bool,
+) -> None:
+    """One newsletter section: heading, its Google Drive link bar directly
+    under it, then the entry's single title+description+photos block."""
+    _add_section_heading(doc, synopsis_type, band_hex, page_break=page_break)
+
+    drive_link = (entry or {}).get(EF.DRIVE_LINK)
+    if drive_link:
+        _add_drive_link_bar(doc, drive_label, drive_link)
+
+    blocks = (entry or {}).get(EF.BLOCKS) or []
+    if blocks:
+        block = blocks[0]
+        label_text = block.get(BF.TITLE) or synopsis_type
+        _add_block_entry(doc, block, week_index=0, label_text=label_text)
+    else:
+        p_notes = _para(doc, spc_b=6, spc_a=12, line=1.5, align=WD_ALIGN_PARAGRAPH.JUSTIFY)
+        _run(p_notes, 'No notes submitted for this month.', size_pt=11)
+
+
+def _add_grade_intro(doc: Document, grade_label: str, month: dict) -> None:
+    intro_title = (month.get(MF.INTRO_TITLE) or '').strip()
+    intro_text = (month.get(MF.INTRO_TEXT) or '').strip()
+    if intro_title or intro_text:
+        _add_intro(doc, intro_title, intro_text)
+
+
+def _doc_bytes(doc: Document) -> bytes:
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+    return buf.read()
+
+
 def _build_after_school_doc(*, grade_label: str, month: dict, entry: Optional[dict]) -> bytes:
     """After School Class newsletter — one section, one entry block."""
     band_hex = _resolve_band_color(month)
@@ -505,31 +569,12 @@ def _build_after_school_doc(*, grade_label: str, month: dict, entry: Optional[di
         meta_text=f'After School Class · {month_label}',
         school_year_label=school_year_label,
     )
-
-    intro_title = (month.get(MF.INTRO_TITLE) or '').strip()
-    intro_text = (month.get(MF.INTRO_TEXT) or '').strip()
-    if intro_title or intro_text:
-        _add_intro(doc, intro_title, intro_text)
-
-    _add_section_heading(doc, AFTER_SCHOOL_CLASS_TYPE, band_hex, page_break=False)
-
-    drive_link = (entry or {}).get(EF.DRIVE_LINK)
-    if drive_link:
-        _add_drive_link_bar(doc, 'Class Photos', drive_link)
-
-    blocks = (entry or {}).get(EF.BLOCKS) or []
-    if blocks:
-        block = blocks[0]
-        label_text = block.get(BF.TITLE) or AFTER_SCHOOL_CLASS_TYPE
-        _add_block_entry(doc, block, week_index=0, label_text=label_text)
-    else:
-        p_notes = _para(doc, spc_b=6, spc_a=12, line=1.5, align=WD_ALIGN_PARAGRAPH.JUSTIFY)
-        _run(p_notes, 'No notes submitted for this month.', size_pt=11)
-
-    buf = io.BytesIO()
-    doc.save(buf)
-    buf.seek(0)
-    return buf.read()
+    _add_grade_intro(doc, grade_label, month)
+    _add_entry_section(
+        doc, synopsis_type=AFTER_SCHOOL_CLASS_TYPE, drive_label='Class Photos',
+        entry=entry, band_hex=band_hex, page_break=False,
+    )
+    return _doc_bytes(doc)
 
 
 def _build_eca_doc(*, grade_label: str, month: dict, entries_by_type: dict) -> bytes:
@@ -547,29 +592,44 @@ def _build_eca_doc(*, grade_label: str, month: dict, entries_by_type: dict) -> b
         meta_text=f'ECA Newsletter · {month_label}',
         school_year_label=school_year_label,
     )
-
     for idx, eca_type in enumerate(ECA_TYPE_ORDER):
-        entry = entries_by_type.get(eca_type)
-        _add_section_heading(doc, eca_type, band_hex, page_break=(idx > 0))
+        _add_entry_section(
+            doc, synopsis_type=eca_type, drive_label=eca_type,
+            entry=entries_by_type.get(eca_type), band_hex=band_hex, page_break=(idx > 0),
+        )
+    return _doc_bytes(doc)
 
-        # Each ECA's Google Drive link sits directly under its own heading.
-        drive_link = (entry or {}).get(EF.DRIVE_LINK)
-        if drive_link:
-            _add_drive_link_bar(doc, eca_type, drive_link)
 
-        blocks = (entry or {}).get(EF.BLOCKS) or []
-        if blocks:
-            block = blocks[0]
-            label_text = block.get(BF.TITLE) or eca_type
-            _add_block_entry(doc, block, week_index=0, label_text=label_text)
-        else:
-            p_notes = _para(doc, spc_b=6, spc_a=12, line=1.5, align=WD_ALIGN_PARAGRAPH.JUSTIFY)
-            _run(p_notes, 'No notes submitted for this month.', size_pt=11)
+def _build_newsletter_doc(
+    *, grade_label: str, month: dict, after_school_entry: Optional[dict], eca_entries_by_type: dict
+) -> bytes:
+    """Combined newsletter — the After School Class section followed by every
+    ECA section (fixed order, each on a new page) in a single document. Grades
+    in GRADES_WITHOUT_ECA get just the After School section."""
+    band_hex = _resolve_band_color(month)
+    month_label = month.get(MF.LABEL, '')
+    school_year_label = _school_year_label(month.get(MF.YEAR), month.get(MF.MONTH))
+    has_eca = grade_label not in GRADES_WITHOUT_ECA
 
-    buf = io.BytesIO()
-    doc.save(buf)
-    buf.seek(0)
-    return buf.read()
+    doc = Document()
+    _add_header_footer_title_block(
+        doc,
+        grade_label=grade_label,
+        meta_text=f'{"After School & ECA Newsletter" if has_eca else "After School Class"} · {month_label}',
+        school_year_label=school_year_label,
+    )
+    _add_grade_intro(doc, grade_label, month)
+    _add_entry_section(
+        doc, synopsis_type=AFTER_SCHOOL_CLASS_TYPE, drive_label='Class Photos',
+        entry=after_school_entry, band_hex=band_hex, page_break=False,
+    )
+    if has_eca:
+        for eca_type in ECA_TYPE_ORDER:
+            _add_entry_section(
+                doc, synopsis_type=eca_type, drive_label=eca_type,
+                entry=eca_entries_by_type.get(eca_type), band_hex=band_hex, page_break=True,
+            )
+    return _doc_bytes(doc)
 
 
 @router.get("/classes/{grade_slug}/download/after-school")
@@ -627,6 +687,47 @@ async def download_eca_doc(
     )
     slug = slugify(grade_label)
     filename = f'eca_{slug}_{month_id}.docx'
+    return Response(
+        content=doc_bytes,
+        media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/classes/{grade_slug}/download/newsletter")
+async def download_newsletter_doc(
+    grade_slug: str,
+    month_id: str = Query(...),
+    admin: dict = Depends(verify_icc_admin),
+):
+    """Single download for a grade: After School Class + all ECAs in one doc.
+    The separate /download/after-school and /download/eca routes above are
+    kept for backward compatibility."""
+    if grade_slug not in GRADE_SLUG_TO_LABEL:
+        raise HTTPException(404, "Unknown grade")
+    grade_label = GRADE_SLUG_TO_LABEL[grade_slug]
+    month = await firebase.get_month(month_id)
+    if not month:
+        raise HTTPException(404, "Month not found")
+
+    after_school_entry = await firebase.get_afterschool_entry(
+        f"{grade_slug}__{slugify(AFTER_SCHOOL_CLASS_TYPE)}__{month_id}"
+    )
+    eca_entries_by_type = {}
+    if grade_label not in GRADES_WITHOUT_ECA:
+        for eca_type in ECA_TYPE_ORDER:
+            entry_id = f"{grade_slug}__{slugify(eca_type)}__{month_id}"
+            eca_entries_by_type[eca_type] = await firebase.get_afterschool_entry(entry_id)
+
+    doc_bytes = await run_in_threadpool(
+        _build_newsletter_doc,
+        grade_label=grade_label,
+        month=month,
+        after_school_entry=after_school_entry,
+        eca_entries_by_type=eca_entries_by_type,
+    )
+    slug = slugify(grade_label)
+    filename = f'newsletter_{slug}_{month_id}.docx'
     return Response(
         content=doc_bytes,
         media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',

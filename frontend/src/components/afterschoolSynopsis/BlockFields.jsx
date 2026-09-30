@@ -106,12 +106,16 @@ export default function BlockFields({
 
   return (
     <div>
-      <input
-        type="text"
+      {/* Textarea (not a one-line input) that grows with its content, so a
+          long title — e.g. a paragraph pasted in by mistake — stays fully
+          visible and editable. Enter is blocked to keep titles single-line. */}
+      <textarea
         value={value.title || ''}
-        onChange={(e) => onChange('title', e.target.value)}
+        onChange={(e) => onChange('title', e.target.value.replace(/\n/g, ' '))}
+        onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
         placeholder={titlePlaceholder}
-        style={{ ...fieldInput, marginBottom: 10, fontWeight: 500 }}
+        rows={Math.min(8, Math.max(1, Math.ceil((value.title || '').length / 70)))}
+        style={{ ...fieldInput, marginBottom: 10, fontWeight: 500, resize: 'vertical', lineHeight: 1.5, display: 'block' }}
         onFocus={focusField}
         onBlur={blurField}
       />
@@ -120,7 +124,9 @@ export default function BlockFields({
         value={value.raw_text || ''}
         onChange={(e) => onChange('raw_text', e.target.value)}
         placeholder={descPlaceholder}
-        rows={4}
+        // Grow with the text (capped) so long/AI-enhanced paragraphs stay
+        // fully visible and editable instead of hiding in a 4-line box.
+        rows={Math.min(20, Math.max(4, (value.raw_text || '').split('\n').length + 1))}
         style={{
           ...fieldInput,
           padding: '14px 16px', borderRadius: 12,
