@@ -1,10 +1,17 @@
 // Block educational category taxonomy
 // Used for labelling blocks and guiding Edo generation
-// Sourced from Firestore (kb_objectives), cached in memory since this data
-// changes rarely. Colors are presentation-only and stay local to the frontend.
+// Sourced from Firestore (EdCube/knowledge_base/pedagogy, formerly the
+// top-level kb_objectives collection -- tasks/firestore-reorg-spec.md
+// TASK-008), cached in memory since this data changes rarely. Colors are
+// presentation-only and stay local to the frontend.
+//
+// NOTE: this is still a direct Firestore read from the frontend, which
+// TASK-001 will replace with a backend-exposed endpoint. This change is a
+// path-only fix, not a resolution of that boundary issue.
 
-import { collection, getDocs } from 'firebase/firestore';
+import { getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
+import { kbCol } from '../firebase/paths';
 
 const CATEGORY_COLORS = {
   thinking_self_awareness: { bg: '#F3EFFF', text: '#7C3AED', border: '#DDD6FE' },
@@ -121,7 +128,7 @@ let categories = [
 
 async function loadObjectivesFromFirestore() {
   try {
-    const snap = await getDocs(collection(db, 'kb_objectives'));
+    const snap = await getDocs(kbCol(db, 'pedagogy'));
     if (snap.empty) return;
     categories = snap.docs.map(d => {
       const data = d.data();
@@ -134,7 +141,7 @@ async function loadObjectivesFromFirestore() {
       };
     });
   } catch (err) {
-    console.error('Failed to load kb_objectives from Firestore, using fallback taxonomy', err);
+    console.error('Failed to load EdCube/knowledge_base/pedagogy from Firestore, using fallback taxonomy', err);
   }
 }
 

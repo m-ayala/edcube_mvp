@@ -13,7 +13,7 @@ import uvicorn
 from routes.file_upload import router as file_upload_router
 from routes.uploads import router as uploads_router
 import os
-from routes import curriculum, resources, topics, teachers, contact, notifications, synopsis, afterschool_synopsis
+from routes import curriculum, resources, topics, teachers, contact, notifications, synopsis, afterschool_synopsis, orgs
 
 app = FastAPI(title="EdCube API")
 
@@ -45,6 +45,7 @@ app.include_router(notifications.router, tags=["notifications"])
 app.include_router(uploads_router, tags=["uploads"])
 app.include_router(synopsis.router, tags=["synopsis"])
 app.include_router(afterschool_synopsis.router, tags=["afterschool_synopsis"])
+app.include_router(orgs.router, tags=["orgs"])
 
 ALLOWED_ORIGINS = {
     "http://localhost:5173", "http://localhost:5174", "http://localhost:5175",

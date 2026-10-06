@@ -17,7 +17,7 @@ const timeAgo = (iso) => {
 };
 
 const NotificationBell = () => {
-  const { notifications, unreadCount, refresh, markRead, markAllRead, remove } = useNotifications();
+  const { notifications, unreadCount, openAndMarkSeen, remove } = useNotifications();
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const ref = useRef(null);
@@ -35,13 +35,14 @@ const NotificationBell = () => {
     const opening = !open;
     setOpen(opening);
     if (opening) {
-      await markAllRead(); // mark all read first, then refresh to sync with server
-      refresh();
+      // Load + display the current list, then mark everything just shown as
+      // seen (deleted server-side) -- decision 6. Still visible locally
+      // until the bell closes; gone for good the next time it opens.
+      await openAndMarkSeen();
     }
   };
 
-  const handleUserClick = (fromUid, notifId) => {
-    markRead(notifId);
+  const handleUserClick = (fromUid) => {
     setOpen(false);
     navigate(`/profile/${fromUid}`);
   };
@@ -157,7 +158,10 @@ const NotificationBell = () => {
                     gap: '10px',
                     padding: '12px 16px',
                     borderBottom: '1px solid #F5F5F4',
-                    backgroundColor: notif.status === 'unread' ? '#FAFAF9' : '#FFFFFF',
+                    // Every notification returned by GET / is unseen by
+                    // definition (delete-on-seen, no `status` field any
+                    // more) -- so this styling always applies here.
+                    backgroundColor: '#FAFAF9',
                     transition: 'background-color 0.1s',
                   }}
                 >
@@ -166,7 +170,7 @@ const NotificationBell = () => {
                     width: '7px',
                     height: '7px',
                     borderRadius: '50%',
-                    backgroundColor: notif.status === 'unread' ? '#EF4444' : 'transparent',
+                    backgroundColor: '#EF4444',
                     flexShrink: 0,
                     marginTop: '5px',
                   }} />
@@ -175,7 +179,7 @@ const NotificationBell = () => {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ margin: 0, fontSize: '14.3px', color: '#1C1917', lineHeight: '1.5' }}>
                       <button
-                        onClick={() => handleUserClick(notif.fromUid, notif.id)}
+                        onClick={() => handleUserClick(notif.fromUid)}
                         style={{
                           background: 'none',
                           border: 'none',

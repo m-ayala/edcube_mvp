@@ -3,7 +3,7 @@ Topic/Section routes for on-demand population (Phase 2)
 """
 
 import logging
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional, List
@@ -12,6 +12,7 @@ import asyncio
 
 from services.orchestrator import CurriculumOrchestrator
 from services.firebase_service import FirebaseService
+from routes.teachers import require_org, require_org_for_uid
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -40,20 +41,26 @@ class GenerateVideosRequest(BaseModel):
 
 
 @router.post("/populate-section")
-async def populate_section(request: PopulateSectionRequest):
+async def populate_section(request: PopulateSectionRequest, current_user: dict = Depends(require_org)):
     """
     Populate a single section with video resources (Phase 2 on-demand).
-    
+
     Called when teacher drags a box into the course outline.
     Runs Phase 2 for JUST this section and returns the populated section.
-    
+
+    Requires a Firebase token (tasks/firestore-reorg-spec.md Round 2, section B):
+    the org comes from the token and is passed straight through to
+    firebase.update_section, which is now a direct org-scoped path write --
+    no cross-org collection_group lookup.
+
     Args:
         request: Section data from the dragged box
-    
+
     Returns:
         StreamingResponse: Progress updates via SSE, final populated section
     """
-    
+    org = current_user["org"]
+
     async def generate():
         """Generator function for SSE streaming"""
         try:
@@ -85,7 +92,8 @@ async def populate_section(request: PopulateSectionRequest):
             await firebase.update_section(
                 curriculum_id=request.curriculum_id,
                 section_id=request.section_id,
-                section_data=populated_section
+                section_data=populated_section,
+                org=org,
             )
             
             # Complete - send the populated section
@@ -122,8 +130,12 @@ async def get_section(curriculum_id: str, section_id: str, teacherUid: str):
     
     Returns:
         dict: Section data with video resources
+
+    NOTE: still takes a raw teacherUid instead of an Authorization token --
+    see this task's report for the TASK-008 frontend follow-up.
     """
     try:
+        require_org_for_uid(teacherUid)  # 403s cleanly if the email isn't registered with any org
         section = await firebase.get_section(curriculum_id, section_id, teacherUid)
         
         if not section:

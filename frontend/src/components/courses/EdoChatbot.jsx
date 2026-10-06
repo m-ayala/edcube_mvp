@@ -400,11 +400,16 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
   const sendToAI = async (userText) => {
     setIsTyping(true);
     try {
+      // POST /curriculum/chat now requires a Firebase ID token (the backend
+      // resolves the org from it) -- tasks/firestore-reorg-spec.md Round 2,
+      // section B.
+      const idToken = await currentUser?.getIdToken?.();
       const data = await chatWithEdo({
         message: userText,
         context: buildAPIContext(),
         conversationHistory: getHistory(),
         teacherUid: currentUser?.uid,
+        idToken,
       });
       if (data.type === 'conversation') {
         addTextMessage('ai-text', data.message || "I'm not sure how to help with that — could you tell me more?");

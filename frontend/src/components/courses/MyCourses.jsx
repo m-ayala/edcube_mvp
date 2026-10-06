@@ -18,7 +18,7 @@ import { Plus, FolderPlus, ChevronRight } from 'lucide-react';
 const getCourseId = (curriculum) => curriculum.courseId || curriculum.id;
 
 const MyCourses = () => {
-  const { currentUser } = useAuth();
+  const { currentUser, org } = useAuth();
   const navigate = useNavigate();
 
   const [curricula, setCurricula] = useState([]);
@@ -34,12 +34,12 @@ const MyCourses = () => {
   const [folderModal, setFolderModal] = useState(null);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { loadData(); }, [currentUser]);
+  useEffect(() => { if (org) loadData(); }, [currentUser, org]);
 
   const loadData = async () => {
     try {
       setLoading(true);
-      const curriculaResult = await getTeacherCurricula(currentUser.uid);
+      const curriculaResult = await getTeacherCurricula(currentUser.uid, org);
       setCurricula(curriculaResult.curricula);
     } catch (error) {
       console.error('Error loading curricula:', error);
@@ -48,7 +48,7 @@ const MyCourses = () => {
       setLoading(false);
     }
     try {
-      const foldersResult = await getCourseFolders(currentUser.uid);
+      const foldersResult = await getCourseFolders(currentUser.uid, org);
       setFolders(foldersResult);
     } catch (error) {
       console.error('Error loading folders:', error);
@@ -147,7 +147,7 @@ const MyCourses = () => {
     collectDescendants(folderId);
 
     try {
-      await Promise.all([...toDelete].map(id => deleteCourseFolder(currentUser.uid, id)));
+      await Promise.all([...toDelete].map(id => deleteCourseFolder(currentUser.uid, org, id)));
       setFolders(prev => prev.filter(f => !toDelete.has(f.id)));
       if (folderPath.some(id => toDelete.has(id))) setFolderPath([]);
     } catch (error) {
@@ -160,7 +160,7 @@ const MyCourses = () => {
   const handleRemoveCourseFromFolder = async (courseId) => {
     if (!currentFolderId) return;
     try {
-      await removeCourseFromFolder(currentUser.uid, currentFolderId, courseId);
+      await removeCourseFromFolder(currentUser.uid, org, currentFolderId, courseId);
       setFolders(prev =>
         prev.map(f =>
           f.id === currentFolderId
@@ -187,7 +187,7 @@ const MyCourses = () => {
 
     const existingFolder = folders.find(f => (f.courseIds || []).includes(draggingCourseId));
     if (existingFolder && existingFolder.id !== folderId) {
-      await removeCourseFromFolder(currentUser.uid, existingFolder.id, draggingCourseId);
+      await removeCourseFromFolder(currentUser.uid, org, existingFolder.id, draggingCourseId);
       setFolders(prev =>
         prev.map(f =>
           f.id === existingFolder.id
@@ -201,7 +201,7 @@ const MyCourses = () => {
     if (targetFolder && (targetFolder.courseIds || []).includes(draggingCourseId)) return;
 
     try {
-      await addCourseToFolder(currentUser.uid, folderId, draggingCourseId);
+      await addCourseToFolder(currentUser.uid, org, folderId, draggingCourseId);
       setFolders(prev =>
         prev.map(f =>
           f.id === folderId
@@ -386,7 +386,7 @@ const MyCourses = () => {
           onConfirm={async () => {
             try {
               const { deleteCurriculum } = await import('../../firebase/dbService');
-              await deleteCurriculum(deleteModalData.id);
+              await deleteCurriculum(deleteModalData.id, org);
               setDeleteModalData(null);
               loadData();
             } catch (error) {

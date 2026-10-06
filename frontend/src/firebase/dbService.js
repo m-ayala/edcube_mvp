@@ -1,5 +1,4 @@
 import {
-  collection,
   doc,
   setDoc,
   getDoc,
@@ -14,40 +13,41 @@ import {
   updateDoc
 } from 'firebase/firestore';
 import { db } from './config';
+import { orgCol, orgSubDoc, teacherSubCol, teacherSubDoc } from './paths';
+
+// NOTE: every function here now takes `org` (the org_id resolved via
+// `checkEmailOrg` / `useAuth().org` -- see contexts/AuthContext.jsx) and
+// reads/writes under `Users/{org}/...` instead of the old top-level
+// collections (tasks/firestore-reorg-spec.md, TASK-008). There is no default
+// org -- callers must have a resolved org before calling any of these.
+//
+// `saveCurriculum` (the old direct-Firestore curriculum writer) was removed
+// here: it had no importers (curriculum creation/update goes through the
+// backend's /api/save-course and /api/update-course instead, which resolve
+// the org server-side) and its old 'curricula' path would have silently
+// written to the wrong place if it were ever called.
 
 /**
- * Save a new curriculum or update existing one
+ * Get a specific curriculum by ID
  */
-export const saveCurriculum = async (teacherUid, curriculumData, organizationId) => {
+export const getCurriculumById = async (curriculumId, org) => {
   try {
-    // Generate curriculum ID (use existing ID if updating, otherwise create new)
-    const curriculumId = curriculumData.id || doc(collection(db, 'curricula')).id;
-    
-    const curriculumDoc = {
-      teacherUid: teacherUid,
-      organizationId: organizationId,
-      courseName: curriculumData.courseName,
-      subject: curriculumData.subject || '',
-      topic: curriculumData.topic || '',
-      class: curriculumData.class,
-      timeDuration: curriculumData.timeDuration,
-      numWorksheets: curriculumData.numWorksheets || 0,
-      numActivities: curriculumData.numActivities || 0,
-      objectives: curriculumData.objectives || '',
-      sections: curriculumData.sections || [],
-      createdAt: curriculumData.createdAt || serverTimestamp(),
-      lastModified: serverTimestamp()
-    };
+    const docRef = orgSubDoc(db, org, 'curricula', curriculumId);
+    const docSnap = await getDoc(docRef);
 
-    await setDoc(doc(db, 'curricula', curriculumId), curriculumDoc);
-
-    return {
-      success: true,
-      curriculumId: curriculumId,
-      message: 'Curriculum saved successfully!'
-    };
+    if (docSnap.exists()) {
+      return {
+        success: true,
+        curriculum: {
+          id: docSnap.id,
+          ...docSnap.data()
+        }
+      };
+    } else {
+      throw new Error('Curriculum not found');
+    }
   } catch (error) {
-    console.error('Save curriculum error:', error);
+    console.error('Get curriculum error:', error);
     throw error;
   }
 };
@@ -55,10 +55,10 @@ export const saveCurriculum = async (teacherUid, curriculumData, organizationId)
 /**
  * Get all curricula for a specific teacher
  */
-export const getTeacherCurricula = async (teacherUid) => {
+export const getTeacherCurricula = async (teacherUid, org) => {
   try {
     const q = query(
-      collection(db, 'curricula'),
+      orgCol(db, org, 'curricula'),
       where('teacherUid', '==', teacherUid),
       orderBy('lastModified', 'desc')
     );
@@ -84,37 +84,12 @@ export const getTeacherCurricula = async (teacherUid) => {
 };
 
 /**
- * Get a specific curriculum by ID
- */
-export const getCurriculumById = async (curriculumId) => {
-  try {
-    const docRef = doc(db, 'curricula', curriculumId);
-    const docSnap = await getDoc(docRef);
-
-    if (docSnap.exists()) {
-      return {
-        success: true,
-        curriculum: {
-          id: docSnap.id,
-          ...docSnap.data()
-        }
-      };
-    } else {
-      throw new Error('Curriculum not found');
-    }
-  } catch (error) {
-    console.error('Get curriculum error:', error);
-    throw error;
-  }
-};
-
-/**
  * Delete a curriculum
  */
-export const deleteCurriculum = async (curriculumId) => {
+export const deleteCurriculum = async (curriculumId, org) => {
   try {
-    await deleteDoc(doc(db, 'curricula', curriculumId));
-    
+    await deleteDoc(orgSubDoc(db, org, 'curricula', curriculumId));
+
     return {
       success: true,
       message: 'Curriculum deleted successfully'
@@ -130,9 +105,9 @@ export const deleteCurriculum = async (curriculumId) => {
 /**
  * Get all library folders for a teacher
  */
-export const getLibraryFolders = async (teacherUid) => {
+export const getLibraryFolders = async (teacherUid, org) => {
   const q = query(
-    collection(db, 'teachers', teacherUid, 'libraryFolders'),
+    teacherSubCol(db, org, teacherUid, 'libraryFolders'),
     orderBy('createdAt', 'asc')
   );
   const snap = await getDocs(q);
@@ -142,8 +117,8 @@ export const getLibraryFolders = async (teacherUid) => {
 /**
  * Create a new library folder
  */
-export const createLibraryFolder = async (teacherUid, name) => {
-  const ref = doc(collection(db, 'teachers', teacherUid, 'libraryFolders'));
+export const createLibraryFolder = async (teacherUid, org, name) => {
+  const ref = doc(teacherSubCol(db, org, teacherUid, 'libraryFolders'));
   await setDoc(ref, {
     name,
     links: [],
@@ -155,14 +130,14 @@ export const createLibraryFolder = async (teacherUid, name) => {
 /**
  * Delete a library folder and all its links
  */
-export const deleteLibraryFolder = async (teacherUid, folderId) => {
-  await deleteDoc(doc(db, 'teachers', teacherUid, 'libraryFolders', folderId));
+export const deleteLibraryFolder = async (teacherUid, org, folderId) => {
+  await deleteDoc(teacherSubDoc(db, org, teacherUid, 'libraryFolders', folderId));
 };
 
 /**
  * Add a link to a folder
  */
-export const addLinkToFolder = async (teacherUid, folderId, linkData) => {
+export const addLinkToFolder = async (teacherUid, org, folderId, linkData) => {
   const link = {
     id: `link-${Date.now()}`,
     title: linkData.title,
@@ -170,7 +145,7 @@ export const addLinkToFolder = async (teacherUid, folderId, linkData) => {
     description: linkData.description || '',
     addedAt: new Date().toISOString()
   };
-  await updateDoc(doc(db, 'teachers', teacherUid, 'libraryFolders', folderId), {
+  await updateDoc(teacherSubDoc(db, org, teacherUid, 'libraryFolders', folderId), {
     links: arrayUnion(link)
   });
   return link;
@@ -179,8 +154,8 @@ export const addLinkToFolder = async (teacherUid, folderId, linkData) => {
 /**
  * Delete a link from a folder
  */
-export const deleteLinkFromFolder = async (teacherUid, folderId, link) => {
-  await updateDoc(doc(db, 'teachers', teacherUid, 'libraryFolders', folderId), {
+export const deleteLinkFromFolder = async (teacherUid, org, folderId, link) => {
+  await updateDoc(teacherSubDoc(db, org, teacherUid, 'libraryFolders', folderId), {
     links: arrayRemove(link)
   });
 };
@@ -188,31 +163,31 @@ export const deleteLinkFromFolder = async (teacherUid, folderId, link) => {
 /**
  * Rename a library folder
  */
-export const renameLibraryFolder = async (teacherUid, folderId, newName) => {
-  await updateDoc(doc(db, 'teachers', teacherUid, 'libraryFolders', folderId), {
+export const renameLibraryFolder = async (teacherUid, org, folderId, newName) => {
+  await updateDoc(teacherSubDoc(db, org, teacherUid, 'libraryFolders', folderId), {
     name: newName
   });
 };
 
 // ─── Course Folders ───────────────────────────────────────────────────────────
 
-export const getCourseFolders = async (teacherUid) => {
+export const getCourseFolders = async (teacherUid, org) => {
   const q = query(
-    collection(db, 'teachers', teacherUid, 'courseFolders'),
+    teacherSubCol(db, org, teacherUid, 'courseFolders'),
     orderBy('createdAt', 'asc')
   );
   const snap = await getDocs(q);
   return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 };
 
-export const createCourseFolder = async (teacherUid, name, parentId = null, extras = {}) => {
+export const createCourseFolder = async (teacherUid, org, name, parentId = null, extras = {}) => {
   const {
     description = '',
     labels = [],
     collaborators = [],
     color = null,
   } = extras;
-  const ref = doc(collection(db, 'teachers', teacherUid, 'courseFolders'));
+  const ref = doc(teacherSubCol(db, org, teacherUid, 'courseFolders'));
   const data = {
     name,
     courseIds: [],
@@ -227,30 +202,30 @@ export const createCourseFolder = async (teacherUid, name, parentId = null, extr
   return { id: ref.id, ...data, createdAt: null };
 };
 
-export const deleteCourseFolder = async (teacherUid, folderId) => {
-  await deleteDoc(doc(db, 'teachers', teacherUid, 'courseFolders', folderId));
+export const deleteCourseFolder = async (teacherUid, org, folderId) => {
+  await deleteDoc(teacherSubDoc(db, org, teacherUid, 'courseFolders', folderId));
 };
 
-export const renameCourseFolder = async (teacherUid, folderId, newName) => {
-  await updateDoc(doc(db, 'teachers', teacherUid, 'courseFolders', folderId), { name: newName });
+export const renameCourseFolder = async (teacherUid, org, folderId, newName) => {
+  await updateDoc(teacherSubDoc(db, org, teacherUid, 'courseFolders', folderId), { name: newName });
 };
 
 /**
  * Patch any editable fields on a course folder
  * (name, description, labels, collaborators, color).
  */
-export const updateCourseFolder = async (teacherUid, folderId, patch) => {
-  await updateDoc(doc(db, 'teachers', teacherUid, 'courseFolders', folderId), patch);
+export const updateCourseFolder = async (teacherUid, org, folderId, patch) => {
+  await updateDoc(teacherSubDoc(db, org, teacherUid, 'courseFolders', folderId), patch);
 };
 
-export const addCourseToFolder = async (teacherUid, folderId, courseId) => {
-  await updateDoc(doc(db, 'teachers', teacherUid, 'courseFolders', folderId), {
+export const addCourseToFolder = async (teacherUid, org, folderId, courseId) => {
+  await updateDoc(teacherSubDoc(db, org, teacherUid, 'courseFolders', folderId), {
     courseIds: arrayUnion(courseId)
   });
 };
 
-export const removeCourseFromFolder = async (teacherUid, folderId, courseId) => {
-  await updateDoc(doc(db, 'teachers', teacherUid, 'courseFolders', folderId), {
+export const removeCourseFromFolder = async (teacherUid, org, folderId, courseId) => {
+  await updateDoc(teacherSubDoc(db, org, teacherUid, 'courseFolders', folderId), {
     courseIds: arrayRemove(courseId)
   });
 };
@@ -260,9 +235,9 @@ export const removeCourseFromFolder = async (teacherUid, folderId, courseId) => 
 /**
  * Get teacher profile
  */
-export const getTeacherProfile = async (teacherUid) => {
+export const getTeacherProfile = async (teacherUid, org) => {
   try {
-    const docRef = doc(db, 'teachers', teacherUid);
+    const docRef = orgSubDoc(db, org, 'teachers', teacherUid);
     const docSnap = await getDoc(docRef);
 
     if (docSnap.exists()) {
@@ -278,3 +253,4 @@ export const getTeacherProfile = async (teacherUid) => {
     throw error;
   }
 };
+

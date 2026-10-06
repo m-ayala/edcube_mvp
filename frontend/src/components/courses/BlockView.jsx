@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { ExternalLink, Trash2, Plus, Sparkles, Loader2, Library, Check, X, Pencil, Clock, ChevronRight, BookOpen } from 'lucide-react';
 import { getLibraryFolders } from '../../firebase/dbService';
+import { useAuth } from '../../contexts/AuthContext';
 
 const TYPE_COLORS = {
   content:   { bg: '#EAF0FF', text: '#2A4A9A', border: '#BFD0FF', label: 'Content' },
@@ -142,6 +143,7 @@ const BlockView = ({
   handsOnResources,
   onNavigateToBlock,
 }) => {
+  const { org } = useAuth();
   const [localTitle, setLocalTitle] = useState(block?.title || '');
   const [localContent, setLocalContent] = useState(block?.content || '');
   const [localCategory] = useState(block?.category || '');
@@ -240,10 +242,10 @@ const BlockView = ({
   };
 
   const loadLibrary = async () => {
-    if (!currentUser?.uid) return;
+    if (!currentUser?.uid || !org) return;
     setLibraryLoading(true);
     try {
-      const folders = await getLibraryFolders(currentUser.uid);
+      const folders = await getLibraryFolders(currentUser.uid, org);
       setLibraryFolders(folders);
     } catch (e) {
       console.error('Library load failed:', e);

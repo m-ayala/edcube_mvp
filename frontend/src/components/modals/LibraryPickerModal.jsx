@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { X, ChevronRight, ChevronDown, FolderOpen, Folder, ExternalLink, BookMarked } from 'lucide-react';
 import { getLibraryFolders } from '../../firebase/dbService';
+import { useAuth } from '../../contexts/AuthContext';
 
 const colors = {
   accent: '#8b7355',
@@ -12,20 +13,21 @@ const colors = {
 };
 
 const LibraryPickerModal = ({ isOpen, onClose, onSelect, currentUser }) => {
+  const { org } = useAuth();
   const [folders, setFolders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expandedFolders, setExpandedFolders] = useState({});
 
   useEffect(() => {
-    if (isOpen && currentUser?.uid) {
+    if (isOpen && currentUser?.uid && org) {
       loadFolders();
     }
-  }, [isOpen, currentUser]);
+  }, [isOpen, currentUser, org]);
 
   const loadFolders = async () => {
     setLoading(true);
     try {
-      const data = await getLibraryFolders(currentUser.uid);
+      const data = await getLibraryFolders(currentUser.uid, org);
       setFolders(data);
       // Auto-expand first folder that has links
       const firstWithLinks = data.find(f => f.links?.length > 0);

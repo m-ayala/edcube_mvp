@@ -4,11 +4,13 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 
 const ProtectedRoute = ({ children }) => {
-  const { currentUser } = useAuth();
+  const { currentUser, orgError } = useAuth();
 
   if (!currentUser) {
-    // User not logged in, redirect to landing page
-    return <Navigate to="/" replace />;
+    // Signed out because their org isn't registered (see AuthContext) ->
+    // send them to Login, which reads orgError and explains why. Otherwise
+    // just not logged in, redirect to landing page.
+    return <Navigate to={orgError ? '/login' : '/'} replace />;
   }
 
   // REMOVED email verification check since VerifyEmail component doesn't exist

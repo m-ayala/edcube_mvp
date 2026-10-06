@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { Paperclip, X, FileText, FileSpreadsheet, Image, Presentation } from 'lucide-react';
-import { getOwnProfile } from '../../services/teacherService';
 import { trackAiOutlineGenerated } from '../../firebase/analytics';
 import { useGeneration } from '../../contexts/GenerationContext';
 
@@ -29,12 +28,11 @@ const MAX_FILES = 5;
 const getExt = (filename) => filename.split('.').pop().toLowerCase();
 
 const CourseDesigner = () => {
-  const { currentUser } = useAuth();
+  const { currentUser, org } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { targetFolderId } = location.state || {};
   const { genState, startGeneration } = useGeneration();
-  const [organizationId, setOrganizationId] = useState(null);
 
   const loading = genState.status === 'generating-outline' || genState.status === 'generating-candidates';
   const hasError = genState.status === 'error';
@@ -54,20 +52,6 @@ const CourseDesigner = () => {
     objectives: ''
   });
 
-  useEffect(() => {
-    const fetchProfile = async () => {
-      if (currentUser) {
-        try {
-          const profile = await getOwnProfile(currentUser);
-          setOrganizationId(profile.org_id);
-        } catch (error) {
-          console.error('Error fetching teacher profile:', error);
-          alert('Failed to load your profile. Please refresh the page.');
-        }
-      }
-    };
-    fetchProfile();
-  }, [currentUser]);
 
   // Navigate to workspace once Phase 1.5 candidates are ready for review — there's
   // nothing structurally useful to show between the bare outline (sections only,
@@ -144,11 +128,11 @@ const CourseDesigner = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!organizationId) {
+    if (!org) {
       alert('Unable to generate course: Organization ID not found. Please refresh the page and try again.');
       return;
     }
-    startGeneration(formData, attachedFiles, currentUser.uid, organizationId, targetFolderId);
+    startGeneration(formData, attachedFiles, currentUser.uid, org, targetFolderId);
   };
 
   const inputStyle = {

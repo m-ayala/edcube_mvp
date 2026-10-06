@@ -24,6 +24,7 @@ from schemas.teacher_schema import (
 from schemas.curriculum_schema import CurriculumFields as CF
 import firebase_admin
 from firebase_admin import auth, firestore
+from firebase.paths import org_col, resolve_org
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -35,39 +36,80 @@ router = APIRouter(prefix="/api/teachers", tags=["teachers"])
 # DEPENDENCY: Firebase Auth Verification
 # ============================================================================
 
-async def verify_firebase_token(authorization: str = Header(...)) -> dict:
+async def verify_firebase_token(authorization: Optional[str] = Header(default=None)) -> dict:
     """
     Verify Firebase ID token from Authorization header
-    
+
     Args:
         authorization: Bearer token from request header
-        
+
     Returns:
         dict: Decoded token with user info (uid, email, name, etc.)
-        
+
     Raises:
-        HTTPException: If token is invalid or missing
+        HTTPException: 401 if the token is invalid, malformed, or missing
+            entirely. `authorization` is intentionally Optional with no
+            required header, so a fully-absent header 401s here instead of
+            FastAPI auto-raising a 422 for a missing required param -- a
+            caller with no credentials and a caller with a bad token should
+            get the same, correct status code.
     """
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authorization header format. Expected 'Bearer <token>'"
+        )
+
     try:
-        # Extract token from "Bearer <token>"
-        if not authorization.startswith("Bearer "):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid authorization header format. Expected 'Bearer <token>'"
-            )
-        
         token = authorization.split("Bearer ")[1]
-        
+
         # Verify token with Firebase Admin SDK
         decoded_token = auth.verify_id_token(token)
         return decoded_token
-        
+
     except Exception as e:
         logger.error(f"Token verification failed: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Invalid authentication credentials: {str(e)}"
         )
+
+
+async def require_org(current_user: dict = Depends(verify_firebase_token)) -> dict:
+    """
+    Shared org-scoping dependency (tasks/firestore-reorg-spec.md Round 2,
+    section A): verifies the Firebase token, then resolves the caller's org
+    from their token email via the Users/{org} registry. 403s with a fixed
+    message if the email isn't registered with any org -- there is no default
+    org to fall back to.
+
+    Returns the decoded token with an added "org" key, so routes get both in
+    one dependency: `current_user = Depends(require_org); org = current_user["org"]`.
+    """
+    org = get_org_from_email(current_user.get("email") or "")
+    if not org:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your organization is not registered with EdCube",
+        )
+    return {**current_user, "org": org}
+
+
+def require_org_for_uid(uid: str) -> str:
+    """
+    Non-token variant of require_org, for routes that still take a raw
+    `teacherUid` instead of an Authorization header (see the TASK-008 list in
+    this task's report -- those routes should move to `require_org` once the
+    frontend sends a token). Same 403 contract and registry lookup, just
+    resolved via the Admin SDK (uid -> email) instead of a decoded token.
+    """
+    org = resolve_org(uid)
+    if not org:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your organization is not registered with EdCube",
+        )
+    return org
 
 
 def get_firestore_client():
@@ -81,23 +123,24 @@ def get_firestore_client():
 
 @router.get("/profile", response_model=TeacherProfileResponse)
 async def get_own_profile(
-    current_user: dict = Depends(verify_firebase_token),
+    current_user: dict = Depends(require_org),
     db = Depends(get_firestore_client)
 ):
     """
     Get the authenticated teacher's own profile.
     Creates a default profile if one doesn't exist.
-    
+
     Returns:
         TeacherProfileResponse: Complete profile data
     """
     teacher_uid = current_user["uid"]
-    
+    org = current_user["org"]
+
     try:
         # Try to get existing profile
-        profile_ref = db.collection(TEACHER_PROFILES_COLLECTION).document(teacher_uid)
+        profile_ref = org_col(db, org, TEACHER_PROFILES_COLLECTION).document(teacher_uid)
         profile_doc = profile_ref.get()
-        
+
         if profile_doc.exists:
             profile_data = profile_doc.to_dict()
             return TeacherProfileResponse(**profile_data)
@@ -119,24 +162,25 @@ async def get_own_profile(
 @router.put("/profile", response_model=TeacherProfileResponse)
 async def update_own_profile(
     profile_update: TeacherProfileUpdate,
-    current_user: dict = Depends(verify_firebase_token),
+    current_user: dict = Depends(require_org),
     db = Depends(get_firestore_client)
 ):
     """
     Update the authenticated teacher's profile.
     Only updates fields that are provided (partial update).
-    
+
     Args:
         profile_update: TeacherProfileUpdate with optional fields
-        
+
     Returns:
         TeacherProfileResponse: Updated profile data
     """
     teacher_uid = current_user["uid"]
-    
+    org = current_user["org"]
+
     try:
-        profile_ref = db.collection(TEACHER_PROFILES_COLLECTION).document(teacher_uid)
-        
+        profile_ref = org_col(db, org, TEACHER_PROFILES_COLLECTION).document(teacher_uid)
+
         # Check if profile exists
         profile_doc = profile_ref.get()
         if not profile_doc.exists:
@@ -173,35 +217,39 @@ async def update_own_profile(
 @router.get("/{teacher_uid}", response_model=TeacherProfilePublic)
 async def get_teacher_profile(
     teacher_uid: str,
-    current_user: dict = Depends(verify_firebase_token),
+    current_user: dict = Depends(require_org),
     db = Depends(get_firestore_client)
 ):
     """
     Get any teacher's public profile by their UID.
     Includes count of their public courses.
-    
+
     Args:
         teacher_uid: Firebase UID of the teacher to view
-        
+
     Returns:
         TeacherProfilePublic: Public profile data with course count
     """
     try:
+        # Sharing/public courses are same-org only (tasks/firestore-reorg-spec.md,
+        # decision 3), so the caller's org is always the target teacher's org.
+        org = current_user["org"]
+
         # Get teacher profile
-        profile_ref = db.collection(TEACHER_PROFILES_COLLECTION).document(teacher_uid)
+        profile_ref = org_col(db, org, TEACHER_PROFILES_COLLECTION).document(teacher_uid)
         profile_doc = profile_ref.get()
-        
+
         if not profile_doc.exists:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Teacher profile not found for UID: {teacher_uid}"
             )
-        
+
         profile_data = profile_doc.to_dict()
-        
+
         # Count public courses for this teacher
         courses_query = (
-            db.collection(COURSES_COLLECTION)
+            org_col(db, org, COURSES_COLLECTION)
             .where(CF.TEACHER_UID, "==", teacher_uid)
             .where(CF.IS_PUBLIC, "==", True)
         )
@@ -236,30 +284,30 @@ async def get_teacher_profile(
 
 @router.get("/", response_model=List[TeacherProfilePublic])
 async def list_all_teachers(
-    current_user: dict = Depends(verify_firebase_token),
+    current_user: dict = Depends(require_org),
     db = Depends(get_firestore_client)
 ):
     """
     Get all teacher profiles in the organization.
     Used for the discovery page to browse other teachers.
-    
+
     Returns:
         List[TeacherProfilePublic]: List of all teacher profiles with public course counts
     """
     try:
         # Resolve the caller's org_id from their email domain
-        caller_org_id = get_org_from_email(current_user["email"])
-        profiles_query = db.collection(TEACHER_PROFILES_COLLECTION).where(TPF.ORG_ID, "==", caller_org_id)
+        caller_org_id = current_user["org"]
+        profiles_query = org_col(db, caller_org_id, TEACHER_PROFILES_COLLECTION).where(TPF.ORG_ID, "==", caller_org_id)
         profiles = profiles_query.stream()
-        
+
         result = []
         for profile_doc in profiles:
             profile_data = profile_doc.to_dict()
             teacher_uid = profile_data[TPF.TEACHER_UID]
-            
+
             # Count public courses for each teacher
             courses_query = (
-                db.collection(COURSES_COLLECTION)
+                org_col(db, caller_org_id, COURSES_COLLECTION)
                 .where(CF.TEACHER_UID, "==", teacher_uid)
                 .where(CF.IS_PUBLIC, "==", True)
             )
@@ -293,7 +341,7 @@ async def list_all_teachers(
 @router.get("/{teacher_uid}/courses")
 async def get_teacher_public_courses(
     teacher_uid: str,
-    current_user: dict = Depends(verify_firebase_token),
+    current_user: dict = Depends(require_org),
     db = Depends(get_firestore_client)
 ):
     """
@@ -301,8 +349,9 @@ async def get_teacher_public_courses(
     plus full sections/outline for viewing in the workspace.
     """
     try:
+        org = current_user["org"]
         courses_query = (
-            db.collection(COURSES_COLLECTION)
+            org_col(db, org, COURSES_COLLECTION)
             .where(CF.TEACHER_UID, "==", teacher_uid)
             .where(CF.IS_PUBLIC, "==", True)
         )

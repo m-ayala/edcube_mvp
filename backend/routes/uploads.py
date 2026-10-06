@@ -7,8 +7,9 @@ import os
 import time
 import logging
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
-from routes.teachers import verify_firebase_token
+from routes.teachers import require_org
 from services.firebase_service import FirebaseService
+from firebase.paths import ORGS_ROOT
 
 router = APIRouter()
 firebase = FirebaseService()
@@ -21,7 +22,7 @@ MAX_IMAGE_BYTES = 5 * 1024 * 1024  # 5 MB
 @router.post("/api/upload/profile-picture")
 async def upload_profile_picture(
     file: UploadFile = File(...),
-    current_user: dict = Depends(verify_firebase_token),
+    current_user: dict = Depends(require_org),
 ):
     if file.content_type not in ALLOWED_IMAGE_TYPES:
         raise HTTPException(status_code=400, detail="Only JPG, PNG, WebP, or GIF images are allowed")
@@ -31,9 +32,13 @@ async def upload_profile_picture(
         raise HTTPException(status_code=400, detail="Image must be under 5 MB")
 
     uid = current_user["uid"]
+    org = current_user["org"]
     ext = os.path.splitext(file.filename or "")[1].lower() or ".jpg"
     safe_name = f"{int(time.time() * 1000)}{ext}"
-    path = f"profile_pictures/{uid}/{safe_name}"
+    # New uploads go under Users/{org}/... (tasks/firestore-reorg-spec.md,
+    # Round 2 section E). Old profile_pictures/{uid}/... URLs already issued
+    # keep working -- this only changes where *new* uploads land.
+    path = f"{ORGS_ROOT}/{org}/profile_pictures/{uid}/{safe_name}"
 
     try:
         url = await firebase.upload_file(data, path, file.content_type)

@@ -10,31 +10,30 @@ from datetime import datetime
 
 
 # ============================================================================
-# DOMAIN → ORG MAPPING
-# Keep in sync with frontend/src/firebase/authService.js DOMAIN_ORG_MAP.
-# Add a new entry here to onboard a new organization.
+# ORG RESOLUTION
+# The hardcoded DOMAIN_ORG_MAP is gone (tasks/firestore-reorg-spec.md, Round 2,
+# overrides Round 1 decision 3). Org membership now comes from the `Users/{org}`
+# registry docs (`{ name, domains, allowed_emails }`), read and cached by
+# backend/firebase/org_registry.py. Re-exported here so existing callers
+# (`from schemas.teacher_schema import get_org_from_email`) need no edits.
 #
-# 'gmail.com': 'icc'  ← temporary for local testing; remove before production
+# IMPORTANT: this now returns None for an email that isn't registered with any
+# org -- there is no default org anymore. Callers must treat None as "not
+# allowed", not silently proceed.
 # ============================================================================
 
-DOMAIN_ORG_MAP: dict[str, str] = {
-    'indiacc.org': 'icc',
-    'gmail.com':   'icc',  # TODO: remove after testing
-}
-
-
-def get_org_from_email(email: str) -> str:
-    """Return the org_id for a given email, defaulting to 'icc' if domain unknown."""
-    domain = email.split('@')[-1].lower()
-    return DOMAIN_ORG_MAP.get(domain, 'icc')
+from firebase.org_registry import get_org_from_email  # noqa: F401 (re-exported)
 
 
 # ============================================================================
-# FIREBASE COLLECTION NAMES
+# FIREBASE SUBCOLLECTION NAMES
+# These are subcollection names under Users/{org}/ -- not top-level
+# collections. Use with firebase.paths.org_col(db, org, NAME) to build the
+# full path. See backend/firebase/paths.py.
 # ============================================================================
 
 TEACHER_PROFILES_COLLECTION = "teacher_profiles"
-COURSES_COLLECTION = "curricula"  # Firestore collection for courses
+COURSES_COLLECTION = "curricula"  # Users/{org}/curricula
 COURSE_FOLDERS_COLLECTION = "course_folders"
 
 

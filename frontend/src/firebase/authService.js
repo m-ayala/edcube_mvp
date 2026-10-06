@@ -8,44 +8,37 @@ import {
   reauthenticateWithCredential,
   EmailAuthProvider
 } from 'firebase/auth';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from './config';
+import { orgSubDoc } from './paths';
+
+const API_BASE_URL = `${import.meta.env.VITE_API_BASE_URL}/api/orgs`;
 
 /**
- * Supported organizations.
- * To add a new org: append an entry here and add its domain to DOMAIN_ORG_MAP.
- * Organizations must contact EdCube to be added.
+ * Check whether an email is registered with an org, via the public
+ * `GET /api/orgs/check-email` backend endpoint (backed by the `Users/{org}`
+ * registry docs -- there is no frontend DOMAIN_ORG_MAP and no default org,
+ * tasks/firestore-reorg-spec.md Round 2, sections A and G). Returns
+ * `{ allowed, org_id, org_name }`.
  */
-export const ORGS = [
-  { id: 'icc', name: 'India Community Center', domain: 'indiacc.org' },
-];
-
-/**
- * Maps email domains to organization IDs.
- * Add a new entry here to onboard a new organization.
- */
-export const DOMAIN_ORG_MAP = {
-  'indiacc.org': 'icc',
+export const checkEmailOrg = async (email) => {
+  const res = await fetch(`${API_BASE_URL}/check-email?email=${encodeURIComponent(email)}`);
+  if (!res.ok) {
+    throw new Error('Could not verify your organization. Please try again.');
+  }
+  return res.json();
 };
 
 /**
- * Returns the org_id for a given email, or null if the domain is not allowed.
- */
-export const getOrgFromEmail = (email) => {
-  const domain = email.split('@')[1]?.toLowerCase();
-  return DOMAIN_ORG_MAP[domain] ?? null;
-};
-
-/**
- * Sign up a new teacher with email/password.
- * Allowed domains are defined in DOMAIN_ORG_MAP above.
+ * Sign up a new teacher with email/password. The org is resolved server-side
+ * from the email via `checkEmailOrg` -- there's no client-side org picker or
+ * domain map to keep in sync.
  */
 export const signupTeacher = async (email, password, displayName) => {
   try {
-    const orgId = getOrgFromEmail(email);
-    if (!orgId) {
-      const allowed = Object.keys(DOMAIN_ORG_MAP).map(d => `@${d}`).join(', ');
-      throw new Error(`Email domain not allowed. Accepted: ${allowed}`);
+    const orgCheck = await checkEmailOrg(email);
+    if (!orgCheck.allowed) {
+      throw new Error('Your organization is not registered with EdCube. Contact us to get added.');
     }
 
     // Create user account
@@ -58,11 +51,11 @@ export const signupTeacher = async (email, password, displayName) => {
     // Send email verification
     await sendEmailVerification(user);
 
-    // Create teacher profile in Firestore
-    await setDoc(doc(db, 'teachers', user.uid), {
+    // Create teacher profile in Firestore, under the resolved org
+    await setDoc(orgSubDoc(db, orgCheck.org_id, 'teachers', user.uid), {
       email: user.email,
       displayName: displayName,
-      organization: orgId,
+      organization: orgCheck.org_id,
       createdAt: serverTimestamp(),
       lastLogin: serverTimestamp()
     });
@@ -80,7 +73,8 @@ export const signupTeacher = async (email, password, displayName) => {
 
 /**
  * Login teacher with email/password
- * Checks if email is verified before allowing access
+ * Checks if email is verified before allowing access, then confirms the
+ * email is still registered with an org before touching Firestore.
  */
 export const loginTeacher = async (email, password) => {
   try {
@@ -93,8 +87,14 @@ export const loginTeacher = async (email, password) => {
       throw new Error('Please verify your email before logging in. Check your inbox for the verification link.');
     }
 
+    const orgCheck = await checkEmailOrg(email);
+    if (!orgCheck.allowed) {
+      await signOut(auth);
+      throw new Error('Your organization is not registered with EdCube');
+    }
+
     // Update last login timestamp
-    await setDoc(doc(db, 'teachers', user.uid), {
+    await setDoc(orgSubDoc(db, orgCheck.org_id, 'teachers', user.uid), {
       lastLogin: serverTimestamp()
     }, { merge: true });
 

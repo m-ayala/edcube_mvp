@@ -52,6 +52,7 @@ from schemas.synopsis_schema import (
     VALID_DAYS,
 )
 from services.firebase_service import FirebaseService
+from firebase.paths import DEFAULT_SYNOPSIS_ORG
 from utils.llm_handler import call_openai, OpenAIServiceError
 
 logger = logging.getLogger(__name__)
@@ -409,12 +410,14 @@ async def get_entries(camp_id: str, week_id: Optional[str] = Query(None)):
 
 
 @router.get("/entries/{entry_id}")
-async def get_entry(entry_id: str, week_id: Optional[str] = Query(None), camp_id: Optional[str] = Query(None)):
-    if week_id and camp_id:
-        doc = firebase._entries_col(week_id, camp_id).document(entry_id).get()
-        entry = ({'id': doc.id, **doc.to_dict()} if doc.exists else None)
-    else:
-        entry = await firebase.get_synopsis_entry(entry_id)
+async def get_entry(entry_id: str, week_id: str = Query(...), camp_id: str = Query(...)):
+    """
+    week_id and camp_id are required (tasks/firestore-reorg-spec.md Round 2,
+    section B) -- this is now a direct-path lookup, not a cross-camp
+    collection_group scan. No current frontend caller hits this route (see
+    TASK-006b report); any future caller must send both.
+    """
+    entry = await firebase.get_synopsis_entry_in_week(week_id, camp_id, entry_id)
     if not entry:
         raise HTTPException(404, "Entry not found")
     return entry
@@ -541,7 +544,10 @@ async def upload_photo(
         ext = "jpg"
 
     photo_id = str(uuid.uuid4())
-    storage_path = f"synopsis/{camp_id}/{day}/{photo_id}.{ext}"
+    # Users/{org}/... prefix per tasks/firestore-reorg-spec.md Round 2, section E.
+    # Synopsis routes are ICC-only today (no auth, DEFAULT_SYNOPSIS_ORG) --
+    # multi-org synopsis is out of scope, same as the Firestore side.
+    storage_path = f"Users/{DEFAULT_SYNOPSIS_ORG}/synopsis/summer_camps/{camp_id}/{day}/{photo_id}.{ext}"
 
     url = await firebase.upload_file(data, storage_path, content_type)
     return {"url": url}

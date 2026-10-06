@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
 """
-Seed the taxonomy knowledge base collections in Firestore:
-kb_age_bands, kb_objectives, kb_worksheet_formats, kb_activity_formats,
-kb_content_formats.
+Seed the taxonomy knowledge base under EdCube/knowledge_base in Firestore, as
+categorized subcollections: age, pedagogy, worksheets, activities, content.
+
+(Old top-level collection names: kb_age_bands, kb_objectives,
+kb_worksheet_formats, kb_activity_formats, kb_content_formats -- see
+tasks/firestore-reorg-spec.md for the mapping.)
 
 Safe to re-run: every document is written with .set() keyed by a fixed
 document ID, so re-running overwrites in place instead of duplicating.
+Also (re-)creates the EdCube/knowledge_base document itself, since Firestore
+intermediate documents must be real docs with at least one field to show up
+in the console rather than being "phantom" docs.
 
 Run from the backend/ directory:
     python scripts/seed_knowledge_base.py
@@ -18,6 +24,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import firebase_admin
 from firebase_admin import firestore
+from firebase.paths import kb_doc, kb_col
 
 
 AGE_BANDS = [
@@ -266,15 +273,15 @@ CONTENT_FORMATS = [
 ]
 
 
-def _seed_collection(db, collection_name, items, extra_fields=None):
-    col = db.collection(collection_name)
+def _seed_category(db, category, items, extra_fields=None):
+    col = kb_col(db, category)
     for item in items:
         doc_id = item["id"]
         data = {k: v for k, v in item.items() if k != "id"}
         if extra_fields:
             data.update(extra_fields)
         col.document(doc_id).set(data)
-    print(f"  ✅ {len(items)} document(s) upserted into {collection_name}")
+    print(f"  ✅ {len(items)} document(s) upserted into EdCube/knowledge_base/{category}")
 
 
 def main():
@@ -282,30 +289,33 @@ def main():
         firebase_admin.initialize_app()
     db = firestore.client()
 
-    print("Seeding kb_age_bands...")
-    _seed_collection(
-        db, "kb_age_bands", AGE_BANDS,
+    print("Ensuring EdCube/knowledge_base doc exists...")
+    kb_doc(db).set({"description": "EdCube platform-wide knowledge base"}, merge=True)
+
+    print("Seeding age...")
+    _seed_category(
+        db, "age", AGE_BANDS,
         extra_fields={"pedagogy_notes": "", "developmental_notes": ""},
     )
 
-    print("Seeding kb_objectives...")
-    _seed_collection(db, "kb_objectives", OBJECTIVES)
+    print("Seeding pedagogy...")
+    _seed_category(db, "pedagogy", OBJECTIVES)
 
-    print("Seeding kb_worksheet_formats...")
-    _seed_collection(
-        db, "kb_worksheet_formats", WORKSHEET_FORMATS,
+    print("Seeding worksheets...")
+    _seed_category(
+        db, "worksheets", WORKSHEET_FORMATS,
         extra_fields={"suitable_age_bands": []},
     )
 
-    print("Seeding kb_activity_formats...")
-    _seed_collection(
-        db, "kb_activity_formats", ACTIVITY_FORMATS,
+    print("Seeding activities...")
+    _seed_category(
+        db, "activities", ACTIVITY_FORMATS,
         extra_fields={"suitable_age_bands": []},
     )
 
-    print("Seeding kb_content_formats...")
-    _seed_collection(
-        db, "kb_content_formats", CONTENT_FORMATS,
+    print("Seeding content...")
+    _seed_category(
+        db, "content", CONTENT_FORMATS,
         extra_fields={"suitable_age_bands": []},
     )
 

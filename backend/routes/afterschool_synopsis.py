@@ -62,6 +62,7 @@ from schemas.afterschool_synopsis_schema import (
     synopsis_types_for_grade,
 )
 from services.firebase_service import FirebaseService
+from firebase.paths import DEFAULT_SYNOPSIS_ORG
 from utils.llm_handler import call_openai, OpenAIServiceError
 
 # Reuse (never duplicate) the camp-synopsis feature's admin-auth dependency and
@@ -161,7 +162,7 @@ async def get_active_month_route():
 async def get_entry(grade_slug: str, type_slug: str, month_id: str):
     """Direct doc lookup — no query, no composite index required."""
     entry_id = f"{grade_slug}__{type_slug}__{month_id}"
-    entry = await firebase.get_afterschool_entry(entry_id)
+    entry = await firebase.get_afterschool_entry(entry_id, month_id)
     return {"entry": entry}
 
 
@@ -194,7 +195,7 @@ async def save_entry(body: EntrySaveRequest):
 
     entry_id = f"{grade_slug}__{type_slug}__{body.month_id}"
     now = datetime.utcnow().isoformat()
-    existing = await firebase.get_afterschool_entry(entry_id)
+    existing = await firebase.get_afterschool_entry(entry_id, body.month_id)
 
     data = {
         EF.ENTRY_ID: entry_id,
@@ -210,7 +211,7 @@ async def save_entry(body: EntrySaveRequest):
         EF.UPDATED_AT: now,
     }
 
-    await firebase.upsert_afterschool_entry(entry_id, data)
+    await firebase.upsert_afterschool_entry(entry_id, body.month_id, data)
     return {"success": True, "entry_id": entry_id}
 
 
@@ -265,7 +266,8 @@ async def upload_photo(
         ext = "jpg"
 
     photo_id = str(uuid.uuid4())
-    storage_path = f"afterschool_synopsis/{grade_slug}/{type_slug}/{month_id}/{block_index}/{photo_id}.{ext}"
+    # Users/{org}/... prefix per tasks/firestore-reorg-spec.md Round 2, section E.
+    storage_path = f"Users/{DEFAULT_SYNOPSIS_ORG}/synopsis/afterschool/{grade_slug}/{type_slug}/{month_id}/{block_index}/{photo_id}.{ext}"
 
     url = await firebase.upload_file(data, storage_path, content_type)
     return {"url": url}
@@ -348,7 +350,7 @@ async def get_class_entries(
     for synopsis_type in synopsis_types_for_grade(grade_label):
         type_slug = slugify(synopsis_type)
         entry_id = f"{grade_slug}__{type_slug}__{month_id}"
-        entries[_entry_key(synopsis_type)] = await firebase.get_afterschool_entry(entry_id)
+        entries[_entry_key(synopsis_type)] = await firebase.get_afterschool_entry(entry_id, month_id)
 
     return {"grade": grade_label, "month": month, "entries": entries}
 
@@ -651,7 +653,7 @@ async def download_after_school_doc(
 
     type_slug = slugify(AFTER_SCHOOL_CLASS_TYPE)
     entry_id = f"{grade_slug}__{type_slug}__{month_id}"
-    entry = await firebase.get_afterschool_entry(entry_id)
+    entry = await firebase.get_afterschool_entry(entry_id, month_id)
 
     doc_bytes = await run_in_threadpool(
         _build_after_school_doc, grade_label=grade_label, month=month, entry=entry
@@ -684,7 +686,7 @@ async def download_eca_doc(
     for eca_type in ECA_TYPE_ORDER:
         type_slug = slugify(eca_type)
         entry_id = f"{grade_slug}__{type_slug}__{month_id}"
-        entries_by_type[eca_type] = await firebase.get_afterschool_entry(entry_id)
+        entries_by_type[eca_type] = await firebase.get_afterschool_entry(entry_id, month_id)
 
     doc_bytes = await run_in_threadpool(
         _build_eca_doc, grade_label=grade_label, month=month, entries_by_type=entries_by_type
@@ -715,13 +717,13 @@ async def download_newsletter_doc(
         raise HTTPException(404, "Month not found")
 
     after_school_entry = await firebase.get_afterschool_entry(
-        f"{grade_slug}__{slugify(AFTER_SCHOOL_CLASS_TYPE)}__{month_id}"
+        f"{grade_slug}__{slugify(AFTER_SCHOOL_CLASS_TYPE)}__{month_id}", month_id
     )
     eca_entries_by_type = {}
     if grade_label not in GRADES_WITHOUT_ECA:
         for eca_type in ECA_TYPE_ORDER:
             entry_id = f"{grade_slug}__{slugify(eca_type)}__{month_id}"
-            eca_entries_by_type[eca_type] = await firebase.get_afterschool_entry(entry_id)
+            eca_entries_by_type[eca_type] = await firebase.get_afterschool_entry(entry_id, month_id)
 
     doc_bytes = await run_in_threadpool(
         _build_newsletter_doc,

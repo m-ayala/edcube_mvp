@@ -15,9 +15,20 @@ export const getNotifications = async (currentUser) => {
   return data.notifications || [];
 };
 
-export const markAsRead = async (currentUser, notifId) => {
+// Delete-on-seen (tasks/firestore-reorg-spec.md, decision 6): replaces the
+// old PATCH /{id}/read + `status` field. Called with the ids of whatever the
+// bell is currently displaying; the backend deletes them so they won't come
+// back on the next fetch.
+export const markNotificationsSeen = async (currentUser, notificationIds) => {
+  if (!notificationIds || notificationIds.length === 0) return { success: true, deleted: 0 };
   const headers = await authHeader(currentUser);
-  await fetch(`${API_BASE}/${notifId}/read`, { method: 'PATCH', headers });
+  const res = await fetch(`${API_BASE}/seen`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ notification_ids: notificationIds }),
+  });
+  if (!res.ok) throw new Error('Failed to mark notifications seen');
+  return res.json();
 };
 
 export const deleteNotification = async (currentUser, notifId) => {

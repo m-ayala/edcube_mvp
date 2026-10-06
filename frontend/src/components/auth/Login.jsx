@@ -1,14 +1,22 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { loginTeacher, resendVerificationEmail } from '../../firebase/authService';
+import { useAuth } from '../../contexts/AuthContext';
 
 const Login = () => {
+  const { orgError } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showResend, setShowResend] = useState(false);
   const navigate = useNavigate();
+
+  // Surfaces the reason ProtectedRoute redirected here: a previously-signed-in
+  // session whose email is no longer registered with any org.
+  useEffect(() => {
+    if (orgError) setError(orgError);
+  }, [orgError]);
 
   const handleLogin = async (e) => {
     e.preventDefault();

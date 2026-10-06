@@ -1,21 +1,20 @@
 # backend/routes/contact.py
 """
 API route for landing page demo requests.
-Stores lead in Firestore and emails manaswini.ayala@gmail.com.
+Emails manaswini.ayala@gmail.com. Does not write to Firestore --
+the `leads` collection was dropped in the EdCube/Users reorg
+(tasks/firestore-reorg-spec.md, decision 5); it was unread and is deleted in
+TASK-010.
 """
 
 from fastapi import APIRouter
 from pydantic import BaseModel
 from typing import Literal, Optional
-from datetime import datetime, timezone
 import smtplib
 import os
 import logging
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-
-import firebase_admin
-from firebase_admin import firestore
 
 logger = logging.getLogger(__name__)
 
@@ -61,20 +60,6 @@ def _send_email(submission: ContactSubmission):
 
 @router.post("/contact")
 async def submit_contact(submission: ContactSubmission):
-    # Save to Firestore
-    try:
-        db = firestore.client()
-        db.collection("leads").add({
-            "name":         submission.name,
-            "email":        submission.email,
-            "org":          submission.org or "",
-            "message":      submission.message or "",
-            "type":         submission.type,
-            "submitted_at": datetime.now(timezone.utc).isoformat(),
-        })
-    except Exception as e:
-        logger.error(f"Firestore write failed: {e}")
-
     # Send notification email
     try:
         _send_email(submission)

@@ -17,13 +17,12 @@ import useAutosave from './useAutosave';
 import { useGeneration } from '../../contexts/GenerationContext';
 import BreakModal from '../modals/BreakModal';
 import ShareCourseModal from '../modals/ShareCourseModal';
-import { getOwnProfile } from '../../services/teacherService';
 import { generateBlockLinks } from '../../utils/curriculumApi';
 import { addCourseToFolder } from '../../firebase/dbService';
 import { trackCourseCreated, trackCourseUpdated, trackPublicCourseViewed } from '../../firebase/analytics';
 
 const CourseWorkspace = () => {
-  const { currentUser } = useAuth();
+  const { currentUser, org } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -61,7 +60,6 @@ const CourseWorkspace = () => {
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [videosByTopic, setVideosByTopic] = useState({});
   const [handsOnResources, setHandsOnResources] = useState(incomingHandsOnResources || {});
-  const [organizationId, setOrganizationId] = useState(null);
   const [isPublic, setIsPublic] = useState(incomingIsPublic || false);
   const [readOnly] = useState(incomingReadOnly || false);
   const [isOwner] = useState(incomingIsOwner || false);
@@ -182,21 +180,6 @@ const CourseWorkspace = () => {
     curriculumId
   });
 
-  // ── Fetch teacher profile to get organizationId ──────────────────────
-  useEffect(() => {
-    const fetchProfile = async () => {
-      if (currentUser) {
-        try {
-          const profile = await getOwnProfile(currentUser);
-          setOrganizationId(profile.org_id);
-        } catch (error) {
-          console.error('Error fetching teacher profile:', error);
-        }
-      }
-    };
-    fetchProfile();
-  }, [currentUser]);
-
   // ── Fetch course info (attachments + notes) once curriculumId is known ─
   useEffect(() => {
     if (!curriculumId || curriculumId === 'new-course' || !currentUser) return;
@@ -262,7 +245,7 @@ const CourseWorkspace = () => {
       setHandsOnResources(prev => ({ ...prev, ...genState.handsOnResources }));
       setIsGenerating(false);
       if (targetFolderId && genState.curriculumId) {
-        addCourseToFolder(currentUser.uid, targetFolderId, genState.curriculumId).catch(() => {});
+        addCourseToFolder(currentUser.uid, org, targetFolderId, genState.curriculumId).catch(() => {});
       }
     }
     if (genState.status === 'error') {
@@ -474,7 +457,7 @@ const CourseWorkspace = () => {
 
     const endpoint = hasExistingId
       ? `${import.meta.env.VITE_API_BASE_URL}/api/update-course?teacherUid=${currentUser.uid}`
-      : `${import.meta.env.VITE_API_BASE_URL}/api/save-course?teacherUid=${currentUser.uid}&organizationId=${organizationId}`;
+      : `${import.meta.env.VITE_API_BASE_URL}/api/save-course?teacherUid=${currentUser.uid}&organizationId=${org}`;
 
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -493,7 +476,7 @@ const CourseWorkspace = () => {
     if (!hasExistingId && result.courseId) {
       setCurriculumId(result.courseId);
       if (targetFolderId) {
-        await addCourseToFolder(currentUser.uid, targetFolderId, result.courseId);
+        await addCourseToFolder(currentUser.uid, org, targetFolderId, result.courseId);
       }
       const totalDuration = sectionsForSave.reduce((acc, s) =>
         acc + (s.subsections || []).reduce((a, ss) => a + (ss.duration_minutes || 0), 0), 0);
@@ -583,7 +566,7 @@ const CourseWorkspace = () => {
     performSave: saveCourse,
     deps: [sections, courseName, videosByTopic, handsOnResources],
     delay: 2000,
-    enabled: !!organizationId && !!currentUser && !readOnly && !isGenerating && !isSelectingSubsections
+    enabled: !!org && !!currentUser && !readOnly && !isGenerating && !isSelectingSubsections
   });
 
   // ── Drag and Drop ──────────────────────────────��──────────────────────

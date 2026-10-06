@@ -66,7 +66,8 @@ Agents should check their work against these, not just against the task descript
   frontend). `docs-qa-agent` verifies by other means until this is built out, and only
   works on test coverage when the person explicitly approves it.
 - `frontend/src/.../blockCategories.js` already fetches live from Firestore's
-  `kb_objectives` collection, with the hardcoded array kept only as a fallback shown
+  `EdCube/knowledge_base/pedagogy` path (moved there from the old flat `kb_objectives`
+  collection by TASK-008), with the hardcoded array kept only as a fallback shown
   before that fetch resolves — it is not a stale hardcoded mirror. The actual problem is
   that this fetch reads Firestore directly from the frontend, bypassing the backend
   entirely, which violates the spirit of the KB-write-boundary rule above even though

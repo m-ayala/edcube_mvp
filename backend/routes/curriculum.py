@@ -20,7 +20,9 @@ from services.orchestrator import CurriculumOrchestrator
 from services.firebase_service import FirebaseService
 from schemas.generation_schema import GenerateRequest, GenerateResponse
 from services.generation_service import GenerationService
-from routes.teachers import verify_firebase_token
+from routes.teachers import verify_firebase_token, require_org, require_org_for_uid
+from schemas.teacher_schema import TEACHER_PROFILES_COLLECTION
+from firebase.paths import org_col
 
 generation_service = GenerationService()
 router = APIRouter()
@@ -52,6 +54,15 @@ async def generate_curriculum(
     with the teacher's selection to generate full block content and save.
     Streams progress via Server-Sent Events.
     """
+    # Resolve + validate org up front (before streaming starts, so a bad org
+    # can 403 normally instead of inside an SSE body). The client-supplied
+    # organizationId must match the org this teacherUid is actually
+    # registered with -- never trust it blindly for a Storage/Firestore path
+    # (tasks/firestore-reorg-spec.md Round 2, decision 1: no default/unverified org).
+    expected_org = require_org_for_uid(teacherUid)
+    if organizationId != expected_org:
+        raise HTTPException(status_code=403, detail="Your organization is not registered with EdCube")
+
     # Read all file bytes EAGERLY — UploadFile objects close after the request body.
     file_bytes: List[tuple] = []
     for uf in (files or []):
@@ -117,7 +128,7 @@ async def generate_curriculum(
 
                     # Upload original file to Firebase Storage
                     ct = content_type_map.get(ext.lower(), 'application/octet-stream')
-                    storage_path = f"course_attachments/{preset_course_id}/{attachment_id}/{filename}"
+                    storage_path = f"Users/{organizationId}/course_attachments/{preset_course_id}/{attachment_id}/{filename}"
                     try:
                         file_url = await firebase.upload_file(data, storage_path, ct)
                     except Exception:
@@ -325,6 +336,10 @@ async def generate_blocks(body: GenerateBlocksRequest):
     where the course is actually saved to Firestore.
     Streams progress via Server-Sent Events.
     """
+    # Validate org before streaming starts (see generate_curriculum for why).
+    expected_org = require_org_for_uid(body.teacherUid)
+    if body.organizationId != expected_org:
+        raise HTTPException(status_code=403, detail="Your organization is not registered with EdCube")
 
     async def generate():
         try:
@@ -450,11 +465,12 @@ async def generate_blocks(body: GenerateBlocksRequest):
 
 
 @router.get("/curricula/shared-with-me")
-async def get_shared_courses(current_user: dict = Depends(verify_firebase_token)):
+async def get_shared_courses(current_user: dict = Depends(require_org)):
     """Return all courses that have been shared with the authenticated user."""
     try:
         uid = current_user["uid"]
-        courses = await firebase.get_shared_courses(uid)
+        org = current_user["org"]
+        courses = await firebase.get_shared_courses(uid, org)
         return {"success": True, "courses": courses}
     except Exception as e:
         logger.error(f"Error fetching shared courses: {e}", exc_info=True)
@@ -466,16 +482,17 @@ class AccessTypeUpdate(BaseModel):
 
 
 @router.get("/curricula/{curriculum_id}/shared-with")
-async def get_course_collaborators(curriculum_id: str, current_user: dict = Depends(verify_firebase_token)):
+async def get_course_collaborators(curriculum_id: str, current_user: dict = Depends(require_org)):
     """Return the sharedWith list (with display names) for a course. Owner only."""
     try:
         uid = current_user["uid"]
-        doc = firebase.curricula_collection.document(curriculum_id).get()
+        org = current_user["org"]
+        doc = firebase.curricula_col(org).document(curriculum_id).get()
         if not doc.exists:
             raise HTTPException(status_code=404, detail="Course not found")
         if doc.to_dict().get('teacherUid') != uid:
             raise HTTPException(status_code=403, detail="Not authorized")
-        collaborators = await firebase.get_course_shared_with(curriculum_id)
+        collaborators = await firebase.get_course_shared_with(curriculum_id, org)
         return {"success": True, "collaborators": collaborators}
     except HTTPException:
         raise
@@ -489,22 +506,24 @@ async def update_collaborator_access(
     curriculum_id: str,
     uid: str,
     body: AccessTypeUpdate,
-    current_user: dict = Depends(verify_firebase_token)
+    current_user: dict = Depends(require_org)
 ):
     """Update a collaborator's access type and notify them."""
     from_uid = current_user["uid"]
+    org = current_user["org"]
     try:
-        doc = firebase.curricula_collection.document(curriculum_id).get()
+        doc = firebase.curricula_col(org).document(curriculum_id).get()
         if not doc.exists or doc.to_dict().get('teacherUid') != from_uid:
             raise HTTPException(status_code=403, detail="Not authorized")
         course_name = doc.to_dict().get('courseName', '')
-        await firebase.add_shared_with(curriculum_id, uid, body.access_type)
-        profile_doc = firebase.db.collection("teacher_profiles").document(from_uid).get()
+        await firebase.add_shared_with(curriculum_id, uid, body.access_type, org=org)
+        profile_doc = org_col(firebase.db, org, TEACHER_PROFILES_COLLECTION).document(from_uid).get()
         from_name = profile_doc.to_dict().get("display_name", "Someone") if profile_doc.exists else "Someone"
         await firebase.create_notification(
             to_uid=uid, from_uid=from_uid, from_name=from_name,
             notif_type="course_share_update",
             course_id=curriculum_id, course_name=course_name,
+            org=org,
             access_type=body.access_type,
         )
         return {"success": True}
@@ -519,22 +538,24 @@ async def update_collaborator_access(
 async def remove_collaborator(
     curriculum_id: str,
     uid: str,
-    current_user: dict = Depends(verify_firebase_token)
+    current_user: dict = Depends(require_org)
 ):
     """Remove a collaborator from a course and notify them."""
     from_uid = current_user["uid"]
+    org = current_user["org"]
     try:
-        doc = firebase.curricula_collection.document(curriculum_id).get()
+        doc = firebase.curricula_col(org).document(curriculum_id).get()
         if not doc.exists or doc.to_dict().get('teacherUid') != from_uid:
             raise HTTPException(status_code=403, detail="Not authorized")
         course_name = doc.to_dict().get('courseName', '')
-        await firebase.remove_from_shared_with(curriculum_id, uid)
-        profile_doc = firebase.db.collection("teacher_profiles").document(from_uid).get()
+        await firebase.remove_from_shared_with(curriculum_id, uid, org=org)
+        profile_doc = org_col(firebase.db, org, TEACHER_PROFILES_COLLECTION).document(from_uid).get()
         from_name = profile_doc.to_dict().get("display_name", "Someone") if profile_doc.exists else "Someone"
         await firebase.create_notification(
             to_uid=uid, from_uid=from_uid, from_name=from_name,
             notif_type="course_share_remove",
             course_id=curriculum_id, course_name=course_name,
+            org=org,
         )
         return {"success": True}
     except HTTPException:
@@ -548,19 +569,25 @@ async def remove_collaborator(
 async def get_curriculum(curriculum_id: str, teacherUid: str):
     """
     Fetch a saved curriculum by ID
-    
+
     Args:
         curriculum_id: Firestore document ID
         teacherUid: User ID for authorization
+
+    NOTE: still takes a raw teacherUid instead of an Authorization token --
+    see this task's report for the TASK-008 frontend follow-up.
     """
     try:
-        curriculum = await firebase.get_curriculum(curriculum_id, teacherUid)
-        
+        org = require_org_for_uid(teacherUid)
+        curriculum = await firebase.get_curriculum(curriculum_id, teacherUid, org=org)
+
         if not curriculum:
             raise HTTPException(status_code=404, detail="Curriculum not found")
-        
+
         return curriculum
-    
+
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -569,14 +596,20 @@ async def get_curriculum(curriculum_id: str, teacherUid: str):
 async def list_curricula(teacherUid: str):
     """
     List all curricula for a teacher
-    
+
     Args:
         teacherUid: Firebase user ID
+
+    NOTE: still takes a raw teacherUid instead of an Authorization token --
+    see this task's report for the TASK-008 frontend follow-up.
     """
     try:
+        require_org_for_uid(teacherUid)
         curricula = await firebase.list_teacher_curricula(teacherUid)
         return {"curricula": curricula}
-    
+
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -585,33 +618,48 @@ async def list_curricula(teacherUid: str):
 async def delete_curriculum(curriculum_id: str, teacherUid: str):
     """
     Delete a curriculum
-    
+
     Args:
         curriculum_id: Firestore document ID
         teacherUid: User ID for authorization
+
+    NOTE: still takes a raw teacherUid instead of an Authorization token --
+    see this task's report for the TASK-008 frontend follow-up.
     """
     try:
+        require_org_for_uid(teacherUid)
         success = await firebase.delete_curriculum(curriculum_id, teacherUid)
-        
+
         if not success:
             raise HTTPException(status_code=404, detail="Curriculum not found")
-        
+
         return {"message": "Curriculum deleted successfully"}
-    
+
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
 # In backend/routes/curriculum.py
 @router.post("/save-course")
 async def save_course(course_data: dict, teacherUid: str, organizationId: str):
-    """Save course from CourseWorkspace"""
+    """Save course from CourseWorkspace
+
+    NOTE: still takes a raw teacherUid/organizationId instead of an
+    Authorization token -- see this task's report for the TASK-008 frontend
+    follow-up. The resolved org (from the registry) is used for the actual
+    Firestore write regardless of what organizationId the client sent, so a
+    stale or tampered organizationId can't write into another org's tree.
+    """
     try:
         if not teacherUid:
             raise HTTPException(status_code=400, detail="teacherUid is required")
 
         if not organizationId:
             raise HTTPException(status_code=400, detail="organizationId is required")
-        
+
+        org = require_org_for_uid(teacherUid)
+
         # FIX: Ensure course_data has the right structure
         curriculum_data = {
             'course_name': course_data.get('courseName'),  # Convert from frontend format
@@ -629,55 +677,67 @@ async def save_course(course_data: dict, teacherUid: str, organizationId: str):
         course_id = await firebase.save_curriculum(
             teacherUid=teacherUid,
             curriculum_data=curriculum_data,
-            organizationId=organizationId
+            organizationId=org
         )
-        
+
         return {
             'success': True,
             'courseId': course_id,
             'message': 'Course saved successfully'
         }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    
+
 @router.get("/my-courses")
 async def get_my_courses(teacherUid: str):
     """
     Get all courses for the logged-in teacher
-    
+
     Args:
         teacherUid: Firebase user ID
+
+    NOTE: still takes a raw teacherUid instead of an Authorization token --
+    see this task's report for the TASK-008 frontend follow-up.
     """
     try:
+        require_org_for_uid(teacherUid)
         curricula = await firebase.list_teacher_curricula(teacherUid)
-        
+
         return {
             'success': True,
             'courses': curricula
         }
-    
+
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    
+
 @router.post("/update-course")
 async def update_course(course_data: dict, teacherUid: str):
     """
     Update an existing course in Firebase
-    
+
     Args:
         course_data: Updated course data (must include courseId)
         teacherUid: Firebase user ID (passed as query parameter)
+
+    NOTE: still takes a raw teacherUid instead of an Authorization token --
+    see this task's report for the TASK-008 frontend follow-up.
     """
     try:
         if not teacherUid:
             raise HTTPException(status_code=400, detail="teacherUid is required")
-        
+
         course_id = course_data.get('courseId')
         if not course_id:
             raise HTTPException(status_code=400, detail="courseId is required for updates")
-        
+
         # Verify ownership OR collaborate access before updating
-        doc = firebase.curricula_collection.document(course_id).get()
+        org = require_org_for_uid(teacherUid)
+        doc = firebase.curricula_col(org).document(course_id).get()
         if not doc.exists:
             raise HTTPException(status_code=404, detail="Course not found or unauthorized")
         doc_data = doc.to_dict()
@@ -687,7 +747,7 @@ async def update_course(course_data: dict, teacherUid: str):
             collab = next((s for s in shared if s.get('uid') == teacherUid), None)
             if not collab or collab.get('accessType') != 'collaborate':
                 raise HTTPException(status_code=404, detail="Course not found or unauthorized")
-        
+
         # Prepare update data — only include fields present in the request.
         # Using .get() with defaults would overwrite sections/outline with [] or {}
         # when a partial save (e.g. saveField({ courseName: '...' })) is sent.
@@ -697,9 +757,9 @@ async def update_course(course_data: dict, teacherUid: str):
             'handsOnResources', 'courseDescription', 'synopsis',
         ]
         update_data = {k: course_data[k] for k in allowed_fields if k in course_data}
-        
+
         # Update in Firebase (this will use the existing document)
-        await firebase.update_curriculum(course_id, update_data)
+        await firebase.update_curriculum(course_id, update_data, org=org)
         
         return {
             'success': True,
@@ -735,7 +795,8 @@ async def upload_course_attachment(
 ):
     """Upload a new attachment to an existing course and extract its text."""
     try:
-        doc = firebase.curricula_collection.document(curriculum_id).get()
+        org = require_org_for_uid(teacherUid)
+        doc = firebase.curricula_col(org).document(curriculum_id).get()
         if not doc.exists:
             raise HTTPException(status_code=404, detail="Course not found")
         if doc.to_dict().get('teacherUid') != teacherUid:
@@ -778,7 +839,8 @@ async def upload_course_attachment(
                 pass
 
         ct = content_type_map.get(ext.lower(), 'application/octet-stream')
-        storage_path = f"course_attachments/{curriculum_id}/{attachment_id}/{filename}"
+        # Users/{org}/... prefix per tasks/firestore-reorg-spec.md Round 2, section E.
+        storage_path = f"Users/{org}/course_attachments/{curriculum_id}/{attachment_id}/{filename}"
         try:
             file_url = await firebase.upload_file(data, storage_path, ct)
         except Exception:
@@ -797,7 +859,7 @@ async def upload_course_attachment(
         }
 
         existing = doc.to_dict().get('courseAttachments', [])
-        firebase.curricula_collection.document(curriculum_id).update({
+        firebase.curricula_col(org).document(curriculum_id).update({
             'courseAttachments': existing + [attachment],
             'lastModified': datetime.utcnow().isoformat(),
         })
@@ -820,7 +882,8 @@ async def update_course_attachment(
 ):
     """Update description or isActive toggle for a course attachment."""
     try:
-        doc = firebase.curricula_collection.document(curriculum_id).get()
+        org = require_org_for_uid(teacherUid)
+        doc = firebase.curricula_col(org).document(curriculum_id).get()
         if not doc.exists:
             raise HTTPException(status_code=404, detail="Course not found")
         if doc.to_dict().get('teacherUid') != teacherUid:
@@ -841,7 +904,7 @@ async def update_course_attachment(
         if not found:
             raise HTTPException(status_code=404, detail="Attachment not found")
 
-        firebase.curricula_collection.document(curriculum_id).update({
+        firebase.curricula_col(org).document(curriculum_id).update({
             'courseAttachments': updated,
             'lastModified': datetime.utcnow().isoformat(),
         })
@@ -863,7 +926,8 @@ async def delete_course_attachment(
 ):
     """Remove an attachment from a course (Firestore record + Storage file)."""
     try:
-        doc = firebase.curricula_collection.document(curriculum_id).get()
+        org = require_org_for_uid(teacherUid)
+        doc = firebase.curricula_col(org).document(curriculum_id).get()
         if not doc.exists:
             raise HTTPException(status_code=404, detail="Course not found")
         if doc.to_dict().get('teacherUid') != teacherUid:
@@ -888,7 +952,7 @@ async def delete_course_attachment(
                 pass  # Storage cleanup is best-effort
 
         remaining = [a for a in attachments if a.get('id') != attachment_id]
-        firebase.curricula_collection.document(curriculum_id).update({
+        firebase.curricula_col(org).document(curriculum_id).update({
             'courseAttachments': remaining,
             'lastModified': datetime.utcnow().isoformat(),
         })
@@ -906,13 +970,14 @@ async def delete_course_attachment(
 async def update_course_info_notes(curriculum_id: str, body: CourseInfoNotesUpdate):
     """Update the teacher's free-text project notes for a course."""
     try:
-        doc = firebase.curricula_collection.document(curriculum_id).get()
+        org = require_org_for_uid(body.teacherUid)
+        doc = firebase.curricula_col(org).document(curriculum_id).get()
         if not doc.exists:
             raise HTTPException(status_code=404, detail="Course not found")
         if doc.to_dict().get('teacherUid') != body.teacherUid:
             raise HTTPException(status_code=403, detail="Not authorized")
 
-        firebase.curricula_collection.document(curriculum_id).update({
+        firebase.curricula_col(org).document(curriculum_id).update({
             'courseInfoNotes': body.notes,
             'lastModified': datetime.utcnow().isoformat(),
         })
@@ -1041,11 +1106,12 @@ async def update_course_visibility(curriculum_id: str, body: VisibilityUpdate, t
     """Toggle a course's public/private visibility. Only the owner can change this."""
     try:
         # Verify ownership
-        curriculum = await firebase.get_curriculum(curriculum_id, teacherUid)
+        org = require_org_for_uid(teacherUid)
+        curriculum = await firebase.get_curriculum(curriculum_id, teacherUid, org=org)
         if not curriculum:
             raise HTTPException(status_code=404, detail="Course not found or unauthorized")
 
-        await firebase.update_curriculum(curriculum_id, {'isPublic': body.isPublic})
+        await firebase.update_curriculum(curriculum_id, {'isPublic': body.isPublic}, org=org)
         return {"success": True, "isPublic": body.isPublic}
 
     except HTTPException:
@@ -1070,8 +1136,17 @@ class EdoChatRequest(BaseModel):
     teacher_uid: Optional[str] = None
 
 @router.post("/curriculum/chat")
-async def chat_with_edo(request: EdoChatRequest):
-    """Edo AI curriculum assistant — returns 2-3 structured suggestion blocks"""
+async def chat_with_edo(request: EdoChatRequest, current_user: dict = Depends(require_org)):
+    """
+    Edo AI curriculum assistant — returns 2-3 structured suggestion blocks.
+
+    Requires a Firebase token (tasks/firestore-reorg-spec.md Round 2, section B):
+    the org comes from the token, not from request.teacher_uid, and the course
+    (if any) is read only from the caller's own org tree -- no cross-org
+    collection_group lookup. Edo's scope stays the single course being chatted
+    about; no new context was added here.
+    """
+    org = current_user["org"]
     try:
         # --- Static block: Edo identity, rules, and stable course info ---
         # Built first so it can be cached by OpenAI prefix caching (≥1024 tokens, identical prefix)
@@ -1114,8 +1189,12 @@ async def chat_with_edo(request: EdoChatRequest):
             course_id = request.context.get("courseId")
             if course_id:
                 try:
-                    doc = firebase.curricula_collection.document(course_id).get()
-                    if doc.exists:
+                    # Direct path lookup under the caller's own org -- no
+                    # cross-org collection_group scan (tasks/firestore-reorg-spec.md
+                    # Round 2, section B). Best-effort only -- failures here are
+                    # swallowed below since this is supplementary chat context.
+                    doc = firebase.curricula_col(org).document(course_id).get()
+                    if doc is not None and doc.exists:
                         doc_data = doc.to_dict()
                         notes = doc_data.get('courseInfoNotes', '').strip()
                         if notes:

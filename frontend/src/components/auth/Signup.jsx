@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { signupTeacher, getOrgFromEmail, ORGS } from '../../firebase/authService';
+import { signupTeacher } from '../../firebase/authService';
 
 const Signup = () => {
   const [formData, setFormData] = useState({
     displayName: '',
-    organization: '',
     email: '',
     password: '',
     confirmPassword: ''
@@ -33,26 +32,6 @@ const Signup = () => {
 
     if (formData.password.length < 6) {
       setError('Password must be at least 6 characters');
-      setLoading(false);
-      return;
-    }
-
-    if (!formData.organization) {
-      setError('Please select your organization.');
-      setLoading(false);
-      return;
-    }
-
-    const selectedOrg = ORGS.find(o => o.id === formData.organization);
-    const emailDomain = formData.email.split('@')[1]?.toLowerCase();
-    if (!selectedOrg || emailDomain !== selectedOrg.domain) {
-      setError(`Your email must end in @${selectedOrg?.domain} to sign up as ${selectedOrg?.name}.`);
-      setLoading(false);
-      return;
-    }
-
-    if (!getOrgFromEmail(formData.email)) {
-      setError('Email domain not recognized. Please contact EdCube to have your organization added.');
       setLoading(false);
       return;
     }
@@ -196,27 +175,15 @@ const Signup = () => {
 
               <div style={{ marginBottom: 16 }}>
                 <label style={{ display: 'block', fontSize: 11, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: '#A89F94', marginBottom: 6 }}>
-                  Organization
-                </label>
-                <select className="su-select" name="organization"
-                  value={formData.organization} onChange={handleChange} required>
-                  <option value="">Select your organization…</option>
-                  {ORGS.map(org => (
-                    <option key={org.id} value={org.id}>{org.name}</option>
-                  ))}
-                </select>
-                <p style={{ fontSize: 11, color: '#A89F94', marginTop: 5 }}>
-                  Don't see your organization?{' '}
-                  <a href="/contact" style={{ color: '#1C1917', fontWeight: 500 }}>Contact us</a> to get added.
-                </p>
-              </div>
-
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: '#A89F94', marginBottom: 6 }}>
                   Email
                 </label>
                 <input className="su-input" type="email" name="email" placeholder="you@yourschool.org"
                   value={formData.email} onChange={handleChange} required />
+                <p style={{ fontSize: 11, color: '#A89F94', marginTop: 5 }}>
+                  Your organization is detected from your email.{' '}
+                  Don't see your organization recognized?{' '}
+                  <a href="/contact" style={{ color: '#1C1917', fontWeight: 500 }}>Contact us</a> to get added.
+                </p>
               </div>
 
               <div style={{ marginBottom: 16 }}>

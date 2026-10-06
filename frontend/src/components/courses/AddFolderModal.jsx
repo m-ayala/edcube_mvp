@@ -39,7 +39,7 @@ const Avatar = ({ person, size = 28 }) =>
   );
 
 const AddFolderModal = ({ folder = null, parentId = null, onClose, onSaved }) => {
-  const { currentUser } = useAuth();
+  const { currentUser, org } = useAuth();
   const isEdit = !!folder;
 
   const [name, setName] = useState(folder?.name || '');
@@ -109,10 +109,10 @@ const AddFolderModal = ({ folder = null, parentId = null, onClose, onSaved }) =>
     const payload = { description: description.trim(), labels, collaborators, color };
     try {
       if (isEdit) {
-        await updateCourseFolder(currentUser.uid, folder.id, { name: trimmed, ...payload });
+        await updateCourseFolder(currentUser.uid, org, folder.id, { name: trimmed, ...payload });
         onSaved({ ...folder, name: trimmed, ...payload });
       } else {
-        const created = await createCourseFolder(currentUser.uid, trimmed, parentId, payload);
+        const created = await createCourseFolder(currentUser.uid, org, trimmed, parentId, payload);
         onSaved(created);
       }
     } catch (err) {

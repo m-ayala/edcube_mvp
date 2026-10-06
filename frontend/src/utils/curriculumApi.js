@@ -8,18 +8,27 @@ const API_BASE_URL = `${import.meta.env.VITE_API_BASE_URL}/api`;
  * @param {string} params.message - User message
  * @param {Object} params.context - Course + selected item context
  * @param {Array} params.conversationHistory - Prior messages [{role, content}]
- * @param {string} params.teacherUid - Teacher's user ID
+ * @param {string} params.teacherUid - Teacher's user ID (legacy field, kept for
+ *   backward compatibility -- the backend now resolves the org from the
+ *   Authorization token, not this field; see `idToken` below)
+ * @param {string} params.idToken - Firebase ID token. Required as of
+ *   tasks/firestore-reorg-spec.md Round 2 section B: POST /curriculum/chat is
+ *   no longer unauthenticated, so this call 401s without it.
  */
 export const chatWithEdo = async ({
   message,
   context = null,
   conversationHistory = [],
-  teacherUid = null
+  teacherUid = null,
+  idToken
 }) => {
   try {
     const response = await fetch(`${API_BASE_URL}/curriculum/chat`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(idToken ? { Authorization: `Bearer ${idToken}` } : {})
+      },
       body: JSON.stringify({
         message,
         context,

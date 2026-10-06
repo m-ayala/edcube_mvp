@@ -2,52 +2,98 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ── Curricula ────────────────────────────────────────────────────────
-    match /curricula/{curriculumId} {
-      // Anyone authenticated can read (for public course browsing)
-      allow read: if request.auth != null;
-      // Only the owning teacher can write
-      allow create: if request.auth != null
-                    && request.resource.data.teacherUid == request.auth.uid;
-      allow update, delete: if request.auth != null
-                    && resource.data.teacherUid == request.auth.uid;
+    // ── Org resolution ───────────────────────────────────────────────────
+    // Single source of truth is the Users/{orgId} doc itself
+    // ({ name, domains: [...], allowed_emails: [...] }) -- the same registry
+    // backend/firebase/org_registry.py reads, no hardcoded domain list here
+    // (tasks/firestore-reorg-spec.md Round 2, section A, overrides the Round 1
+    // version of this file). An email belongs to orgId if its lowercased
+    // domain is in that org's `domains`, OR the full lowercased email is in
+    // `allowed_emails`. No match -> not a member; there is no default org.
+    function callerEmail() {
+      return request.auth.token.email.lower();
     }
 
-    // ── Knowledge Base (taxonomy reference data) ────────────────────────
-    // Seeded only via the backend admin script; read-only for clients.
-    match /kb_age_bands/{docId} {
-      allow read: if request.auth != null;
-    }
-    match /kb_objectives/{docId} {
-      allow read: if request.auth != null;
-    }
-    match /kb_worksheet_formats/{docId} {
-      allow read: if request.auth != null;
-    }
-    match /kb_activity_formats/{docId} {
-      allow read: if request.auth != null;
-    }
-    match /kb_content_formats/{docId} {
-      allow read: if request.auth != null;
+    function callerEmailDomain() {
+      return callerEmail().split('@')[1];
     }
 
-    // ── Teachers ─────────────────────────────────────────────────────────
-    match /teachers/{teacherUid} {
-      // Any authenticated user can read a teacher profile (for profile pages)
-      allow read: if request.auth != null;
-      // Only the teacher themselves can write their profile
-      allow write: if request.auth != null && request.auth.uid == teacherUid;
+    function isOrgMember(orgId) {
+      return request.auth != null
+          && request.auth.token.email != null
+          && exists(/databases/$(database)/documents/Users/$(orgId))
+          && (
+               callerEmailDomain() in get(/databases/$(database)/documents/Users/$(orgId)).data.get('domains', [])
+               || callerEmail() in get(/databases/$(database)/documents/Users/$(orgId)).data.get('allowed_emails', [])
+             );
+    }
 
-      // ── Resource Library (private — owner only) ───────────────────────
-      match /libraryFolders/{folderId} {
-        allow read, write: if request.auth != null
-                           && request.auth.uid == teacherUid;
+    // ── EdCube (platform-wide knowledge base) ───────────────────────────
+    // Seeded only via backend/scripts/seed_knowledge_base.py; read-only for
+    // any authenticated user, never writable from clients.
+    match /EdCube/knowledge_base {
+      allow read: if request.auth != null;
+
+      match /{category}/{docId} {
+        allow read: if request.auth != null;
+      }
+    }
+
+    // ── Users/{orgId} (per-organization data) ───────────────────────────
+    match /Users/{orgId} {
+      allow read: if isOrgMember(orgId);
+
+      // ── Curricula ──────────────────────────────────────────────────────
+      match /curricula/{curriculumId} {
+        // Any org member can read (for public course browsing within the org)
+        allow read: if isOrgMember(orgId);
+        // Only the owning teacher can write
+        allow create: if isOrgMember(orgId)
+                      && request.resource.data.teacherUid == request.auth.uid;
+        allow update, delete: if isOrgMember(orgId)
+                      && resource.data.teacherUid == request.auth.uid;
       }
 
-      // ── Course Folders (private — owner only) ────────────────────────
-      match /courseFolders/{folderId} {
-        allow read, write: if request.auth != null
-                           && request.auth.uid == teacherUid;
+      // ── Teacher profiles ─────────────────────────────────────────────
+      match /teacher_profiles/{uid} {
+        allow read: if isOrgMember(orgId);
+        allow write: if isOrgMember(orgId) && request.auth.uid == uid;
+      }
+
+      // ── Teachers (legacy profile doc + folders) ─────────────────────
+      match /teachers/{teacherUid} {
+        // Any org member can read a teacher profile (for profile pages)
+        allow read: if isOrgMember(orgId);
+        // Only the teacher themselves can write their profile
+        allow write: if isOrgMember(orgId) && request.auth.uid == teacherUid;
+
+        // ── Resource Library (private — owner only) ───────────────────
+        match /libraryFolders/{folderId} {
+          allow read, write: if isOrgMember(orgId) && request.auth.uid == teacherUid;
+        }
+
+        // ── Course Folders (private — owner only) ─────────────────────
+        match /courseFolders/{folderId} {
+          allow read, write: if isOrgMember(orgId) && request.auth.uid == teacherUid;
+        }
+      }
+
+      // ── Notifications (delete-on-seen inbox) ────────────────────────
+      // Created by the backend via the Admin SDK (which bypasses these
+      // rules); clients only ever read their own and delete-on-seen.
+      match /notifications/{notifId} {
+        allow read, delete: if isOrgMember(orgId)
+                      && resource.data.toUid == request.auth.uid;
+      }
+
+      // ── Synopsis (camp + afterschool admin/teacher views) ───────────
+      // Writes go through the backend (Admin SDK); clients only read.
+      match /synopsis/{synDoc} {
+        allow read: if isOrgMember(orgId);
+
+        match /{document=**} {
+          allow read: if isOrgMember(orgId);
+        }
       }
     }
 

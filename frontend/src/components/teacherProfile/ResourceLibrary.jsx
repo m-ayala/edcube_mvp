@@ -9,6 +9,7 @@ import {
   deleteLinkFromFolder,
   renameLibraryFolder
 } from '../../firebase/dbService';
+import { useAuth } from '../../contexts/AuthContext';
 
 const colors = {
   bg: '#FFFFFF',
@@ -34,6 +35,7 @@ const inputStyle = {
 };
 
 const ResourceLibrary = ({ currentUser }) => {
+  const { org } = useAuth();
   const [folders, setFolders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expandedFolders, setExpandedFolders] = useState({});
@@ -53,13 +55,13 @@ const ResourceLibrary = ({ currentUser }) => {
   const [savingLink, setSavingLink] = useState(false);
 
   useEffect(() => {
-    if (currentUser?.uid) loadFolders();
-  }, [currentUser]);
+    if (currentUser?.uid && org) loadFolders();
+  }, [currentUser, org]);
 
   const loadFolders = async () => {
     try {
       setLoading(true);
-      const data = await getLibraryFolders(currentUser.uid);
+      const data = await getLibraryFolders(currentUser.uid, org);
       setFolders(data);
     } catch (err) {
       console.error('Error loading library folders:', err);
@@ -79,7 +81,7 @@ const ResourceLibrary = ({ currentUser }) => {
     if (!name) return;
     setSavingFolder(true);
     try {
-      const id = await createLibraryFolder(currentUser.uid, name);
+      const id = await createLibraryFolder(currentUser.uid, org, name);
       setFolders(prev => [...prev, { id, name, links: [] }]);
       setExpandedFolders(prev => ({ ...prev, [id]: true }));
       setNewFolderName('');
@@ -94,7 +96,7 @@ const ResourceLibrary = ({ currentUser }) => {
   const handleDeleteFolder = async (folder) => {
     if (!confirm(`Delete folder "${folder.name}" and all ${folder.links?.length || 0} links inside?`)) return;
     try {
-      await deleteLibraryFolder(currentUser.uid, folder.id);
+      await deleteLibraryFolder(currentUser.uid, org, folder.id);
       setFolders(prev => prev.filter(f => f.id !== folder.id));
     } catch (err) {
       console.error('Error deleting folder:', err);
@@ -105,7 +107,7 @@ const ResourceLibrary = ({ currentUser }) => {
     const name = renamingFolder?.name?.trim();
     if (!name) { setRenamingFolder(null); return; }
     try {
-      await renameLibraryFolder(currentUser.uid, folderId, name);
+      await renameLibraryFolder(currentUser.uid, org, folderId, name);
       setFolders(prev => prev.map(f => f.id === folderId ? { ...f, name } : f));
       setRenamingFolder(null);
     } catch (err) {
@@ -130,7 +132,7 @@ const ResourceLibrary = ({ currentUser }) => {
 
     setSavingLink(true);
     try {
-      const link = await addLinkToFolder(currentUser.uid, addingLinkTo, { title: title.trim(), url: url.trim(), description: description.trim() });
+      const link = await addLinkToFolder(currentUser.uid, org, addingLinkTo, { title: title.trim(), url: url.trim(), description: description.trim() });
       setFolders(prev => prev.map(f =>
         f.id === addingLinkTo ? { ...f, links: [...(f.links || []), link] } : f
       ));
@@ -145,7 +147,7 @@ const ResourceLibrary = ({ currentUser }) => {
 
   const handleDeleteLink = async (folder, link) => {
     try {
-      await deleteLinkFromFolder(currentUser.uid, folder.id, link);
+      await deleteLinkFromFolder(currentUser.uid, org, folder.id, link);
       setFolders(prev => prev.map(f =>
         f.id === folder.id ? { ...f, links: (f.links || []).filter(l => l.id !== link.id) } : f
       ));
