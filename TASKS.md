@@ -9,22 +9,97 @@ Format: `- [ ] TASK-XXX: description (suggested agent, optional)`
 ## Backlog
 
 
-- [ ] TASK-010: [NEEDS EXPLICIT APPROVAL, skip in /next-task] Firestore reorg, part
-      5/5: delete old collections (including leads, legacy synopsis_*, and
-      worksheet_pdfs) via --delete-old. Review the 2 leads docs first. Depends on:
-      TASK-009 done and verified.
-- [ ] TASK-011: [LATER, skip in /next-task until TASK-010 is done] Move existing Cloud
-      Storage files (course attachments, synopsis photos) under Users/{org}/ and
-      rewrite the download links stored in the docs. See
+## Needs Input
+
+
+## In Progress
+
+
+
+## Done
+
+- [x] TASK-013: Decide what to do with the leftovers of the Storage reorg (unlinked blobs
+      under Users/icc/ and the out-of-scope worksheet_* prefixes).
+      Result: PASS (docs-qa-agent, 2026-10-07) - the person approved: "Just simply delete
+      them... as long as they're only the summer camp ones. Don't delete the after-school
+      newsletter synopsis ones." Coordinator deleted 176 blobs (about 462 MB) from the bucket:
+      166 unlinked camp photos under Users/icc/synopsis/summer_camps/, plus all of
+      worksheet_images/ (6, test files) and worksheet_pdfs/ (4), none linked from any document.
+      Deliberately KEPT per that instruction: 15 unlinked blobs under Users/icc/synopsis/afterschool/
+      and 1 under Users/icc/profile_pictures/ (16 unlinked remain; no new task filed).
+      Read-only re-check: bucket holds 1204 blobs (summer_camps 1158, afterschool 43,
+      course_attachments 1, profile_pictures 2, no worksheet_* blobs); 1188 stored links, 0
+      pointing at a missing blob; unlinked = 16 (15 afterschool, 1 profile picture, 0 camp).
+      Local backup of all 176 deleted files: /Users/manaswiniayala/edcube_backups/storage_leftovers_2026-10-07/
+      (176 files, outside the repo, owner-only permissions). Restoring means re-uploading
+      them, which gives new download tokens.
+
+- [x] TASK-012 (first part only): Delete the old top-level Cloud Storage copies
+      (synopsis/, afterschool_synopsis/, course_attachments/, profile_pictures/) via
+      `scripts/migrate_storage_to_org_tree.py --delete-old --yes-really`.
+      Result: PASS (docs-qa-agent, 2026-10-06) — approved by the person ("just delete the
+      old folder") and run by the coordinator: 1370 old blobs (about 4.3 GB) deleted. Read-only
+      re-check: the four old prefixes hold 0 blobs; new prefixes hold 1324 / 43 / 1 / 2;
+      worksheet_images/ (6) and worksheet_pdfs/ (4) untouched. Walking every doc under
+      Users/icc (766 docs, list_documents) finds 1188 Storage links, 0 without a blob; 60
+      random links fetched, all 206; the script's plain dry run shows 0 to copy, 0 to
+      rewrite, 0 dangling. Corrected reasoning: sent newsletters do NOT link to Storage;
+      they are downloaded .docx files with photos embedded as bytes (_fetch_photo_bytes in
+      routes/synopsis.py, reused by routes/afterschool_synopsis.py), so deleting the
+      originals cannot break them. No hardcoded old-prefix reference in backend/ or
+      frontend/src. Residual risk: a photo address someone copied out of the app and pasted
+      elsewhere (old-path links now 404). No backup of the deleted blobs exists; the link
+      backup is ~/edcube_backups/storage_link_rewrite_20261005T234322.json. Not done, not
+      approved: orphans and out-of-scope prefixes, now TASK-013.
+
+- [x] TASK-010: [NEEDS EXPLICIT APPROVAL] Firestore reorg, part 5/5: delete old
+      collections (including leads, legacy synopsis_*, and worksheet_pdfs) via
+      --delete-old. Review the 2 leads docs first. Depends on: TASK-009 done and
+      verified.
+      Result: PASS (docs-qa-agent, 2026-10-05) — approved by the person and run by the
+      coordinator. Full backup of all 18 old collections (recursive, phantom parents
+      included) at ~/edcube_backups/firestore_old_collections_2026-10-05.json: 851 docs,
+      equal to the 851 deleted; outside the repo, untracked. Live root collections are now
+      exactly EdCube and Users; tree counts match the mapping table. Two edits to
+      migrate_to_org_tree.py: (a) recursive delete walks list_documents() instead of
+      stream(), because the old synopsis/ICC parent was a phantom doc that stream() skips
+      (661 nested docs would have been left); (b) opt-in --allow-fewer-notifications lets
+      the count guard accept a smaller notifications destination (3 vs 4: the missing one
+      was addressed to the person's own account and was consumed by delete-on-seen,
+      spec decision 6; verified against the backup). Leads note: the 2 leads docs (a demo
+      request from an ICC address dated 2026-05-19 and an obvious test entry dated
+      2026-04-24) were backed up and shown to the person only after the approval message,
+      so "review first" was met by backup plus disclosure, not prior reading. Caveat: the
+      backup file is world-readable (0644) and holds lead names and emails; keep it private.
+
+- [x] TASK-011: Move existing Cloud Storage files (course attachments, synopsis photos)
+      under Users/{org}/ and rewrite the download links stored in the docs. See
       tasks/firestore-reorg-spec.md, "Round 2" E. (backend-agent)
-- [ ] TASK-001: Wire blockCategories.js to fetch live taxonomy from a backend endpoint
-      instead of using a hardcoded array (backend-agent for the endpoint, then
-      frontend-agent for the fetch)
-- [ ] TASK-003: Phase 1.5 redesign, part 2/3 — day lanes panel with copy-on-drop
+      Result: PASS-WITH-FOLLOW-UP (docs-qa-agent, 2026-10-05) — done as COPY plus relink,
+      not a move: the old blobs still exist (about 4.3 GB duplicated) by design, since
+      already-sent emails and newsletters may link to them. 1370 blobs under
+      Users/icc/ (1324 / 43 / 1 / 2) match their old counterparts on size, crc32c and
+      download token (all 1370 pairs checked, not a sample); a re-run of the script's dry
+      run reports 0 to copy, 0 to rewrite, 0 dangling; walking Users/icc finds 1188
+      Storage links, all pointing at Users/icc/, none at an old prefix; 35 sampled new
+      links all returned 206. Link backup at ~/edcube_backups/storage_link_rewrite_20261005T234322.json
+      (1188 entries, only the object path differs; contains live tokens, keep private).
+      Follow-up: TASK-012 (delete old copies, orphans, out-of-scope prefixes).
+
+- [x] TASK-003: Phase 1.5 redesign, part 2/3 — day lanes panel with copy-on-drop
       (fresh unique id per copy, subsection drop renders grouped card, single block
       drop renders standalone chip). See tasks/phase-1.5-redesign-spec.md section 3.
       Depends on: TASK-002 done. (frontend-agent)
-- [ ] TASK-005: Expose CONTENT_SUBTYPES/WORKSHEET_SUBTYPES/ACTIVITY_SUBTYPES
+      Result: PASS (docs-qa-agent, 2026-10-05) — handleDragEnd diff is insertion-only
+      (no removed lines), library branch always returns and is reachable only from `lib-`
+      sources with LIBRARY_* types; copy helpers run under node: distinct group/block ids,
+      deep independence, 100k ids unique; dayLanes feeds no effect, history or save;
+      numDays edge cases checked; `npm run build` ok, lint 27 errors/6 warnings (baseline),
+      and the 4 errors/1 warning in CourseWorkspace.jsx are identical at HEAD. Caveats:
+      drag behaviour NOT browser-tested (nested typed droppables, hidden placeholders,
+      drop animation); lanes are not persisted and reset on reload.
+
+- [x] TASK-005: Expose CONTENT_SUBTYPES/WORKSHEET_SUBTYPES/ACTIVITY_SUBTYPES
       (currently hardcoded in backend/outliner/block_prompts.py:15-43) to the
       frontend via a new FastAPI route, same pattern as TASK-001's endpoint — no
       shared backend/frontend constants file currently exists to reuse instead
@@ -33,15 +108,22 @@ Format: `- [ ] TASK-XXX: description (suggested agent, optional)`
       of blockCategories.js (a different, pedagogical-objective taxonomy — confirmed
       not a match). See tasks/phase-1.5-redesign-spec.md "Resolved after TASK-002
       investigation," point 3. Depends on: nothing. (backend-agent)
+      Result: PASS (docs-qa-agent, 2026-10-05) — `import main` ok, both routes registered;
+      401 with no/bad token; 200 with require_org overridden, lists (9/6/6) and the
+      compatibility map equal the imported constants; response is fresh lists, mutating
+      it leaves the constants unchanged; backend/outliner/ and knowledge_base_service.py
+      untouched. Caveats: route not deployed; no automated tests; placement on the
+      knowledge-base router accepted (noted in ARCHITECTURE.md).
 
-
-## Needs Input
-
-
-## In Progress
-
-
-## Done
+- [x] TASK-001: Wire blockCategories.js to fetch live taxonomy from a backend endpoint
+      instead of using a hardcoded array (backend-agent for the endpoint, then
+      frontend-agent for the fetch)
+      Result: PASS (docs-qa-agent, 2026-10-05) — `import main` ok, route registered;
+      401 with no/bad token; 200 body shape confirmed (5 objectives, fields id/label/
+      allowed_types/clusters) with auth dependency overridden against live Firestore;
+      field mapping and path match; `npm run build` ok, lint 27 errors/6 warnings
+      (baseline, none in this file). Caveats: 200 with a real token untested; route
+      not deployed, so the live call 404s and the fallback runs until deploy.
 
 - [x] TASK-009: [PERSON-RUN] Firestore reorg, part 4/5: cutover. Run the migration
       with --apply, deploy backend, frontend and rules, re-run --apply, then smoke

@@ -20,11 +20,11 @@ structure changes, don't let it drift from what's actually in the repo.
 
 ```
 backend/
-  routes/            → curriculum, resources, topics, teachers
+  routes/            → curriculum, resources, topics, teachers, knowledge_base
   services/           → orchestrator.py, prompt_builder.py, firebase_service.py,
                         knowledge_base_service.py (backend-agent builds/owns this)
   schemas/             → curriculum_schema.py, teacher_schema.py
-  scripts/             → seed_knowledge_base.py (kb_* seed script)
+  scripts/             → seed_knowledge_base.py (EdCube/knowledge_base seed script)
   outliner/            → Phase 1 — outline_generator.py, outline_prompts.py, main.py
   populator/           → Phase 2 — youtube_handler.py, transcript_handler.py,
                           content_analyzer.py, video_filter.py, channel_database.py
@@ -55,27 +55,21 @@ exists.
 
 ## Data model — Firestore
 
-**Firestore reorg in progress (TASK-006 to TASK-010, see
-`tasks/firestore-reorg-spec.md`).** The tree is being collapsed from 18 flat top-level
-collections down to two roots, `EdCube` (platform-wide) and `Users` (per-organization).
-As of TASK-006b, the *backend code* (`backend/firebase/paths.py` and every service/route
-that touches Firestore) reads and writes the new tree shape below. As of TASK-008, the
-*frontend code* (`frontend/src/firebase/paths.js` and every component that touches
-Firestore) does too — there is no raw `collection(db, ...)`/`doc(db, ...)` call left
-outside `paths.js`. As of TASK-007,
-`backend/scripts/migrate_to_org_tree.py` exists and copies every mapping in
-`tasks/firestore-reorg-spec.md`'s "Old → new mapping" table (plus the Round 2 additions —
-the `Users/icc` registry doc, afterschool entries nested under their month, and the
-`sharedWithUids` backfill) into the new tree; it is copy-only (never deletes the old
-collections) and idempotent (`.set()` on the same doc ids). Run from `backend/`:
-`.venv/bin/python scripts/migrate_to_org_tree.py` for a read-only dry run (the default —
-prints a source → destination plan, writes nothing), add `--apply` to perform the copy,
-and `--delete-old --yes-really` (TASK-010 only) to remove the old top-level collections
-once the destination counts have been verified to match. But the *data itself has not
-been migrated for real yet* — only a dry run has been run (that happens in TASK-009's
-cutover) — and nothing has been deployed. Until TASK-009 runs, the new-tree backend code
-is inert on `main`/production, which still runs the old code against the old flat
-collections. Don't deploy `backend_cleanup` on its own.
+**Firestore reorg complete (TASK-006 to TASK-010, see `tasks/firestore-reorg-spec.md`).**
+The 18 flat top-level collections were collapsed into two roots, `EdCube` (platform-wide)
+and `Users` (per-organization). The old collections were deleted on 2026-10-05 (TASK-010,
+after a full local backup); the live database's only root collections are `EdCube` and
+`Users`. Backend code (`backend/firebase/paths.py`) and frontend code
+(`frontend/src/firebase/paths.js`) read and write only the new tree; there is no raw
+`collection(db, ...)`/`doc(db, ...)` call outside those two files. The migration scripts
+are kept for reference. `backend/scripts/migrate_to_org_tree.py` copies each mapping in
+`tasks/firestore-reorg-spec.md` into the new tree (dry run by default; `--apply` copies;
+`--delete-old --yes-really` deletes the old top-level collections only if destination
+counts are at least the eligible source counts; `--allow-fewer-notifications` is an opt-in
+exception for the notifications mapping only, because that inbox is delete-on-seen).
+Recursive deletes use `list_documents()` so phantom parent docs are traversed. All of it
+is no longer needed for normal operation; do not re-run `--apply` casually, as the old
+sources no longer exist.
 
 ### Target tree
 
@@ -209,12 +203,24 @@ synopsis (camp + afterschool) photos go under `Users/{org}/course_attachments/�
 `Users/{org}/synopsis/summer_camps/…` and `Users/{org}/synopsis/afterschool/…`.
 Synopsis routes have no auth and are ICC-only today, so they use a
 `DEFAULT_SYNOPSIS_ORG = "icc"` constant for the storage prefix (same constant used for
-the Firestore synopsis paths). Existing files and their stored download URLs are
-untouched — moving them is TASK-011. As of TASK-007, new profile-picture uploads also go
+the Firestore synopsis paths). Existing files were copied under the org prefix by TASK-011 and the old copies deleted by TASK-012 (see below). As of TASK-007, new profile-picture uploads also go
 under `Users/{org}/profile_pictures/{uid}/…` (`routes/uploads.py`, via the `require_org`
 dependency); old `profile_pictures/{uid}/…` download URLs already stored on teacher
 profiles are unaffected since they're already-issued absolute Storage URLs, not
 reconstructed paths.
+
+**Storage migration (TASK-011, done 2026-10-05):** `backend/scripts/migrate_storage_to_org_tree.py`
+(dry run by default) copied 1370 existing blobs server-side to `Users/icc/synopsis/summer_camps/`
+(from `synopsis/`), `Users/icc/synopsis/afterschool/` (from `afterschool_synopsis/`),
+`Users/icc/course_attachments/` and `Users/icc/profile_pictures/`, preserving metadata and the
+download token, and rewrote the 1188 stored links (only the object path in the URL changes).
+This was a copy, not a move; the old top-level blobs were then deleted on 2026-10-06 (TASK-012,
+approved by the person; no backup of them exists). Sent newsletters are not affected: they are
+.docx files with photos embedded as bytes, not Storage links. The 166 unlinked camp photos and the out-of-scope
+`worksheet_images/` / `worksheet_pdfs/` blobs were deleted on 2026-10-07 (TASK-013, approved by the person; local backup
+outside the repo). 16 unlinked blobs (15 afterschool, 1 profile picture) are deliberately kept. Storage URLs are parsed back into object
+paths by `routes/curriculum.py` (attachment delete) and `routes/synopsis.py` (photo fetch) by
+splitting on `/o/`, so they work unchanged on the new links.
 
 **`EdCube/knowledge_base/{pedagogy,age,content,worksheets,activities}`** (and future
 `curriculum`, `impact_partners`) — the taxonomy knowledge base, was
@@ -226,11 +232,39 @@ move — only the underlying Firestore path changed, so `prompt_builder.py`, the
 and generation callers needed no edits. These replace pedagogy that used to be
 hardcoded across prompt files and `blockCategories.js`.
 
-As of TASK-008, `frontend/src/constants/blockCategories.js` reads
-`EdCube/knowledge_base/pedagogy` (via `firebase/paths.js`'s `kbCol`) instead of the old
-flat `kb_objectives` collection. It's still a direct Firestore read from the frontend,
-not a backend endpoint — see "Known architectural debt" below — but the path itself now
-matches the backend's tree.
+As of TASK-001, `frontend/src/constants/blockCategories.js` gets the taxonomy from
+`GET /api/knowledge-base/objectives` (`routes/knowledge_base.py`, read-only, behind
+`require_org`; returns `{"objectives": [{id, label, allowed_types, clusters}]}` straight
+from `knowledge_base_service.get_objectives()`). The frontend sends the Firebase ID token,
+maps `allowed_types` to `allowedTypes`, adds the local presentation colour, and caches the
+result in memory; the hardcoded array is only a fallback (shown until the fetch resolves,
+and kept if it fails). The frontend no longer reads the knowledge base from Firestore;
+`kbCol` in `firebase/paths.js` is now unused.
+
+As of TASK-005, `GET /api/knowledge-base/block-subtypes` (same router, same `require_org`
+guard) returns `{"subtypes": {"content": [...], "worksheet": [...], "activity": [...]},
+"worksheet_compatibility": {content subtype: [worksheet subtypes]}}`. Unlike `/objectives`
+this is NOT Firestore KB data: it is served straight from the Python constants in
+`backend/outliner/block_prompts.py` (`CONTENT_SUBTYPES`, `WORKSHEET_SUBTYPES`,
+`ACTIVITY_SUBTYPES`, `WORKSHEET_SUBTYPE_COMPATIBILITY`), which remain the single source of
+truth (structure-agent owns that file; the route only imports and copies them into fresh
+lists). It lives on the knowledge-base router because that is where the frontend already
+looks for taxonomy; if these subtypes are ever moved into the Firestore KB, only the route
+body changes.
+
+### Phase 1.5 library + day lanes view (frontend, TASK-002/003)
+
+Behind a local "Library" toggle in `CourseWorkspace.jsx` (off by default; the existing
+outline view is unchanged when off). `ContentLibraryPanel.jsx` lists every subsection and
+its block chips as drag sources (`@hello-pangea/dnd`, types `LIBRARY_SUBSECTION` /
+`LIBRARY_BLOCK`, both source droppables `isDropDisabled`); `DayLanesPanel.jsx` renders one
+lane per day (day count from `formData.numDays`, default 5, max 60). Drops are copies:
+`handleDragEnd` has a library branch that adds a fresh-id deep copy (grouped card for a
+subsection, standalone chip for a block) to the `dayLanes` React state. `dayLanes` is
+session-only: it is not saved, not part of the saved course shape, not in undo history, and
+resets on reload. Nothing triggers generation. Shared constants live in
+`frontend/src/constants/libraryView.js`, pure helpers in `frontend/src/utils/dayLanes.js`.
+The Edo suggestion tray (`edo-tray-*`, a cut) is untouched.
 
 ## Agent-to-code ownership map
 
@@ -249,11 +283,14 @@ directly, and never edit `knowledge_base_service.py`.
 
 ## Known architectural debt (update as these close)
 
-- `frontend/src/.../blockCategories.js` reads `EdCube/knowledge_base/pedagogy` directly
-  from Firestore in the browser (as of TASK-008 — the path is current, not stale) rather
-  than fetching from a backend endpoint. That's the open item: see `TASKS.md`'s TASK-001
-  for the plan to expose `knowledge_base_service.get_objectives()` via a FastAPI route
-  and move this read server-side.
+- `GET /api/knowledge-base/objectives` (TASK-001) is verified but depends on the backend
+  being deployed; until then the frontend gets a 404 and keeps its hardcoded fallback.
+  `kbCol` in `frontend/src/firebase/paths.js` has no users and could be removed.
+- `GET /api/knowledge-base/block-subtypes` (TASK-005) is verified but not deployed. The
+  Phase 1.5 day lanes (TASK-003) are not persisted and have not been exercised in a browser.
+- `backend/scripts/migrate_synopsis.py` is an obsolete one-off that reads the deleted
+  `synopsis_*` collections and writes to the deleted top-level `synopsis/ICC`; do not run it
+  (it would recreate an old root collection). Candidate for deletion.
 - No automated test suite exists yet (no pytest, no jest/vitest — only eslint on the
   frontend). `docs-qa-agent` verifies by other means until this is built out.
 - The knowledge base collections (`kb_*`, now `EdCube/knowledge_base/*` in the backend

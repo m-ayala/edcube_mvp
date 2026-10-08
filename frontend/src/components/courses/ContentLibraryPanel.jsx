@@ -13,35 +13,20 @@
 // SUBSECTION / BLOCK types. They share the single top-level DragDropContext
 // already provided by CourseWorkspace (nesting a second DragDropContext isn't
 // supported by @hello-pangea/dnd), but `handleDragEnd` has no branch that
-// matches these new type strings, so a drop is currently a safe no-op — real
-// drop handling (day lanes) lands in TASK-003.
+// matches these new type strings until the library branch (TASK-003), which
+// copies the dropped item into a day lane. Shared constants (palette, types,
+// droppable ids) live in constants/libraryView.js for Fast Refresh.
+//
+// Both source Droppables are `isDropDisabled`, so they never accept drops: the
+// library can't be reordered or reshuffled by a drag, and dropping back on it
+// is a no-op (the item just snaps home). Combined with copy-only handling in
+// handleDragEnd, the library never loses anything.
 import { Droppable, Draggable } from '@hello-pangea/dnd';
-import { GripVertical, Sparkles, CalendarDays } from 'lucide-react';
+import { GripVertical, Sparkles } from 'lucide-react';
+import { SECTION_GRADIENTS, BLOCK_TYPE_STYLE, LIBRARY_DND_TYPES } from '../../constants/libraryView';
+import DayLanesPanel from './DayLanesPanel';
 
-// Matches the pastel palette already used for section accents in CourseEditor.jsx
-const SECTION_GRADIENTS = [
-  'linear-gradient(180deg,#B2E8C8,#ACD8F0)',
-  'linear-gradient(180deg,#F2C0D4,#F7E4A0)',
-  'linear-gradient(180deg,#ACD8F0,#B2E8C8)',
-  'linear-gradient(180deg,#F7E4A0,#F2C0D4)',
-];
-
-// Matches the block-type color coding already used for chips in CourseEditor.jsx
-const BLOCK_TYPE_STYLE = {
-  content:   { bg: 'rgba(59,95,187,0.10)',  border: 'rgba(59,95,187,0.28)', dot: '#3B5FBB', label: 'Content' },
-  worksheet: { bg: 'rgba(176,90,26,0.10)',  border: 'rgba(176,90,26,0.28)', dot: '#B05A1A', label: 'Worksheet' },
-  activity:  { bg: 'rgba(26,122,64,0.10)',  border: 'rgba(26,122,64,0.28)', dot: '#1A7A40', label: 'Activity' },
-};
-
-// Not exported (keeps this a components-only file for React Fast Refresh) —
-// TASK-003 can reuse these same literal strings ('LIBRARY_SUBSECTION' /
-// 'LIBRARY_BLOCK') for its day-lane Droppables, they just need to match.
-const LIBRARY_DND_TYPES = {
-  SUBSECTION: 'LIBRARY_SUBSECTION',
-  BLOCK: 'LIBRARY_BLOCK',
-};
-
-const ContentLibraryPanel = ({ sections = [], handsOnResources = {} }) => {
+const ContentLibraryPanel = ({ sections = [], handsOnResources = {}, numDays, dayLanes = {}, onRemoveDayItem = () => {} }) => {
   // Flatten every subsection across every non-break section, in outline order,
   // for the single vertical Droppable this panel exposes.
   const flatSubsections = [];
@@ -75,7 +60,7 @@ const ContentLibraryPanel = ({ sections = [], handsOnResources = {} }) => {
             </div>
           )}
 
-          <Droppable droppableId="lib-subsections" type={LIBRARY_DND_TYPES.SUBSECTION}>
+          <Droppable droppableId="lib-subsections" type={LIBRARY_DND_TYPES.SUBSECTION} isDropDisabled>
             {(provided) => (
               <div ref={provided.innerRef} {...provided.droppableProps}>
                 {flatSubsections.map(({ section, sectionIndex, sub, subIndex }, flatIndex) => {
@@ -152,7 +137,7 @@ const ContentLibraryPanel = ({ sections = [], handsOnResources = {} }) => {
                           </div>
 
                           {/* Block chips — each independently draggable, copies ONLY that block */}
-                          <Droppable droppableId={`lib-blocks-${sub.id}`} type={LIBRARY_DND_TYPES.BLOCK}>
+                          <Droppable droppableId={`lib-blocks-${sub.id}`} type={LIBRARY_DND_TYPES.BLOCK} isDropDisabled>
                             {(blockProvided, blockSnapshot) => (
                               <div
                                 ref={blockProvided.innerRef}
@@ -230,19 +215,8 @@ const ContentLibraryPanel = ({ sections = [], handsOnResources = {} }) => {
         </div>
       </div>
 
-      {/* ── Day lanes placeholder — TASK-003 builds the real drop target here ── */}
-      <div style={{
-        flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: '24px', color: '#AAA', textAlign: 'center',
-      }}>
-        <div>
-          <CalendarDays size={28} style={{ marginBottom: '8px', opacity: 0.5 }} />
-          <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: '13.5px', lineHeight: 1.5 }}>
-            Day lanes are coming in the next update.<br />
-            For now, this view just shows your content library.
-          </div>
-        </div>
-      </div>
+      {/* ── Day lanes (drop target, copy-on-drop) ── */}
+      <DayLanesPanel numDays={numDays} dayLanes={dayLanes} onRemoveItem={onRemoveDayItem} />
     </div>
   );
 };

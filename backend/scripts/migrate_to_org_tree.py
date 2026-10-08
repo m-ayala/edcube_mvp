@@ -476,18 +476,19 @@ def _delete_collection_recursive(col_ref, batch_size: int = 200) -> int:
     (so courseFolders/libraryFolders etc. under old `teachers` docs, and
     camps/entries under old `synopsis/ICC/weeks` docs, are also removed)."""
     count = 0
-    docs = list(col_ref.limit(batch_size).stream())
-    while docs:
-        for doc in docs:
-            for sub in doc.reference.collections():
-                count += _delete_collection_recursive(sub, batch_size)
-            doc.reference.delete()
-            count += 1
-        docs = list(col_ref.limit(batch_size).stream())
+    # list_documents() (not stream()) so "phantom" docs -- ones with no fields
+    # that exist only as a parent of subcollections, like the old
+    # `synopsis/ICC` -- are also visited and their subcollections removed.
+    for doc_ref in list(col_ref.list_documents(page_size=batch_size)):
+        for sub in doc_ref.collections():
+            count += _delete_collection_recursive(sub, batch_size)
+        doc_ref.delete()
+        count += 1
     return count
 
 
-def run_delete_old(db, results: List[MigrationResult], yes_really: bool):
+def run_delete_old(db, results: List[MigrationResult], yes_really: bool,
+                   allow_fewer_notifications: bool = False):
     """
     TASK-010 only. Refuses unless every destination already has at least as
     many docs as are eligible to be migrated there (i.e. a prior --apply
@@ -499,6 +500,13 @@ def run_delete_old(db, results: List[MigrationResult], yes_really: bool):
     refused = False
     for r in results:
         actual_count = actual.get(r.label, 0)
+        if (allow_fewer_notifications and r.label.startswith("notifications ")
+                and actual_count < r.dest_count):
+            # Notifications are a delete-on-seen inbox (spec decision 6), so the
+            # live destination legitimately shrinks once the new app is in use.
+            print(f"NOTE: '{r.label}' -- destination has {actual_count} < {r.dest_count}; "
+                  f"accepted via --allow-fewer-notifications (delete-on-seen inbox).")
+            continue
         if actual_count < r.dest_count:
             print(f"REFUSING: '{r.label}' -- existing destination count {actual_count} "
                   f"< eligible-to-migrate count {r.dest_count}.")
@@ -527,6 +535,9 @@ def main():
     parser.add_argument("--delete-old", action="store_true",
                          help="TASK-010 only: verify destination counts, then delete the old top-level collections")
     parser.add_argument("--yes-really", action="store_true", help="Required alongside --delete-old")
+    parser.add_argument("--allow-fewer-notifications", action="store_true",
+                         help="With --delete-old: don't refuse when the notifications destination has "
+                              "fewer docs than the source (expected once delete-on-seen is live)")
     args = parser.parse_args()
 
     if args.delete_old and args.apply:
@@ -568,7 +579,7 @@ def main():
     if args.delete_old:
         print()
         print("Verifying destination counts before --delete-old...")
-        run_delete_old(db, results, args.yes_really)
+        run_delete_old(db, results, args.yes_really, args.allow_fewer_notifications)
 
 
 if __name__ == "__main__":

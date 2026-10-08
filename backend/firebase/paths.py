@@ -98,6 +98,17 @@ def kb_col(db, category: str):
     return kb_doc(db).collection(category)
 
 
+# ── Storage (Cloud Storage object paths) ────────────────────────────────────
+
+def storage_path(org: str, *parts: str) -> str:
+    """
+    `Users/{org}/{part}/{part}/...` -- the Cloud Storage object-name prefix for
+    everything belonging to one org (tasks/firestore-reorg-spec.md, Round 2 E).
+    Pure string helper; touches neither Storage nor Firestore.
+    """
+    return "/".join([ORGS_ROOT, org, *[p.strip("/") for p in parts if p]])
+
+
 # ── Org resolution ───────────────────────────────────────────────────────────
 
 # Short TTL, same posture as firebase/org_registry.py's own cache -- so an

@@ -117,3 +117,61 @@ unchanged by this task and tracked in `ARCHITECTURE.md`: several
 `routes/curriculum.py`/`topics.py` endpoints still take a raw `teacherUid` instead of a
 token — not in this task's file list, safe today only because the backend ignores the
 client-supplied `organizationId` and resolves org server-side.
+
+## 2026-10-05 — TASK-001 — blockCategories.js fetches taxonomy from backend
+Backend: new read-only `GET /api/knowledge-base/objectives` (`routes/knowledge_base.py`,
+registered in `main.py`, behind `require_org`) returning `get_objectives()` unchanged.
+Frontend: `blockCategories.js` now fetches it with the Firebase ID token instead of reading
+Firestore directly; exports unchanged, hardcoded array kept as fallback, a single one-shot
+auth listener covers a first call made before sign-in. Not yet deployed (404 and fallback
+until then). `kbCol` in `firebase/paths.js` is now unused.
+
+## 2026-10-05 — TASK-005 — block subtypes route
+Backend: added `GET /api/knowledge-base/block-subtypes` to `routes/knowledge_base.py`
+(behind `require_org`), returning the content/worksheet/activity subtype lists and the
+content-to-worksheet compatibility map, built from the constants in
+`outliner/block_prompts.py` (nothing retyped, nothing under `outliner/` edited, no
+Firestore access). For TASK-004's format dropdown. Not yet deployed.
+
+## 2026-10-05 — TASK-003 — Phase 1.5 day lanes with copy-on-drop
+Frontend: new `DayLanesPanel.jsx`, `constants/libraryView.js` and `utils/dayLanes.js`.
+The Library view's right-hand placeholder is now one drop lane per day (count from
+`formData.numDays`, default 5, max 60). Dropping a subsection adds a grouped card of
+fresh-id deep-copied blocks; dropping a block adds a standalone chip; each has a remove
+button. `handleDragEnd` gained a library-only branch (existing branches untouched);
+library source lists are `isDropDisabled`. Lane state is session-only React state, not
+saved. Not browser-tested.
+
+## 2026-10-05 — TASK-010 — Firestore reorg part 5/5: old collections deleted
+Ran `migrate_to_org_tree.py --delete-old --allow-fewer-notifications --yes-really` against
+`edcube-8fe7d` after a full recursive local backup (851 docs, 18 collections, kept outside
+the repo). 851 docs deleted; the database's only root collections are now `EdCube` and
+`Users`. Script changes: recursive delete uses `list_documents()` so phantom parents such
+as `synopsis/ICC` are traversed; new opt-in `--allow-fewer-notifications` relaxes the count
+guard for the notifications mapping only (delete-on-seen inbox). The 2 `leads` docs were
+backed up, then deleted. Verified read-only afterwards by docs-qa-agent.
+
+## 2026-10-05 — TASK-011 — Cloud Storage files moved under Users/icc (copy plus relink)
+New `backend/scripts/migrate_storage_to_org_tree.py` (dry run by default) and a pure
+`storage_path(org, *parts)` helper in `backend/firebase/paths.py`. Ran with `--apply`:
+1370 blobs copied server-side to `Users/icc/{synopsis/summer_camps, synopsis/afterschool,
+course_attachments, profile_pictures}/` with metadata and download token preserved, and
+1188 stored links across 416 docs rewritten (before/after backup kept outside the repo).
+Old blobs were deliberately left in place; deleting them is TASK-012. No route or upload
+behaviour changed.
+
+## 2026-10-06 — TASK-012 — Storage reorg: old top-level copies deleted
+Deleted the 1370 old Cloud Storage blobs (about 4.3 GB) under `synopsis/`,
+`afterschool_synopsis/`, `course_attachments/` and `profile_pictures/` with the migration
+script's `--delete-old --yes-really`, on the person's explicit approval. Verified read-only:
+old prefixes empty, new prefixes 1324 / 43 / 1 / 2, all 1188 stored links point at an existing
+blob, 60 sampled links returned 206, dry run clean. Sent newsletters are unaffected (photos
+are embedded as bytes in downloaded .docx files). Residual risk: addresses copied out of the
+app and pasted elsewhere. Orphans (182) and `worksheet_*` prefixes left for TASK-013.
+
+## 2026-10-07 - TASK-013 - Storage leftovers cleanup
+Deleted 176 unlinked blobs (about 462 MB) from the Storage bucket on the person's explicit
+approval: 166 summer-camp photos under `Users/icc/synopsis/summer_camps/` and all 10 blobs in
+`worksheet_images/` and `worksheet_pdfs/`. Kept on purpose: 15 unlinked afterschool blobs and 1
+profile picture. Verified read-only: bucket 1204 blobs (1158 / 43 / 1 / 2), 1188 stored links, 0
+missing. Backup of the deleted files is at `~/edcube_backups/storage_leftovers_2026-10-07/`.

@@ -1,17 +1,17 @@
 // Block educational category taxonomy
 // Used for labelling blocks and guiding Edo generation
-// Sourced from Firestore (EdCube/knowledge_base/pedagogy, formerly the
-// top-level kb_objectives collection -- tasks/firestore-reorg-spec.md
-// TASK-008), cached in memory since this data changes rarely. Colors are
-// presentation-only and stay local to the frontend.
+// Sourced from the backend (GET /api/knowledge-base/objectives, which reads
+// the knowledge base via knowledge_base_service.py), cached in memory since
+// this data changes rarely. The frontend never reads the knowledge base from
+// Firestore directly. Colors are presentation-only and stay local.
 //
-// NOTE: this is still a direct Firestore read from the frontend, which
-// TASK-001 will replace with a backend-exposed endpoint. This change is a
-// path-only fix, not a resolution of that boundary issue.
+// The hardcoded array below is only a fallback: it is what callers see until
+// the fetch resolves, and permanently if the fetch fails.
 
-import { getDocs } from 'firebase/firestore';
-import { db } from '../firebase/config';
-import { kbCol } from '../firebase/paths';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from '../firebase/config';
+
+const API_BASE_URL = `${import.meta.env.VITE_API_BASE_URL}/api`;
 
 const CATEGORY_COLORS = {
   thinking_self_awareness: { bg: '#F3EFFF', text: '#7C3AED', border: '#DDD6FE' },
@@ -126,33 +126,58 @@ let categories = [
   },
 ].map(cat => ({ ...cat, color: CATEGORY_COLORS[cat.id] || null }));
 
-async function loadObjectivesFromFirestore() {
+async function loadObjectivesFromBackend(user) {
   try {
-    const snap = await getDocs(kbCol(db, 'pedagogy'));
-    if (snap.empty) return;
-    categories = snap.docs.map(d => {
-      const data = d.data();
-      return {
-        id: d.id,
-        label: data.label,
-        color: CATEGORY_COLORS[d.id] || null,
-        allowedTypes: data.allowed_types || [],
-        clusters: data.clusters || [],
-      };
+    const idToken = await user.getIdToken();
+    const response = await fetch(`${API_BASE_URL}/knowledge-base/objectives`, {
+      headers: { Authorization: `Bearer ${idToken}` },
     });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    const objectives = data?.objectives;
+    if (!Array.isArray(objectives) || objectives.length === 0) {
+      throw new Error('empty objectives list');
+    }
+    categories = objectives.map(o => ({
+      id: o.id,
+      label: o.label,
+      color: CATEGORY_COLORS[o.id] || null,
+      allowedTypes: o.allowed_types || [],
+      clusters: o.clusters || [],
+    }));
   } catch (err) {
-    console.error('Failed to load EdCube/knowledge_base/pedagogy from Firestore, using fallback taxonomy', err);
+    // Logged once (hasStartedFetch is never reset after this point); the
+    // fallback taxonomy stays in place.
+    console.error('Failed to load taxonomy from /api/knowledge-base/objectives, using fallback taxonomy', err);
   }
 }
 
 // Kicked off lazily (on first real use) rather than at module load, since
 // this module gets bundled into the app's initial chunk and would otherwise
-// race the user's auth state — kb_objectives requires an authenticated read.
+// race the user's auth state -- the endpoint requires a Firebase ID token.
+// If no user is signed in yet, nothing is marked as started; instead a
+// one-shot auth listener runs the fetch as soon as a user appears, so a
+// too-early first call does not leave the fallback in place for the session.
 let hasStartedFetch = false;
+let isWaitingForAuth = false;
 function ensureObjectivesLoading() {
   if (hasStartedFetch) return;
-  hasStartedFetch = true;
-  loadObjectivesFromFirestore();
+  const user = auth.currentUser;
+  if (user) {
+    hasStartedFetch = true;
+    loadObjectivesFromBackend(user);
+    return;
+  }
+  if (isWaitingForAuth) return;
+  isWaitingForAuth = true;
+  const unsubscribe = onAuthStateChanged(auth, u => {
+    if (!u) return;
+    unsubscribe();
+    isWaitingForAuth = false;
+    if (hasStartedFetch) return;
+    hasStartedFetch = true;
+    loadObjectivesFromBackend(u);
+  });
 }
 
 // Flat list of all subcategories for a given block type

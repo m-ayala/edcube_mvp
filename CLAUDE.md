@@ -14,7 +14,7 @@ session itself acts as coordinator, following this file and `.claude/commands/ne
 
 | Agent | Owns |
 |---|---|
-| `backend-agent` | Infra, schema, orchestrator, prompt_builder.py, ALL of the knowledge base (`kb_*` collections, `knowledge_base_service.py`) |
+| `backend-agent` | Infra, schema, orchestrator, prompt_builder.py, ALL of the knowledge base (`EdCube/knowledge_base/*`, `knowledge_base_service.py`) |
 | `structure-agent` | Outline generation + Edo (Course→Section→Subsection→Block hierarchy) |
 | `generation-agent` | Content, worksheet, activity, and PPT generation |
 | `frontend-agent` | `frontend/src/**` |
@@ -26,7 +26,7 @@ relevant one before delegating if you're unsure of a boundary.
 
 ## The one hard rule: knowledge base writes
 
-Only `backend-agent` writes to `kb_*` Firestore collections or edits `knowledge_base_service.py`.
+Only `backend-agent` writes to `EdCube/knowledge_base/*` Firestore collections or edits `knowledge_base_service.py`.
 Every other agent calls into `knowledge_base_service.py` (imports its functions) but never edits it
 and never touches Firestore directly. If an agent needs a KB change, that becomes a
 task for `backend-agent` — it does not work around the boundary.
@@ -65,15 +65,12 @@ Agents should check their work against these, not just against the task descript
 - No automated test suite exists yet (no pytest, no jest/vitest — only eslint on the
   frontend). `docs-qa-agent` verifies by other means until this is built out, and only
   works on test coverage when the person explicitly approves it.
-- `frontend/src/.../blockCategories.js` already fetches live from Firestore's
-  `EdCube/knowledge_base/pedagogy` path (moved there from the old flat `kb_objectives`
-  collection by TASK-008), with the hardcoded array kept only as a fallback shown
-  before that fetch resolves — it is not a stale hardcoded mirror. The actual problem is
-  that this fetch reads Firestore directly from the frontend, bypassing the backend
-  entirely, which violates the spirit of the KB-write-boundary rule above even though
-  it's a read, not a write. `knowledge_base_service.py` already has `get_objectives()`;
-  there is no FastAPI route exposing it yet. See `TASKS.md`'s `## Needs Input` section
-  for the current fix plan.
+- `frontend/src/constants/blockCategories.js` now fetches the taxonomy from the backend
+  route `GET /api/knowledge-base/objectives` (TASK-001), which calls
+  `knowledge_base_service.get_objectives()`. The hardcoded array remains only as a
+  fallback. The frontend no longer reads the knowledge base from Firestore; `kbCol` in
+  the frontend path helpers (`firebase/paths.js`) is now unused. The route only serves
+  once the backend is deployed (404 and fallback until then).
 
 
   ## Autonomy policy for subagents

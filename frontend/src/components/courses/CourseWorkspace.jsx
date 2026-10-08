@@ -10,6 +10,8 @@ import SubsectionView from './SubsectionView';
 import BlockView from './BlockView';
 import SubsectionSelectionMatrix from './SubsectionSelectionMatrix';
 import ContentLibraryPanel from './ContentLibraryPanel';
+import { LIBRARY_DND_TYPES, LIBRARY_SOURCE_PREFIX, parseDayDropId } from '../../constants/libraryView';
+import { resolveNumDays, makeGroupItem, makeBlockItem } from '../../utils/dayLanes';
 import EdoChatbot from './EdoChatbot';
 import CourseInfoPanel from './CourseInfoPanel';
 import useCourseActions from './useCourseActions';
@@ -75,6 +77,12 @@ const CourseWorkspace = () => {
   // Local feature flag only: gates the new panel alongside the existing
   // CourseEditor render so the current flow keeps working untouched when off.
   const [showLibraryView, setShowLibraryView] = useState(false);
+  // Day lanes (TASK-003): { [dayNumber]: item[] } where item is either
+  // { id, kind:'group', title, blocks[] } or { id, kind:'block', block }.
+  // Session-only React state: NOT saved to Firestore/backend, not part of the
+  // saved course shape, and reset on reload. Lives here (not in the panel) so it
+  // survives toggling between Outline and Library.
+  const [dayLanes, setDayLanes] = useState({});
 
   // ── Page Navigation ───────────────────────────────────────────────────
   // navPage: 'outline' | 'subsection' | 'block'
@@ -589,6 +597,38 @@ const CourseWorkspace = () => {
     const { source, destination, draggableId, type } = result;
 
     if (!destination) return;
+
+    // Library -> day lane: COPY (never a cut). Handled first and always returns,
+    // so a library drag can never fall through to the tray / SECTION / SUBSECTION
+    // / BLOCK branches below. Anything not dropped on a day lane is a no-op.
+    if (
+      source.droppableId.startsWith(LIBRARY_SOURCE_PREFIX) &&
+      (type === LIBRARY_DND_TYPES.SUBSECTION || type === LIBRARY_DND_TYPES.BLOCK)
+    ) {
+      const target = parseDayDropId(destination.droppableId);
+      if (!target) return;
+
+      let newItem = null;
+      if (type === LIBRARY_DND_TYPES.SUBSECTION && target.kind === 'sub') {
+        const subId = draggableId.replace('lib-sub-', '');
+        let found = null;
+        sections.forEach(sec => {
+          if (sec.type === 'break') return;
+          (sec.subsections || []).forEach(sub => { if (sub.id === subId) found = sub; });
+        });
+        if (found) newItem = makeGroupItem(found, handsOnResources[subId] || []);
+      } else if (type === LIBRARY_DND_TYPES.BLOCK && target.kind === 'block') {
+        const subId = source.droppableId.replace('lib-blocks-', '');
+        const blockId = draggableId.replace('lib-block-', '');
+        const block = (handsOnResources[subId] || []).find(b => b.id === blockId);
+        if (block) newItem = makeBlockItem(block);
+      }
+      if (newItem) {
+        setDayLanes(prev => ({ ...prev, [target.day]: [...(prev[target.day] || []), newItem] }));
+      }
+      return;
+    }
+
     if (
       source.droppableId === destination.droppableId &&
       source.index === destination.index
@@ -878,6 +918,12 @@ const CourseWorkspace = () => {
                 <ContentLibraryPanel
                   sections={sections}
                   handsOnResources={handsOnResources}
+                  numDays={resolveNumDays(formData?.numDays)}
+                  dayLanes={dayLanes}
+                  onRemoveDayItem={(day, itemId) => setDayLanes(prev => ({
+                    ...prev,
+                    [day]: (prev[day] || []).filter(i => i.id !== itemId),
+                  }))}
                 />
               )}
 
