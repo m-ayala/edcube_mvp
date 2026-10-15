@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { Paperclip, X, FileText, FileSpreadsheet, Image, Presentation } from 'lucide-react';
 import { trackAiOutlineGenerated } from '../../firebase/analytics';
 import { useGeneration } from '../../contexts/GenerationContext';
+import { COURSE_BUILDER_ENABLED } from '../../constants/featureFlags';
 
 // Map file extension → icon + label
 const FILE_TYPE_META = {
@@ -32,7 +33,9 @@ const CourseDesigner = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { targetFolderId } = location.state || {};
-  const { genState, startGeneration } = useGeneration();
+  const { genState, startGeneration, clearGeneration } = useGeneration();
+  // Message from the Course Builder when it sent the teacher back here (e.g. after a refresh).
+  const builderNotice = location.state?.notice || null;
 
   const loading = genState.status === 'generating-outline' || genState.status === 'generating-candidates';
   const hasError = genState.status === 'error';
@@ -75,6 +78,27 @@ const CourseDesigner = () => {
         },
       });
     }
+  }, [genState.status]);
+
+  // Course Builder (flag on): leftover builder state from an earlier visit must not bounce
+  // the teacher back into a stale flow, so clear it on arrival. Declared before the
+  // navigation effect so that effect can skip the stale status in the same commit.
+  const justClearedStale = useRef(false);
+  useEffect(() => {
+    if (genState.builder) {
+      justClearedStale.current = true;
+      clearGeneration();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Course Builder: outlines arrived. Multi-day courses land on the Stage 1 outline page;
+  // one-day courses skip it and go straight to the Stage 2 hand-off.
+  useEffect(() => {
+    if (justClearedStale.current) { justClearedStale.current = false; return; }
+    if (genState.status === 'outlines-ready') navigate('/course-builder/outline');
+    else if (genState.status === 'builder-planning') navigate('/course-builder/plan');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [genState.status]);
 
   const handleChange = (e) => {
@@ -189,6 +213,21 @@ const CourseDesigner = () => {
             }} />
           </div>
           <div style={{ marginTop: '4px', fontSize: '13px', color: '#4a90d9' }}>{progress.progress}%</div>
+        </div>
+      )}
+
+      {builderNotice && !loading && (
+        <div role="status" style={{
+          marginBottom: '24px',
+          padding: '14px 20px',
+          backgroundColor: '#fff3dc',
+          borderRadius: '10px',
+          border: '1px solid #f5c98a',
+          color: '#8a5a00',
+          fontSize: '14px',
+          fontWeight: '500',
+        }}>
+          {builderNotice}
         </div>
       )}
 
@@ -314,12 +353,17 @@ const CourseDesigner = () => {
                 onChange={handleChange}
                 required
                 disabled={loading}
-                min="0.5"
+                min={COURSE_BUILDER_ENABLED ? '1' : '0.5'}
                 max="8"
-                step="0.5"
+                step={COURSE_BUILDER_ENABLED ? '1' : '0.5'}
                 placeholder="e.g., 2"
                 style={inputStyle}
               />
+              {COURSE_BUILDER_ENABLED && (
+                <p style={{ margin: '6px 0 0', fontSize: '13px', color: '#718096' }}>
+                  Whole hours only (1, 2, 3 ...). Each hour is one lesson of four 15-minute blocks.
+                </p>
+              )}
             </div>
           </div>
 

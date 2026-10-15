@@ -1,22 +1,28 @@
 #!/usr/bin/env python3
 """
 Seed the taxonomy knowledge base under EdCube/knowledge_base in Firestore, as
-categorized subcollections: age, pedagogy, worksheets, activities, content.
+categorized subcollections (old kb_* name -> category; see kb_seed_data.KB_CATEGORY):
+kb_age_bands -> age, kb_objectives -> pedagogy, kb_worksheet_formats -> worksheets,
+kb_activity_formats -> activities, kb_content_formats -> content,
+kb_content_types -> content_types, kb_thinking_levels -> thinking_levels,
+kb_group_sizes -> group_sizes, kb_teacher_attention_levels -> teacher_attention.
+Also ensures the EdCube/knowledge_base document itself exists (merge-only), so it
+is a real document and not a phantom.
 
-(Old top-level collection names: kb_age_bands, kb_objectives,
-kb_worksheet_formats, kb_activity_formats, kb_content_formats -- see
-tasks/firestore-reorg-spec.md for the mapping.)
+The data itself lives in services/kb_seed_data.py (edit it there).
 
-Safe to re-run: every document is written with .set() keyed by a fixed
-document ID, so re-running overwrites in place instead of duplicating.
-Also (re-)creates the EdCube/knowledge_base document itself, since Firestore
-intermediate documents must be real docs with at least one field to show up
-in the console rather than being "phantom" docs.
+Safe to re-run. Default mode is MERGE: a document that does not exist is created
+in full; a document that exists only gets the fields that are missing or blank
+("" / [] / {} / null) filled in. Values that someone edited by hand in Firestore
+are never overwritten. Use --force to overwrite every seeded field with the
+values in kb_seed_data.py (fields not in the seed data are left alone).
+Use --dry-run to print what would change without writing anything.
 
 Run from the backend/ directory:
-    python scripts/seed_knowledge_base.py
+    python scripts/seed_knowledge_base.py [--dry-run] [--force]
 """
 
+import argparse
 import sys
 import os
 
@@ -24,300 +30,86 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import firebase_admin
 from firebase_admin import firestore
+
 from firebase.paths import kb_doc, kb_col
+from services.kb_seed_data import (  # noqa: F401  (re-exported for backward compatibility)
+    AGE_BANDS,
+    OBJECTIVES,
+    WORKSHEET_FORMATS,
+    ACTIVITY_FORMATS,
+    CONTENT_FORMATS,
+    CONTENT_TYPES,
+    COLLECTIONS,
+    KB_CATEGORY,
+    is_blank,
+)
 
 
-AGE_BANDS = [
-    {"id": "4.5-6", "label": "4.5-6", "age_min": 4.5, "age_max": 6},
-    {"id": "6-8", "label": "6-8", "age_min": 6, "age_max": 8},
-    {"id": "7-9", "label": "7-9", "age_min": 7, "age_max": 9},
-    {"id": "9-13", "label": "9-13", "age_min": 9, "age_max": 13},
-]
-
-OBJECTIVES = [
-    {
-        "id": "thinking_self_awareness",
-        "label": "Thinking and Self-Awareness",
-        "allowed_types": ["content", "worksheet", "activity"],
-        "clusters": [
-            {
-                "label": "Self-Awareness",
-                "subcategories": [
-                    "Emotional Intelligence",
-                    "Self-Regulation",
-                    "Growth Mindset",
-                    "Metacognition",
-                    "Identity & Values",
-                    "Resilience",
-                ],
-            },
-            {
-                "label": "Critical Thinking",
-                "subcategories": [
-                    "Critical Thinking",
-                    "Compare & Contrast",
-                    "Pattern Recognition",
-                    "Examine Evidence",
-                    "Synthesize",
-                    "Critique & Debate",
-                    "Evaluate & Judge",
-                    "Make Connections",
-                ],
-            },
-        ],
-    },
-    {
-        "id": "soft_skills",
-        "label": "Soft Skills",
-        "allowed_types": ["content", "worksheet", "activity"],
-        "clusters": [
-            {
-                "label": "Soft Skills",
-                "subcategories": [
-                    "Communication",
-                    "Teamwork",
-                    "Leadership",
-                    "Collaboration",
-                    "Conflict Resolution",
-                    "Time Management",
-                    "Public Speaking",
-                ],
-            },
-        ],
-    },
-    {
-        "id": "knowledge_theory",
-        "label": "Knowledge and Theory",
-        "allowed_types": ["content", "worksheet", "activity"],
-        "clusters": [
-            {
-                "label": "Knowledge and Theory",
-                "subcategories": [
-                    "Definitions",
-                    "Concepts",
-                    "Theories",
-                    "Types of",
-                    "Parts of",
-                    "Process",
-                    "Methodologies",
-                    "Techniques",
-                    "Principles",
-                    "Frameworks",
-                    "Systems",
-                    "Rules & Formulas",
-                ],
-            },
-        ],
-    },
-    {
-        "id": "ethics_perspectives",
-        "label": "Ethics and Global Perspectives",
-        "allowed_types": ["content", "worksheet", "activity"],
-        "clusters": [
-            {
-                "label": "Ethics and Global Perspectives",
-                "subcategories": [
-                    "History",
-                    "Evolution",
-                    "Culture",
-                    "Perspectives",
-                    "Ethical Issues",
-                    "Ethical Practices",
-                    "Impact & Consequences",
-                    "Sustainability",
-                ],
-            },
-        ],
-    },
-    {
-        "id": "application_impact",
-        "label": "Application and Impact",
-        "allowed_types": ["content", "worksheet", "activity"],
-        "clusters": [
-            {
-                "label": "Building & Making",
-                "subcategories": [
-                    "Model/diorama building",
-                    "Prototyping",
-                    "Design-build challenge",
-                    "Construction project",
-                    "Coding/app project",
-                    "3D modeling",
-                ],
-            },
-            {
-                "label": "Design",
-                "subcategories": [
-                    "Product design",
-                    "Poster/infographic design",
-                    "Diagram/blueprint design (process or system)",
-                    "Game design",
-                ],
-            },
-            {
-                "label": "Visual Arts",
-                "subcategories": [
-                    "Drawing/illustration",
-                    "Painting",
-                    "Sculpture",
-                    "Collage/mixed media",
-                    "Photography project",
-                    "Comic strip/storyboard",
-                    "Digital art",
-                ],
-            },
-            {
-                "label": "Writing & Composition",
-                "subcategories": [
-                    "Essay writing",
-                    "Persuasive writing (letter, op-ed, speech)",
-                    "Creative/narrative writing",
-                    "Poetry writing",
-                    "Journal/diary entry",
-                    "Script writing",
-                    "Research report",
-                ],
-            },
-            {
-                "label": "Performance & Presentation",
-                "subcategories": [
-                    "Oral presentation",
-                    "Skit/performance",
-                    "Speech/oration",
-                    "Music or movement composition",
-                    "Podcast/video recording",
-                ],
-            },
-            {
-                "label": "Discussion & Argumentation",
-                "subcategories": [
-                    "Debate",
-                    "Seminar/structured discussion",
-                    "Panel discussion",
-                ],
-            },
-            {
-                "label": "Investigation & Inquiry",
-                "subcategories": [
-                    "Experiment/investigation",
-                    "Field observation/data collection",
-                    "Survey or interview project",
-                    "Case study analysis",
-                ],
-            },
-            {
-                "label": "Simulation & Roleplay",
-                "subcategories": [
-                    "Roleplay",
-                    "Simulation",
-                    "Negotiation/decision-making exercise",
-                ],
-            },
-            {
-                "label": "Planning & Strategy",
-                "subcategories": [
-                    "Plan or proposal creation",
-                    "Timeline creation",
-                    "Campaign or pitch design",
-                    "Event planning",
-                ],
-            },
-            {
-                "label": "Teaching & Mentoring",
-                "subcategories": [
-                    "Peer teach-back",
-                    "How-to guide/tutorial",
-                    "Explainer video",
-                ],
-            },
-            {
-                "label": "Reflection & Self-Assessment",
-                "subcategories": [
-                    "Reflection journal",
-                    "Goal-setting exercise",
-                    "Portfolio curation",
-                ],
-            },
-        ],
-    },
-]
-
-WORKSHEET_FORMATS = [
-    {"id": "fill_in_blank", "label": "Fill in the Blank", "description": "Numbered sentences with key terms removed; student writes the missing word in each blank. Requires an answer key."},
-    {"id": "labeling", "label": "Labeling", "description": "A diagram or image with numbered blank lines pointing to parts; student writes the correct term for each. Requires an image reference + label list."},
-    {"id": "matching", "label": "Matching", "description": "Two columns of related items; student draws lines or writes letters connecting matching pairs. Requires equal-length paired lists."},
-    {"id": "comprehension", "label": "Comprehension", "description": "A short passage followed by questions testing understanding of it. Requires passage text + question set + answer key."},
-    {"id": "cut_paste", "label": "Cut & Paste", "description": "Printable elements the student cuts out and pastes into matching positions or categories. Requires distinct cut-zone and paste-zone layout."},
-    {"id": "composition", "label": "Composition", "description": "Open-ended writing prompt; student produces original sentences/paragraphs. Requires a prompt + optional word/line-count guidance, no fixed answer key."},
-    {"id": "sequencing", "label": "Sequencing", "description": "A set of steps/events presented out of order; student numbers or reorders them correctly. Requires an ordered reference sequence."},
-    {"id": "short_answer", "label": "Short Answer", "description": "Direct questions requiring a brief written response (not multiple choice). Requires question set + answer key or rubric."},
-    {"id": "diagram_completion", "label": "Diagram Completion", "description": "A partially drawn/labeled diagram; student fills in missing elements (arrows, parts, values). Requires a base diagram + missing-element list."},
-    {"id": "word_problem", "label": "Word Problem", "description": "A short narrative scenario requiring calculation or applied reasoning to solve. Requires scenario text + solution/answer key."},
-]
-
-ACTIVITY_FORMATS = [
-    {"id": "hands_on_building", "label": "Hands-on Building", "description": "Student physically constructs something (model, structure, craft) using provided or found materials. Requires a materials list + build steps."},
-    {"id": "art_creation", "label": "Art Creation", "description": "Student produces an original visual/creative work (drawing, collage, design) expressing understanding of the topic. Requires a creative prompt, no fixed correct output."},
-    {"id": "experimentation", "label": "Experimentation", "description": "Student runs a simple test/experiment and observes/records results. Requires materials, procedure steps, and an observation/recording format."},
-    {"id": "modelling", "label": "Modelling", "description": "Student builds a physical or diagrammatic model representing a concept, system, or process. Requires a target concept + model components."},
-    {"id": "presentations", "label": "Presentations", "description": "Student prepares and delivers a short spoken or visual presentation on a topic. Requires a topic prompt + structure guidance (time/format)."},
-    {"id": "problem_solving", "label": "Problem Solving", "description": "Student works through an applied challenge with no single obvious answer, using reasoning/strategy. Requires a scenario + constraints, open-ended resolution."},
-    {"id": "role_play_simulation", "label": "Role Play & Simulation", "description": "Students act out roles or a scenario to explore a concept experientially. Requires role descriptions + scenario setup."},
-    {"id": "research_investigation", "label": "Research & Investigation", "description": "Student gathers information from provided or external sources to answer a guiding question. Requires a research question + source guidance."},
-]
-
-CONTENT_FORMATS = [
-    {"id": "text", "label": "Text", "description": "Written material introducing or explaining the topic, sourced from an article, book excerpt, website, or paper — relevant paragraphs selected/excerpted. Requires source text + citation/reference to origin."},
-    {"id": "image", "label": "Image", "description": "A visual representation of the topic — photo, illustration, or diagram — used either standalone or alongside text. Requires image + optional caption/labels."},
-    {"id": "video", "label": "Video", "description": "A short instructional or illustrative video clip, sourced (existing video, not generated). Requires a source video reference + relevance justification."},
-]
+def plan_write(existing, seed_data, force=False):
+    """
+    Decide what to write for one document. Pure function (no Firestore).
+    existing: dict of the current doc, or None if it does not exist.
+    Returns (action, fields) where action is 'create', 'update' or 'skip'.
+    """
+    if existing is None:
+        return "create", dict(seed_data)
+    if force:
+        changed = {k: v for k, v in seed_data.items() if existing.get(k) != v}
+        return ("update", changed) if changed else ("skip", {})
+    fill = {k: v for k, v in seed_data.items() if k not in existing or is_blank(existing.get(k))}
+    # Do not "fill" a blank with another blank.
+    fill = {k: v for k, v in fill.items() if not is_blank(v)}
+    return ("update", fill) if fill else ("skip", {})
 
 
-def _seed_category(db, category, items, extra_fields=None):
-    col = kb_col(db, category)
+def target_path(collection_name):
+    """Firestore path a seed collection is written to (new layout only)."""
+    return f"EdCube/knowledge_base/{KB_CATEGORY[collection_name]}"
+
+
+def _seed_collection(db, collection_name, items, force=False, dry_run=False):
+    col = kb_col(db, KB_CATEGORY[collection_name])
+    path = target_path(collection_name)
+    counts = {"create": 0, "update": 0, "skip": 0}
     for item in items:
         doc_id = item["id"]
         data = {k: v for k, v in item.items() if k != "id"}
-        if extra_fields:
-            data.update(extra_fields)
-        col.document(doc_id).set(data)
-    print(f"  ✅ {len(items)} document(s) upserted into EdCube/knowledge_base/{category}")
+        ref = col.document(doc_id)
+        snap = ref.get()
+        existing = snap.to_dict() if snap.exists else None
+        action, fields = plan_write(existing, data, force=force)
+        counts[action] += 1
+        if action != "skip":
+            print(f"    {action:6s} {doc_id}: {', '.join(sorted(fields))}")
+            if not dry_run:
+                if action == "create":
+                    ref.set(fields)
+                else:
+                    ref.update(fields)
+    verb = "would be" if dry_run else "were"
+    print(f"  {path}: {counts['create']} created, {counts['update']} updated, "
+          f"{counts['skip']} unchanged ({verb} applied)")
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--force", action="store_true",
+                        help="overwrite seeded fields even where Firestore already has a value")
+    parser.add_argument("--dry-run", action="store_true", help="print changes, write nothing")
+    args = parser.parse_args()
+
     if not firebase_admin._apps:
         firebase_admin.initialize_app()
     db = firestore.client()
 
-    print("Ensuring EdCube/knowledge_base doc exists...")
-    kb_doc(db).set({"description": "EdCube platform-wide knowledge base"}, merge=True)
-
-    print("Seeding age...")
-    _seed_category(
-        db, "age", AGE_BANDS,
-        extra_fields={"pedagogy_notes": "", "developmental_notes": ""},
-    )
-
-    print("Seeding pedagogy...")
-    _seed_category(db, "pedagogy", OBJECTIVES)
-
-    print("Seeding worksheets...")
-    _seed_category(
-        db, "worksheets", WORKSHEET_FORMATS,
-        extra_fields={"suitable_age_bands": []},
-    )
-
-    print("Seeding activities...")
-    _seed_category(
-        db, "activities", ACTIVITY_FORMATS,
-        extra_fields={"suitable_age_bands": []},
-    )
-
-    print("Seeding content...")
-    _seed_category(
-        db, "content", CONTENT_FORMATS,
-        extra_fields={"suitable_age_bands": []},
-    )
+    mode = "FORCE overwrite" if args.force else "merge (fill missing only)"
+    print(f"Mode: {mode}{' [dry run]' if args.dry_run else ''}")
+    print("Ensuring EdCube/knowledge_base doc exists (merge)...")
+    if not args.dry_run:
+        kb_doc(db).set({"description": "EdCube platform-wide knowledge base"}, merge=True)
+    for name, items in COLLECTIONS.items():
+        print(f"Seeding {target_path(name)}...")
+        _seed_collection(db, name, items, force=args.force, dry_run=args.dry_run)
 
     print()
     print("Done.")

@@ -1,6 +1,6 @@
 // frontend/src/components/teacherProfile/TeacherProfile.jsx
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { getOwnProfile, getTeacherProfile, getTeacherCourses, getSharedCourses } from '../../utils/teacherService';
@@ -9,6 +9,8 @@ import ProfileCourseGrid from './ProfileCourseGrid';
 import ResourceLibrary from './ResourceLibrary';
 import EditProfileModal from '../modals/EditProfileModal';
 import NotificationBell from '../notifications/NotificationBell';
+import { navSectionsFromDoc, builderBlocksMissing, outlineExtrasOf } from '../../utils/builderCourse';
+import { fetchCourseDocument } from '../../services/courseBuilderApi';
 import './TeacherProfile.css';
 
 const TeacherProfile = () => {
@@ -75,25 +77,64 @@ const TeacherProfile = () => {
     }
   };
 
-  const handleCourseClick = (course) => {
-    const sections = (course.outline?.sections || course.sections || []).map(section => ({
-      id: section.id,
-      title: section.title,
-      description: section.description || '',
-      type: section.type,
-      duration: section.duration,
-      subsections: (section.subsections || []).map(sub => ({
-        id: sub.id,
-        title: sub.title,
-        description: sub.description || '',
-        learning_objectives: sub.learning_objectives || [],
-        duration_minutes: sub.duration_minutes ?? 20,
-        content_blocks: sub.content_blocks || [],
-        worksheets: sub.worksheets || [],
-        activities: sub.activities || [],
-        video_resources: sub.video_resources || [],
-      }))
-    }));
+  // The old fixed-key mapping, used for every course that is not a Course Builder course.
+  const legacySections = (course) => (course.outline?.sections || course.sections || []).map(section => ({
+    id: section.id,
+    title: section.title,
+    description: section.description || '',
+    type: section.type,
+    duration: section.duration,
+    subsections: (section.subsections || []).map(sub => ({
+      id: sub.id,
+      title: sub.title,
+      description: sub.description || '',
+      learning_objectives: sub.learning_objectives || [],
+      duration_minutes: sub.duration_minutes ?? 20,
+      content_blocks: sub.content_blocks || [],
+      worksheets: sub.worksheets || [],
+      activities: sub.activities || [],
+      video_resources: sub.video_resources || [],
+    }))
+  }));
+
+  // Sections (and extras for the navigation state) for a course from either profile list. A Course
+  // Builder course keeps every field it was saved with. The profile lists do not carry
+  // handsOnResources / numDays / hoursPerDay, so the full document is fetched (best effort): if
+  // that is refused (e.g. a private course shared with you) and some topic's blocks are not in the
+  // list payload, the course opens with `blocksIncomplete`, which stops the workspace from saving.
+  const loadCourseForNav = async (course) => {
+    if (!navSectionsFromDoc(course)) return { sections: legacySections(course), extraFormData: {}, extraState: {} };
+    let doc = course;
+    let incomplete = false;
+    try {
+      const full = await fetchCourseDocument(course.courseId || course.id, currentUser.uid);
+      doc = { ...course, ...full };
+    } catch (err) {
+      console.error('Could not load the full course document:', err);
+      incomplete = builderBlocksMissing(course);
+    }
+    return {
+      sections: navSectionsFromDoc(doc),
+      extraFormData: { numDays: doc.numDays, hoursPerDay: doc.hoursPerDay },
+      extraState: { ...(incomplete ? { blocksIncomplete: true } : {}), ...(doc.outline ? { outlineExtras: outlineExtrasOf(doc) } : {}) },
+    };
+  };
+
+  // Opening a built course waits on a network fetch: show it on the clicked card and ignore
+  // further clicks until it finishes (the ref blocks a second click in the same tick).
+  const [openingId, setOpeningId] = useState(null);
+  const openingRef = useRef(false);
+  const withOpening = (course, fn) => async () => {
+    if (openingRef.current) return;
+    openingRef.current = true;
+    setOpeningId(course.id || course.courseId);
+    try { await fn(); } finally { openingRef.current = false; setOpeningId(null); }
+  };
+
+  const handleCourseClick = (course) => withOpening(course, () => openCourse(course))();
+
+  const openCourse = async (course) => {
+    const { sections, extraFormData, extraState } = await loadCourseForNav(course);
 
     navigate('/course-view', {
       state: {
@@ -103,13 +144,15 @@ const TeacherProfile = () => {
           topic: course.topic || '',
           class: course.class,
           timeDuration: course.timeDuration,
-          objectives: course.objectives || ''
+          objectives: course.objectives || '',
+          ...extraFormData
         },
         sections,
         curriculumId: course.courseId || course.id,
         isPublic: course.isPublic || true,
         isOwner: isOwnProfile,
-        ownerName: profile?.display_name || ''
+        ownerName: profile?.display_name || '',
+        ...extraState
       }
     });
   };
@@ -183,7 +226,7 @@ const TeacherProfile = () => {
             }
           </div>
         ) : (
-          <ProfileCourseGrid courses={courses} onCourseClick={handleCourseClick} />
+          <ProfileCourseGrid courses={courses} onCourseClick={handleCourseClick} loadingId={openingId} />
         )}
       </div>
 
@@ -200,26 +243,10 @@ const TeacherProfile = () => {
           ) : (
             <ProfileCourseGrid
               courses={sharedCourses}
-              onCourseClick={(course) => {
+              loadingId={openingId}
+              onCourseClick={(course) => withOpening(course, async () => {
                 const accessType = course.accessType || 'view';
-                const sections = (course.outline?.sections || course.sections || []).map(section => ({
-                  id: section.id,
-                  title: section.title,
-                  description: section.description || '',
-                  type: section.type,
-                  duration: section.duration,
-                  subsections: (section.subsections || []).map(sub => ({
-                    id: sub.id,
-                    title: sub.title,
-                    description: sub.description || '',
-                    learning_objectives: sub.learning_objectives || [],
-                    duration_minutes: sub.duration_minutes ?? 20,
-                    content_blocks: sub.content_blocks || [],
-                    worksheets: sub.worksheets || [],
-                    activities: sub.activities || [],
-                    video_resources: sub.video_resources || [],
-                  }))
-                }));
+                const { sections, extraFormData, extraState } = await loadCourseForNav(course);
                 navigate('/course-view', {
                   state: {
                     formData: {
@@ -227,6 +254,7 @@ const TeacherProfile = () => {
                       subject: course.subject || '',
                       topic: course.topic || '',
                       class: course.class,
+                      ...extraFormData,
                     },
                     sections,
                     curriculumId: course.courseId || course.id,
@@ -234,9 +262,10 @@ const TeacherProfile = () => {
                     isOwner: false,
                     ownerName: '',
                     isCollaborator: accessType === 'collaborate',
+                    ...extraState,
                   }
                 });
-              }}
+              })()}
             />
           )}
         </div>

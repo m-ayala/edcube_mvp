@@ -6,13 +6,22 @@ their type/subtype/title, and worksheet source_block_ids) is decided in Phase 1.
 expands each approved block spec into full content.
 """
 
+import logging
 from typing import Dict, List, Optional
 
 
-# Canonical closed taxonomy (kept in sync with frontend). Single source of truth,
-# shared by Phase 1.5 (subsection_selection_prompts.py) and Phase 2 (this file) so
-# both stages speak the same vocabulary.
-CONTENT_SUBTYPES = [
+# ---------------------------------------------------------------------------
+# Subtype taxonomy: ONE source of truth = the knowledge base
+# (services/knowledge_base_service.py). Use the get_*() functions below.
+#
+# The literals in this block are the DOCUMENTED FALLBACK, kept in one place:
+#  - used if the knowledge base is unavailable or returns something unusable
+#    (logged once, never raises).
+# The knowledge base fixes the old-flow list order with each format's `legacy_order`.
+# Stored subtype strings on saved courses are the KB `legacy_labels`
+# (get_legacy_label_map), so they stay valid either way.
+# ---------------------------------------------------------------------------
+_FALLBACK_CONTENT_SUBTYPES = [
     "Definition",
     "Categories/Types",
     "Examples",
@@ -24,7 +33,7 @@ CONTENT_SUBTYPES = [
     "Context/History",
 ]
 
-WORKSHEET_SUBTYPES = [
+_FALLBACK_WORKSHEET_SUBTYPES = [
     "Fill-in-the-blank",
     "Matching",
     "Sequencing/ordering",
@@ -33,7 +42,7 @@ WORKSHEET_SUBTYPES = [
     "Multiple choice",
 ]
 
-ACTIVITY_SUBTYPES = [
+_FALLBACK_ACTIVITY_SUBTYPES = [
     "Create-your-own/design challenge",
     "Roleplay/simulation",
     "Debate/discussion",
@@ -46,7 +55,7 @@ ACTIVITY_SUBTYPES = [
 # A worksheet can't test content that isn't in the subsection, and its format
 # must fit what it's testing (e.g. Matching for Categories/Examples, Sequencing
 # for Process, Labeling for Parts/Components).
-WORKSHEET_SUBTYPE_COMPATIBILITY = {
+_FALLBACK_WORKSHEET_SUBTYPE_COMPATIBILITY = {
     "Definition": ["Fill-in-the-blank", "Multiple choice"],
     "Categories/Types": ["Matching", "Multiple choice"],
     "Examples": ["Matching", "Fill-in-the-blank"],
@@ -58,7 +67,124 @@ WORKSHEET_SUBTYPE_COMPATIBILITY = {
     "Context/History": ["Sequencing/ordering", "Multiple choice"],
 }
 
-# Flexible section toolkit for content blocks — LLM picks 3-5 per block
+# Backward-compatible names. DEPRECATED: these are the static FALLBACK values and do
+# NOT reflect knowledge base edits. New code should call the get_*() functions.
+CONTENT_SUBTYPES = _FALLBACK_CONTENT_SUBTYPES
+WORKSHEET_SUBTYPES = _FALLBACK_WORKSHEET_SUBTYPES
+ACTIVITY_SUBTYPES = _FALLBACK_ACTIVITY_SUBTYPES
+WORKSHEET_SUBTYPE_COMPATIBILITY = _FALLBACK_WORKSHEET_SUBTYPE_COMPATIBILITY
+
+_logger = logging.getLogger(__name__)
+_taxonomy_cache: Optional[Dict] = None  # resolved once per process (like the KB cache)
+
+
+def _fallback_taxonomy() -> Dict:
+    return {
+        'content': list(_FALLBACK_CONTENT_SUBTYPES),
+        'worksheet': list(_FALLBACK_WORKSHEET_SUBTYPES),
+        'activity': list(_FALLBACK_ACTIVITY_SUBTYPES),
+        'compat': {k: list(v) for k, v in _FALLBACK_WORKSHEET_SUBTYPE_COMPATIBILITY.items()},
+    }
+
+
+def _derive_taxonomy() -> Dict:
+    """
+    Build the legacy subtype vocabulary from the knowledge base. Raises on anything
+    unusable; the caller falls back.
+
+    Derived from the KB: the content subtype list (legacy content types, KB order)
+    and the content -> worksheet compatibility table (each legacy content type's
+    pairing-table worksheet formats, restricted to formats that have a legacy label,
+    shown by that legacy label), plus the worksheet and activity subtype lists
+    (kb.get_legacy_subtypes, in the KB's legacy order). Every label in the compatibility
+    table is restricted to the worksheet list, so the two cannot disagree.
+    """
+    from services import knowledge_base_service as kb
+
+    label_map = kb.get_legacy_label_map()
+    content_label_to_id = label_map.get('content') or {}
+    ws_id_to_labels: Dict[str, List[str]] = {}
+    for label, fid in (label_map.get('worksheet') or {}).items():
+        ws_id_to_labels.setdefault(fid, []).append(label)
+
+    id_to_label = {cid: label for label, cid in content_label_to_id.items()}
+    pairing = {row['content_type_id']: row for row in kb.get_pairing_table()}
+
+    content = []
+    compat: Dict[str, List[str]] = {}
+    for ct in kb.get_content_types():
+        cid = ct.get('id')
+        label = id_to_label.get(cid)
+        if label is None:  # not a legacy content type
+            continue
+        labels: List[str] = []
+        for fid in (pairing.get(cid) or {}).get('worksheet_format_ids', []):
+            for lbl in ws_id_to_labels.get(fid, []):
+                if lbl not in labels:
+                    labels.append(lbl)
+        if not labels:
+            raise ValueError(f"no legacy worksheet subtype for content type {cid!r}")
+        content.append(label)
+        compat[label] = labels
+
+    if not content or not all(isinstance(c, str) and c for c in content):
+        raise ValueError("no usable legacy content types")
+
+    worksheet = kb.get_legacy_subtypes('worksheet')
+    activity = kb.get_legacy_subtypes('activity')
+    for lst in (worksheet, activity):
+        if not lst or not all(isinstance(x, str) and x for x in lst):
+            raise ValueError("no usable legacy worksheet/activity subtypes")
+    # Same label set for table and list: a label outside the list is dropped here.
+    compat = {c: [l for l in ls if l in worksheet] for c, ls in compat.items()}
+    if not all(compat.values()):
+        raise ValueError("compatibility table references worksheet labels outside the allowed list")
+
+    taxonomy = _fallback_taxonomy()
+    taxonomy['content'] = content
+    taxonomy['worksheet'] = worksheet
+    taxonomy['activity'] = activity
+    taxonomy['compat'] = compat
+    return taxonomy
+
+
+def _taxonomy() -> Dict:
+    """Resolved once per process, including a failure (logged once, then fallback)."""
+    global _taxonomy_cache
+    if _taxonomy_cache is None:
+        try:
+            _taxonomy_cache = _derive_taxonomy()
+        except Exception as e:
+            _logger.warning("Legacy subtype taxonomy: knowledge base unusable (%s); using built-in fallback", e)
+            _taxonomy_cache = _fallback_taxonomy()
+    return _taxonomy_cache
+
+
+def reset_taxonomy_cache() -> None:
+    """Forget the resolved taxonomy (tests / after the KB cache is refreshed)."""
+    global _taxonomy_cache
+    _taxonomy_cache = None
+
+
+def get_content_subtypes() -> List[str]:
+    return list(_taxonomy()['content'])
+
+
+def get_worksheet_subtypes() -> List[str]:
+    return list(_taxonomy()['worksheet'])
+
+
+def get_activity_subtypes() -> List[str]:
+    return list(_taxonomy()['activity'])
+
+
+def get_worksheet_subtype_compatibility() -> Dict[str, List[str]]:
+    return {k: list(v) for k, v in _taxonomy()['compat'].items()}
+
+
+# Flexible section toolkit for content blocks — LLM picks 3-5 per block.
+# Deliberately NOT knowledge-base derived: it is prompt wording (how generated prose
+# is structured), not a taxonomy teachers pick from or that is stored on blocks.
 CONTENT_SECTION_TOOLKIT = """
 Available sections (choose 3-5 that fit the concept — do NOT use sections that don't apply):
 
@@ -113,6 +239,7 @@ def get_block_generation_prompt(
     block_specs: List[Dict],
     other_subsections: list = None,
     session_minutes: int = 60,
+    fixed_block_minutes: Optional[int] = None,
 ) -> str:
     """
     Build the prompt that expands an approved subsection's block specs (titles/
@@ -125,6 +252,10 @@ def get_block_generation_prompt(
         block_specs: Ordered list of approved block-spec dicts (already exclusion-filtered),
             each {id, type, subtype, title, source_block_ids? (worksheet only)}
         session_minutes: Estimated total minutes for this subsection (from Phase 1.5)
+        fixed_block_minutes: Course Builder plans only. When set, EVERY block is exactly this
+            long (15), the 15/15/30 rules below do not apply, and the format ids / subtypes of
+            the plan are passed through as given (they come from the knowledge base and may
+            not be in the legacy lists above). None = the legacy behaviour, unchanged.
 
     Returns:
         str: Prompt for the LLM — expects JSON { "blocks": [...] }
@@ -164,6 +295,16 @@ def get_block_generation_prompt(
         line = f"  {i + 1}. id=\"{spec.get('id')}\" type=\"{spec.get('type')}\" subtype=\"{spec.get('subtype')}\" title=\"{spec.get('title')}\""
         if spec.get('type') == 'worksheet' and spec.get('source_block_ids'):
             line += f" source_block_ids={spec['source_block_ids']}"
+        if fixed_block_minutes:
+            line += f" format_id=\"{spec.get('format_id', '')}\""
+            if spec.get('description'):
+                line += f" plan_note=\"{spec['description']}\""
+            if (spec.get('part_count') or 1) > 1:
+                line += f" part=\"{spec.get('part')} of {spec.get('part_count')}\""
+            if spec.get('type') == 'activity' and spec.get('group_size'):
+                line += f" group_size=\"{spec['group_size']}\""
+            if spec.get('resources'):
+                line += " resources=" + ", ".join(f"{r['quantity']} x {r['name']}" for r in spec['resources'])
         spec_lines.append(line)
     specs_text = "\n".join(spec_lines)
 
@@ -312,4 +453,20 @@ OUTPUT FORMAT (strict JSON, no other text, one entry per approved block spec abo
 
 Generate the blocks now as valid JSON only. No other text.
 """
+    if fixed_block_minutes:
+        m = int(fixed_block_minutes)
+        prompt = prompt.replace(
+            f"""- This session is estimated at {session_minutes} minutes of teaching — content blocks are 15
+  or 30 minutes each (default 15, use 30 only if the concept genuinely needs more depth),
+  worksheets are always 15 minutes, activities are always 30 minutes.""",
+            f"""- This session is {session_minutes} minutes of teaching. EVERY block, of every type, is exactly {m}
+  minutes. A block marked part "k of n" is one {m}-minute part of a longer item: write only what
+  fits in {m} minutes and make it make sense on its own. Honour each block's plan_note, group_size
+  and resources where given; the format_id and subtype are fixed by the teacher's plan.""")
+        prompt = prompt.replace("- duration_minutes: 15 or 30", f"- duration_minutes: {m}")
+        prompt = prompt.replace("- duration_minutes: 30\n", f"- duration_minutes: {m}\n")
+        prompt = prompt.replace("**Duration:** 30 minutes", f"**Duration:** {m} minutes")
+        prompt = prompt.replace('"duration_minutes": 30', f'"duration_minutes": {m}')
+        prompt = prompt.replace('"duration_minutes": 15', f'"duration_minutes": {m}')
+        prompt = prompt.replace("Approximately 15 minutes", f"Approximately {m} minutes")
     return prompt

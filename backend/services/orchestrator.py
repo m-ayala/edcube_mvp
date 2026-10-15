@@ -288,9 +288,15 @@ class CurriculumOrchestrator:
                 yield {'type': 'subsection_blocks', 'subsection_id': sub_id, 'blocks': [], 'progress': pct}
                 continue
 
-            session_minutes = int(sub.get('duration_minutes') or sum(
-                {'content': 15, 'worksheet': 15, 'activity': 30}.get(b.get('type'), 15) for b in block_specs
-            ))
+            # Course Builder plans set block_minutes: every block is exactly that long and the
+            # legacy 15/15/30 estimate does not apply. Legacy subsections leave it unset.
+            block_minutes = sub.get('block_minutes')
+            if block_minutes:
+                session_minutes = int(block_minutes) * len(block_specs)
+            else:
+                session_minutes = int(sub.get('duration_minutes') or sum(
+                    {'content': 15, 'worksheet': 15, 'activity': 30}.get(b.get('type'), 15) for b in block_specs
+                ))
 
             try:
                 prompt = get_block_generation_prompt(
@@ -307,6 +313,7 @@ class CurriculumOrchestrator:
                     block_specs=block_specs,
                     other_subsections=other_subsections,
                     session_minutes=session_minutes,
+                    **({'fixed_block_minutes': int(block_minutes)} if block_minutes else {}),
                 )
 
                 result = call_openai(
@@ -344,6 +351,10 @@ class CurriculumOrchestrator:
             except Exception as e:
                 logger.error(f"Block generation failed for subsection {sub_id}: {e}", exc_info=True)
                 stamped = []
+
+            if block_minutes:
+                from outliner.course_builder_handoff import finalize_builder_blocks
+                stamped = finalize_builder_blocks(stamped, block_specs, sub_id, int(block_minutes))
 
             blocks_by_subsection[sub_id] = stamped
 

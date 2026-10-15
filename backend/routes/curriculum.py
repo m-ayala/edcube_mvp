@@ -7,7 +7,7 @@ Generates boxes/topics without any video or worksheet population
 
 from fastapi import APIRouter, HTTPException, Depends, Form, UploadFile, File
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, Dict, List, Any
 import json
 import asyncio
@@ -45,6 +45,9 @@ async def generate_curriculum(
     teacherUid:        str   = Form(...),
     organizationId:    str   = Form(...),
     file_descriptions: str   = Form(""),  # JSON array of per-file description strings
+    # "legacy" (default) = original flow ending in candidates_complete.
+    # "course_builder" = Course Builder Stage 1: stops after 'outlines_ready'.
+    flow:              str   = Form("legacy"),
     files: List[UploadFile] = File(default=[]),
 ):
     """
@@ -172,6 +175,58 @@ async def generate_curriculum(
             # Requirements Interpreter is the single source of truth for both.
             detected_subject = (interpreted_requirements or {}).get('detected_subject', '') or ''
             detected_topic = (interpreted_requirements or {}).get('detected_topic', '') or ''
+
+            # ── Course Builder Stage 1 (additive branch; legacy flow below is untouched) ──
+            if flow == "course_builder":
+                from outliner.course_outline_generator import (
+                    generate_course_outlines, outline_to_legacy, OutlineGenerationError,
+                )
+                yield f"data: {json.dumps({'phase': 1, 'message': 'Drafting course outlines...', 'progress': 20})}\n\n"
+                requirements_text = full_objectives or ""
+                if interpreted_requirements:
+                    requirements_text += "\n\nSTRUCTURED REQUIREMENTS (interpreted):\n" + json.dumps(
+                        {k: interpreted_requirements.get(k) for k in ('recurring_structure', 'days') if interpreted_requirements.get(k)}
+                    )
+                course_inputs = {
+                    'course_name': course_name, 'age_min': age_range_start, 'age_max': age_range_end,
+                    'num_students': num_students, 'num_days': num_days,
+                    'hours_per_day': hours_per_day, 'requirements': requirements_text,
+                }
+                try:
+                    outlines = await asyncio.to_thread(
+                        generate_course_outlines, course_inputs, combined_vision_images or None
+                    )
+                except OutlineGenerationError as e:
+                    yield f"data: {json.dumps({'phase': 1, 'message': f'Error: {str(e)}', 'progress': 0, 'error': True})}\n\n"
+                    return
+                single_day = num_days <= 1
+                payload = {
+                    'type': 'outlines_ready',
+                    'outlines': outlines,
+                    'requires_choice': not single_day,
+                    'preset_course_id': preset_course_id,
+                    'course_attachments': course_attachments,
+                    'interpretation': interpreted_requirements,
+                    'subject': detected_subject,
+                    'topic': detected_topic,
+                    # Echo this back to the day-planning step: nothing is persisted.
+                    'course_context': {
+                        'course_name': course_name, 'age_range_start': age_range_start,
+                        'age_range_end': age_range_end, 'num_students': num_students,
+                        'num_days': num_days, 'hours_per_day': hours_per_day,
+                        'num_worksheets': num_worksheets, 'num_activities': num_activities,
+                        'objectives': full_objectives, 'subject': detected_subject,
+                        'topic': detected_topic, 'interpreted_requirements': interpreted_requirements,
+                    },
+                    'phase': 1, 'progress': 60,
+                    'message': 'Outline ready!' if single_day else 'Three outlines ready - pick one!',
+                }
+                if single_day:
+                    payload['chosen_outline_legacy'] = outline_to_legacy(
+                        outlines[0], course_name, detected_subject, detected_topic,
+                        age_range_start, age_range_end)
+                yield f"data: {json.dumps(payload)}\n\n"
+                return
 
             # ── Phase 1: Generate outline ───────────────────────────────────
             yield f"data: {json.dumps({'phase': 1, 'message': 'Generating course outline...', 'progress': 10})}\n\n"
@@ -309,6 +364,9 @@ class SubsectionSelection(BaseModel):
     blocks: List[Dict[str, Any]] = []
     included: bool = True
     excludedBlockIds: List[str] = []
+    # Course Builder only (both unset for the legacy flow):
+    blockMinutes: Optional[int] = None  # every block is exactly this long; skips the 15/15/30 rules
+    extra: Dict[str, Any] = {}          # additive subsection fields to keep through save (icon, priority, ...)
 
 
 class GenerateBlocksRequest(BaseModel):
@@ -377,6 +435,7 @@ async def generate_blocks(body: GenerateBlocksRequest):
                     'learning_objectives': sel.learningObjectives,
                     'blocks': sel.blocks,
                     'excluded_block_ids': sel.excludedBlockIds,
+                    'block_minutes': sel.blockMinutes,
                 })
 
             blocks_by_subsection: Dict = {}
@@ -409,6 +468,7 @@ async def generate_blocks(body: GenerateBlocksRequest):
                     duration = sel.durationMinutes
                     total_duration += duration
                     built_subsections.append({
+                        **{k: v for k, v in sel.extra.items()},
                         'id': sel.subsectionId,
                         'title': sel.title,
                         'description': sel.description,
@@ -423,6 +483,12 @@ async def generate_blocks(body: GenerateBlocksRequest):
                     })
                 built_section['subsections'] = built_subsections
                 final_sections.append(built_section)
+
+            # Course Builder only (additive): also store each topic's blocks inside the sections,
+            # in the shape the workspace's autosave writes, so a built course is never "unsaved".
+            if any((sel.extra or {}).get('source') == 'course_builder' for sel in body.selections):
+                from outliner.course_builder_handoff import embed_blocks_in_sections
+                embed_blocks_in_sections(final_sections, blocks_by_subsection)
 
             final_outline = dict(body.outline)
             final_outline['sections'] = final_sections
@@ -1134,6 +1200,69 @@ class EdoChatRequest(BaseModel):
     context: Optional[Dict] = None
     conversation_history: Optional[List[EdoChatMessage]] = []
     teacher_uid: Optional[str] = None
+
+class OutlineChatMessage(BaseModel):
+    role: str = Field("user", max_length=20)
+    content: str = Field("", max_length=4000)
+
+
+class ChooseOutlineRequest(BaseModel):
+    outline: Dict
+    course_name: str = Field("", max_length=300)
+    subject: str = Field("", max_length=300)
+    topic: str = Field("", max_length=300)
+    age_range_start: Optional[int] = None
+    age_range_end: Optional[int] = None
+
+
+@router.post("/course-builder/outline-to-sections")
+async def course_builder_outline_to_sections(body: ChooseOutlineRequest):
+    """Pure conversion of a chosen/edited builder outline into the existing
+    outline shape (one section per day). No state, no LLM."""
+    from outliner.course_outline_generator import (
+        outline_to_legacy, check_day_shape, check_outline_limits,
+    )
+    try:
+        if not isinstance(body.outline.get("days"), list) or not body.outline["days"]:
+            raise ValueError("outline.days is required")
+        check_outline_limits(body.outline)
+        for d in body.outline["days"]:
+            check_day_shape(d)
+        return outline_to_legacy(body.outline, body.course_name, body.subject, body.topic,
+                                 body.age_range_start, body.age_range_end)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+
+class EditOutlineRequest(BaseModel):
+    outline: Dict
+    message: str = Field(..., max_length=2000)
+    course: Dict  # course_name, age_range_start, age_range_end, num_students, hours_per_day, requirements
+    conversation_history: Optional[List[OutlineChatMessage]] = Field(default_factory=list, max_length=20)
+
+
+@router.post("/course-builder/edit-outline")
+async def course_builder_edit_outline(body: EditOutlineRequest):
+    """Edo revises the chosen outline. Pure function of its inputs: nothing is stored,
+    so the client can undo by keeping the previous outline it sent."""
+    from outliner.course_outline_generator import edit_outline, OutlineGenerationError
+    from utils.llm_handler import OpenAIServiceError
+    c = body.course or {}
+    course_inputs = {
+        'course_name': str(c.get('course_name', ''))[:300], 'age_min': c.get('age_range_start', ''),
+        'age_max': c.get('age_range_end', ''), 'num_students': c.get('num_students', ''),
+        'hours_per_day': c.get('hours_per_day', ''), 'requirements': str(c.get('requirements') or '')[:6000],
+    }
+    try:
+        return await asyncio.to_thread(
+            edit_outline, body.outline, body.message, course_inputs,
+            [m.model_dump() for m in (body.conversation_history or [])],
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except (OutlineGenerationError, OpenAIServiceError) as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
 
 @router.post("/curriculum/chat")
 async def chat_with_edo(request: EdoChatRequest, current_user: dict = Depends(require_org)):

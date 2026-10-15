@@ -12,6 +12,7 @@ const CourseViewer = ({
   isCollaborator,
   onEditInWorkspace,
   onEditAsCollaborator,
+  contentUnavailable = false,
   navigate
 }) => {
   const [collapsedSections, setCollapsedSections] = useState({});
@@ -259,7 +260,7 @@ const CourseViewer = ({
                           <span style={{
                             fontSize: '12px', color: '#888', flexShrink: 0
                           }}>
-                            {blocks.length} block{blocks.length !== 1 ? 's' : ''}
+                            {contentUnavailable ? 'content not loaded' : `${blocks.length} block${blocks.length !== 1 ? 's' : ''}`}
                           </span>
                         </div>
                       </div>
@@ -297,7 +298,7 @@ const CourseViewer = ({
                               border: '1px dashed #e5e7eb', borderRadius: '8px',
                               backgroundColor: '#fafafa', color: '#888', fontSize: '13px'
                             }}>
-                              No blocks in this subsection
+                              {contentUnavailable ? 'The content of this subsection could not be loaded.' : 'No blocks in this subsection'}
                             </div>
                           ) : (
                             <div style={{
@@ -503,7 +504,7 @@ const CourseViewer = ({
         <span style={{ fontSize: '14px', color: '#444' }}>
           {sectionCount} section{sectionCount !== 1 ? 's' : ''} {'\u2022'}{' '}
           {subsectionCount} subsection{subsectionCount !== 1 ? 's' : ''} {'\u2022'}{' '}
-          {blockCount} block{blockCount !== 1 ? 's' : ''}
+          {contentUnavailable ? 'content not loaded' : `${blockCount} block${blockCount !== 1 ? 's' : ''}`}
         </span>
       </div>
 

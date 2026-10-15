@@ -6,8 +6,7 @@ import { chatWithEdo, generateEdoChips } from '../../utils/curriculumApi';
 import { trackEdoMessageSent } from '../../firebase/analytics';
 import { getSubcategoriesForType, getCategoryColor } from '../../constants/blockCategories';
 
-const EDO_GREEN = '#2C5F3A';
-const EDO_ORANGE = '#E8761A';
+import { EDO_GREEN, EDO_ORANGE } from '../../constants/editorTheme';
 
 // Render inline bold: splits on **text** markers and wraps in <strong>
 const renderInline = (text, keyPrefix) => {
