@@ -2,6 +2,7 @@
 import { Droppable, Draggable } from '@hello-pangea/dnd';
 import { GripVertical, Edit2, Check, Trash2, Plus, ChevronDown, ChevronLeft, Pencil } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
+import { FONT, T, BLOCK_TAG } from '../../constants/editorTheme';
 
 // Extracted outside CourseEditor so React keeps stable identity across renders
 export const EditableField = ({
@@ -200,32 +201,6 @@ export const EditableField = ({
 };
 
 // ── Redesigned outline palette (Figma "Edit workspace") ─────────────────
-const FONT = "'DM Sans', sans-serif";
-const T = {
-  crumbMuted: '#8a8a8a',
-  crumbActive: '#3e62bc',
-  sectionTag: '#3e62bc',
-  heading: '#1f1f1f',
-  desc: '#727272',
-  rowBorder: '#d7e1fb',
-  numBg: '#ebf0ff',
-  numFg: '#3e62bc',
-  cardBorder: '#e4e4e4',
-  cardTitle: '#262626',
-  cardDesc: '#8f8f8f',
-  primary: '#bf2066',
-  dashed: '#cdd7ee',
-  addPillBg: '#f1f1f1',
-  addPillFg: '#9b9b9b',
-  iconEditBg: '#fff2f8', iconEditFg: '#bf2066',
-  iconDelBg: '#fff3dc', iconDelFg: '#c0871d',
-};
-
-const BLOCK_TAG = {
-  content:   { bg: '#fff2f8', fg: '#ad004b', label: 'Content' },
-  worksheet: { bg: '#fff3dc', fg: '#a9761b', label: 'Worksheet' },
-  activity:  { bg: '#e7f7ee', fg: '#1a7a40', label: 'Activity' },
-};
 
 const iconBtn = (bg, fg, size = 30) => ({
   display: 'flex', alignItems: 'center', justifyContent: 'center',

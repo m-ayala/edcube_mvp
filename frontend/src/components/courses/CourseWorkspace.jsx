@@ -21,6 +21,11 @@ import { getOwnProfile } from '../../services/teacherService';
 import { generateBlockLinks } from '../../utils/curriculumApi';
 import { addCourseToFolder } from '../../firebase/dbService';
 import { trackCourseCreated, trackCourseUpdated, trackPublicCourseViewed } from '../../firebase/analytics';
+import {
+  isBuilderSection, builderSectionForEditing, builderSectionBlocks,
+  builderSectionForSave, outlineExtrasOf, builderDayIds, downgradedDays, allBlockIds,
+  INCOMPLETE_COURSE_MESSAGE, SAVE_REFUSED_DAYS_MESSAGE, SAVE_FAILED_MESSAGE,
+} from '../../utils/builderCourse';
 
 const CourseWorkspace = () => {
   const { currentUser } = useAuth();
@@ -40,6 +45,8 @@ const CourseWorkspace = () => {
     handsOnResources: incomingHandsOnResources,
     isGenerating: incomingIsGenerating,
     isSelectingSubsections: incomingIsSelectingSubsections,
+    blocksIncomplete: incomingBlocksIncomplete,
+    outlineExtras: incomingOutlineExtras,
   } = location.state || {};
 
   const { genState, submitSelectionsAndGenerateBlocks, clearGeneration } = useGeneration();
@@ -63,7 +70,9 @@ const CourseWorkspace = () => {
   const [handsOnResources, setHandsOnResources] = useState(incomingHandsOnResources || {});
   const [organizationId, setOrganizationId] = useState(null);
   const [isPublic, setIsPublic] = useState(incomingIsPublic || false);
-  const [readOnly] = useState(incomingReadOnly || false);
+  // A course that could not be fully loaded (blocksIncomplete) opens read-only: editing it
+  // on screen could never be saved.
+  const [readOnly] = useState(incomingReadOnly || !!incomingBlocksIncomplete);
   const [isOwner] = useState(incomingIsOwner || false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [isEdoOpen, setIsEdoOpen] = useState(false);
@@ -72,6 +81,24 @@ const CourseWorkspace = () => {
   const [courseInfoNotes, setCourseInfoNotes] = useState('');
   const [trayItems, setTrayItems] = useState([]);
   const [linkGenJobs, setLinkGenJobs] = useState({}); // { [blockId]: 'generating'|'done'|'error' }
+
+  // Course Builder courses open in this same classic workspace. What is kept for them is data
+  // only (see utils/builderCourse.js). Save guard: the sections this course was loaded with as
+  // Course Builder sections. A save that would turn one of them into a classic-shaped section is
+  // refused (see saveCourse). A section the teacher deletes in the editor is an edit, not a loss.
+  const loadedDayIdsRef = useRef(builderDayIds(incomingSections));
+  // Ids of the blocks present when a built course was loaded; a block of these that is gone at
+  // save time was deleted by the teacher and must leave the day order too.
+  const loadedBlockIdsRef = useRef(new Set());
+  const isBuilderDoc = loadedDayIdsRef.current.length > 0;
+  // Persistent, plain-language notice when a save did not happen (builder courses only):
+  // { kind: 'refused'|'failed', text }. 'refused' also locks the editor (see render).
+  const [saveNotice, setSaveNotice] = useState(null);
+  const editorRowRef = useRef(null);
+  useEffect(() => {
+    if (editorRowRef.current) editorRowRef.current.inert = saveNotice?.kind === 'refused';
+  }, [saveNotice]);
+  const [outlineExtras, setOutlineExtras] = useState(incomingOutlineExtras || null); // saved outline fields other than sections
 
   // Phase 1.5 redesign (TASK-002/003/004) — content library + day lanes view.
   // Local feature flag only: gates the new panel alongside the existing
@@ -209,6 +236,7 @@ const CourseWorkspace = () => {
         const data = await res.json();
         setCourseAttachments(data.courseAttachments || []);
         setCourseInfoNotes(data.courseInfoNotes || '');
+        if (data.outline) setOutlineExtras(outlineExtrasOf(data));
       } catch (e) {
         console.error('Failed to fetch course info:', e);
       }
@@ -273,13 +301,16 @@ const CourseWorkspace = () => {
   // ── Mount: Transform old data (topicBoxes) → new flat structure ───────
   useEffect(() => {
     console.log('📦 CourseWorkspace loaded');
-    if (readOnly && !isOwner && initialCurriculumId) {
+    if (incomingReadOnly && !isOwner && initialCurriculumId) {
       trackPublicCourseViewed({ course_id: initialCurriculumId, courseName, grade: courseClass });
     }
 
     // Flatten old topicBoxes into subsection-level structure
     const transformedSections = sections.map(section => {
       if (section.type === 'break') return section;
+      // Course Builder day: keep every field (icon, priority, plan specs, ...); the blocks and
+      // videos move to handsOnResources / videosByTopic below and are written back on save.
+      if (isBuilderSection(section)) return builderSectionForEditing(section);
       return {
         ...section,
         subsections: (section.subsections || []).map(sub => {
@@ -321,6 +352,13 @@ const CourseWorkspace = () => {
     const loadedHandsOn = {};
 
     sections.forEach(section => {
+      if (isBuilderSection(section)) {
+        const { blocksBySub, videosBySub } = builderSectionBlocks(section, incomingHandsOnResources || {});
+        Object.assign(loadedHandsOn, blocksBySub);
+        Object.assign(loadedVideos, videosBySub);
+        allBlockIds(blocksBySub).forEach(id => loadedBlockIdsRef.current.add(id));
+        return;
+      }
       (section.subsections || []).forEach(sub => {
         const allResources = [];
 
@@ -437,7 +475,12 @@ const CourseWorkspace = () => {
   const saveCourse = async () => {
     const idToken = await currentUser.getIdToken();
 
-    const sectionsForSave = sections.map(section => ({
+    // Blocks present when the course was loaded and gone now: the teacher deleted them.
+    const nowIds = allBlockIds(handsOnResources);
+    const deletedBlockIds = new Set([...loadedBlockIdsRef.current].filter(id => !nowIds.has(id)));
+    const sectionsForSave = sections.map(section => isBuilderSection(section)
+      ? builderSectionForSave(section, handsOnResources, videosByTopic, nowIds, deletedBlockIds)
+      : ({
       ...section,
       subsections: (section.subsections || []).map(sub => ({
         id: sub.id,
@@ -456,6 +499,21 @@ const CourseWorkspace = () => {
       }))
     }));
 
+    // Never write a built course in a shape that loses its Course Builder structure, or while
+    // some of its blocks were not available when it was opened (they would be saved as empty).
+    // Older courses have no loaded days and are not affected.
+    const lostDays = downgradedDays(loadedDayIdsRef.current, sectionsForSave);
+    if (lostDays.length > 0) {
+      console.error('Save refused: this would remove the Course Builder day structure from', lostDays);
+      setSaveNotice({ kind: 'refused', text: SAVE_REFUSED_DAYS_MESSAGE });
+      throw new Error('Save refused: this change would remove the Course Builder day structure from this course.');
+    }
+    if (loadedDayIdsRef.current.length > 0 && incomingBlocksIncomplete) {
+      console.error('Save refused: the course was opened without all of its blocks.');
+      setSaveNotice({ kind: 'refused', text: INCOMPLETE_COURSE_MESSAGE });
+      throw new Error('Save refused: this course was opened without all of its blocks. Open it again from My courses.');
+    }
+
     const courseData = {
       courseName,
       subject: formData?.subject || '',
@@ -466,7 +524,7 @@ const CourseWorkspace = () => {
       courseDescription,
       synopsis,
       sections: sectionsForSave,
-      outline: { sections: sectionsForSave }
+      outline: isBuilderDoc ? { ...(outlineExtras || {}), sections: sectionsForSave } : { sections: sectionsForSave }
     };
 
     const hasExistingId = curriculumId && curriculumId !== 'new-course';
@@ -476,19 +534,27 @@ const CourseWorkspace = () => {
       ? `${import.meta.env.VITE_API_BASE_URL}/api/update-course?teacherUid=${currentUser.uid}`
       : `${import.meta.env.VITE_API_BASE_URL}/api/save-course?teacherUid=${currentUser.uid}&organizationId=${organizationId}`;
 
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${idToken}`
-      },
-      body: JSON.stringify(courseData)
-    });
+    let result;
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`
+        },
+        body: JSON.stringify(courseData)
+      });
 
-    const result = await response.json();
-    if (!result.success) {
-      throw new Error(result.error || result.detail || 'Unknown error');
+      result = await response.json();
+      if (!result.success) {
+        throw new Error(result.error || result.detail || 'Unknown error');
+      }
+    } catch (err) {
+      // Built courses get a plain explanation; older courses keep the "Error" chip only.
+      if (isBuilderDoc) setSaveNotice({ kind: 'failed', text: SAVE_FAILED_MESSAGE });
+      throw err;
     }
+    if (isBuilderDoc) setSaveNotice(null);
 
     if (!hasExistingId && result.courseId) {
       setCurriculumId(result.courseId);
@@ -536,6 +602,8 @@ const CourseWorkspace = () => {
         isOwner,
         ownerName: incomingOwnerName,
         isCollaborator: incomingIsCollaborator || false,
+        ...(incomingBlocksIncomplete ? { blocksIncomplete: true } : {}),
+        ...(isBuilderDoc && outlineExtras ? { outlineExtras } : {}),
       }
     });
   };
@@ -550,6 +618,7 @@ const CourseWorkspace = () => {
   };
 
   const handleEditInWorkspace = () => {
+    if (incomingBlocksIncomplete) return;
     navigate('/course-workspace', {
       state: {
         formData: updatedFormData(),
@@ -558,12 +627,15 @@ const CourseWorkspace = () => {
         curriculumId,
         isPublic,
         readOnly: false,
-        isOwner: false
+        isOwner: false,
+        ...(incomingBlocksIncomplete ? { blocksIncomplete: true } : {}),
+        ...(isBuilderDoc && outlineExtras ? { outlineExtras } : {}),
       }
     });
   };
 
   const handleEditAsCollaborator = () => {
+    if (incomingBlocksIncomplete) return;
     navigate('/course-workspace', {
       state: {
         formData: updatedFormData(),
@@ -574,6 +646,8 @@ const CourseWorkspace = () => {
         readOnly: false,
         isOwner: false,
         isCollaborator: true,
+        ...(incomingBlocksIncomplete ? { blocksIncomplete: true } : {}),
+        ...(isBuilderDoc && outlineExtras ? { outlineExtras } : {}),
       }
     });
   };
@@ -584,6 +658,9 @@ const CourseWorkspace = () => {
     deps: [sections, courseName, videosByTopic, handsOnResources],
     delay: 2000,
     enabled: !!organizationId && !!currentUser && !readOnly && !isGenerating && !isSelectingSubsections
+      // A built course always has an id. Never let a Course Builder course create a second
+      // document under a new id (an unsaved or half-loaded state would do exactly that).
+      && !(loadedDayIdsRef.current.length > 0 && !(curriculumId && curriculumId !== 'new-course'))
   });
 
   // ── Drag and Drop ──────────────────────────────��──────────────────────
@@ -606,6 +683,7 @@ const CourseWorkspace = () => {
     const { source, destination, draggableId, type } = result;
 
     if (!destination) return;
+
     if (
       source.droppableId === destination.droppableId &&
       source.index === destination.index
@@ -704,6 +782,15 @@ const CourseWorkspace = () => {
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
       {readOnly ? (
+        <>
+        {incomingBlocksIncomplete && (
+          <div role="status" style={{
+            padding: '12px 24px', background: '#FFF8E6', borderBottom: '1px solid #F2D58A',
+            color: '#7A5A00', fontSize: '14px', lineHeight: 1.5, flexShrink: 0, fontFamily: "'DM Sans', sans-serif",
+          }}>
+            {INCOMPLETE_COURSE_MESSAGE}
+          </div>
+        )}
         <CourseViewer
           courseName={courseName}
           sections={sections}
@@ -711,10 +798,12 @@ const CourseWorkspace = () => {
           ownerName={incomingOwnerName}
           isOwner={isOwner}
           isCollaborator={incomingIsCollaborator || false}
-          onEditInWorkspace={isOwner ? handleEditInWorkspace : null}
-          onEditAsCollaborator={incomingIsCollaborator ? handleEditAsCollaborator : null}
+          onEditInWorkspace={isOwner && !incomingBlocksIncomplete ? handleEditInWorkspace : null}
+          onEditAsCollaborator={incomingIsCollaborator && !incomingBlocksIncomplete ? handleEditAsCollaborator : null}
+          contentUnavailable={!!incomingBlocksIncomplete}
           navigate={navigate}
         />
+        </>
       ) : (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#FFFFFF' }}>
           <style>{`
@@ -851,8 +940,26 @@ const CourseWorkspace = () => {
             )}
           </div>
 
+          {saveNotice && (
+            <div role="alert" style={{
+              padding: '12px 24px', flexShrink: 0, fontFamily: "'DM Sans', sans-serif", fontSize: '14px', lineHeight: 1.5,
+              display: 'flex', alignItems: 'center', gap: '16px',
+              background: saveNotice.kind === 'refused' ? '#FDECEC' : '#FFF8E6',
+              borderBottom: `1px solid ${saveNotice.kind === 'refused' ? '#F4B6B6' : '#F2D58A'}`,
+              color: saveNotice.kind === 'refused' ? '#9B1C1C' : '#7A5A00',
+            }}>
+              <span style={{ flex: 1 }}>{saveNotice.text}</span>
+              {saveNotice.kind === 'refused' && (
+                <button onClick={() => navigate('/my-courses')} style={{
+                  height: '32px', padding: '0 14px', borderRadius: '8px', border: '1px solid #9B1C1C',
+                  background: '#fff', color: '#9B1C1C', cursor: 'pointer', fontWeight: 600, fontFamily: 'inherit',
+                }}>Leave without saving</button>
+              )}
+            </div>
+          )}
+
           {/* ── Page + Edo row ── */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'row', overflow: 'hidden' }}>
+          <div ref={editorRowRef} style={{ flex: 1, display: 'flex', flexDirection: 'row', overflow: 'hidden' }}>
           <DragDropContext onDragEnd={handleDragEnd}>
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
 

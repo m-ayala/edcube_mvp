@@ -18,6 +18,7 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { generateSynopsis, generateCourseDescription } from '../../utils/curriculumApi';
 import html2pdf from 'html2pdf.js';
+import { INCOMPLETE_COURSE_MESSAGE } from '../../utils/builderCourse';
 
 const SERIF = "'DM Serif Display', serif";
 const SERIF_TEXT = "'DM Serif Text', Georgia, serif";
@@ -374,6 +375,8 @@ const CourseViewPage = () => {
     isOwner       = false,
     ownerName     = '',
     isCollaborator = false,
+    blocksIncomplete = false,
+    outlineExtras = null,
   } = location.state || {};
 
   const [sections]             = useState(incomingSections);
@@ -501,13 +504,13 @@ const CourseViewPage = () => {
   const currentFormData = () => ({ ...incomingFormData, ...editableFormData, courseDescription, synopsis });
 
   const handleEditInWorkspace = () =>
-    navigate('/course-workspace', {
-      state: { formData: currentFormData(), sections, handsOnResources, isEditing: true, curriculumId, isPublic, readOnly: false, isOwner: true }
+    !blocksIncomplete && navigate('/course-workspace', {
+      state: { formData: currentFormData(), sections, handsOnResources, isEditing: true, curriculumId, isPublic, readOnly: false, isOwner: true, ...(blocksIncomplete ? { blocksIncomplete: true } : {}), ...(outlineExtras ? { outlineExtras } : {}) }
     });
 
   const handleEditAsCollaborator = () =>
-    navigate('/course-workspace', {
-      state: { formData: currentFormData(), sections, handsOnResources, isEditing: true, curriculumId, isPublic, readOnly: false, isOwner: false, isCollaborator: true }
+    !blocksIncomplete && navigate('/course-workspace', {
+      state: { formData: currentFormData(), sections, handsOnResources, isEditing: true, curriculumId, isPublic, readOnly: false, isOwner: false, isCollaborator: true, ...(blocksIncomplete ? { blocksIncomplete: true } : {}), ...(outlineExtras ? { outlineExtras } : {}) }
     });
 
   // ── Synopsis: collect all selectable blocks ───────────────────────────
@@ -698,7 +701,7 @@ const CourseViewPage = () => {
             )}
           </div>
 
-          {isOwner && (
+          {isOwner && !blocksIncomplete && (
             <button
               onClick={handleEditInWorkspace}
               style={{
@@ -710,7 +713,7 @@ const CourseViewPage = () => {
               <Pencil size={15} /> Edit Workspace
             </button>
           )}
-          {isCollaborator && (
+          {isCollaborator && !blocksIncomplete && (
             <button
               onClick={handleEditAsCollaborator}
               style={{
@@ -724,6 +727,16 @@ const CourseViewPage = () => {
           )}
         </div>
       </div>
+
+      {blocksIncomplete && (
+        <div role="status" style={{
+          margin: '12px 32px 0', padding: '12px 16px', borderRadius: '10px',
+          background: '#FFF8E6', border: '1px solid #F2D58A', color: '#7A5A00',
+          fontSize: '14px', lineHeight: 1.5, fontFamily: SANS,
+        }}>
+          {INCOMPLETE_COURSE_MESSAGE}
+        </div>
+      )}
 
       {/* ── Panel body — swaps in place based on `activeView`, no navigation ── */}
       <div style={{

@@ -1,6 +1,6 @@
 // frontend/src/components/teacherProfile/ProfileCourseGrid.jsx
 
-const ProfileCourseGrid = ({ courses, onCourseClick }) => {
+const ProfileCourseGrid = ({ courses, onCourseClick, loadingId = null }) => {
   if (!courses || courses.length === 0) return null;
 
   return (
@@ -13,13 +13,15 @@ const ProfileCourseGrid = ({ courses, onCourseClick }) => {
       {courses.map((course) => (
         <div
           key={course.id || course.courseId}
-          onClick={() => onCourseClick(course)}
+          onClick={() => { if (loadingId) return; onCourseClick(course); }}
+          aria-busy={loadingId === (course.id || course.courseId) ? true : undefined}
           style={{
+            ...(loadingId ? { opacity: loadingId === (course.id || course.courseId) ? 1 : 0.6 } : {}),
             backgroundColor: '#ffffff',
             border: '1px solid rgba(0,0,0,0.09)',
             borderRadius: '12px',
             padding: '20px',
-            cursor: 'pointer',
+            cursor: loadingId ? 'progress' : 'pointer',
             transition: 'all 0.2s',
             boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
           }}
@@ -46,6 +48,9 @@ const ProfileCourseGrid = ({ courses, onCourseClick }) => {
           }}>
             {course.courseName || 'Untitled Course'}
           </h3>
+          {loadingId === (course.id || course.courseId) && (
+            <p role="status" style={{ margin: '0 0 8px', fontSize: '13px', fontWeight: 500, color: '#3e62bc' }}>Opening course…</p>
+          )}
 
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '10px' }}>
             {course.subject && (

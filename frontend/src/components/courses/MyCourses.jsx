@@ -9,6 +9,7 @@ import {
   addCourseToFolder,
 } from '../../firebase/dbService';
 import CourseCard from './CourseCard';
+import { navSectionsFromDoc, outlineExtrasOf } from '../../utils/builderCourse';
 import FolderCard from './FolderCard';
 import CardRow from './CardRow';
 import AddFolderModal from './AddFolderModal';
@@ -76,7 +77,11 @@ const MyCourses = () => {
 
   // ─── Navigation ─────────────────────────────────────────────────────────────
   const handleCardClick = (curriculum) => {
-    const sections = (curriculum.outline?.sections || curriculum.sections || []).map(section => ({
+    // A Course Builder course keeps every field it was saved with (day schedule, topic emoji,
+    // block order...) and, if it was never opened in the workspace, its blocks come from the
+    // document's handsOnResources. Every other course is mapped exactly as before.
+    const builderSections = navSectionsFromDoc(curriculum);
+    const sections = builderSections || (curriculum.outline?.sections || curriculum.sections || []).map(section => ({
       id: section.id,
       title: section.title,
       description: section.description || '',
@@ -105,12 +110,16 @@ const MyCourses = () => {
           ageRangeEnd: curriculum.ageRangeEnd || '',
           numStudents: curriculum.numStudents || '',
           timeDuration: curriculum.timeDuration,
-          objectives: curriculum.objectives || ''
+          objectives: curriculum.objectives || '',
+          // Reopened Course Builder courses keep their course length (the workspace uses it for
+          // the day's time cap when a day does not carry its own).
+          ...(builderSections ? { numDays: curriculum.numDays, hoursPerDay: curriculum.hoursPerDay } : {}),
         },
         sections,
         curriculumId: getCourseId(curriculum),
         isPublic: curriculum.isPublic || false,
-        isOwner: true
+        isOwner: true,
+        ...(builderSections && curriculum.outline ? { outlineExtras: outlineExtrasOf(curriculum) } : {})
       }
     });
   };

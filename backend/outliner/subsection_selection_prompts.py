@@ -10,10 +10,10 @@ from typing import Dict, List, Optional
 
 from config import OutlinerConfig
 from outliner.block_prompts import (
-    CONTENT_SUBTYPES,
-    WORKSHEET_SUBTYPES,
-    ACTIVITY_SUBTYPES,
-    WORKSHEET_SUBTYPE_COMPATIBILITY,
+    get_content_subtypes,
+    get_worksheet_subtypes,
+    get_activity_subtypes,
+    get_worksheet_subtype_compatibility,
 )
 
 DEPTH_LEVELS = ["Basics", "Intermediate", "Advanced"]
@@ -203,7 +203,7 @@ def get_subsection_ideation_prompt(
 
     compatibility_lines = "\n".join(
         f"  - {content_subtype} -> {', '.join(worksheet_subtypes)}"
-        for content_subtype, worksheet_subtypes in WORKSHEET_SUBTYPE_COMPATIBILITY.items()
+        for content_subtype, worksheet_subtypes in get_worksheet_subtype_compatibility().items()
     )
 
     recurring_and_day_text = _format_recurring_and_day_context(day_slice, recurring_structure)
@@ -258,14 +258,14 @@ another might be 2 activity blocks and nothing else.
 
 - Content blocks (0 to 4): use as many as it takes to establish this subsection's core_concept, no
   more. Most subsections that introduce a new idea should open with a "Definition" content block
-  (subtype from: {CONTENT_SUBTYPES}), but a subsection whose purpose is primarily PRACTICE,
+  (subtype from: {get_content_subtypes()}), but a subsection whose purpose is primarily PRACTICE,
   REHEARSAL, BUILDING, or PERFORMING — rather than introducing a new idea — may use a single short
   framing content block, or skip content blocks entirely, when the teacher's requirements describe
   it that way (e.g. a "script read-through and practice" or "prop-building" session doesn't need a
   Definition block).
-- Worksheet blocks (subtype from: {WORKSHEET_SUBTYPES} when used): {worksheet_line}
+- Worksheet blocks (subtype from: {get_worksheet_subtypes()} when used): {worksheet_line}
 - Activity blocks: {activity_line}
-  Activity subtype from: {ACTIVITY_SUBTYPES}. Activities reference the subsection's core_concept (or,
+  Activity subtype from: {get_activity_subtypes()}. Activities reference the subsection's core_concept (or,
   for a practice/rehearsal/build subsection, its whole purpose) as a whole, NOT a single source
   block — do not include source_block_ids on activity blocks.
 
