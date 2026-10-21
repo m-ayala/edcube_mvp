@@ -16,6 +16,7 @@ Target tree (see tasks/firestore-reorg-spec.md for the full picture):
     Users/{org}/teacher_profiles/{uid}
     Users/{org}/teachers/{uid}/courseFolders/**, libraryFolders/**
     Users/{org}/notifications/{id}                -- short-lived, delete-on-seen
+    Users/{org}/usage/{uid}/months/{YYYY-MM}      -- backend-only quota counters
     Users/{org}/synopsis/afterschool/months/**, entries/**
     Users/{org}/synopsis/summer_camps/weeks/{week}/camps/{camp}/entries/**
 
@@ -37,6 +38,12 @@ import firebase_admin
 from firebase_admin import auth as fb_auth
 
 from schemas.teacher_schema import get_org_from_email
+from firebase.public_space import (  # noqa: F401 (re-exported)
+    PUBLIC_SPACE_ID,
+    ORG_CLAIM,
+    WAITLIST_COLLECTION,
+    USAGE_COLLECTION,
+)
 
 # ── Roots ────────────────────────────────────────────────────────────────────
 
@@ -86,6 +93,11 @@ def summer_camps_doc(db, org: str):
     return org_col(db, org, "synopsis").document("summer_camps")
 
 
+def usage_month_doc(db, org: str, uid: str, month_id: str):
+    """`Users/{org}/usage/{uid}/months/{YYYY-MM}` -- backend-only monthly usage counters."""
+    return org_col(db, org, USAGE_COLLECTION).document(uid).collection("months").document(month_id)
+
+
 # ── Platform (knowledge base) tree ──────────────────────────────────────────
 
 def kb_doc(db):
@@ -118,13 +130,49 @@ _ORG_CACHE_TTL_SECONDS = 300
 _org_cache: Dict[str, Tuple[Optional[str], float]] = {}
 
 
+# Bootstrapped-public-user lookup (doc fallback for tokens issued before the
+# `org` claim refreshed). Brief cache: positives and negatives both expire fast.
+_PUBLIC_MEMBER_TTL_SECONDS = 60
+_public_member_cache: Dict[str, Tuple[bool, float]] = {}
+
+
+def invalidate_uid_caches(uid: str) -> None:
+    """Drop cached org / public-membership results for one uid (called by bootstrap)."""
+    _org_cache.pop(uid, None)
+    _public_member_cache.pop(uid, None)
+
+
+def is_public_member(uid: str, claims: Optional[dict] = None, db=None) -> bool:
+    """
+    True if `uid` has been bootstrapped into the public space: the token/user
+    custom claim `org == "public"`, OR (fallback) a doc at
+    `Users/public/teachers/{uid}`. Doc lookups are cached for ~60s.
+    """
+    if (claims or {}).get(ORG_CLAIM) == PUBLIC_SPACE_ID:
+        return True
+    now = time.time()
+    cached = _public_member_cache.get(uid)
+    if cached is not None and (now - cached[1]) < _PUBLIC_MEMBER_TTL_SECONDS:
+        return cached[0]
+    if db is None:
+        from firebase.project import firestore_client
+        if not firebase_admin._apps:
+            firebase_admin.initialize_app()
+        db = firestore_client()
+    exists = bool(org_col(db, PUBLIC_SPACE_ID, "teachers").document(uid).get().exists)
+    _public_member_cache[uid] = (exists, now)
+    return exists
+
+
 def resolve_org(uid: str) -> Optional[str]:
     """
     Resolve a Firebase uid to its org_id: looks up the uid's email via the
     Admin SDK, then resolves that email through the `Users/{org}` registry
-    (backend/firebase/org_registry.py). Cached in-process per uid with a short
-    TTL. Returns None if the uid's email isn't registered with any org --
-    there is no default; callers must 403 rather than proceed.
+    (backend/firebase/org_registry.py). An org match always wins. Otherwise a
+    bootstrapped public user (claim or teachers doc, see is_public_member)
+    resolves to "public". Returns None otherwise -- callers must 403.
+    Org matches are cached per uid with a short TTL; None is never cached so a
+    fresh bootstrap takes effect immediately.
     """
     now = time.time()
     cached = _org_cache.get(uid)
@@ -136,5 +184,8 @@ def resolve_org(uid: str) -> Optional[str]:
 
     user = fb_auth.get_user(uid)
     org = get_org_from_email(user.email or "")
-    _org_cache[uid] = (org, now)
+    if not org and is_public_member(uid, getattr(user, "custom_claims", None)):
+        org = PUBLIC_SPACE_ID
+    if org:
+        _org_cache[uid] = (org, now)
     return org

@@ -75,3 +75,30 @@ export const sendShareInvite = async (currentUser, { courseId, courseName, recip
   if (!res.ok) throw new Error('Failed to send share invitations');
   return res.json();
 };
+
+// Public-space users share by email. Resolves to { success, shared_with, shared: [uids],
+// not_found: [emails] }; on failure throws an Error carrying .status and .code
+// (e.g. 'too_many_emails', 'cannot_share_with_self', 'rate_limited').
+export const sendShareByEmail = async (currentUser, { courseId, courseName, emails, accessType }) => {
+  const headers = await authHeader(currentUser);
+  const res = await fetch(`${API_BASE}/share`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      course_id: courseId,
+      course_name: courseName,
+      recipient_emails: emails,
+      access_type: accessType,
+    }),
+  });
+  if (!res.ok) {
+    let detail = null;
+    try { detail = (await res.json()).detail; } catch { /* non-JSON body */ }
+    const err = new Error(typeof detail === 'string' ? detail : (detail?.message || 'Failed to send share invitations'));
+    err.status = res.status;
+    err.code = detail && typeof detail === 'object' ? detail.code : undefined;
+    err.max = detail && typeof detail === 'object' ? detail.max : undefined;
+    throw err;
+  }
+  return res.json();
+};

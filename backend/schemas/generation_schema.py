@@ -17,7 +17,7 @@ class GenerateRequest(BaseModel):
     context: GenerationContext
     user_guidance: Optional[str] = None
     count: int = 3
-    teacher_uid: str
+    teacher_uid: Optional[str] = None  # optional; token uid is authoritative
 
 class GenerateResponse(BaseModel):
     """Generation response"""

@@ -6,6 +6,9 @@ import { chatWithEdo, generateEdoChips } from '../../utils/curriculumApi';
 import { trackEdoMessageSent } from '../../firebase/analytics';
 import { getSubcategoriesForType, getCategoryColor } from '../../constants/blockCategories';
 
+import { useAuth } from '../../contexts/AuthContext';
+import { useUsage } from '../../contexts/usageContextCore';
+import { formatResetDate, percentUsed } from '../../utils/usageFormat';
 import { EDO_GREEN, EDO_ORANGE } from '../../constants/editorTheme';
 
 // Render inline bold: splits on **text** markers and wraps in <strong>
@@ -210,6 +213,14 @@ const TRAY_DROPPABLE = {
 };
 
 const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onClose, trayItems = [], setTrayItems, handsOnResources = {}, currentPage = null, curriculumId = null }) => {
+  const { isPublicUser } = useAuth();
+  const { usage, limits, resetsAt, isExhausted, openUpgrade } = useUsage();
+  // Public users only: Edo allowance state. Org users have no limits, so none of
+  // this ever shows or disables anything for them.
+  const edoLimited = isPublicUser && limits?.edo_tokens != null;
+  const edoBlocked = isPublicUser && isExhausted('edo_tokens');
+  const edoLeftPct = edoLimited ? 100 - percentUsed(usage?.edo_tokens ?? 0, limits.edo_tokens) : null;
+  const quotaReply = (err, fallback) => (err?.quota ? 'You have reached this month\'s limit.' : fallback);
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -419,15 +430,15 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
       } else {
         addTextMessage('ai-text', "I couldn't generate suggestions right now. Please try again.");
       }
-    } catch {
-      addTextMessage('ai-text', "I'm having trouble connecting. Please try again in a moment.");
+    } catch (err) {
+      addTextMessage('ai-text', quotaReply(err, "I'm having trouble connecting. Please try again in a moment."));
     } finally {
       setIsTyping(false);
     }
   };
 
   const sendMessage = async (text) => {
-    if (!text.trim() || isTyping) return;
+    if (!text.trim() || isTyping || edoBlocked) return;
     addTextMessage('user', text.trim());
     setInputText('');
     trackEdoMessageSent({ context_type: currentPage?.page || 'outline', prompt_length: text.trim().length });
@@ -481,11 +492,11 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
         },
         count: 1,
       });
-      if (result?.success === false) throw new Error(result.error);
+      if (result?.success === false) throw Object.assign(new Error(result.error), { quota: result.quota });
       result.items.forEach(item => addToTray('SECTION', item));
       addTextMessage('ai-text', `Generated ${result.items.length} section${result.items.length !== 1 ? 's' : ''}! Drag it from the tray below into your course.`);
-    } catch {
-      addTextMessage('ai-text', 'I had trouble generating a section. Please try again.');
+    } catch (err) {
+      addTextMessage('ai-text', quotaReply(err, 'I had trouble generating a section. Please try again.'));
     } finally {
       setIsTyping(false);
     }
@@ -513,11 +524,11 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
         },
         count: 1,
       });
-      if (result?.success === false) throw new Error(result.error);
+      if (result?.success === false) throw Object.assign(new Error(result.error), { quota: result.quota });
       result.items.forEach(item => addToTray('SUBSECTION', item));
       addTextMessage('ai-text', `Generated ${result.items.length} subsection${result.items.length !== 1 ? 's' : ''} for "${targetSection.title}"! Drag it from the tray into that section.`);
-    } catch {
-      addTextMessage('ai-text', 'I had trouble generating a subsection. Please try again.');
+    } catch (err) {
+      addTextMessage('ai-text', quotaReply(err, 'I had trouble generating a subsection. Please try again.'));
     } finally {
       setIsTyping(false);
     }
@@ -1403,6 +1414,18 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
         </div>
       )}
 
+      {edoBlocked && (
+        <div data-testid="edo-exhausted" style={{ padding: '8px 12px', borderTop: '1px solid #E7E5E4', backgroundColor: '#FFF4E8', fontSize: '12.5px', color: '#7A4A12', fontFamily: "'DM Sans', sans-serif", flexShrink: 0 }}>
+          You've used this month's Edo allowance{resetsAt ? ` — resets ${formatResetDate(resetsAt)}` : ''}.{' '}
+          <button onClick={openUpgrade} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: EDO_ORANGE, fontWeight: 700, textDecoration: 'underline', fontSize: 'inherit', fontFamily: 'inherit' }}>Upgrade</button>
+        </div>
+      )}
+      {!edoBlocked && edoLimited && (
+        <div data-testid="edo-allowance" style={{ padding: '3px 12px 0', borderTop: '1px solid #E7E5E4', fontSize: '11.5px', color: '#8A8580', fontFamily: "'DM Sans', sans-serif", flexShrink: 0, backgroundColor: 'white' }}>
+          Edo: {edoLeftPct}% left this month
+        </div>
+      )}
+
       {/* Input bar */}
       <div style={{
         padding: '9px 11px', borderTop: '1px solid #E7E5E4',
@@ -1428,7 +1451,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
             }
           }}
           placeholder="Ask Edo anything… (Shift+Enter for new line)"
-          disabled={isTyping}
+          disabled={isTyping || edoBlocked}
           style={{
             flex: 1, padding: '8px 12px',
             border: '1px solid #E7E5E4', borderRadius: '16px',
@@ -1444,7 +1467,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
             if (inputText.trim() && inputRef.current) inputRef.current.style.height = 'auto';
             sendMessage(inputText);
           }}
-          disabled={!inputText.trim() || isTyping}
+          disabled={!inputText.trim() || isTyping || edoBlocked}
           style={{
             width: '34px', height: '34px', borderRadius: '50%',
             backgroundColor: inputText.trim() && !isTyping ? EDO_GREEN : '#E5E7EB',

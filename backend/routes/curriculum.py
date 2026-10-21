@@ -20,7 +20,8 @@ from services.orchestrator import CurriculumOrchestrator
 from services.firebase_service import FirebaseService
 from schemas.generation_schema import GenerateRequest, GenerateResponse
 from services.generation_service import GenerationService
-from routes.teachers import verify_firebase_token, require_org, require_org_for_uid
+from routes.teachers import verify_firebase_token, require_org, require_org_for_uid, resolve_caller_uid
+from services.usage_service import enforce_quota, throttle_chips, safe_add_usage, refund_charge
 from schemas.teacher_schema import TEACHER_PROFILES_COLLECTION
 from firebase.paths import org_col
 
@@ -31,7 +32,7 @@ firebase = FirebaseService()
 logger = logging.getLogger(__name__)
 
 
-@router.post("/generate-curriculum")
+@router.post("/generate-curriculum", dependencies=[Depends(enforce_quota("courses"))])
 async def generate_curriculum(
     course_name:     str   = Form(...),
     age_range_start: int   = Form(...),
@@ -42,13 +43,14 @@ async def generate_curriculum(
     num_worksheets:  int   = Form(...),
     num_activities:  int   = Form(...),
     objectives:        str   = Form(""),
-    teacherUid:        str   = Form(...),
+    teacherUid:        Optional[str] = Form(None),  # optional; token uid is authoritative
     organizationId:    str   = Form(...),
     file_descriptions: str   = Form(""),  # JSON array of per-file description strings
     # "legacy" (default) = original flow ending in candidates_complete.
     # "course_builder" = Course Builder Stage 1: stops after 'outlines_ready'.
     flow:              str   = Form("legacy"),
     files: List[UploadFile] = File(default=[]),
+    current_user: dict = Depends(require_org),
 ):
     """
     Generate a course outline (sections = days/themes) then candidate subsection
@@ -62,7 +64,8 @@ async def generate_curriculum(
     # organizationId must match the org this teacherUid is actually
     # registered with -- never trust it blindly for a Storage/Firestore path
     # (tasks/firestore-reorg-spec.md Round 2, decision 1: no default/unverified org).
-    expected_org = require_org_for_uid(teacherUid)
+    teacherUid = resolve_caller_uid(current_user, teacherUid)
+    expected_org = current_user["org"]
     if organizationId != expected_org:
         raise HTTPException(status_code=403, detail="Your organization is not registered with EdCube")
 
@@ -197,6 +200,7 @@ async def generate_curriculum(
                         generate_course_outlines, course_inputs, combined_vision_images or None
                     )
                 except OutlineGenerationError as e:
+                    refund_charge(current_user, "courses")  # build produced nothing
                     yield f"data: {json.dumps({'phase': 1, 'message': f'Error: {str(e)}', 'progress': 0, 'error': True})}\n\n"
                     return
                 single_day = num_days <= 1
@@ -252,6 +256,7 @@ async def generate_curriculum(
             )
 
             if not outline_data:
+                refund_charge(current_user, "courses")
                 yield f"data: {json.dumps({'phase': 1, 'message': 'Error: Failed to generate outline', 'progress': 0, 'error': True})}\n\n"
                 return
 
@@ -273,6 +278,7 @@ async def generate_curriculum(
 
         except Exception as e:
             logger.error(f"generate-curriculum error: {e}", exc_info=True)
+            refund_charge(current_user, "courses")
             yield f"data: {json.dumps({'message': f'Error: {str(e)}', 'error': True})}\n\n"
         finally:
             for p in tmp_paths:
@@ -312,8 +318,8 @@ class GenerateMoreSubsectionsRequest(BaseModel):
     existingSubsections: List[SubsectionLabel] = []
 
 
-@router.post("/generate-more-subsections")
-async def generate_more_subsections(body: GenerateMoreSubsectionsRequest):
+@router.post("/generate-more-subsections", dependencies=[Depends(enforce_quota("generates"))])
+async def generate_more_subsections(body: GenerateMoreSubsectionsRequest, current_user: dict = Depends(require_org)):
     """
     Phase 1.5 "generate more": propose one additional independent chain for a
     single section, triggered by the teacher clicking "+" in the selection matrix.
@@ -371,7 +377,7 @@ class SubsectionSelection(BaseModel):
 
 class GenerateBlocksRequest(BaseModel):
     presetCourseId: str
-    teacherUid: str
+    teacherUid: Optional[str] = None  # optional; token uid is authoritative
     organizationId: str
     courseName: str
     ageRangeStart: int
@@ -386,7 +392,7 @@ class GenerateBlocksRequest(BaseModel):
 
 
 @router.post("/generate-blocks")
-async def generate_blocks(body: GenerateBlocksRequest):
+async def generate_blocks(body: GenerateBlocksRequest, current_user: dict = Depends(require_org)):
     """
     Stage 2 of course generation: take the teacher's Phase 1.5 selection (which
     subsections are included, and which of their blocks were unchecked) and
@@ -395,7 +401,8 @@ async def generate_blocks(body: GenerateBlocksRequest):
     Streams progress via Server-Sent Events.
     """
     # Validate org before streaming starts (see generate_curriculum for why).
-    expected_org = require_org_for_uid(body.teacherUid)
+    body.teacherUid = resolve_caller_uid(current_user, body.teacherUid)
+    expected_org = current_user["org"]
     if body.organizationId != expected_org:
         raise HTTPException(status_code=403, detail="Your organization is not registered with EdCube")
 
@@ -632,7 +639,7 @@ async def remove_collaborator(
 
 
 @router.get("/curricula/{curriculum_id}")
-async def get_curriculum(curriculum_id: str, teacherUid: str):
+async def get_curriculum(curriculum_id: str, teacherUid: Optional[str] = None, current_user: dict = Depends(require_org)):
     """
     Fetch a saved curriculum by ID
 
@@ -644,7 +651,8 @@ async def get_curriculum(curriculum_id: str, teacherUid: str):
     see this task's report for the TASK-008 frontend follow-up.
     """
     try:
-        org = require_org_for_uid(teacherUid)
+        teacherUid = resolve_caller_uid(current_user, teacherUid)
+        org = current_user["org"]
         curriculum = await firebase.get_curriculum(curriculum_id, teacherUid, org=org)
 
         if not curriculum:
@@ -659,7 +667,7 @@ async def get_curriculum(curriculum_id: str, teacherUid: str):
 
 
 @router.get("/curricula")
-async def list_curricula(teacherUid: str):
+async def list_curricula(teacherUid: Optional[str] = None, current_user: dict = Depends(require_org)):
     """
     List all curricula for a teacher
 
@@ -670,7 +678,7 @@ async def list_curricula(teacherUid: str):
     see this task's report for the TASK-008 frontend follow-up.
     """
     try:
-        require_org_for_uid(teacherUid)
+        teacherUid = resolve_caller_uid(current_user, teacherUid)
         curricula = await firebase.list_teacher_curricula(teacherUid)
         return {"curricula": curricula}
 
@@ -681,7 +689,7 @@ async def list_curricula(teacherUid: str):
 
 
 @router.delete("/curricula/{curriculum_id}")
-async def delete_curriculum(curriculum_id: str, teacherUid: str):
+async def delete_curriculum(curriculum_id: str, teacherUid: Optional[str] = None, current_user: dict = Depends(require_org)):
     """
     Delete a curriculum
 
@@ -693,7 +701,7 @@ async def delete_curriculum(curriculum_id: str, teacherUid: str):
     see this task's report for the TASK-008 frontend follow-up.
     """
     try:
-        require_org_for_uid(teacherUid)
+        teacherUid = resolve_caller_uid(current_user, teacherUid)
         success = await firebase.delete_curriculum(curriculum_id, teacherUid)
 
         if not success:
@@ -707,8 +715,8 @@ async def delete_curriculum(curriculum_id: str, teacherUid: str):
         raise HTTPException(status_code=500, detail=str(e))
     
 # In backend/routes/curriculum.py
-@router.post("/save-course")
-async def save_course(course_data: dict, teacherUid: str, organizationId: str):
+@router.post("/save-course", dependencies=[Depends(enforce_quota("courses"))])
+async def save_course(course_data: dict, teacherUid: Optional[str] = None, organizationId: Optional[str] = None, current_user: dict = Depends(require_org)):
     """Save course from CourseWorkspace
 
     NOTE: still takes a raw teacherUid/organizationId instead of an
@@ -718,13 +726,8 @@ async def save_course(course_data: dict, teacherUid: str, organizationId: str):
     stale or tampered organizationId can't write into another org's tree.
     """
     try:
-        if not teacherUid:
-            raise HTTPException(status_code=400, detail="teacherUid is required")
-
-        if not organizationId:
-            raise HTTPException(status_code=400, detail="organizationId is required")
-
-        org = require_org_for_uid(teacherUid)
+        teacherUid = resolve_caller_uid(current_user, teacherUid)
+        org = current_user["org"]
 
         # FIX: Ensure course_data has the right structure
         curriculum_data = {
@@ -757,7 +760,7 @@ async def save_course(course_data: dict, teacherUid: str, organizationId: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/my-courses")
-async def get_my_courses(teacherUid: str):
+async def get_my_courses(teacherUid: Optional[str] = None, current_user: dict = Depends(require_org)):
     """
     Get all courses for the logged-in teacher
 
@@ -768,7 +771,7 @@ async def get_my_courses(teacherUid: str):
     see this task's report for the TASK-008 frontend follow-up.
     """
     try:
-        require_org_for_uid(teacherUid)
+        teacherUid = resolve_caller_uid(current_user, teacherUid)
         curricula = await firebase.list_teacher_curricula(teacherUid)
 
         return {
@@ -782,7 +785,7 @@ async def get_my_courses(teacherUid: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/update-course")
-async def update_course(course_data: dict, teacherUid: str):
+async def update_course(course_data: dict, teacherUid: Optional[str] = None, current_user: dict = Depends(require_org)):
     """
     Update an existing course in Firebase
 
@@ -794,15 +797,14 @@ async def update_course(course_data: dict, teacherUid: str):
     see this task's report for the TASK-008 frontend follow-up.
     """
     try:
-        if not teacherUid:
-            raise HTTPException(status_code=400, detail="teacherUid is required")
+        teacherUid = resolve_caller_uid(current_user, teacherUid)
 
         course_id = course_data.get('courseId')
         if not course_id:
             raise HTTPException(status_code=400, detail="courseId is required for updates")
 
         # Verify ownership OR collaborate access before updating
-        org = require_org_for_uid(teacherUid)
+        org = current_user["org"]
         doc = firebase.curricula_col(org).document(course_id).get()
         if not doc.exists:
             raise HTTPException(status_code=404, detail="Course not found or unauthorized")
@@ -849,19 +851,21 @@ class AttachmentUpdate(BaseModel):
 
 class CourseInfoNotesUpdate(BaseModel):
     notes: str
-    teacherUid: str
+    teacherUid: Optional[str] = None  # optional; token uid is authoritative
 
 
 @router.post("/curricula/{curriculum_id}/attachments")
 async def upload_course_attachment(
     curriculum_id: str,
-    teacherUid: str = Form(...),
+    teacherUid: Optional[str] = Form(None),
     description: str = Form(""),
     file: UploadFile = File(...),
+    current_user: dict = Depends(require_org),
 ):
     """Upload a new attachment to an existing course and extract its text."""
     try:
-        org = require_org_for_uid(teacherUid)
+        teacherUid = resolve_caller_uid(current_user, teacherUid)
+        org = current_user["org"]
         doc = firebase.curricula_col(org).document(curriculum_id).get()
         if not doc.exists:
             raise HTTPException(status_code=404, detail="Course not found")
@@ -944,11 +948,13 @@ async def update_course_attachment(
     curriculum_id: str,
     attachment_id: str,
     update: AttachmentUpdate,
-    teacherUid: str,
+    teacherUid: Optional[str] = None,
+    current_user: dict = Depends(require_org),
 ):
     """Update description or isActive toggle for a course attachment."""
     try:
-        org = require_org_for_uid(teacherUid)
+        teacherUid = resolve_caller_uid(current_user, teacherUid)
+        org = current_user["org"]
         doc = firebase.curricula_col(org).document(curriculum_id).get()
         if not doc.exists:
             raise HTTPException(status_code=404, detail="Course not found")
@@ -988,11 +994,13 @@ async def update_course_attachment(
 async def delete_course_attachment(
     curriculum_id: str,
     attachment_id: str,
-    teacherUid: str,
+    teacherUid: Optional[str] = None,
+    current_user: dict = Depends(require_org),
 ):
     """Remove an attachment from a course (Firestore record + Storage file)."""
     try:
-        org = require_org_for_uid(teacherUid)
+        teacherUid = resolve_caller_uid(current_user, teacherUid)
+        org = current_user["org"]
         doc = firebase.curricula_col(org).document(curriculum_id).get()
         if not doc.exists:
             raise HTTPException(status_code=404, detail="Course not found")
@@ -1033,14 +1041,15 @@ async def delete_course_attachment(
 
 
 @router.patch("/curricula/{curriculum_id}/course-info-notes")
-async def update_course_info_notes(curriculum_id: str, body: CourseInfoNotesUpdate):
+async def update_course_info_notes(curriculum_id: str, body: CourseInfoNotesUpdate, current_user: dict = Depends(require_org)):
     """Update the teacher's free-text project notes for a course."""
     try:
-        org = require_org_for_uid(body.teacherUid)
+        uid = resolve_caller_uid(current_user, body.teacherUid)
+        org = current_user["org"]
         doc = firebase.curricula_col(org).document(curriculum_id).get()
         if not doc.exists:
             raise HTTPException(status_code=404, detail="Course not found")
-        if doc.to_dict().get('teacherUid') != body.teacherUid:
+        if doc.to_dict().get('teacherUid') != uid:
             raise HTTPException(status_code=403, detail="Not authorized")
 
         firebase.curricula_col(org).document(curriculum_id).update({
@@ -1061,8 +1070,8 @@ async def update_course_info_notes(curriculum_id: str, body: CourseInfoNotesUpda
 # NEW UNIFIED GENERATION ENDPOINT
 # ============================================================================
 
-@router.post("/curriculum/generate", response_model=GenerateResponse)
-async def generate_curriculum_content(request: GenerateRequest):
+@router.post("/curriculum/generate", dependencies=[Depends(enforce_quota("generates"))], response_model=GenerateResponse)
+async def generate_curriculum_content(request: GenerateRequest, current_user: dict = Depends(require_org)):
     """
     Unified generation endpoint for sections, subsections, and topic boxes
     
@@ -1124,9 +1133,8 @@ async def generate_curriculum_content(request: GenerateRequest):
     try:
         logger.info(f"Generation request: level={request.level}, count={request.count}")
         
-        # Validate teacher_uid
-        if not request.teacher_uid:
-            raise HTTPException(status_code=400, detail="teacher_uid is required")
+        # teacher_uid is optional; if sent it must match the token uid
+        resolve_caller_uid(current_user, request.teacher_uid)
         
         # Convert Pydantic model to dict for service
         context_dict = request.context.dict()
@@ -1168,16 +1176,21 @@ class VisibilityUpdate(BaseModel):
     isPublic: bool
 
 @router.patch("/curricula/{curriculum_id}/visibility")
-async def update_course_visibility(curriculum_id: str, body: VisibilityUpdate, teacherUid: str):
+async def update_course_visibility(curriculum_id: str, body: VisibilityUpdate, teacherUid: Optional[str] = None, current_user: dict = Depends(require_org)):
     """Toggle a course's public/private visibility. Only the owner can change this."""
     try:
         # Verify ownership
-        org = require_org_for_uid(teacherUid)
-        curriculum = await firebase.get_curriculum(curriculum_id, teacherUid, org=org)
-        if not curriculum:
+        uid = resolve_caller_uid(current_user, teacherUid)
+        org = current_user["org"]
+        doc = firebase.curricula_col(org).document(curriculum_id).get()
+        if not doc.exists:
             raise HTTPException(status_code=404, detail="Course not found or unauthorized")
+        if doc.to_dict().get('teacherUid') != uid:
+            raise HTTPException(status_code=403, detail="Only the course owner can change visibility")
 
         await firebase.update_curriculum(curriculum_id, {'isPublic': body.isPublic}, org=org)
+        # Public space only (no-op for orgs): keep discovery's has_public_courses flag in step.
+        await firebase.sync_has_public_courses(org, uid)
         return {"success": True, "isPublic": body.isPublic}
 
     except HTTPException:
@@ -1216,7 +1229,7 @@ class ChooseOutlineRequest(BaseModel):
 
 
 @router.post("/course-builder/outline-to-sections")
-async def course_builder_outline_to_sections(body: ChooseOutlineRequest):
+async def course_builder_outline_to_sections(body: ChooseOutlineRequest, current_user: dict = Depends(require_org)):
     """Pure conversion of a chosen/edited builder outline into the existing
     outline shape (one section per day). No state, no LLM."""
     from outliner.course_outline_generator import (
@@ -1241,8 +1254,8 @@ class EditOutlineRequest(BaseModel):
     conversation_history: Optional[List[OutlineChatMessage]] = Field(default_factory=list, max_length=20)
 
 
-@router.post("/course-builder/edit-outline")
-async def course_builder_edit_outline(body: EditOutlineRequest):
+@router.post("/course-builder/edit-outline", dependencies=[Depends(enforce_quota("generates"))])
+async def course_builder_edit_outline(body: EditOutlineRequest, current_user: dict = Depends(require_org)):
     """Edo revises the chosen outline. Pure function of its inputs: nothing is stored,
     so the client can undo by keeping the previous outline it sent."""
     from outliner.course_outline_generator import edit_outline, OutlineGenerationError
@@ -1264,7 +1277,7 @@ async def course_builder_edit_outline(body: EditOutlineRequest):
         raise HTTPException(status_code=502, detail=str(e))
 
 
-@router.post("/curriculum/chat")
+@router.post("/curriculum/chat", dependencies=[Depends(enforce_quota("edo_tokens"))])
 async def chat_with_edo(request: EdoChatRequest, current_user: dict = Depends(require_org)):
     """
     Edo AI curriculum assistant — returns 2-3 structured suggestion blocks.
@@ -1639,6 +1652,11 @@ Respond ONLY with valid JSON. No markdown, no preamble."""
             response_format={"type": "json_object"}
         )
 
+        # Record Edo token usage (TASK-029). No usage on the response -> record nothing
+        # (the pre-check still gates the next message); never breaks the reply.
+        _u = getattr(response, "usage", None)
+        safe_add_usage(org, current_user["uid"], "edo_tokens", getattr(_u, "total_tokens", 0) or 0)
+
         raw = response.choices[0].message.content
         try:
             parsed = json.loads(raw)
@@ -1684,8 +1702,8 @@ class EdoChipsRequest(BaseModel):
     age_range: Optional[str] = None
     taxonomy_hints: Optional[List[str]] = []  # subcategory names from blockCategories
 
-@router.post("/curriculum/chips")
-async def generate_edo_chips(request: EdoChipsRequest):
+@router.post("/curriculum/chips", dependencies=[Depends(throttle_chips)])
+async def generate_edo_chips(request: EdoChipsRequest, current_user: dict = Depends(require_org)):
     """Generate context-specific quick-chips for Edo block generation, tailored to the topic."""
     try:
         block_label = {"content": "content block", "worksheet": "worksheet", "activity": "activity"}.get(request.block_type, "block")
@@ -1752,8 +1770,8 @@ class GenerateBlockLinksRequest(BaseModel):
     blockDurationMinutes: Optional[float] = None     # caps video length
 
 
-@router.post("/curriculum/generate-block-links")
-async def generate_block_links(request: GenerateBlockLinksRequest):
+@router.post("/curriculum/generate-block-links", dependencies=[Depends(enforce_quota("generates"))])
+async def generate_block_links(request: GenerateBlockLinksRequest, current_user: dict = Depends(require_org)):
     """
     Generate resource links for a block. Provider is chosen by env
     RESOURCE_SEARCH_PROVIDER ("browserbase" default, or "legacy").
@@ -1764,6 +1782,7 @@ async def generate_block_links(request: GenerateBlockLinksRequest):
     If BROWSERBASE_API_KEY is missing we fall back to legacy (not an empty list)
     so Generate keeps working, and log a warning.
     """
+    resolve_caller_uid(current_user, request.teacherUid)  # optional field; 403 if it mismatches the token
     from config import APIConfig
 
     provider = (APIConfig.RESOURCE_SEARCH_PROVIDER or "").strip().lower()
@@ -1780,7 +1799,7 @@ async def generate_block_links(request: GenerateBlockLinksRequest):
         provider = "legacy"
 
     if provider == "legacy":
-        return await _generate_block_links_legacy(request)
+        return await _generate_block_links_legacy(request, current_user)
 
     try:
         from populator.block_resource_finder import find_block_resources
@@ -1806,10 +1825,11 @@ async def generate_block_links(request: GenerateBlockLinksRequest):
         return {"links": links}
     except Exception as e:
         logger.error(f"Browserbase block link generation error: {type(e).__name__}: {e}", exc_info=True)
+        refund_charge(current_user, "generates")  # swallowed failure: nothing delivered
         return {"links": []}
 
 
-async def _generate_block_links_legacy(request: GenerateBlockLinksRequest):
+async def _generate_block_links_legacy(request: GenerateBlockLinksRequest, current_user: Optional[dict] = None):
     """
     Legacy path (unchanged behaviour): existing video/worksheet generators.
     - content blocks  → YouTube video links via the video generator (video_id → youtube.com/watch?v=...)
@@ -1928,6 +1948,8 @@ async def _generate_block_links_legacy(request: GenerateBlockLinksRequest):
 
     except Exception as e:
         logger.error(f"Block link generation error: {e}", exc_info=True)
+        if current_user is not None:
+            refund_charge(current_user, "generates")  # swallowed failure: nothing delivered
         return {"links": []}
 
 
@@ -1956,12 +1978,13 @@ class GenerateDescriptionRequest(BaseModel):
     teacherUid: Optional[str] = None
 
 
-@router.post("/curriculum/generate-description")
-async def generate_description(request: GenerateDescriptionRequest):
+@router.post("/curriculum/generate-description", dependencies=[Depends(enforce_quota("generates"))])
+async def generate_description(request: GenerateDescriptionRequest, current_user: dict = Depends(require_org)):
     """
     Generate a one-paragraph course description based on the teacher's course info.
     Describes student learning outcomes and the general theme of the course.
     """
+    resolve_caller_uid(current_user, request.teacherUid)  # optional field; 403 if it mismatches the token
     try:
         age_start = str(request.ageRangeStart) if request.ageRangeStart not in (None, "", 0) else ""
         age_end   = str(request.ageRangeEnd)   if request.ageRangeEnd   not in (None, "", 0) else ""
@@ -2030,13 +2053,14 @@ class GenerateSynopsisRequest(BaseModel):
     selectedBlocks: List[SynopsisBlock]
 
 
-@router.post("/curriculum/generate-synopsis")
-async def generate_synopsis(request: GenerateSynopsisRequest):
+@router.post("/curriculum/generate-synopsis", dependencies=[Depends(enforce_quota("generates"))])
+async def generate_synopsis(request: GenerateSynopsisRequest, current_user: dict = Depends(require_org)):
     """
     Generate a parent-facing narrative synopsis of a completed course.
     The teacher selects which blocks (content/worksheet/activity) were completed,
     and this returns a 3–5 paragraph friendly summary for parents.
     """
+    resolve_caller_uid(current_user, request.teacherUid)  # optional field; 403 if it mismatches the token
     try:
         if not request.selectedBlocks:
             raise HTTPException(status_code=400, detail="At least one block must be selected")

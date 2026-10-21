@@ -2,11 +2,13 @@
 
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
+import { UsageProvider } from './contexts/UsageContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { GenerationProvider } from './contexts/GenerationContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import Login from './components/auth/Login';
 import Signup from './components/auth/Signup';
+import Waitlist from './components/auth/Waitlist';
 import LandingPage from './components/pages/LandingPage';
 import Layout from './components/layout/Layout';
 import MyCourses from './components/courses/MyCourses';
@@ -26,6 +28,7 @@ import { COURSE_BUILDER_ENABLED } from './constants/featureFlags';
 function App() {
   return (
     <AuthProvider>
+      <UsageProvider>
       <NotificationProvider>
       <GenerationProvider>
       <Router>
@@ -34,6 +37,7 @@ function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
+          <Route path="/waitlist" element={<Waitlist />} />
           <Route path="/contact" element={<ContactPage />} />
 
           {/* Protected Routes — pathless layout wrapper */}
@@ -71,6 +75,7 @@ function App() {
       </Router>
       </GenerationProvider>
       </NotificationProvider>
+      </UsageProvider>
     </AuthProvider>
   );
 }

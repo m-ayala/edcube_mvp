@@ -8,6 +8,41 @@ Format: `- [ ] TASK-XXX: description (suggested agent, optional)`
 
 ## Backlog
 
+Public launch (plan: ~/.claude/plans/pasted-content-id-bccb-all-right-structured-pnueli.md).
+One branch per task (task/TASK-XXX-slug). Stop for the person's review at the end of each phase
+and before every commit. Target project edcubeai-fdba7 (Firestore DB "default").
+
+- [ ] TASK-031: Phase 1 — accounts, plans (trial 30-day placeholder / teacher / org), one central
+      config doc, the can() entitlement check, admin claim + override routes, personal workspace and
+      memberships (a user can be in personal + org), account deactivation with 30-day grace; dry-run
+      setup script: ICC = Org (unlimited), the person = admin + Teacher. Replaces public-release's
+      free/pro and signup cap/waitlist (removals paused for OK). (backend-agent)
+- [ ] TASK-032: Phase 1 — signup/login: individual via Google or email+password (no domain blocked),
+      organizations via the enterprise waitlist (see TASK-035 note), one login for all, workspace switcher, email domain recorded
+      at signup. (frontend-agent, small backend route)
+- [ ] TASK-033: Phase 2 — credit counters: reserve → confirm/refund in transactions; trial one-time
+      allowance, paid monthly on plan-start anniversary, no rollover; org pool; every AI route;
+      Generate Course counts only when a usable course is produced; Edo counted per message. (backend-agent)
+- [ ] TASK-034: Phase 3 — usage and cost log per AI action (user, plan, action, course, Browserbase
+      search/fetch counts, model, tokens, success, time) + admin export. (backend-agent)
+- [ ] TASK-035: Phase 4 — credit counters in the UI, per-feature pause, upgrade messages, admin page
+      (plans, credits, cost export). NO PAYMENTS (person, 2026-10-21): every Upgrade / enterprise
+      button opens "Join the waitlist for when we open paid and enterprise versions" — saves name,
+      email, interest (Teacher / School-Org), school name + staff size for orgs, note; backend-only
+      collection + email to the person; admin page lists it. Replaces public-release's Upgrade-to-Pro
+      contact form. No price shown, nothing that implies payment. Stripe comes later as its own task.
+      (frontend-agent, small backend route)
+- [ ] TASK-036: Phase 5 — sharing/collaboration backend: view-only links (no account, revocable),
+      owner's plan governs co-editing, 3 collaborators incl. pending invites, invites to non-users,
+      lapse/resubscribe, removal, delete warning count, rules. Outlier cases 1–14. (backend-agent)
+- [ ] TASK-037: Phase 5 — sharing/collaboration frontend: link viewer, invite + collaborator UI,
+      live access loss in open sessions, delete confirmation. (frontend-agent)
+- [ ] TASK-038: Phase 6 — forking audit: no fork/copy feature exists; only the landing-page
+      testimonial mentions "fork" — reword if the person wants. (frontend-agent)
+- [ ] TASK-039: Phase 7 — email domain tagging (edu/k12, excluding personal providers), admin domain
+      list (user counts, newest first), data model for later org domain verification. (backend-agent, frontend-agent)
+- [ ] TASK-040: Phase 8 — test suite: pytest + Firestore emulator, one test per outlier case. (docs-qa-agent)
+
 - [ ] TASK-025 (attempt 2): Small follow-ups from QA on TASK-023/024 — build rejects a day whose
       hours list is shorter than its teaching hours (hour_missing) instead of silently
       shortening it; "1 one-hour lesson" wording; Stage 2 shows a note when a drag into
@@ -40,10 +75,27 @@ Format: `- [ ] TASK-XXX: description (suggested agent, optional)`
 
 ## Needs Input
 
+- [ ] TASK-041: Org ownership gap (found during public-release work) — any org member can delete
+      another member's public course and overwrite sections of any org course (delete via
+      get_curriculum; populate-section / update_section lack an owner check). Already fixed for the
+      public space. Fix for orgs: owner-only delete; owner or collaborate-access for section writes.
+      NEEDS YOUR OK: changes org behaviour. Likely folds into TASK-036. (backend-agent)
+
 
 ## In Progress
 
 ## Done
+
+- [x] TASK-030: Phase 0 — bring branch public-release (commit f4bd3fd: token auth on every route,
+      public space, free/pro quotas, waitlist, usage meter, sharing by email) forward onto current main,
+      resolving conflicts with the edcubeai-fdba7 migration and the Browserbase Links & Resources work.
+      Carry everything over unchanged in behaviour; nothing deleted. Browserbase generate-block-links
+      gets token auth and its Generate charge. Old public-release task entries renumbered so they don't
+      clash with main's TASK-027..029. (backend-agent, then frontend-agent)
+      Assigned: backend-agent, then frontend-agent — started 2026-10-21. Branch task/TASK-030-public-release-forward.
+      QA PASS 2026-10-21: merged code imports; auth/public/usage/discovery/block-links check scripts all pass; lint 27 errors/5 warnings
+      (main baseline 27/6); build passes; no conflict markers; no edcube-8fe7d outside migration scripts. Docs reconciled (old TASK-027..032 relabelled).
+      Public-release history: commit f4bd3fd / CHANGELOG "Public release PR-1..PR-6". Not browser-tested; no automated test coverage.
 
 - [x] TASK-029: Make "Links & Resources" generation follow each block's type and content, and filter
       videos. (1) Move every resource prompt into one prompts file with a "where to look" note:
@@ -153,7 +205,7 @@ Their results are recorded in CHANGELOG.md and in this file's git history.)
 
 Course Builder tasks, done on the course-builder branch before the reorg was merged.
 NOTE: their numbers TASK-006 to TASK-025 overlap the reorg's TASK-006 to TASK-013
-above; they are separate tasks. The next free task number is TASK-030.
+above; they are separate tasks. The next free task number is TASK-042.
 
 - [x] TASK-024: Stage 2 hours — frontend. Show each day as its hour subsections, move
       blocks between hours within the per-hour and per-day caps, whole hours only on

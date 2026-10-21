@@ -23,6 +23,19 @@ from datetime import datetime
 # ============================================================================
 
 from firebase.org_registry import get_org_from_email  # noqa: F401 (re-exported)
+from firebase.public_space import (  # noqa: F401 (re-exported schema constants)
+    PUBLIC_SPACE_ID,
+    PUBLIC_SPACE_NAME,
+    PUBLIC_SPACE_TYPE,
+    ORG_CLAIM,
+    PLAN_FREE,
+    PLAN_PRO,
+    TEACHER_PLAN,
+    TEACHER_PLAN_UPDATED_AT,
+    PROFILE_NAME_LOWER,
+    WAITLIST_COLLECTION,
+    USAGE_COLLECTION,
+)
 
 
 # ============================================================================
@@ -35,6 +48,7 @@ from firebase.org_registry import get_org_from_email  # noqa: F401 (re-exported)
 TEACHER_PROFILES_COLLECTION = "teacher_profiles"
 COURSES_COLLECTION = "curricula"  # Users/{org}/curricula
 COURSE_FOLDERS_COLLECTION = "course_folders"
+TEACHERS_COLLECTION = "teachers"  # Users/{org}/teachers/{uid} (signup doc; plan lives here in public)
 
 
 # ============================================================================
@@ -97,7 +111,7 @@ class TeacherProfileUpdate(BaseModel):
 class TeacherProfileResponse(TeacherProfileBase):
     """Model for returning complete teacher profile data"""
     teacher_uid: str
-    email: str
+    email: Optional[str] = None  # not stored for public-space profiles
     org_id: str
     created_at: datetime
     updated_at: datetime
@@ -124,25 +138,34 @@ class TeacherProfilePublic(BaseModel):
 # HELPER FUNCTIONS
 # ============================================================================
 
-def create_default_profile(user_data: dict) -> dict:
+def create_default_profile(user_data: dict, org_id: Optional[str] = None) -> dict:
     """
     Create default profile data from Firebase Auth user
-    
+
     Args:
         user_data: Firebase Auth user dict with uid, email, name, picture
-        
+        org_id: the space the profile is created in. Defaults to the email's
+            org match (legacy behaviour). For the public space, the email is
+            NOT stored and `name_lower` is added for search.
+
     Returns:
         dict: Default profile data ready for Firestore
     """
-    return {
+    is_public = org_id == PUBLIC_SPACE_ID
+    display_name = user_data.get("name") or (user_data.get("email") or "").split("@")[0]
+    profile = {
         TeacherProfileFields.TEACHER_UID: user_data["uid"],
         TeacherProfileFields.EMAIL: user_data["email"],
-        TeacherProfileFields.DISPLAY_NAME: user_data.get("name", user_data.get("email", "").split("@")[0]),
+        TeacherProfileFields.DISPLAY_NAME: display_name,
         TeacherProfileFields.SUBJECTS_TAUGHT: [],
         TeacherProfileFields.GRADES_TAUGHT: [],
         TeacherProfileFields.BIO: "",
         TeacherProfileFields.PROFILE_PICTURE_URL: user_data.get("picture"),
-        TeacherProfileFields.ORG_ID: get_org_from_email(user_data["email"]),
+        TeacherProfileFields.ORG_ID: org_id or get_org_from_email(user_data["email"]),
         TeacherProfileFields.CREATED_AT: datetime.utcnow(),
         TeacherProfileFields.UPDATED_AT: datetime.utcnow(),
     }
+    if is_public:
+        del profile[TeacherProfileFields.EMAIL]
+        profile[PROFILE_NAME_LOWER] = display_name.lower()
+    return profile

@@ -1,5 +1,6 @@
 import { createContext, useContext, useRef, useState } from 'react';
 import { COURSE_BUILDER_ENABLED } from '../constants/featureFlags';
+import { authFetch, legacyErrorFromResponse } from '../services/authFetch';
 import { streamPlanDays, planDay, streamBuildCourse } from '../services/courseBuilderApi';
 import { hourCapacity, placeBlocker } from '../components/courseBuilder/dayPlan';
 
@@ -271,14 +272,17 @@ export function GenerationProvider({ children }) {
     };
 
     try {
-      const response = await fetch(
+      const response = await authFetch(
         `${import.meta.env.VITE_API_BASE_URL}/api/generate-curriculum`,
         { method: 'POST', body }
       );
+      // A 401/403 comes back as a plain JSON error, not a stream: show its message
+      // instead of waiting on a stream that never starts.
+      if (!response.ok) throw await legacyErrorFromResponse(response, 'Failed to generate course. Please try again.');
       await consumeSSE(response, processLine);
     } catch (err) {
       console.error('GenerationContext: fetch error', err);
-      setGenState(prev => ({ ...prev, status: 'error', progress: { message: 'Failed to generate course. Please try again.', percent: 0 } }));
+      setGenState(prev => ({ ...prev, status: 'error', progress: { message: err.status ? err.message : 'Failed to generate course. Please try again.', percent: 0 } }));
     }
   };
 
@@ -364,7 +368,7 @@ export function GenerationProvider({ children }) {
     };
 
     try {
-      const response = await fetch(
+      const response = await authFetch(
         `${import.meta.env.VITE_API_BASE_URL}/api/generate-blocks`,
         {
           method: 'POST',
@@ -372,10 +376,11 @@ export function GenerationProvider({ children }) {
           body: JSON.stringify(requestBody),
         }
       );
+      if (!response.ok) throw await legacyErrorFromResponse(response, 'Failed to generate blocks. Please try again.');
       await consumeSSE(response, processLine);
     } catch (err) {
       console.error('GenerationContext: fetch error', err);
-      setGenState(prev => ({ ...prev, status: 'error', progress: { message: 'Failed to generate blocks. Please try again.', percent: 0 } }));
+      setGenState(prev => ({ ...prev, status: 'error', progress: { message: err.status ? err.message : 'Failed to generate blocks. Please try again.', percent: 0 } }));
     }
   };
 
@@ -395,7 +400,7 @@ export function GenerationProvider({ children }) {
 
     const { formData, rawOutline } = genState;
     const dayNumber = genState.sections.findIndex(s => s.id === sectionId) + 1;
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/generate-more-subsections`, {
+    const response = await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/generate-more-subsections`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -419,7 +424,7 @@ export function GenerationProvider({ children }) {
     });
 
     if (!response.ok) {
-      throw new Error(`generate-more-subsections failed: ${response.status}`);
+      throw await legacyErrorFromResponse(response, `generate-more-subsections failed: ${response.status}`);
     }
     const data = await response.json();
     const newChains = data.chains || [];

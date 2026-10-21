@@ -1,20 +1,26 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Query
+from typing import Optional
+from fastapi import APIRouter, UploadFile, File, HTTPException, Query, Depends
+from routes.teachers import require_org, resolve_caller_uid
+from services.usage_service import enforce_quota
 from fastapi.responses import JSONResponse
 import os
 import tempfile
 
 router = APIRouter()
 
-@router.post("/upload-course-file")
+@router.post("/upload-course-file", dependencies=[Depends(enforce_quota("generates"))])
 async def upload_course_file(
     file: UploadFile = File(...),
-    teacherUid: str = Query(...)
+    teacherUid: Optional[str] = Query(None),
+    current_user: dict = Depends(require_org),
 ):
     """
     Accept a file upload (Excel/Word), parse it with GPT-4, 
     return structured course data
     """
     
+    teacherUid = resolve_caller_uid(current_user, teacherUid)
+
     # Validate file type
     allowed_extensions = ['.xlsx', '.xls', '.docx', '.doc']
     file_ext = os.path.splitext(file.filename)[1].lower()

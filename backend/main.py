@@ -13,7 +13,8 @@ import uvicorn
 from routes.file_upload import router as file_upload_router
 from routes.uploads import router as uploads_router
 import os
-from routes import curriculum, resources, topics, teachers, contact, notifications, synopsis, afterschool_synopsis, orgs, knowledge_base, course_builder
+from routes import curriculum, resources, topics, teachers, contact, notifications, synopsis, afterschool_synopsis, orgs, knowledge_base, course_builder, account
+from services.usage_service import QuotaExceeded
 
 app = FastAPI(title="EdCube API")
 
@@ -54,6 +55,7 @@ app.include_router(afterschool_synopsis.router, tags=["afterschool_synopsis"])
 app.include_router(orgs.router, tags=["orgs"])
 app.include_router(knowledge_base.router, tags=["knowledge_base"])
 app.include_router(course_builder.router, prefix="/api", tags=["course-builder"])
+app.include_router(account.router, tags=["account"])
 
 ALLOWED_ORIGINS = {
     "http://localhost:5173", "http://localhost:5174", "http://localhost:5175",
@@ -63,6 +65,12 @@ ALLOWED_ORIGINS = {
     "https://edcubeai-fdba7.web.app", "https://edcubeai-fdba7.firebaseapp.com",
     "https://edcubeai.web.app", "https://edcubeai.firebaseapp.com",
 }
+
+@app.exception_handler(QuotaExceeded)
+async def quota_exceeded_handler(request: Request, exc: QuotaExceeded):
+    # 402 {"detail": {code, kind, limit, used, resets_at, plan}} (TASK-029)
+    return JSONResponse(status_code=402, content={"detail": exc.to_detail()})
+
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):

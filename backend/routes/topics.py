@@ -12,7 +12,8 @@ import asyncio
 
 from services.orchestrator import CurriculumOrchestrator
 from services.firebase_service import FirebaseService
-from routes.teachers import require_org, require_org_for_uid
+from routes.teachers import require_org, require_org_for_uid, resolve_caller_uid
+from services.usage_service import enforce_quota, throttle_chips, refund_charge
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -40,7 +41,7 @@ class GenerateVideosRequest(BaseModel):
     courseId: str
 
 
-@router.post("/populate-section")
+@router.post("/populate-section", dependencies=[Depends(enforce_quota("generates"))])
 async def populate_section(request: PopulateSectionRequest, current_user: dict = Depends(require_org)):
     """
     Populate a single section with video resources (Phase 2 on-demand).
@@ -94,6 +95,7 @@ async def populate_section(request: PopulateSectionRequest, current_user: dict =
                 section_id=request.section_id,
                 section_data=populated_section,
                 org=org,
+                caller_uid=current_user["uid"],
             )
             
             # Complete - send the populated section
@@ -103,6 +105,7 @@ async def populate_section(request: PopulateSectionRequest, current_user: dict =
         except Exception as e:
             error_msg = f"Error populating section: {str(e)}"
             logger.error(error_msg, exc_info=True)
+            refund_charge(current_user, "generates")
             yield f"data: {json.dumps({'message': error_msg, 'error': True})}\n\n"
     
     return StreamingResponse(
@@ -117,7 +120,7 @@ async def populate_section(request: PopulateSectionRequest, current_user: dict =
 
 
 @router.get("/section/{curriculum_id}/{section_id}")
-async def get_section(curriculum_id: str, section_id: str, teacherUid: str):
+async def get_section(curriculum_id: str, section_id: str, teacherUid: Optional[str] = None, current_user: dict = Depends(require_org)):
     """
     Get a specific section's data (for viewing populated content).
     
@@ -131,11 +134,11 @@ async def get_section(curriculum_id: str, section_id: str, teacherUid: str):
     Returns:
         dict: Section data with video resources
 
-    NOTE: still takes a raw teacherUid instead of an Authorization token --
-    see this task's report for the TASK-008 frontend follow-up.
+    teacherUid is optional (back-compat); the caller is identified by the
+    Authorization token and a mismatching teacherUid is a 403.
     """
     try:
-        require_org_for_uid(teacherUid)  # 403s cleanly if the email isn't registered with any org
+        teacherUid = resolve_caller_uid(current_user, teacherUid)
         section = await firebase.get_section(curriculum_id, section_id, teacherUid)
         
         if not section:
@@ -143,12 +146,14 @@ async def get_section(curriculum_id: str, section_id: str, teacherUid: str):
         
         return section
     
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error fetching section: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/generate-videos")
-async def generate_videos(request: GenerateVideosRequest):
+@router.post("/generate-videos", dependencies=[Depends(enforce_quota("generates"))])
+async def generate_videos(request: GenerateVideosRequest, current_user: dict = Depends(require_org)):
     """Generate videos for a specific topic (Phase 2 on-demand)."""
     try:
         

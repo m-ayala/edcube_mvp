@@ -21,6 +21,7 @@ import BreakModal from '../modals/BreakModal';
 import ShareCourseModal from '../modals/ShareCourseModal';
 import { generateBlockLinks } from '../../utils/curriculumApi';
 import { mergeLinks } from '../../utils/blockLinks';
+import { authFetch } from '../../services/authFetch';
 import { addCourseToFolder } from '../../firebase/dbService';
 import { trackCourseCreated, trackCourseUpdated, trackPublicCourseViewed } from '../../firebase/analytics';
 import {
@@ -30,7 +31,7 @@ import {
 } from '../../utils/builderCourse';
 
 const CourseWorkspace = () => {
-  const { currentUser, org } = useAuth();
+  const { currentUser, org, isPublicUser } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -73,6 +74,7 @@ const CourseWorkspace = () => {
   const [isPublic, setIsPublic] = useState(incomingIsPublic || false);
   // A course that could not be fully loaded (blocksIncomplete) opens read-only: editing it
   // on screen could never be saved.
+  const [courseUnavailable, setCourseUnavailable] = useState(false);
   const [readOnly] = useState(incomingReadOnly || !!incomingBlocksIncomplete);
   const [isOwner] = useState(incomingIsOwner || false);
   const [showShareModal, setShowShareModal] = useState(false);
@@ -188,7 +190,12 @@ const CourseWorkspace = () => {
       }
     } catch (err) {
       console.error('Link generation failed:', err);
-      setLinkGenJobs(prev => ({ ...prev, [blockId]: 'error' }));
+      if (err?.quota === true) {
+        // The quota modal is already open (authFetch raised it); don't add a second error line.
+        setLinkGenJobs(prev => { const next = { ...prev }; delete next[blockId]; return next; });
+      } else {
+        setLinkGenJobs(prev => ({ ...prev, [blockId]: 'error' }));
+      }
     }
   };
 
@@ -223,10 +230,14 @@ const CourseWorkspace = () => {
     if (!curriculumId || curriculumId === 'new-course' || !currentUser) return;
     const fetchCourseInfo = async () => {
       try {
-        const res = await fetch(
+        const res = await authFetch(
           `${import.meta.env.VITE_API_BASE_URL}/api/curricula/${curriculumId}?teacherUid=${currentUser.uid}`
         );
-        if (!res.ok) return;
+        if (!res.ok) {
+          // Public space: the course was made private or removed since it was listed.
+          if (isPublicUser && (res.status === 404 || res.status === 403)) setCourseUnavailable(true);
+          return;
+        }
         const data = await res.json();
         setCourseAttachments(data.courseAttachments || []);
         setCourseInfoNotes(data.courseInfoNotes || '');
@@ -445,7 +456,7 @@ const CourseWorkspace = () => {
     }
     try {
       const newIsPublic = !isPublic;
-      const response = await fetch(
+      const response = await authFetch(
         `${import.meta.env.VITE_API_BASE_URL}/api/curricula/${curriculumId}/visibility?teacherUid=${currentUser.uid}`,
         {
           method: 'PATCH',
@@ -457,7 +468,7 @@ const CourseWorkspace = () => {
       if (result.success) {
         setIsPublic(newIsPublic);
       } else {
-        alert('Failed to update visibility');
+        alert(typeof result.detail === 'string' && result.detail ? result.detail : 'Failed to update visibility');
       }
     } catch (error) {
       console.error('Error toggling visibility:', error);
@@ -467,8 +478,6 @@ const CourseWorkspace = () => {
 
   // ── Save Course ───────────────────────────────────────────────────────
   const saveCourse = async () => {
-    const idToken = await currentUser.getIdToken();
-
     // Blocks present when the course was loaded and gone now: the teacher deleted them.
     const nowIds = allBlockIds(handsOnResources);
     const deletedBlockIds = new Set([...loadedBlockIdsRef.current].filter(id => !nowIds.has(id)));
@@ -530,12 +539,9 @@ const CourseWorkspace = () => {
 
     let result;
     try {
-      const response = await fetch(endpoint, {
+      const response = await authFetch(endpoint, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${idToken}`
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(courseData)
       });
 
@@ -804,6 +810,15 @@ const CourseWorkspace = () => {
   };
 
   // ── Render ──────────────────────────────────────────────────────────���─
+  if (courseUnavailable) {
+    return (
+      <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '14px', fontFamily: "'DM Sans', sans-serif" }}>
+        <p role="alert" style={{ fontSize: '17px', color: '#374151', margin: 0 }}>This course is private or no longer available</p>
+        <button onClick={() => navigate(-1)} style={{ padding: '8px 20px', borderRadius: '8px', border: '1px solid #D1D5DB', background: '#fff', cursor: 'pointer', fontSize: '14px' }}>Go back</button>
+      </div>
+    );
+  }
+
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
       {readOnly ? (
@@ -914,7 +929,15 @@ const CourseWorkspace = () => {
                   </div>
                 )}
 
-                <div onClick={handleToggleVisibility} style={pillStyle('blue')}>
+                <div
+                  onClick={handleToggleVisibility}
+                  title={isPublicUser
+                    ? (isPublic
+                      ? 'Public — visible to all EdCube users (click to make Private)'
+                      : 'Private — only you and people you invite (click to make Public)')
+                    : undefined}
+                  style={pillStyle('blue')}
+                >
                   {isPublic ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
                   {isPublic ? 'Public' : 'Private'}
                 </div>

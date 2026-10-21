@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
 import { Trash2, X, Pencil, Lock } from 'lucide-react';
 import {
   descriptionText,
@@ -43,6 +44,7 @@ const CourseCard = ({
   onRemoveFromFolder,
 }) => {
   const [hovered, setHovered] = useState(false);
+  const { isPublicUser } = useAuth();
 
   const isPublic = !!curriculum.isPublic;
   const [c1, c2] = thumbFor(curriculum.courseName);
@@ -148,14 +150,18 @@ const CourseCard = ({
             width: '26px', height: '26px', borderRadius: '7px', background: '#F4ECF1',
             display: 'grid', placeItems: 'center', fontSize: '13px',
           }}>{glyphFor(curriculum)}</span>
-          <span style={{
+          <span
+            title={isPublicUser
+              ? (isPublic ? 'Public — visible to all EdCube users' : 'Private — only you and people you invite')
+              : undefined}
+            style={{
             fontSize: '13px', fontWeight: 500, padding: '4px 11px', borderRadius: '7px',
             display: 'inline-flex', alignItems: 'center', gap: '5px',
             background: isPublic ? '#F0F4FF' : '#EDEDF1',
             color: isPublic ? '#3E62BC' : '#4E4E4E',
           }}>
             {!isPublic && <Lock size={11} />}
-            {isPublic ? 'Published' : 'Unpublished'}
+            {isPublicUser ? (isPublic ? 'Public' : 'Private') : (isPublic ? 'Published' : 'Unpublished')}
           </span>
         </div>
 
