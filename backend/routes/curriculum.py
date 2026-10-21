@@ -1748,12 +1748,70 @@ class GenerateBlockLinksRequest(BaseModel):
     topic: Optional[str] = ""
     gradeLevel: Optional[str] = ""
     teacherUid: Optional[str] = None
+    blockSubtype: Optional[str] = ""                 # e.g. "Matching", "Labeling/diagramming"
+    blockDurationMinutes: Optional[float] = None     # caps video length
 
 
 @router.post("/curriculum/generate-block-links")
 async def generate_block_links(request: GenerateBlockLinksRequest):
     """
-    Generate relevant resource links for a block using existing video/worksheet generators.
+    Generate resource links for a block. Provider is chosen by env
+    RESOURCE_SEARCH_PROVIDER ("browserbase" default, or "legacy").
+    Returns { "links": [{ "url", "label", "type", ... }] }
+    - browserbase: type is "article" | "image" | "video"; image links also carry
+      imageUrl + caption; any link may carry a reason.
+    - legacy: old YouTube/worksheet path (type "video" | "worksheet").
+    If BROWSERBASE_API_KEY is missing we fall back to legacy (not an empty list)
+    so Generate keeps working, and log a warning.
+    """
+    from config import APIConfig
+
+    provider = (APIConfig.RESOURCE_SEARCH_PROVIDER or "").strip().lower()
+    if provider not in ("browserbase", "legacy"):
+        logger.warning(
+            f"[generate-block-links] unknown RESOURCE_SEARCH_PROVIDER={provider!r}; using 'browserbase'"
+        )
+        provider = "browserbase"
+
+    if provider == "browserbase" and not APIConfig.BROWSERBASE_API_KEY:
+        logger.warning(
+            "[generate-block-links] BROWSERBASE_API_KEY is not set; falling back to legacy provider"
+        )
+        provider = "legacy"
+
+    if provider == "legacy":
+        return await _generate_block_links_legacy(request)
+
+    try:
+        from populator.block_resource_finder import find_block_resources
+
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(
+            None,
+            lambda: find_block_resources(
+                block_title=(request.blockTitle or request.topicTitle or "").strip(),
+                block_type=request.blockType,
+                block_content=request.blockContent or "",
+                topic_title=request.topicTitle or "",
+                topic_description=request.topicDescription or "",
+                subject=request.subject or "",
+                topic=request.topic or "",
+                grade_level=request.gradeLevel or "",
+                block_subtype=request.blockSubtype or "",
+                block_duration_minutes=request.blockDurationMinutes,
+            ),
+        )
+        links = (result or {}).get("links") or []
+        logger.info(f"[generate-block-links] browserbase returned {len(links)} link(s)")
+        return {"links": links}
+    except Exception as e:
+        logger.error(f"Browserbase block link generation error: {type(e).__name__}: {e}", exc_info=True)
+        return {"links": []}
+
+
+async def _generate_block_links_legacy(request: GenerateBlockLinksRequest):
+    """
+    Legacy path (unchanged behaviour): existing video/worksheet generators.
     - content blocks  → YouTube video links via the video generator (video_id → youtube.com/watch?v=...)
     - worksheet blocks → worksheet source URLs via worksheet generator (source_url)
     - activity blocks  → YouTube demo/tutorial video links via the video generator
