@@ -3,12 +3,14 @@ Resource generation routes (on-demand Phase 3)
 """
 
 import logging
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
 
 from services.orchestrator import CurriculumOrchestrator
 from services.firebase_service import FirebaseService
+from routes.teachers import require_org
+from services.usage_service import enforce_quota, throttle_chips
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -32,8 +34,8 @@ class GenerateResourceRequest(BaseModel):
     learningObjectives: Optional[list] = []
 
 
-@router.post("/generate-resource")
-async def generate_resource(request: GenerateResourceRequest):
+@router.post("/generate-resource", dependencies=[Depends(enforce_quota("generates"))])
+async def generate_resource(request: GenerateResourceRequest, current_user: dict = Depends(require_org)):
     """
     Generate a single worksheet or activity for a topic (Phase 3 on-demand).
     
@@ -160,8 +162,8 @@ class ActivityGenerationRequest(BaseModel):
     num_options: Optional[int] = 3
 
 
-@router.post("/worksheet-prompts")
-async def get_worksheet_prompts(request: WorksheetPromptRequest):
+@router.post("/worksheet-prompts", dependencies=[Depends(enforce_quota("generates"))])
+async def get_worksheet_prompts(request: WorksheetPromptRequest, current_user: dict = Depends(require_org)):
     """
     Get worksheet type suggestions for a section.
     
@@ -182,8 +184,8 @@ async def get_worksheet_prompts(request: WorksheetPromptRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/activity-prompts")
-async def get_activity_prompts(request: ActivityPromptRequest):
+@router.post("/activity-prompts", dependencies=[Depends(enforce_quota("generates"))])
+async def get_activity_prompts(request: ActivityPromptRequest, current_user: dict = Depends(require_org)):
     """
     Get activity type suggestions for a section.
     
@@ -204,8 +206,8 @@ async def get_activity_prompts(request: ActivityPromptRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/generate-worksheets")
-async def generate_worksheets(request: WorksheetGenerationRequest):
+@router.post("/generate-worksheets", dependencies=[Depends(enforce_quota("generates"))])
+async def generate_worksheets(request: WorksheetGenerationRequest, current_user: dict = Depends(require_org)):
     """
     Generate worksheet options for a section based on user's selected prompt.
     
@@ -232,8 +234,8 @@ async def generate_worksheets(request: WorksheetGenerationRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/generate-activities")
-async def generate_activities(request: ActivityGenerationRequest):
+@router.post("/generate-activities", dependencies=[Depends(enforce_quota("generates"))])
+async def generate_activities(request: ActivityGenerationRequest, current_user: dict = Depends(require_org)):
     """
     Generate activity options for a section based on user's selected prompt.
     

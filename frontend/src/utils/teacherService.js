@@ -114,11 +114,39 @@ export const getAllTeachers = async (currentUser) => {
       throw new Error(error.detail || 'Failed to fetch teachers');
     }
 
-    return await response.json();
+    const data = await response.json();
+    // Org callers get a bare list; public callers get { teachers, next_cursor }.
+    return Array.isArray(data) ? data : (Array.isArray(data?.teachers) ? data.teachers : []);
   } catch (error) {
     console.error('Error fetching teachers:', error);
     throw error;
   }
+};
+
+/**
+ * Server-side teacher search for public-space users: name prefix `q`, one page
+ * of up to `limit` teachers, and an opaque `cursor` for the next page.
+ * Always resolves to { teachers: [], next_cursor: string|null }.
+ */
+export const searchTeachers = async (currentUser, { q = '', limit = 20, cursor = null } = {}) => {
+  const headers = await getAuthHeader(currentUser);
+  const params = new URLSearchParams();
+  if (q) params.set('q', q);
+  params.set('limit', String(limit));
+  if (cursor) params.set('cursor', cursor);
+
+  const response = await fetch(`${API_BASE_URL}/?${params.toString()}`, { method: 'GET', headers });
+  if (!response.ok) {
+    let detail = null;
+    try { detail = (await response.json()).detail; } catch { /* non-JSON body */ }
+    throw new Error(typeof detail === 'string' && detail ? detail : 'Failed to fetch teachers');
+  }
+  const data = await response.json();
+  if (Array.isArray(data)) return { teachers: data, next_cursor: null };
+  return {
+    teachers: Array.isArray(data?.teachers) ? data.teachers : [],
+    next_cursor: data?.next_cursor ?? null,
+  };
 };
 
 /**

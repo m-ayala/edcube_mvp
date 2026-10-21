@@ -1,6 +1,7 @@
 // src/components/courses/useCourseActions.js
 import { useState } from 'react';
 import { generateCurriculumContent } from '../../utils/curriculumApi';
+import { authFetch } from '../../services/authFetch';
 import { trackResourceAdded } from '../../firebase/analytics';
 
 const useCourseActions = ({
@@ -224,7 +225,7 @@ const useCourseActions = ({
       return { success: false, error: 'No items returned' };
     } catch (error) {
       console.error('Failed to generate sections:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: error.message, quota: error.quota === true };
     } finally {
       setGenerating('sections', false);
     }
@@ -265,7 +266,7 @@ const useCourseActions = ({
       return { success: false, error: 'No items returned' };
     } catch (error) {
       console.error('Failed to generate subsections:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: error.message, quota: error.quota === true };
     } finally {
       setGenerating(`subsections-${sectionId}`, false);
     }
@@ -291,7 +292,7 @@ const useCourseActions = ({
       }
       return { success: false, error: 'No items returned' };
     } catch (error) {
-      return { success: false, error: error.message };
+      return { success: false, error: error.message, quota: error.quota === true };
     } finally {
       setGenerating('sections-tray', false);
     }
@@ -317,7 +318,7 @@ const useCourseActions = ({
       }
       return { success: false, error: 'No items returned' };
     } catch (error) {
-      return { success: false, error: error.message };
+      return { success: false, error: error.message, quota: error.quota === true };
     } finally {
       setGenerating('subsections-tray', false);
     }
@@ -328,7 +329,7 @@ const useCourseActions = ({
     setGenerating(`videos-${subsection.id}`, true);
     try {
       console.log('🎬 Generating videos for:', subsection.title);
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/generate-videos`, {
+      const response = await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/generate-videos`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -348,6 +349,7 @@ const useCourseActions = ({
       });
       const result = await response.json();
       if (!response.ok) {
+        if (response.status === 402) return { success: false, error: 'Monthly limit reached', quota: true };
         const detail = result.detail || result.error || `Server error ${response.status}`;
         console.error('❌ Video generation failed:', detail);
         return { success: false, error: detail };
@@ -380,7 +382,7 @@ const useCourseActions = ({
     setGenerating(`${resourceType}-${subsectionId}`, true);
     try {
       console.log(`🔨 Generating ${resourceType} for:`, subsection.title);
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/generate-resource`, {
+      const response = await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/generate-resource`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -394,6 +396,7 @@ const useCourseActions = ({
       });
       const resource = await response.json();
       if (!response.ok) {
+        if (response.status === 402) return { success: false, error: 'Monthly limit reached', quota: true };
         throw new Error(resource.detail || resource.error || `Server error ${response.status}`);
       }
       console.log(`✅ ${resourceType} generated:`, resource);

@@ -6,6 +6,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { getAllTeachers } from '../../utils/teacherService';
 import {
   sendShareInvite,
+  sendShareByEmail,
   getCollaborators,
   updateCollaboratorAccess,
   removeCollaborator,
@@ -16,6 +17,19 @@ const getInitials = (name) => {
   const parts = name.trim().split(/\s+/);
   if (parts.length === 1) return parts[0][0].toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
+
+const MAX_EMAILS = 20;
+const EMAIL_RE = /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/;
+
+// Friendly text for a failed share-by-email call.
+const shareErrorMessage = (err) => {
+  if (err?.code === 'too_many_emails') return `You can share with at most ${err.max || MAX_EMAILS} email addresses at a time.`;
+  if (err?.code === 'cannot_share_with_self') return "You can't share a course with yourself.";
+  if (err?.code === 'rate_limited' || err?.status === 429) return 'Too many lookups — try again in a minute.';
+  if (err?.status === 403) return 'Only the course owner can share this course.';
+  if (err?.status === 503) return 'Sharing is temporarily unavailable. Please try again shortly.';
+  return 'Failed to send invitations. Please try again.';
 };
 
 const Avatar = ({ name }) => (
@@ -69,7 +83,7 @@ const PersonRow = ({ person, onAccessChange, onRemove }) => (
 
 // ── Main modal ────────────────────────────────────────────────────────────────
 const ShareCourseModal = ({ isOpen, onClose, courseId, courseName }) => {
-  const { currentUser } = useAuth();
+  const { currentUser, isPublicUser } = useAuth();
 
   // Existing collaborators (already have access)
   const [collaborators, setCollaborators] = useState([]);
@@ -84,12 +98,18 @@ const ShareCourseModal = ({ isOpen, onClose, courseId, courseName }) => {
   const [sent, setSent]         = useState(false);
   const [error, setError]       = useState(null);
 
+  // Public users: invite by email (chips) with one access level for the batch
+  const [emailInput, setEmailInput] = useState('');
+  const [emails, setEmails]         = useState([]);
+  const [emailAccess, setEmailAccess] = useState('view');
+  const [shareResult, setShareResult] = useState(null); // { count, notFound }
+
   const inputRef    = useRef(null);
   const dropdownRef = useRef(null);
 
   // Load org teachers once per open
   useEffect(() => {
-    if (!isOpen || !currentUser) return;
+    if (!isOpen || !currentUser || isPublicUser) return;
     getAllTeachers(currentUser)
       .then((all) => {
         setAllTeachers(
@@ -99,7 +119,7 @@ const ShareCourseModal = ({ isOpen, onClose, courseId, courseName }) => {
         );
       })
       .catch(() => {});
-  }, [isOpen, currentUser]);
+  }, [isOpen, currentUser, isPublicUser]);
 
   // Load existing collaborators on open
   useEffect(() => {
@@ -116,6 +136,10 @@ const ShareCourseModal = ({ isOpen, onClose, courseId, courseName }) => {
     if (isOpen) {
       setQuery('');
       setSelected([]);
+      setEmailInput('');
+      setEmails([]);
+      setEmailAccess('view');
+      setShareResult(null);
       setSent(false);
       setError(null);
       setTimeout(() => inputRef.current?.focus(), 80);
@@ -180,6 +204,65 @@ const ShareCourseModal = ({ isOpen, onClose, courseId, courseName }) => {
       setSelected([]);
     } catch {
       setError('Failed to send invitations. Please try again.');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  // ── Public-space email handlers ───────────────────────────────────────
+  // Takes the typed text (one or several addresses separated by space/comma/semicolon)
+  // and adds the valid, new ones as chips.
+  const commitEmails = (raw) => {
+    const parts = String(raw).split(/[\s,;]+/).map((x) => x.trim().toLowerCase()).filter(Boolean);
+    if (parts.length === 0) return;
+    const invalid = parts.filter((x) => !EMAIL_RE.test(x));
+    const next = [...emails];
+    let overflow = false;
+    parts.filter((x) => EMAIL_RE.test(x)).forEach((x) => {
+      if (next.includes(x)) return;
+      if (next.length >= MAX_EMAILS) { overflow = true; return; }
+      next.push(x);
+    });
+    setEmails(next);
+    setShareResult(null);
+    if (overflow) setError(`You can share with at most ${MAX_EMAILS} email addresses at a time.`);
+    else if (invalid.length) setError(`Not a valid email address: ${invalid.join(', ')}`);
+    else setError(null);
+    setEmailInput(invalid.join(' '));
+  };
+
+  const handleEmailKeyDown = (e) => {
+    if (e.key === 'Enter' || e.key === ',' || e.key === ' ' || e.key === ';') {
+      if (emailInput.trim()) { e.preventDefault(); commitEmails(emailInput); }
+    } else if (e.key === 'Backspace' && !emailInput && emails.length) {
+      setEmails((prev) => prev.slice(0, -1));
+    }
+  };
+
+  const handleShareByEmail = async () => {
+    // Include whatever is still typed in the box
+    const pending = emailInput.trim();
+    let toSend = emails;
+    if (pending && EMAIL_RE.test(pending.toLowerCase()) && !emails.includes(pending.toLowerCase()) && emails.length < MAX_EMAILS) {
+      toSend = [...emails, pending.toLowerCase()];
+    }
+    if (toSend.length === 0) return;
+    setSending(true);
+    setError(null);
+    setShareResult(null);
+    try {
+      const res = await sendShareByEmail(currentUser, {
+        courseId, courseName, emails: toSend, accessType: emailAccess,
+      });
+      setShareResult({
+        count: res.shared_with ?? (res.shared || []).length,
+        notFound: res.not_found || [],
+      });
+      setEmails([]);
+      setEmailInput('');
+      try { setCollaborators(await getCollaborators(currentUser, courseId)); } catch { /* list refresh is best effort */ }
+    } catch (err) {
+      setError(shareErrorMessage(err));
     } finally {
       setSending(false);
     }
@@ -256,7 +339,71 @@ const ShareCourseModal = ({ isOpen, onClose, courseId, courseName }) => {
         {/* ── Scrollable body ── */}
         <div style={{ padding: '20px 24px', overflowY: 'auto', flex: 1 }}>
 
-          {/* Search / invite */}
+          {isPublicUser ? (
+            <div>
+              <div
+                onClick={() => inputRef.current?.focus()}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap',
+                  border: '1px solid #D1D5DB', borderRadius: '8px',
+                  padding: '8px 12px', minHeight: '44px',
+                  backgroundColor: '#FAFAF9', cursor: 'text',
+                }}
+              >
+                {emails.map((em) => (
+                  <span key={em} style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '4px',
+                    backgroundColor: '#EEF2FF', color: '#3E62BC', borderRadius: '999px',
+                    padding: '3px 6px 3px 10px', fontSize: '13.2px', fontWeight: '500',
+                  }}>
+                    {em}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setEmails((prev) => prev.filter((x) => x !== em)); }}
+                      title="Remove"
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#3E62BC', fontSize: '16px', lineHeight: 1, padding: '0 2px' }}
+                    >×</button>
+                  </span>
+                ))}
+                <input
+                  ref={inputRef}
+                  type="email"
+                  value={emailInput}
+                  placeholder={emails.length ? 'Add another email…' : 'Add people by email…'}
+                  onChange={(e) => setEmailInput(e.target.value)}
+                  onKeyDown={handleEmailKeyDown}
+                  onBlur={() => { if (emailInput.trim()) commitEmails(emailInput); }}
+                  onPaste={(e) => {
+                    const text = e.clipboardData.getData('text');
+                    if (/[\s,;]/.test(text.trim())) { e.preventDefault(); commitEmails(text); }
+                  }}
+                  style={{
+                    border: 'none', outline: 'none', background: 'transparent',
+                    fontSize: '15.4px', color: '#1C1917', flex: 1, minWidth: '160px',
+                    fontFamily: "'DM Sans', sans-serif",
+                  }}
+                />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '8px', gap: '10px' }}>
+                <span style={{ fontSize: '12.5px', color: '#78716C' }}>
+                  {emails.length}/{MAX_EMAILS} · They need an EdCube account already.
+                </span>
+                <select
+                  value={emailAccess}
+                  onChange={(e) => setEmailAccess(e.target.value)}
+                  aria-label="Access level for these people"
+                  style={{
+                    border: '1px solid #D1D5DB', borderRadius: '6px',
+                    padding: '4px 8px', fontSize: '13.2px', color: '#374151',
+                    backgroundColor: '#fff', cursor: 'pointer',
+                    fontFamily: "'DM Sans', sans-serif",
+                  }}
+                >
+                  <option value="view">View</option>
+                  <option value="collaborate">Collaborate</option>
+                </select>
+              </div>
+            </div>
+          ) : (
           <div ref={dropdownRef} style={{ position: 'relative' }}>
             <div style={{
               display: 'flex', alignItems: 'center', gap: '8px',
@@ -302,6 +449,7 @@ const ShareCourseModal = ({ isOpen, onClose, courseId, courseName }) => {
               </div>
             )}
           </div>
+          )}
 
           {/* Pending invites */}
           {selected.length > 0 && (
@@ -320,6 +468,24 @@ const ShareCourseModal = ({ isOpen, onClose, courseId, courseName }) => {
           {sent && (
             <div style={{ color: '#16A34A', fontSize: '14.3px', fontWeight: '600', marginTop: '12px' }}>
               ✓ Invitations sent!
+            </div>
+          )}
+
+          {shareResult && (
+            <div style={{ marginTop: '12px', fontSize: '14.3px' }}>
+              {shareResult.count > 0 && (
+                <div style={{ color: '#16A34A', fontWeight: '600' }}>
+                  ✓ Shared with {shareResult.count} {shareResult.count === 1 ? 'person' : 'people'}
+                </div>
+              )}
+              {shareResult.notFound.length > 0 && (
+                <div style={{ color: '#B45309', marginTop: '4px' }}>
+                  No EdCube account found for: {shareResult.notFound.join(', ')} — ask them to sign up first
+                </div>
+              )}
+              {shareResult.count === 0 && shareResult.notFound.length === 0 && (
+                <div style={{ color: '#78716C' }}>Shared with 0 people</div>
+              )}
             </div>
           )}
 
@@ -358,7 +524,7 @@ const ShareCourseModal = ({ isOpen, onClose, courseId, courseName }) => {
         </div>
 
         {/* ── Footer (only when pending invites) ── */}
-        {selected.length > 0 && (
+        {(isPublicUser ? (emails.length > 0 || emailInput.trim()) : selected.length > 0) && (
           <div style={{
             padding: '14px 24px',
             borderTop: '1px solid #F3F4F6',
@@ -366,7 +532,7 @@ const ShareCourseModal = ({ isOpen, onClose, courseId, courseName }) => {
             flexShrink: 0,
           }}>
             <button
-              onClick={handleShare}
+              onClick={isPublicUser ? handleShareByEmail : handleShare}
               disabled={sending}
               style={{
                 padding: '9px 24px',

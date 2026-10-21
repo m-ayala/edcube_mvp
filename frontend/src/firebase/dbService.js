@@ -33,7 +33,18 @@ import { orgCol, orgSubDoc, teacherSubCol, teacherSubDoc } from './paths';
 export const getCurriculumById = async (curriculumId, org) => {
   try {
     const docRef = orgSubDoc(db, org, 'curricula', curriculumId);
-    const docSnap = await getDoc(docRef);
+    let docSnap;
+    try {
+      docSnap = await getDoc(docRef);
+    } catch (err) {
+      // Rules deny reading a course that isn't yours, isn't public and isn't shared with you
+      if (err?.code === 'permission-denied') {
+        const denied = new Error('This course is private.');
+        denied.code = 'permission-denied';
+        throw denied;
+      }
+      throw err;
+    }
 
     if (docSnap.exists()) {
       return {

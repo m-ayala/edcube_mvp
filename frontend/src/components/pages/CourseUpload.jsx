@@ -1,5 +1,6 @@
 ﻿import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { authFetch } from '../../services/authFetch';
 import { useAuth } from '../../contexts/AuthContext';
 
 const CourseUpload = () => {
@@ -44,7 +45,7 @@ const handleUpload = async () => {
     const formData = new FormData();
     formData.append('file', selectedFile);
     
-    const response = await fetch(
+    const response = await authFetch(
       `${import.meta.env.VITE_API_BASE_URL}/api/upload-course-file?teacherUid=${currentUser.uid}`,
       {
         method: 'POST',
@@ -56,7 +57,11 @@ const handleUpload = async () => {
 
     if (!response.ok) {
       console.error('Backend error:', result);
-      throw new Error(result.detail || 'Upload failed');
+      const quota = response.status === 402 && result.detail?.code === 'quota_exceeded';
+      const err = new Error(quota ? 'Monthly limit reached' : (typeof result.detail === 'string' && result.detail ? result.detail : 'Upload failed'));
+      err.status = response.status;
+      err.quota = quota;
+      throw err;
     }
     
     // Navigate to course workspace with parsed data
@@ -82,7 +87,9 @@ const handleUpload = async () => {
     
   } catch (error) {
     console.error('Upload error:', error);
-    alert('Failed to upload file. Please try again.');
+    // A quota 402 has already opened the "limit reached" modal; no second alert.
+    if (error.quota) return;
+    alert(error.status === 401 || error.status === 403 ? error.message : 'Failed to upload file. Please try again.');
   } finally {
     setUploading(false);
   }

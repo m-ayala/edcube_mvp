@@ -6,8 +6,7 @@ fractional hours_per_day / hoursPerDay is rejected with a plain 422.
 
 Same conventions as the Stage 1 course-builder routes in routes/curriculum.py: nothing is
 persisted before the course is built (the frontend sends the chosen outline and the
-course_context back), and no auth dependency (parity with /generate-curriculum and
-/generate-blocks, which these sit between).
+course_context back). Every route requires a Firebase ID token (require_org).
 """
 
 import asyncio
@@ -15,10 +14,12 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from routes.teachers import require_org, resolve_caller_uid
+from services.usage_service import enforce_quota, throttle_chips, refund_charge
 from outliner.course_day_planner import (
     DayPlanningError, library_topup_event, library_topup_enabled, library_topup_failed_event,
     library_topup_timeout, more_ideas, parse_context, plan_day,
@@ -60,8 +61,8 @@ class DayIdeasRequest(PlanDayRequest):
     count: int = Field(6, ge=2, le=10)
 
 
-@router.post("/course-builder/plan-days")
-async def course_builder_plan_days(body: PlanDaysRequest):
+@router.post("/course-builder/plan-days", dependencies=[Depends(enforce_quota("generates"))])
+async def course_builder_plan_days(body: PlanDaysRequest, current_user: dict = Depends(require_org)):
     """
     SSE. Plans days one after another (a day sees the topics of the days before it).
     Events (each `data: {json}`):
@@ -142,6 +143,8 @@ async def course_builder_plan_days(body: PlanDaysRequest):
                                               "error": str(e), "progress": pct}))
                         continue
                     except OpenAIServiceError as e:
+                        if not planned_ok:
+                            refund_charge(current_user, "generates")  # fatal before any day completed
                         await queue.put(_sse({"message": str(e), "error": True}))
                         return  # fatal: the run stops (finally below cancels top-ups)
                     except Exception as e:  # noqa: BLE001 - one bad day must not kill the stream
@@ -164,6 +167,8 @@ async def course_builder_plan_days(body: PlanDaysRequest):
                 raise
             except Exception as e:  # noqa: BLE001
                 logger.error("plan-days error: %s", e, exc_info=True)
+                if not planned_ok:
+                    refund_charge(current_user, "generates")
                 await queue.put(_sse({"message": f"Error: {e}", "error": True}))
             finally:
                 for t in topups:  # run ended early (fatal error): drop pending top-ups
@@ -188,8 +193,8 @@ async def course_builder_plan_days(body: PlanDaysRequest):
     return StreamingResponse(generate(), media_type="text/event-stream", headers=SSE_HEADERS)
 
 
-@router.post("/course-builder/plan-day")
-async def course_builder_plan_day(body: PlanDayRequest):
+@router.post("/course-builder/plan-day", dependencies=[Depends(enforce_quota("generates"))])
+async def course_builder_plan_day(body: PlanDayRequest, current_user: dict = Depends(require_org)):
     """Plan (or re-plan) a single day. Plain JSON: the day plan. 422 bad input, 502 AI failure."""
     try:
         # one JSON response: the plan with its library already topped up (plan.notices covers both)
@@ -204,8 +209,8 @@ async def course_builder_plan_day(body: PlanDayRequest):
         raise HTTPException(status_code=502, detail="Could not plan this day. Please try again.")
 
 
-@router.post("/course-builder/day-ideas")
-async def course_builder_day_ideas(body: DayIdeasRequest):
+@router.post("/course-builder/day-ideas", dependencies=[Depends(enforce_quota("generates"))])
+async def course_builder_day_ideas(body: DayIdeasRequest, current_user: dict = Depends(require_org)):
     """More spare blocks for a day's library. Returns {day_id, block_minutes, topics (new only), blocks, warnings, notices}."""
     try:
         return await asyncio.to_thread(
@@ -231,7 +236,7 @@ class PlannedDay(BaseModel):
 
 class BuildCourseRequest(BaseModel):
     presetCourseId: str
-    teacherUid: str
+    teacherUid: Optional[str] = None  # optional; token uid is authoritative
     organizationId: str
     courseName: str = Field(..., max_length=300)
     ageRangeStart: int
@@ -248,7 +253,7 @@ class BuildCourseRequest(BaseModel):
 
 
 @router.post("/course-builder/build-course")
-async def course_builder_build_course(body: BuildCourseRequest):
+async def course_builder_build_course(body: BuildCourseRequest, current_user: dict = Depends(require_org)):
     """
     Build hand-off. Validates the teacher's finalized plan (including the server-side hard
     caps: an hour never holds more than 4 blocks -> 422 code `hour_over_capacity`, a day's blocks never
@@ -257,6 +262,7 @@ async def course_builder_build_course(body: BuildCourseRequest):
     pipeline (SSE stream and save are identical to that route's).
     """
     from routes.curriculum import GenerateBlocksRequest, SubsectionSelection, generate_blocks
+    uid = resolve_caller_uid(current_user, body.teacherUid)  # 403 before any work / stream
     try:
         check_outline_limits(body.outline)
         for d in body.outline.get("days") or []:
@@ -276,13 +282,13 @@ async def course_builder_build_course(body: BuildCourseRequest):
     if notes:
         logger.info("build-course notes: %s", notes)
     req = GenerateBlocksRequest(
-        presetCourseId=body.presetCourseId, teacherUid=body.teacherUid, organizationId=body.organizationId,
+        presetCourseId=body.presetCourseId, teacherUid=uid, organizationId=body.organizationId,
         courseName=body.courseName, ageRangeStart=body.ageRangeStart, ageRangeEnd=body.ageRangeEnd,
         numStudents=body.numStudents, numDays=body.numDays, hoursPerDay=body.hoursPerDay,
         objectives=body.objectives, courseAttachments=body.courseAttachments, outline=outline,
         selections=[SubsectionSelection(**s) for s in selections],
     )
-    response = await generate_blocks(req)
+    response = await generate_blocks(req, current_user)
     if not notes:
         return response
 

@@ -1,6 +1,8 @@
 // frontend/src/services/courseBuilderApi.js
 // Course Builder network calls. Nothing is persisted server-side; callers keep state.
 
+import { authFetch, legacyErrorFromResponse, isQuotaDetail, QUOTA_MESSAGE } from './authFetch';
+
 const API = () => `${import.meta.env.VITE_API_BASE_URL}`;
 
 let taxonomyPromise = null;
@@ -31,7 +33,7 @@ export const fetchObjectiveCategories = (currentUser) =>
 
 // Ask Edo to revise the outline. Returns { reply, outline, changed_day_ids }.
 export const editOutline = async ({ outline, message, course, conversationHistory }) => {
-  const res = await fetch(`${API()}/api/course-builder/edit-outline`, {
+  const res = await authFetch(`${API()}/api/course-builder/edit-outline`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -44,8 +46,10 @@ export const editOutline = async ({ outline, message, course, conversationHistor
   if (!res.ok) {
     let detail = '';
     try { detail = (await res.json()).detail; } catch { /* non-JSON error body */ }
-    const err = new Error(typeof detail === 'string' && detail ? detail : `Edo could not revise the outline (${res.status})`);
+    const quota = res.status === 402 && isQuotaDetail(detail);
+    const err = new Error(quota ? QUOTA_MESSAGE : (typeof detail === 'string' && detail ? detail : `Edo could not revise the outline (${res.status})`));
     err.status = res.status;
+    err.quota = quota;
     throw err;
   }
   const data = await res.json();
@@ -62,18 +66,20 @@ export const editOutline = async ({ outline, message, course, conversationHistor
 // A saved course document (what build-course saved). Same route the workspace already uses
 // for course info. Rejects with an Error on a non-2xx answer.
 export const fetchCourseDocument = async (curriculumId, teacherUid) => {
-  const res = await fetch(`${API()}/api/curricula/${encodeURIComponent(curriculumId)}?teacherUid=${encodeURIComponent(teacherUid)}`);
-  if (!res.ok) throw new Error(`The saved course could not be loaded (${res.status}).`);
+  const res = await authFetch(`${API()}/api/curricula/${encodeURIComponent(curriculumId)}?teacherUid=${encodeURIComponent(teacherUid)}`);
+  if (!res.ok) throw await legacyErrorFromResponse(res, `The saved course could not be loaded (${res.status}).`);
   return res.json();
 };
 
 // ── Stage 2: day planning ───────────────────────────────────────────────
 
-const errorFromResponse = async (res, fallback) => {
+const errorFromResponseWithProblems = async (res, fallback) => {
   let detail = null;
   try { detail = (await res.json()).detail; } catch { /* non-JSON error body */ }
-  const err = new Error(typeof detail === 'string' && detail ? detail : (detail?.message || `${fallback} (${res.status})`));
+  const quota = res.status === 402 && isQuotaDetail(detail);
+  const err = new Error(quota ? QUOTA_MESSAGE : (typeof detail === 'string' && detail ? detail : (detail?.message || `${fallback} (${res.status})`)));
   err.status = res.status;
+  err.quota = quota;
   err.problems = Array.isArray(detail?.problems) ? detail.problems : [];
   return err;
 };
@@ -100,7 +106,7 @@ const readSSE = async (response, onEvent) => {
   if (buffer.trim()) handle(buffer.trim());
 };
 
-const postJSON = (path, body, signal) => fetch(`${API()}${path}`, {
+const postJSON = (path, body, signal) => authFetch(`${API()}${path}`, {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify(body),
@@ -116,7 +122,7 @@ export const streamPlanDays = async ({ courseContext, outline, dayIds, earlierTo
     ...(dayIds ? { day_ids: dayIds } : {}),
     ...(earlierTopics ? { earlier_topics: earlierTopics } : {}),
   }, signal);
-  if (!res.ok) throw await errorFromResponse(res, 'Planning the days failed');
+  if (!res.ok) throw await errorFromResponseWithProblems(res, 'Planning the days failed');
   await readSSE(res, onEvent);
 };
 
@@ -125,7 +131,7 @@ export const planDay = async ({ courseContext, outline, dayId, earlierTopics }) 
   const res = await postJSON('/api/course-builder/plan-day', {
     course_context: courseContext, outline, day_id: dayId, earlier_topics: earlierTopics || [],
   });
-  if (!res.ok) throw await errorFromResponse(res, 'Could not plan this day');
+  if (!res.ok) throw await errorFromResponseWithProblems(res, 'Could not plan this day');
   return res.json();
 };
 
@@ -136,7 +142,7 @@ export const fetchDayIdeas = async ({ courseContext, outline, dayId, earlierTopi
     course_context: courseContext, outline, day_id: dayId,
     earlier_topics: earlierTopics || [], current_topics: currentTopics, count,
   });
-  if (!res.ok) throw await errorFromResponse(res, 'Could not come up with more ideas');
+  if (!res.ok) throw await errorFromResponseWithProblems(res, 'Could not come up with more ideas');
   const data = await res.json();
   return {
     topics: Array.isArray(data.topics) ? data.topics : [],
@@ -150,6 +156,6 @@ export const fetchDayIdeas = async ({ courseContext, outline, dayId, earlierTopi
 // streams events to onEvent (build_notes, subsection_blocks, progress, done, error).
 export const streamBuildCourse = async (payload, onEvent) => {
   const res = await postJSON('/api/course-builder/build-course', payload);
-  if (!res.ok) throw await errorFromResponse(res, 'The course could not be built');
+  if (!res.ok) throw await errorFromResponseWithProblems(res, 'The course could not be built');
   await readSSE(res, onEvent);
 };

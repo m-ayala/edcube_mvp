@@ -16,6 +16,7 @@ Target tree (see tasks/firestore-reorg-spec.md for the full picture):
     Users/{org}/teacher_profiles/{uid}
     Users/{org}/teachers/{uid}/courseFolders/**, libraryFolders/**
     Users/{org}/notifications/{id}                -- short-lived, delete-on-seen
+    Users/{org}/usage/{uid}/months/{YYYY-MM}      -- backend-only quota counters
     Users/{org}/synopsis/afterschool/months/**, entries/**
     Users/{org}/synopsis/summer_camps/weeks/{week}/camps/{camp}/entries/**
 
@@ -37,12 +38,24 @@ import firebase_admin
 from firebase_admin import auth as fb_auth
 
 from schemas.teacher_schema import get_org_from_email
+from firebase.public_space import (  # noqa: F401 (re-exported)
+    PERSONAL_SPACE_ID,
+    PERSONAL_SPACE_IDS,
+    ORG_CLAIM,
+    WAITLIST_COLLECTION,
+    USAGE_COLLECTION,
+)
 
 # ── Roots ────────────────────────────────────────────────────────────────────
 
 ORGS_ROOT = "Users"
 PLATFORM_ROOT = "EdCube"
 KNOWLEDGE_BASE_DOC = "knowledge_base"
+PLATFORM_CONFIG_DOC = "platform_config"   # EdCube/platform_config (TASK-031), sibling of knowledge_base
+
+# Top-level, backend-written collections (TASK-031)
+ACCOUNTS_COLLECTION = "Accounts"          # Accounts/{uid}
+ADMIN_AUDIT_COLLECTION = "AdminAudit"     # AdminAudit/{autoId}
 
 # Synopsis / afterschool routes have no auth today and are ICC-specific.
 # Multi-org synopsis is out of scope (tasks/firestore-reorg-spec.md, decision 4).
@@ -86,7 +99,27 @@ def summer_camps_doc(db, org: str):
     return org_col(db, org, "synopsis").document("summer_camps")
 
 
+def usage_month_doc(db, org: str, uid: str, month_id: str):
+    """`Users/{org}/usage/{uid}/months/{YYYY-MM}` -- backend-only monthly usage counters."""
+    return org_col(db, org, USAGE_COLLECTION).document(uid).collection("months").document(month_id)
+
+
 # ── Platform (knowledge base) tree ──────────────────────────────────────────
+
+def platform_config_doc(db):
+    """`EdCube/platform_config` -- plan limits, trial length, collaborator caps, feature flags."""
+    return db.collection(PLATFORM_ROOT).document(PLATFORM_CONFIG_DOC)
+
+
+def accounts_col(db):
+    """`Accounts` -- one doc per uid, written by the backend only."""
+    return db.collection(ACCOUNTS_COLLECTION)
+
+
+def admin_audit_col(db):
+    """`AdminAudit` -- one doc per admin change, written by the backend only."""
+    return db.collection(ADMIN_AUDIT_COLLECTION)
+
 
 def kb_doc(db):
     """`EdCube/knowledge_base`"""
@@ -118,13 +151,50 @@ _ORG_CACHE_TTL_SECONDS = 300
 _org_cache: Dict[str, Tuple[Optional[str], float]] = {}
 
 
+# Bootstrapped personal-workspace lookup (doc fallback for tokens issued before the
+# `org` claim refreshed). Brief cache: positives and negatives both expire fast.
+_PERSONAL_MEMBER_TTL_SECONDS = 60
+_personal_member_cache: Dict[str, Tuple[bool, float]] = {}
+
+
+def invalidate_uid_caches(uid: str) -> None:
+    """Drop cached org / personal-membership results for one uid (called by bootstrap)."""
+    _org_cache.pop(uid, None)
+    _personal_member_cache.pop(uid, None)
+
+
+def is_personal_member(uid: str, claims: Optional[dict] = None, db=None) -> bool:
+    """
+    True if `uid` has a personal workspace: the token/user custom claim
+    `org == "personal"` (the pre-rename "public" is still accepted), OR a doc at
+    `Users/personal/teachers/{uid}` (this is how org members, whose claim is
+    their org id, are recognised). Doc lookups are cached for ~60s.
+    """
+    if (claims or {}).get(ORG_CLAIM) in PERSONAL_SPACE_IDS:
+        return True
+    now = time.time()
+    cached = _personal_member_cache.get(uid)
+    if cached is not None and (now - cached[1]) < _PERSONAL_MEMBER_TTL_SECONDS:
+        return cached[0]
+    if db is None:
+        from firebase.project import firestore_client
+        if not firebase_admin._apps:
+            firebase_admin.initialize_app()
+        db = firestore_client()
+    exists = bool(org_col(db, PERSONAL_SPACE_ID, "teachers").document(uid).get().exists)
+    _personal_member_cache[uid] = (exists, now)
+    return exists
+
+
 def resolve_org(uid: str) -> Optional[str]:
     """
     Resolve a Firebase uid to its org_id: looks up the uid's email via the
     Admin SDK, then resolves that email through the `Users/{org}` registry
-    (backend/firebase/org_registry.py). Cached in-process per uid with a short
-    TTL. Returns None if the uid's email isn't registered with any org --
-    there is no default; callers must 403 rather than proceed.
+    (backend/firebase/org_registry.py). An org match always wins. Otherwise a
+    bootstrapped personal user (claim or teachers doc, see is_personal_member)
+    resolves to "personal". Returns None otherwise -- callers must 403.
+    Org matches are cached per uid with a short TTL; None is never cached so a
+    fresh bootstrap takes effect immediately.
     """
     now = time.time()
     cached = _org_cache.get(uid)
@@ -136,5 +206,8 @@ def resolve_org(uid: str) -> Optional[str]:
 
     user = fb_auth.get_user(uid)
     org = get_org_from_email(user.email or "")
-    _org_cache[uid] = (org, now)
+    if not org and is_personal_member(uid, getattr(user, "custom_claims", None)):
+        org = PERSONAL_SPACE_ID
+    if org:
+        _org_cache[uid] = (org, now)
     return org

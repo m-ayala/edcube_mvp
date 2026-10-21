@@ -1,4 +1,5 @@
 // frontend/src/utils/curriculumApi.js
+import { authFetch, legacyErrorFromResponse, isQuotaDetail, notifyQuotaExceeded, QUOTA_MESSAGE, USAGE_CHANGED_EVENT } from '../services/authFetch';
 
 const API_BASE_URL = `${import.meta.env.VITE_API_BASE_URL}/api`;
 
@@ -38,10 +39,18 @@ export const chatWithEdo = async ({
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Chat failed');
+      const error = await response.json().catch(() => ({}));
+      if (response.status === 402 && isQuotaDetail(error.detail)) {
+        notifyQuotaExceeded(error.detail);
+        const quotaErr = new Error(QUOTA_MESSAGE);
+        quotaErr.status = 402;
+        quotaErr.quota = true;
+        throw quotaErr;
+      }
+      throw new Error(typeof error.detail === 'string' && error.detail ? error.detail : 'Chat failed');
     }
 
+    window.dispatchEvent(new Event(USAGE_CHANGED_EVENT));
     return await response.json();
   } catch (error) {
     console.error('Edo chat error:', error);
@@ -62,7 +71,7 @@ export const generateEdoChips = async ({
   taxonomyHints = [],
 }) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/curriculum/chips`, {
+    const response = await authFetch(`${API_BASE_URL}/curriculum/chips`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -75,7 +84,7 @@ export const generateEdoChips = async ({
         taxonomy_hints: taxonomyHints,
       }),
     });
-    if (!response.ok) throw new Error('Chip generation failed');
+    if (!response.ok) throw await legacyErrorFromResponse(response, 'Chip generation failed');
     return await response.json();
   } catch (error) {
     console.error('Edo chips error:', error);
@@ -100,7 +109,7 @@ export const generateCurriculumContent = async ({
   teacherUid
 }) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/curriculum/generate`, {
+    const response = await authFetch(`${API_BASE_URL}/curriculum/generate`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -115,8 +124,7 @@ export const generateCurriculumContent = async ({
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Generation failed');
+      throw await legacyErrorFromResponse(response, 'Generation failed', { useDetail: true });
     }
 
     const data = await response.json();
@@ -144,7 +152,7 @@ export const generateBlockLinks = async ({
   gradeLevel = '',
   teacherUid = null,
 }) => {
-  const response = await fetch(`${API_BASE_URL}/curriculum/generate-block-links`, {
+  const response = await authFetch(`${API_BASE_URL}/curriculum/generate-block-links`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -159,7 +167,7 @@ export const generateBlockLinks = async ({
       teacherUid,
     }),
   });
-  if (!response.ok) throw new Error('Link generation failed');
+  if (!response.ok) throw await legacyErrorFromResponse(response, 'Link generation failed');
   return await response.json(); // { links: [{ url, label, type }] }
 };
 
@@ -187,12 +195,12 @@ export const generateCourseDescription = async ({
   objectives = '',
   teacherUid = null,
 }) => {
-  const response = await fetch(`${API_BASE_URL}/curriculum/generate-description`, {
+  const response = await authFetch(`${API_BASE_URL}/curriculum/generate-description`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ courseName, subject, topic, ageRangeStart, ageRangeEnd, numStudents, timeDuration, timeUnit, objectives, teacherUid }),
   });
-  if (!response.ok) throw new Error('Description generation failed');
+  if (!response.ok) throw await legacyErrorFromResponse(response, 'Description generation failed');
   return await response.json(); // { success: true, description: string }
 };
 
@@ -207,11 +215,11 @@ export const uploadCourseAttachment = async (curriculumId, file, description, te
   form.append('description', description || '');
   form.append('teacherUid', teacherUid);
 
-  const response = await fetch(`${API_BASE_URL}/curricula/${curriculumId}/attachments`, {
+  const response = await authFetch(`${API_BASE_URL}/curricula/${curriculumId}/attachments`, {
     method: 'POST',
     body: form,
   });
-  if (!response.ok) throw new Error('Attachment upload failed');
+  if (!response.ok) throw await legacyErrorFromResponse(response, 'Attachment upload failed');
   return await response.json(); // { success, attachment }
 };
 
@@ -219,7 +227,7 @@ export const uploadCourseAttachment = async (curriculumId, file, description, te
  * Update an attachment's description or isActive toggle.
  */
 export const updateCourseAttachment = async (curriculumId, attachmentId, { description, isActive }, teacherUid) => {
-  const response = await fetch(
+  const response = await authFetch(
     `${API_BASE_URL}/curricula/${curriculumId}/attachments/${attachmentId}?teacherUid=${encodeURIComponent(teacherUid)}`,
     {
       method: 'PATCH',
@@ -227,7 +235,7 @@ export const updateCourseAttachment = async (curriculumId, attachmentId, { descr
       body: JSON.stringify({ description, isActive }),
     }
   );
-  if (!response.ok) throw new Error('Attachment update failed');
+  if (!response.ok) throw await legacyErrorFromResponse(response, 'Attachment update failed');
   return await response.json();
 };
 
@@ -235,11 +243,11 @@ export const updateCourseAttachment = async (curriculumId, attachmentId, { descr
  * Delete an attachment from a course.
  */
 export const deleteCourseAttachment = async (curriculumId, attachmentId, teacherUid) => {
-  const response = await fetch(
+  const response = await authFetch(
     `${API_BASE_URL}/curricula/${curriculumId}/attachments/${attachmentId}?teacherUid=${encodeURIComponent(teacherUid)}`,
     { method: 'DELETE' }
   );
-  if (!response.ok) throw new Error('Attachment delete failed');
+  if (!response.ok) throw await legacyErrorFromResponse(response, 'Attachment delete failed');
   return await response.json();
 };
 
@@ -247,12 +255,12 @@ export const deleteCourseAttachment = async (curriculumId, attachmentId, teacher
  * Update the teacher's free-text course info notes.
  */
 export const updateCourseInfoNotes = async (curriculumId, notes, teacherUid) => {
-  const response = await fetch(`${API_BASE_URL}/curricula/${curriculumId}/course-info-notes`, {
+  const response = await authFetch(`${API_BASE_URL}/curricula/${curriculumId}/course-info-notes`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ notes, teacherUid }),
   });
-  if (!response.ok) throw new Error('Course info notes update failed');
+  if (!response.ok) throw await legacyErrorFromResponse(response, 'Course info notes update failed');
   return await response.json();
 };
 
@@ -272,11 +280,11 @@ export const generateSynopsis = async ({
   teacherUid = null,
   selectedBlocks = [],
 }) => {
-  const response = await fetch(`${API_BASE_URL}/curriculum/generate-synopsis`, {
+  const response = await authFetch(`${API_BASE_URL}/curriculum/generate-synopsis`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ courseName, subject, topic, classLevel, teacherUid, selectedBlocks }),
   });
-  if (!response.ok) throw new Error('Synopsis generation failed');
+  if (!response.ok) throw await legacyErrorFromResponse(response, 'Synopsis generation failed');
   return await response.json(); // { success: true, synopsis: string }
 };

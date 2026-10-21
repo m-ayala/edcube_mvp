@@ -7,13 +7,16 @@ structure changes, don't let it drift from what's actually in the repo.
 ## Stack
 
 - **Frontend:** React/Vite, Firebase Hosting, Firebase Auth (client SDK)
-- **Backend:** FastAPI on Cloud Run, Firestore, Firebase Admin SDK
+- **Backend:** FastAPI on Cloud Run, Firestore, Firebase Admin SDK. Firebase project
+  `edcubeai-fdba7`; the Firestore database is the named database `default` (not the implicit
+  `(default)`), so every backend Firestore client must come from
+  `firebase.project.firestore_client()`, never a bare `firestore.client()`.
 - **AI generation:** Gemini (content + image-prompt generation), Imagen 3 (line art),
   Claude (Edo's backbone)
 - **Output rendering:** Puppeteer (HTML → PDF, worksheets and camp synopses),
   pptxgenjs (PPT decks)
 - **Content discovery:** YouTube Data API v3, YouTube transcript API, Google Custom
-  Search API (worksheets/activities); block Links & Resources (articles, images, videos) uses
+  Search API (worksheets/activities, legacy path); block Links & Resources (articles, images, videos) uses
   Browserbase search/fetch (`RESOURCE_SEARCH_PROVIDER=legacy` restores the YouTube path)
 - **Infra:** Google Cloud (Secret Manager, Cloud Run, Container Registry), Firebase
 
@@ -21,11 +24,13 @@ structure changes, don't let it drift from what's actually in the repo.
 
 ```
 backend/
-  routes/            → curriculum, resources, topics, teachers, knowledge_base
+  routes/            → curriculum, resources, topics, teachers, knowledge_base, account, orgs,
+                        notifications, contact, course_builder, file_upload, uploads, synopsis
   services/           → orchestrator.py, prompt_builder.py, firebase_service.py,
                         knowledge_base_service.py (backend-agent builds/owns this)
   schemas/             → curriculum_schema.py, teacher_schema.py
-  scripts/             → seed_knowledge_base.py (EdCube/knowledge_base seed script)
+  scripts/             → seed_knowledge_base.py (EdCube/knowledge_base seed script),
+                        create_personal_space.py, setup_launch_accounts.py, purge_deactivated.py
   outliner/            → Phase 1 — outline_generator.py, outline_prompts.py, main.py
   populator/           → Phase 2 — youtube_handler.py, transcript_handler.py,
                           content_analyzer.py, video_filter.py, channel_database.py
@@ -87,58 +92,236 @@ Users/{org}                                          (doc: { name, domains: [...
 ├── teacher_profiles/
 ├── teachers/{uid}/courseFolders/, libraryFolders/
 ├── notifications/                                   delete-on-seen inbox
+├── usage/{uid}/months/{YYYY-MM}                     backend-only monthly counters (every space)
 └── synopsis/
     ├── afterschool (doc) → months/{monthId}/entries/{entryId}   (entries nested inside their month)
     └── summer_camps (doc) → weeks/{week}/camps/{camp}/entries/
+
+Users/personal                                       (doc: reserved personal-workspace pseudo-org, see below)
+├── curricula/, teacher_profiles/, teachers/{uid}, notifications/   (same shapes as an org)
+└── waitlist/{email}                                 backend-only
+
+EdCube/platform_config                               (doc: plan limits, trial length, caps; backend-written)
+Accounts/{uid}                                       (plan, trial dates, credits, memberships, status; backend-written)
+AdminAudit/{autoId}                                  (one doc per admin/self account change; backend-only)
 ```
 
 Only `icc` is a real org today — Round 2 (TASK-006b) dropped `test-org` entirely; it was
 only ever an example org shape and was never migrated.
 
-All backend Firestore access goes through `backend/firebase/paths.py` (`org_doc`,
-`org_col`, `kb_col`, `afterschool_entries_col`, `resolve_org`, etc.) — no module outside
-that file should hold a raw `.collection('some_name')` string for org- or KB-scoped
-data, and there is no `collection_group()` query anywhere in the backend (Round 2
-removed the last ones — see "Org resolution" and the curricula note below).
+### The personal workspace (`Users/personal`, was `Users/personal`)
 
-### Org resolution (Round 2 — no default org, ever)
+`Users/personal` is a reserved pseudo-org holding every user's PERSONAL workspace (content owned
+by the teacher, not an org). Everyone has one, including org members, so a user can be in a
+personal and an org workspace at once. It reuses the org tree shape, is never domain-matched
+(`match_org` skips it) and anything org-specific must be gated on `org != "personal"`. Constants
+live in `backend/firebase/public_space.py` (kept filename; `PERSONAL_SPACE_ID = "personal"`, the
+old `PUBLIC_*` names and a claim of `"public"` are still accepted as aliases).
+- **Space doc fields:** `name`, `type: "personal"`, `domains: []`, `allowed_emails: []`,
+  `max_users` (signup cap, now null = no cap by default; the cap/waitlist code is kept pending the
+  person's OK to remove it), `user_count`. Plans/limits no longer live here.
+- **`Users/personal/teachers/{uid}`:** the teachers doc created by bootstrap. Plans live on
+  `Accounts/{uid}`; the old `plan` fields stay rules-protected.
+- **`teacher_profiles/{uid}` (personal):** no `email` stored; `name_lower`; `has_public_courses`
+  (maintained by `FirebaseService.sync_has_public_courses`, self-healing).
+- **`Users/{org}/usage/{uid}/months/{YYYY-MM}`:** `{courses, generates, edo_tokens, updated_at}`,
+  UTC month, written for every user, limited only in the personal workspace. Backend-only.
+- **`Users/personal/waitlist/{email}`:** written only if a signup cap is set and reached.
+- Created by `backend/scripts/setup_launch_accounts.py` (or `create_personal_space.py`). Until
+  that doc exists, `check-email` reports non-org emails as not allowed and bootstrap returns 503.
 
-The org for a request is resolved via a registry, not a hardcoded map:
-- **Registry:** `backend/firebase/org_registry.py` reads every `Users/{org}` doc's
-  `{ name, domains: [...], allowed_emails: [...] }` fields and caches them in-process
-  with a short TTL (5 min). `match_org(email, registry)` is a pure function (no
-  Firestore access) so the matching rule itself is unit-testable against a stubbed
-  registry: an email matches an org if its lowercased domain is in that org's `domains`,
-  OR the full lowercased email is in `allowed_emails`. No match → `None`. There is no
-  default/fallback org — callers must treat `None` as "not allowed."
-- **`get_org_from_email(email)`** (re-exported from `backend/schemas/teacher_schema.py`
-  for existing callers) and **`resolve_org(uid)`** (in `backend/firebase/paths.py`,
-  looks the uid's email up via the Admin SDK first) both wrap the registry.
-- **`require_org`** (FastAPI dependency in `routes/teachers.py`): verifies the Firebase
-  ID token, resolves `org` from the token's email, and 403s with "Your organization is
-  not registered with EdCube" if it's `None`. Returns the decoded token plus an `org`
-  key. Token-based routes (Edo chat, populate-section, notifications, shared-with,
-  profile/discovery) use this.
-- **`require_org_for_uid(uid)`**: the same 403 contract for routes that still take a raw
-  `teacherUid` query/body param instead of a bearer token (most of `routes/curriculum.py`'s
-  older endpoints — `get-curriculum`, `list-curricula`, `delete-curriculum`,
-  `save-course`, `my-courses`, `update-course`, course-attachment routes,
-  `topics.py`'s `get_section`). TASK-008 (the frontend half of this reorg) didn't need to
-  touch these — no current frontend caller of them changed signature — so they're still
-  open for a future move to token-based auth; until then they resolve org server-side
-  from the uid and never trust a client-supplied `organizationId` for the actual
-  Firestore path.
-- **`GET /api/orgs/check-email?email=`** (`routes/orgs.py`, no auth — mirrors
-  `POST /contact`'s unauthenticated posture since there's no token before signup):
-  returns `{allowed, org_id, org_name}`. As of TASK-008, the frontend's
-  `firebase/authService.js` (`checkEmailOrg`) calls this for signup *and* login, and
-  `contexts/AuthContext.jsx` calls it on every auth-state change to resolve
-  `org`/`orgName`/`orgError` for the whole app via `useAuth()` — there is no frontend
-  `DOMAIN_ORG_MAP` any more, so the frontend and backend/rules now agree on the same
-  registry-backed answer.
-- Sharing and public courses are same-org only, so once a request's org is resolved,
-  every Firestore read/write for it is a direct path under `Users/{org}/…` — never a
-  cross-org lookup.
+### Accounts, plans, entitlements (TASK-031)
+
+- **Central config** (`services/platform_config.py`): the only place for plan limits, trial length
+  (30 days, a PLACEHOLDER), `deactivation_grace_days` (30), collaborator caps and per-plan flags.
+  Firestore `EdCube/platform_config` is merged over code defaults, cached ~5 min; nothing numeric
+  is hardcoded elsewhere. Plans: `trial` (one-time allowance, no co-editing), `teacher`, `org`
+  (pooled/unlimited; the pool, `collaborator_cap` and `seats` live on `Users/{orgId}`).
+  Legacy `free`/`pro` map to `trial`/`teacher`.
+- **`Accounts/{uid}`** (`services/accounts_service.py`): `email`, `email_domain`, `plan` (the
+  PERSONAL workspace plan), `plan_started_at`, `trial_ends_at`, `plan_source`
+  (`trial_default`|`admin`), `bonus_credits`, `is_admin`, `memberships`, `status`
+  (`active`|`deactivated`), `deactivated_at`, `delete_after`. Created by bootstrap (plan trial);
+  existing users are backfilled without touching plans.
+- **`can(user, action, course)`** (`services/entitlements.py`) returns a Decision. Deactivated:
+  everything denied. `view` and `manual_edit`: always allowed (nothing is deleted or locked when a
+  trial ends). Ended personal trial: AI actions and new sharing denied with an upgrade message
+  pointing to a waitlist (no prices). `coedit` follows the COURSE OWNER's plan and status,
+  computed live, never stored on the course; applied in `update_section` and `/update-course`
+  (`enforce_collaborator_write`). `invite_collaborator` needs the plan flag and room under the
+  cap. Credits are checked after `can()` in `usage_service.enforce_quota` (reworked in TASK-033).
+  An org workspace runs on the org plan, so a lapsed personal trial does not affect it.
+- **Workspaces:** header `X-EdCube-Workspace: personal|<orgId>` (`require_workspace` in
+  `routes/teachers.py`; `require_org` is a wrapper). The caller must be a member. No header keeps
+  the old behaviour: org members stay in their org, bootstrapped others go personal.
+- **Admin** (`routes/admin.py`, custom claim `admin: true`, else 403): look up by email, set plan
+  (recomputes dates, `plan_source: admin`), grant credits (adds to `bonus_credits`), deactivate,
+  reactivate (not bound by the grace period). Every change writes an `AdminAudit` doc.
+- **Deactivation:** `POST /api/account/deactivate|reactivate`. Deactivated accounts are denied
+  everywhere except `/me` and reactivate; their personal courses become unreachable to others;
+  org courses are unaffected. After `delete_after`, `scripts/purge_deactivated.py --apply`
+  (dry-run by default, person-run) deletes personal data and the Auth user.
+- **Error codes:** 402 `plan_inactive` (trial ended), 402 `plan_upgrade_required` (reasons
+  `coediting_not_in_plan`, `sharing_not_in_plan`, `collaborator_cap_reached`), 403
+  `account_deactivated`, 403 `coediting_not_in_plan` (collaborator write when the owner's plan
+  lacks co-editing), 410 `grace_period_over`. `GET /api/account/me` adds memberships, account
+  summary and entitlements; bootstrap/check-email now say `space: "personal"` (was `"public"`).
+
+### Space resolution (Round 2 org registry + public release PR-2)
+
+The space (an org id, or `public`) for a request is resolved in this order, never from a
+client-sent value:
+1. **Org match wins.** `backend/firebase/org_registry.py` reads every `Users/{org}` doc's
+   `{ name, domains, allowed_emails, type }` and caches them in-process (5 min TTL).
+   `match_org(email, registry)` is pure: a lowercased domain in `domains`, or the full
+   email in `allowed_emails`, matches; the `public` doc is skipped. No default org.
+2. **Verified + not an org email → `public`.** `resolve_space(email, email_verified)`
+   returns the org id, else `"public"` for a verified email, else `None`.
+3. **Membership proof for later requests.** After bootstrap the user carries the custom
+   claim `org: "<orgId>|personal"`. `require_org` accepts the claim, and falls back to the
+   existence of `Users/personal/teachers/{uid}` (`is_personal_member` in `paths.py`, 60 s
+   cache) for tokens issued before the claim refreshed. An org email match is always checked first.
+
+Helpers: `get_org_from_email(email)` (re-exported from `schemas/teacher_schema.py`),
+`resolve_org(uid)` in `paths.py` (uid → email via Admin SDK → registry, then the public
+fallback; org matches cached 5 min, `None` never cached), `invalidate_uid_caches(uid)`.
+
+**Bootstrap flow** (the client never writes `teachers/{uid}` itself):
+signup → verification email → user verifies and logs in (login refuses unverified
+accounts) → `POST /api/account/bootstrap` → `user.getIdToken(true)` to pick up the new
+claim (`bootstrapAccount` in `frontend/src/firebase/authService.js`).
+`AuthContext.jsx` also bootstraps once if `GET /api/account/me` says the user is not
+registered (e.g. verified through the email link into a live session) and exposes
+`space`, `plan`, `isPublicUser`. Bootstrap uses `verify_firebase_token` plus its own
+`email_verified` check (not `require_org`, since a new public user has no space yet):
+- org email: creates the teachers doc and profile, sets the claim, `plan: null`;
+- public: one Firestore transaction on `Users/personal`. If the teachers doc exists it
+  does nothing; if `user_count >= max_users` it writes `waitlist/{email}` and answers
+  403 `{"code": "waitlisted", "message": ...}` (the frontend shows `Waitlist.jsx` and
+  signs the user out); otherwise it increments `user_count` and creates the teachers doc
+  with `plan: "free"`. Then it ensures the profile, sets the claim (merged with existing
+  claims) and returns `{space, org_id, org_name, plan, created}`.
+- **Signup cap:** `max_users` / `user_count` on `Users/personal`. Change the cap in Firestore.
+
+Other routes:
+- **`GET /api/account/me`** (`require_org`): `{space: "org"|"public", org_id, org_name, plan}`.
+- **`GET /api/orgs/check-email?email=`** (`routes/orgs.py`, no auth, since there is no
+  token before signup): org email → `{allowed: true, space: "org", org_id, org_name}`;
+  otherwise, if `Users/personal` exists → `{allowed: true, space: "public", org_id: "public",
+  org_name, waitlisted: bool}`; otherwise `{allowed: false}`. The frontend's
+  `checkEmailOrg` calls it at signup and login.
+- **`require_org_for_uid(uid)`**: legacy non-token variant, unused by routes (kept for compatibility).
+- Sharing and public courses never cross spaces: once the space is resolved, every
+  Firestore read/write is a direct path under `Users/{space}/…`.
+
+### Auth
+
+`verify_firebase_token` (`routes/teachers.py`) checks the Bearer ID token (401 on a
+missing/invalid header). `require_org` builds on it: 403 "Please verify your email address
+before using EdCube" unless `email_verified is True`, then resolves the space as above
+(403 "Your organization is not registered with EdCube" if none) and returns the decoded
+token plus `org`. **Every AI route and every route that used to take a raw `teacherUid`
+uses `require_org`** (curriculum, resources, topics, course_builder, file_upload,
+uploads, notifications, knowledge_base, teachers, account). The token uid is
+authoritative: `resolve_caller_uid(current_user, claimed_uid)` returns the token uid and
+403s ("teacherUid does not match the authenticated user") if a client-sent
+`teacherUid`/`teacher_uid` differs; a stale `organizationId` is ignored or rejected (403)
+in favour of the resolved space. The frontend attaches the token through
+`frontend/src/services/authFetch.js`. The only unauthenticated routes are `/contact`,
+`/orgs/check-email` and the synopsis routes (see Known gaps).
+
+### Quotas (public release PR-3)
+
+`backend/services/usage_service.py`. Limits come from the central config (TASK-031), never code: org users are
+unlimited (but counted); personal users get their `Accounts` plan. `entitlements.can()` runs first
+(ended trial gives 402 `plan_inactive`).
+
+| Route(s) | Kind |
+|---|---|
+| `POST /generate-curriculum` (`/save-course` is manual and no longer charged) | `courses` (charge 1) |
+| `generate-more-subsections`, `curriculum/generate`, `curriculum/generate-block-links`, `curriculum/generate-description`, `curriculum/generate-synopsis`, `course-builder/{plan-days,plan-day,day-ideas,edit-outline}`, `populate-section`, `generate-videos`, `generate-resource`, `worksheet-prompts`, `activity-prompts`, `generate-worksheets`, `generate-activities`, `upload-course-file` | `generates` (charge 1) |
+| `POST /curriculum/chat` (Edo) | `edo_tokens` (pre-check, then real tokens recorded after the reply) |
+| `POST /curriculum/chips` | uncounted; `throttle_chips`, 30/min/uid |
+
+Counting rules: one course per build flow. The charge is on `generate-curriculum`;
+`generate-blocks` / `build-course` and `update-course` do not charge, so a build counts
+once; `save-course` charges only because it is the creation path for uploads (the
+workspace uses `update-course` once it has a `curriculumId`). `plan-days` is one
+`generates` per run (not per day) and `upload-course-file` is one `generates`.
+`enforce_quota(kind)` is a route dependency that runs after `require_org` and before any
+streaming starts, using a Firestore transaction that reads and increments atomically.
+
+Refunds (`refund_charge`, best-effort, never below 0, once per request): the dependency
+refunds if the route then raises an HTTP error or unhandled exception; streaming routes
+refund explicitly when they fail before producing a result (outline generation failed
+in `generate-curriculum`; `populate-section` error; `plan-days` fatal error before any
+day completed). Edo is the exception: the pre-check only blocks when `used >= limit`,
+so a reply can overshoot by one reply.
+
+Fail open: if the quota check itself errors (infrastructure), the request proceeds and
+nothing is charged (logged). Recording tokens (`safe_add_usage`) never breaks a reply.
+
+Contracts:
+- **402** `{"detail": {"code": "quota_exceeded", "kind": "courses"|"generates"|"edo_tokens",
+  "limit", "used", "resets_at" (ISO UTC, start of next month), "plan"}}`, produced by the
+  `QuotaExceeded` handler in `main.py`. Streaming routes return it as plain JSON before
+  the stream starts.
+- **429** `{"detail": {"code": "rate_limited"}}` with a `Retry-After` header (Edo chips
+  throttle, and the invite-by-email lookups below).
+- **`GET /api/account/usage`**: `{plan, space, limits: {courses, generates, edo_tokens},
+  usage: {...}, resets_at}`; `null` limit = unlimited, `plan` is `null` for org users.
+  The frontend `UsageContext.jsx` fetches it for public users only, listens for the 402
+  and "AI call succeeded" window events dispatched by `authFetch`, and shows the usage
+  meter, the limit-reached modal and the Upgrade-to-Pro form (`POST /contact`, `type: "pro"`).
+
+### Visibility and collaboration
+
+- **Separate worlds.** An org user only ever sees their own org's tree; public users only
+  `Users/personal`; there is no cross-space sharing, discovery or notification.
+- **Org semantics are unchanged:** `isPublic` makes a course readable by every org member
+  (and rules let any org member read the org's curricula and profiles).
+- **Public space: Private/Public.** A Private course is readable by its owner and the uids
+  in `sharedWithUids` only; a Public course by every public-space member (UI wording:
+  "visible to all EdCube users"). Enforced twice: backend (`FirebaseService.get_curriculum`
+  returns others' courses only if public or shared, and strips `teacherEmail`;
+  `delete_curriculum` and `update_section` require the owner, or a `collaborate`
+  invitee for sections; visibility change is owner-only) and `firestore.rules`
+  (`/Users/personal/curricula`).
+- **Discovery (public).** `GET /api/teachers/?q=&limit=&cursor=` returns
+  `{teachers, next_cursor}` for public callers (bare list for org callers, unchanged):
+  only teachers with `has_public_courses == true`, caller excluded, prefix match on
+  `name_lower`, ordered by it, `limit` clamped 1..50 (default 20), opaque cursor. A stale
+  flag (no public course found) hides the teacher and heals the flag. This needs the
+  composite index `teacher_profiles (has_public_courses, name_lower)` in
+  `frontend/firestore.indexes.json`. Profiles never show email.
+- **Invite by email (public only).** `POST /api/notifications/share` accepts
+  `recipient_emails` (+ `access_type` `view`|`collaborate`) in addition to the uid list; an org
+  caller sending emails gets 400. Max 20 emails per request (`too_many_emails`); own email is
+  rejected; lookups use `get_user_by_email` and succeed only if the account is in the
+  public space. The response carries `not_found: [emails]`: "no account" and "account
+  exists in another space" are deliberately indistinguishable. Enumeration note: a caller can
+  still learn which gmail addresses are EdCube public users from `not_found`, so lookups
+  are limited to 30 emails/min/uid (429 `rate_limited`, in-memory per instance).
+
+### Firestore rules summary (`frontend/firestore.rules`)
+
+- `isOrgMember(orgId)`: caller's email domain / full email is in the org doc's `domains` /
+  `allowed_emails` (no hardcoded list).
+- `inSpace(orgId)`: verified email and the `org` custom claim equals `orgId`.
+- `orgAccess(orgId)`: `orgId != 'public'` and (`isOrgMember` or `inSpace`). The generic
+  `Users/{orgId}` block uses it, so the generic rules can never apply to `public`
+  (Firestore ORs overlapping matches).
+- `inPersonal()`: `inSpace('personal')` or a `Users/personal/teachers/{uid}` doc (org members).
+- `match /Accounts/{uid}`: read by self only; `Accounts`, `AdminAudit` and `EdCube/platform_config` are never client-writable.
+- `match /Users/personal` (stricter): space doc readable by personal members, never
+  client-writable. Curricula: read if owner, `isPublic`, or in `sharedWithUids`; create/update/delete
+  owner only. `teacher_profiles`: read by members, write by self. `teachers/{uid}`: self only;
+  `plan` / `plan_updated_at` cannot be written by clients; no client delete. `notifications`:
+  read/delete own. `usage/**` and `waitlist/**`: no client access.
+- The org block: members read curricula, profiles, teachers, synopsis; owner-only writes;
+  folders owner-only; notifications read/delete own.
+- Hosting/deploy config: `frontend/firebase.json` points Firestore at `firestore.rules` and
+  `firestore.indexes.json`; hosting target `edcubeai`.
 
 Field names for a curriculum document are defined once in
 `backend/schemas/curriculum_schema.py` (`CurriculumFields`, `SectionFields`,
@@ -177,7 +360,9 @@ best-effort (wrapped in try/except) since it's supplementary chat context, not a
 requirement. No collection-group index is needed anywhere in the backend anymore.
 
 **`Users/{org}/teacher_profiles/{uid}`** — `teacher_uid`, `display_name`, `email`,
-`subjects_taught[]`, `grades_taught[]`, `bio`, `profile_picture_url`, `org_id`
+`subjects_taught[]`, `grades_taught[]`, `bio`, `profile_picture_url`, `org_id`. In the
+public space `email` is never stored or returned, and `name_lower` / `has_public_courses`
+are added (see above).
 
 **`Users/{org}/teachers/{uid}/courseFolders/`, `libraryFolders/`** — organizational
 grouping for a teacher's courses and library resources.
@@ -298,17 +483,55 @@ directly, and never edit `knowledge_base_service.py`.
   code — see "Data model — Firestore" above) are being built out but not yet wired into
   generation prompts — `prompt_builder.py` may still contain some hardcoded pedagogy
   that should eventually pull from `knowledge_base_service.py` instead.
-- Several `routes/curriculum.py` and `routes/topics.py` endpoints still take a raw
-  `teacherUid` query/body param instead of a bearer token (see "Org resolution" above
-  for the list) — each one calls `require_org_for_uid(teacherUid)` so unregistered
-  emails still 403 correctly, but a client could still pass someone else's uid as a
-  parameter value (no signature/token proves the caller *is* that uid on these specific
-  routes). These were out of TASK-008's file list (no current caller needed a signature
-  change to send a token) and remain open for whenever that's prioritized.
+- **Synopsis / after-school LLM routes are unauthenticated.** `routes/synopsis.py` and
+  `routes/afterschool_synopsis.py` (including the model-calling `/enhance`, `/parse-flyer`,
+  `/parse-food`) use a shared camp-staff portal password, not EdCube accounts, as do
+  `/contact` and `/orgs/check-email`. Anyone can spend model calls through them until they
+  get their own protection. They are also not quota-counted.
+- **Org ownership gap (no task yet, needs the person's OK).** In orgs, any member can delete
+  another member's public course and overwrite sections of any org course
+  (`delete_curriculum` / `update_section` have no owner check there). Fixed only for the
+  public space.
+- **Throttles are in-memory and per Cloud Run instance** (Edo chips 30/min, invite-by-email
+  lookups 30/min); the effective limit grows with instance count.
+- **Org rules are broad.** At the rules level any org member can read any `teacher_profiles`
+  doc and any curriculum in their org, including private ones (unchanged; the public space
+  is stricter). Public clients can also write their own `has_public_courses` flag
+  (harmless, self-heals).
+- Quota recording is synchronous Firestore I/O inside async dependencies, and Edo can
+  overshoot its token limit by one reply.
 - The collection-group query that used to back `_find_curriculum_ref()` is gone — Round
   2 (TASK-006b) deleted it along with every other `collection_group()` call in the
   backend (synopsis camp/entry lookups included). No collection-group index is needed
   anywhere in the backend anymore; ignore any pre-TASK-006b note that said otherwise.
+
+## Public launch checklist
+
+Everything below is run or decided by the person; nothing here is automatic. Run from
+`backend/` for the script (Application Default Credentials) and `frontend/` for Firebase CLI.
+
+**Steps, in order**
+1. `python scripts/setup_launch_accounts.py --admin-email <you>` (dry run), then `--apply`: creates
+   `EdCube/platform_config`, `Users/personal`, puts `icc` on the org plan, makes you admin + Teacher
+   and backfills `Accounts`. Idempotent; never overwrites existing plans or limits.
+2. Deploy the backend to Cloud Run (`deploy.sh`; `BROWSERBASE_API_KEY` must be set on the service).
+3. Deploy `firestore.rules` (`firebase deploy --only firestore:rules`).
+4. Export the existing indexes first (`firebase firestore:indexes`), merge anything
+   missing into `firestore.indexes.json`, then deploy it (`firebase deploy --only
+   firestore:indexes`). If prompted to delete console-only indexes, answer no.
+5. Deploy the frontend (hosting target `edcubeai`).
+6. Smoke test: an org login; a gmail signup, verify, login; hit a free limit (402 modal);
+   the waitlist (temporarily set `max_users` at or below `user_count`, then restore it).
+
+**Non-code items**
+- Terms of Service and Privacy Policy pages.
+- A delete-account path (manual at first).
+- An OpenAI spend alert / budget cap.
+- The Firebase Auth verification email template and sender domain.
+- `GMAIL_USER` / `GMAIL_APP_PASSWORD` set on the backend, or Pro requests (`POST /contact`
+  with `type: "pro"`) are accepted but no email is sent.
+- Change a plan or grant credits: `PATCH /api/admin/accounts/{uid}/plan`, `POST .../credits` (audited).
+- Change limits or trial length: edit `EdCube/platform_config` (takes effect within ~5 min; `null` = unlimited).
 
 ## Agentic dev system (meta — how this repo is built)
 

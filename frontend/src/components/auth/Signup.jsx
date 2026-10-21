@@ -41,6 +41,10 @@ const Signup = () => {
       setSuccess(result.message);
       setTimeout(() => navigate('/'), 3000);
     } catch (err) {
+      if (err.code === 'waitlisted') {
+        navigate('/waitlist', { state: { message: err.message } });
+        return;
+      }
       setError(err.message);
     } finally {
       setLoading(false);
@@ -128,7 +132,7 @@ const Signup = () => {
               Create your account
             </h1>
             <p style={{ fontSize: 14, color: '#6B6459', margin: 0, lineHeight: 1.6 }}>
-              Join your school's EdCube workspace.
+              Start planning with EdCube.
             </p>
           </div>
 
@@ -180,9 +184,7 @@ const Signup = () => {
                 <input className="su-input" type="email" name="email" placeholder="you@yourschool.org"
                   value={formData.email} onChange={handleChange} required />
                 <p style={{ fontSize: 11, color: '#A89F94', marginTop: 5 }}>
-                  Your organization is detected from your email.{' '}
-                  Don't see your organization recognized?{' '}
-                  <a href="/contact" style={{ color: '#1C1917', fontWeight: 500 }}>Contact us</a> to get added.
+                  Sign up with any email address. School emails are automatically connected to your school's workspace.
                 </p>
               </div>
 

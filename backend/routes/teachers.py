@@ -4,9 +4,11 @@ API routes for teacher profiles and discovery
 Handles profile management, course visibility, and teacher discovery
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Header
+from fastapi import APIRouter, Depends, HTTPException, status, Header, Query
 from typing import List, Optional
 from datetime import datetime
+import base64
+import json
 import logging
 
 from schemas.teacher_schema import (
@@ -20,11 +22,16 @@ from schemas.teacher_schema import (
     COURSES_COLLECTION,
     create_default_profile,
     get_org_from_email,
+    PERSONAL_SPACE_ID,
+    ORG_CLAIM,
+    PROFILE_NAME_LOWER,
 )
+from firebase.public_space import PERSONAL_SPACE_IDS, ADMIN_CLAIM
+from services import accounts_service
 from schemas.curriculum_schema import CurriculumFields as CF
 import firebase_admin
 from firebase_admin import auth, firestore
-from firebase.paths import org_col, resolve_org
+from firebase.paths import org_col, resolve_org, is_personal_member
 from firebase.project import firestore_client
 
 # Initialize logger
@@ -76,24 +83,133 @@ async def verify_firebase_token(authorization: Optional[str] = Header(default=No
         )
 
 
-async def require_org(current_user: dict = Depends(verify_firebase_token)) -> dict:
-    """
-    Shared org-scoping dependency (tasks/firestore-reorg-spec.md Round 2,
-    section A): verifies the Firebase token, then resolves the caller's org
-    from their token email via the Users/{org} registry. 403s with a fixed
-    message if the email isn't registered with any org -- there is no default
-    org to fall back to.
+WORKSPACE_HEADER = "X-EdCube-Workspace"
 
-    Returns the decoded token with an added "org" key, so routes get both in
-    one dependency: `current_user = Depends(require_org); org = current_user["org"]`.
+
+def _resolve_workspace(current_user: dict, requested: Optional[str], allow_deactivated: bool = False) -> dict:
     """
-    org = get_org_from_email(current_user.get("email") or "")
-    if not org:
+    Resolve which workspace this request acts in (TASK-031) and return the decoded
+    token plus:
+        org             the resolved workspace id: "personal" or an orgId (existing
+                        routes keep reading current_user["org"])
+        workspace_type  "personal" | "org"
+        home_org        the caller's org (from the registry) or None
+        is_admin        the `admin` custom claim
+
+    Rules
+    - header `X-EdCube-Workspace: personal|<orgId>` (client's choice): the caller must be
+      a member -- "personal" needs a bootstrapped personal workspace, an orgId must be the
+      org their email matches. Otherwise 403.
+    - no header: org members default to their org (exactly the pre-TASK-031 behaviour),
+      everyone else to personal (must be bootstrapped, else 403 as before).
+    - a deactivated account is rejected (403 account_deactivated) unless allow_deactivated.
+    """
+    if current_user.get("email_verified") is not True:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Please verify your email address before using EdCube",
+        )
+    uid = current_user["uid"]
+    home_org = get_org_from_email(current_user.get("email") or "")
+    req = (requested or "").strip()
+    if req.lower() in PERSONAL_SPACE_IDS:   # also accepts the pre-rename "public"
+        req = PERSONAL_SPACE_ID
+
+    if req:
+        if req == PERSONAL_SPACE_ID:
+            if not is_personal_member(uid, current_user):
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                                    detail="Your personal workspace isn't set up yet")
+            workspace = PERSONAL_SPACE_ID
+        elif home_org and req == home_org:
+            workspace = home_org
+        else:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                                detail="You are not a member of that workspace")
+    elif home_org:
+        workspace = home_org
+    elif is_personal_member(uid, current_user):
+        # Bootstrapped personal user (claim, or teachers doc for tokens issued
+        # before the claim refreshed). An org match above always wins.
+        workspace = PERSONAL_SPACE_ID
+    else:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Your organization is not registered with EdCube",
         )
-    return {**current_user, "org": org}
+
+    if not allow_deactivated:
+        try:
+            account = accounts_service.get_account(uid)
+        except Exception as e:  # noqa: BLE001 -- infra trouble must not lock everyone out
+            logger.warning("account status check failed open (%s): %s", uid, e)
+            account = None
+        if accounts_service.is_deactivated(account):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "code": "account_deactivated",
+                    "message": "This account is deactivated. Reactivate it to continue.",
+                    "delete_after": accounts_service.public_view(account).get("delete_after"),
+                },
+            )
+
+    return {
+        **current_user,
+        "org": workspace,
+        "workspace_type": "personal" if workspace == PERSONAL_SPACE_ID else "org",
+        "home_org": home_org,
+        "is_admin": current_user.get(ADMIN_CLAIM) is True,
+    }
+
+
+async def require_workspace(
+    current_user: dict = Depends(verify_firebase_token),
+    x_edcube_workspace: Optional[str] = Header(default=None),
+) -> dict:
+    """Workspace-aware dependency (see _resolve_workspace). Honors X-EdCube-Workspace."""
+    return _resolve_workspace(current_user, x_edcube_workspace)
+
+
+async def require_workspace_lenient(
+    current_user: dict = Depends(verify_firebase_token),
+    x_edcube_workspace: Optional[str] = Header(default=None),
+) -> dict:
+    """Like require_workspace but lets a deactivated account through (account/me, reactivate)."""
+    return _resolve_workspace(current_user, x_edcube_workspace, allow_deactivated=True)
+
+
+async def require_org(current_user: dict = Depends(require_workspace)) -> dict:
+    """
+    Compatibility wrapper kept under its original name: every existing route uses
+    `current_user = Depends(require_org); org = current_user["org"]`. It is now
+    workspace-aware (header `X-EdCube-Workspace`), and with no header behaves exactly as
+    before (org members -> their org, bootstrapped others -> the personal workspace).
+    """
+    return current_user
+
+
+async def require_admin(current_user: dict = Depends(verify_firebase_token)) -> dict:
+    """Platform admin: verified token carrying the custom claim `admin: true`. 403 otherwise."""
+    if current_user.get(ADMIN_CLAIM) is not True or current_user.get("email_verified") is not True:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return current_user
+
+
+def resolve_caller_uid(current_user: dict, claimed_uid: Optional[str] = None) -> str:
+    """
+    Backward-compat helper for routes whose clients still send a raw
+    `teacherUid` / `teacher_uid`. The token is the source of truth: a claimed
+    uid is optional, but if present it must equal the token uid (else 403).
+    Returns the token uid.
+    """
+    uid = current_user["uid"]
+    if claimed_uid and claimed_uid != uid:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="teacherUid does not match the authenticated user",
+        )
+    return uid
 
 
 def require_org_for_uid(uid: str) -> str:
@@ -144,10 +260,12 @@ async def get_own_profile(
 
         if profile_doc.exists:
             profile_data = profile_doc.to_dict()
+            if org == PERSONAL_SPACE_ID:
+                profile_data.pop(TPF.EMAIL, None)  # public profiles never expose email
             return TeacherProfileResponse(**profile_data)
         
         # Create default profile if doesn't exist
-        default_profile = create_default_profile(current_user)
+        default_profile = create_default_profile(current_user, org)
         profile_ref.set(default_profile)
         
         return TeacherProfileResponse(**default_profile)
@@ -193,13 +311,18 @@ async def update_own_profile(
         # Prepare update data (only include non-None fields)
         update_data = profile_update.model_dump(exclude_unset=True, exclude_none=True)
         update_data[TPF.UPDATED_AT] = datetime.utcnow()
+        if org == PERSONAL_SPACE_ID and TPF.DISPLAY_NAME in update_data:
+            update_data[PROFILE_NAME_LOWER] = update_data[TPF.DISPLAY_NAME].lower()
         
         # Update profile in Firestore
         profile_ref.update(update_data)
         
         # Return updated profile
         updated_doc = profile_ref.get()
-        return TeacherProfileResponse(**updated_doc.to_dict())
+        updated_data = updated_doc.to_dict()
+        if org == PERSONAL_SPACE_ID:
+            updated_data.pop(TPF.EMAIL, None)
+        return TeacherProfileResponse(**updated_data)
         
     except HTTPException:
         raise
@@ -283,21 +406,110 @@ async def get_teacher_profile(
 # DISCOVERY ENDPOINT
 # ============================================================================
 
-@router.get("/", response_model=List[TeacherProfilePublic])
+PUBLIC_LIST_DEFAULT_LIMIT = 20
+PUBLIC_LIST_MAX_LIMIT = 50
+HAS_PUBLIC_COURSES = "has_public_courses"
+
+
+def _encode_cursor(name_lower: str, uid: str) -> str:
+    return base64.urlsafe_b64encode(json.dumps([name_lower, uid]).encode()).decode()
+
+
+def _decode_cursor(cursor: str):
+    try:
+        name_lower, uid = json.loads(base64.urlsafe_b64decode(cursor.encode()).decode())
+        if not isinstance(name_lower, str) or not isinstance(uid, str):
+            raise ValueError("bad cursor")
+        return name_lower, uid
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid cursor")
+
+
+def _public_profile(profile_data: dict, public_course_count: int) -> TeacherProfilePublic:
+    return TeacherProfilePublic(
+        teacher_uid=profile_data[TPF.TEACHER_UID],
+        display_name=profile_data[TPF.DISPLAY_NAME],
+        subjects_taught=profile_data.get(TPF.SUBJECTS_TAUGHT, []),
+        grades_taught=profile_data.get(TPF.GRADES_TAUGHT, []),
+        bio=profile_data.get(TPF.BIO, ""),
+        profile_picture_url=profile_data.get(TPF.PROFILE_PICTURE_URL),
+        public_course_count=public_course_count,
+    )
+
+
+def _list_public_space_teachers(db, caller_uid: str, q: Optional[str], limit: int, cursor: Optional[str]) -> dict:
+    """
+    Public-space discovery: paginated, prefix-searchable, only teachers whose
+    profile has has_public_courses == true (missing flag == excluded), caller
+    excluded. Needs the composite index (has_public_courses, name_lower) on
+    teacher_profiles -- see frontend/firestore.indexes.json.
+    """
+    col = org_col(db, PERSONAL_SPACE_ID, TEACHER_PROFILES_COLLECTION)
+    query = col.where(HAS_PUBLIC_COURSES, "==", True)
+    q = (q or "").strip().lower()[:100]
+    if q:
+        query = query.where(PROFILE_NAME_LOWER, ">=", q).where(PROFILE_NAME_LOWER, "<=", q + "\uf8ff")
+    query = query.order_by(PROFILE_NAME_LOWER)
+    if cursor:
+        c_name, c_uid = _decode_cursor(cursor)
+        c_snap = col.document(c_uid).get()
+        query = query.start_after(c_snap if c_snap.exists else {PROFILE_NAME_LOWER: c_name})
+    # +2: room for the (at most one) caller row plus one lookahead row.
+    docs = list(query.limit(limit + 2).stream())
+    rows = [d for d in docs if d.id != caller_uid]
+    page = rows[:limit]
+    has_more = len(rows) > limit
+
+    teachers = []
+    for d in page:
+        data = d.to_dict() or {}
+        uid = data.get(TPF.TEACHER_UID) or d.id
+        data[TPF.TEACHER_UID] = uid
+        n = len(list(
+            org_col(db, PERSONAL_SPACE_ID, COURSES_COLLECTION)
+            .where(CF.TEACHER_UID, "==", uid)
+            .where(CF.IS_PUBLIC, "==", True)
+            .stream()
+        ))
+        if n == 0:
+            # Stale flag (should be rare): hide the teacher and heal the flag.
+            try:
+                col.document(d.id).update({HAS_PUBLIC_COURSES: False})
+            except Exception:
+                pass
+            continue
+        teachers.append(_public_profile(data, n))
+
+    next_cursor = None
+    if has_more and page:
+        last = page[-1].to_dict() or {}
+        next_cursor = _encode_cursor(last.get(PROFILE_NAME_LOWER, ""), page[-1].id)
+    return {"teachers": teachers, "next_cursor": next_cursor}
+
+
+@router.get("/", response_model=None)
 async def list_all_teachers(
+    q: Optional[str] = Query(default=None, description="public space only: name prefix"),
+    limit: int = Query(default=PUBLIC_LIST_DEFAULT_LIMIT, description="public space only; clamped to 1..50"),
+    cursor: Optional[str] = Query(default=None, description="public space only: opaque next_cursor"),
     current_user: dict = Depends(require_org),
     db = Depends(get_firestore_client)
 ):
     """
-    Get all teacher profiles in the organization.
-    Used for the discovery page to browse other teachers.
+    Org callers: unchanged -- a bare List[TeacherProfilePublic] of every teacher
+    in the org (q / limit / cursor are ignored).
 
-    Returns:
-        List[TeacherProfilePublic]: List of all teacher profiles with public course counts
+    Public-space callers: {"teachers": [TeacherProfilePublic...], "next_cursor": str|null},
+    only teachers with at least one Public course, caller excluded, ordered by
+    lowercased name.
     """
     try:
         # Resolve the caller's org_id from their email domain
         caller_org_id = current_user["org"]
+        if caller_org_id == PERSONAL_SPACE_ID:
+            limit = max(1, min(limit, PUBLIC_LIST_MAX_LIMIT))
+            return _list_public_space_teachers(db, current_user["uid"], q, limit, cursor)
+
         profiles_query = org_col(db, caller_org_id, TEACHER_PROFILES_COLLECTION).where(TPF.ORG_ID, "==", caller_org_id)
         profiles = profiles_query.stream()
 
@@ -326,7 +538,9 @@ async def list_all_teachers(
             ))
         
         return result
-        
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error listing teachers: {e}")
         raise HTTPException(

@@ -358,7 +358,7 @@ const SubsectionSelectionMatrix = ({ sections, candidatesBySection, onSubmit }) 
       await generateMoreSubsections(sectionId);
     } catch (err) {
       console.error('generateMoreSubsections failed', err);
-      alert('Could not generate more ideas right now. Please try again.');
+      alert(err?.status === 401 || err?.status === 403 ? err.message : 'Could not generate more ideas right now. Please try again.');
     } finally {
       setAddMoreLoading(prev => ({ ...prev, [sectionId]: false }));
     }

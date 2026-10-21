@@ -14,6 +14,7 @@ from firebase_admin import credentials, firestore, storage as fb_storage
 from datetime import datetime
 from schemas.curriculum_schema import CurriculumFields as F
 from firebase.project import firestore_client, STORAGE_BUCKET
+from services import entitlements
 from firebase.paths import (
     org_col,
     afterschool_doc,
@@ -21,6 +22,7 @@ from firebase.paths import (
     summer_camps_doc,
     resolve_org as _resolve_org,
     DEFAULT_SYNOPSIS_ORG,
+    PERSONAL_SPACE_ID,
 )
 
 logger = logging.getLogger(__name__)
@@ -49,6 +51,33 @@ class FirebaseService:
     def resolve_org(self, uid: str) -> str:
         """Resolve a uid to its org_id. See firebase.paths.resolve_org."""
         return _resolve_org(uid)
+
+    async def sync_has_public_courses(self, org: str, uid: str) -> Optional[bool]:
+        """
+        Public space only (no-op returning None for orgs): recompute and store
+        `has_public_courses` on the owner's `teacher_profiles` doc, which powers
+        public teacher discovery. Recomputed from the source of truth (does this
+        owner have any curriculum with isPublic == true, limit 1) rather than
+        toggled, so it self-heals. Never raises: a failure here must not fail
+        the course write that triggered it.
+        """
+        if org != PERSONAL_SPACE_ID:
+            return None
+        try:
+            has_public = any(
+                True for _ in self.curricula_col(org)
+                .where('teacherUid', '==', uid)
+                .where('isPublic', '==', True)
+                .limit(1)
+                .stream()
+            )
+            ref = org_col(self.db, org, 'teacher_profiles').document(uid)
+            if ref.get().exists:
+                ref.update({'has_public_courses': has_public})
+            return has_public
+        except Exception as e:
+            logger.error(f"sync_has_public_courses failed for {uid}: {e}", exc_info=True)
+            return None
 
     # ── Synopsis path helpers ─────────────────────────────────────────────────
     # Synopsis/afterschool routes have no auth and are ICC-specific today
@@ -123,6 +152,8 @@ class FirebaseService:
             }
             
             self.curricula_col(organizationId).document(course_id).set(doc_data)
+            if doc_data.get('isPublic'):
+                await self.sync_has_public_courses(organizationId, teacherUid)
 
             print(f"✅ Saved curriculum to Firebase: {course_id}")
             return course_id
@@ -160,10 +191,22 @@ class FirebaseService:
             # so same-org is already guaranteed structurally -- no separate
             # Firestore org check needed here.
             is_owner = curriculum.get('teacherUid') == teacherUid
+            if not is_owner and not entitlements.owner_allows_access(curriculum.get('teacherUid'), org):
+                # TASK-031: a deactivated owner's personal-workspace course is unreachable by
+                # others (view links, collaborators). Org-workspace courses are unaffected.
+                return None
             if not is_owner:
                 is_public = curriculum.get('isPublic', False)
                 if is_public:
                     curriculum['id'] = doc.id
+                    if org == PERSONAL_SPACE_ID:
+                        curriculum.pop('teacherEmail', None)  # never expose emails of public users
+                    return curriculum
+                if org == PERSONAL_SPACE_ID and teacherUid in (curriculum.get('sharedWithUids') or []):
+                    # Public space: a Private course is readable by its invited
+                    # collaborators (mirrors the Users/personal firestore rule).
+                    curriculum['id'] = doc.id
+                    curriculum.pop('teacherEmail', None)
                     return curriculum
                 print(f"⚠️  Authorization failed: User {teacherUid} tried to access curriculum owned by {curriculum.get('teacherUid')}")
                 return None
@@ -232,8 +275,15 @@ class FirebaseService:
             if not curriculum:
                 return False
 
+            # get_curriculum also returns other people's Public courses, so
+            # ownership must be re-checked here. Enforced for the public space
+            # (strangers share it); org behaviour is deliberately unchanged.
+            if org == PERSONAL_SPACE_ID and curriculum.get('teacherUid') != teacherUid:
+                return False
+
             # Delete document
             self.curricula_col(org).document(curriculum_id).delete()
+            await self.sync_has_public_courses(org, teacherUid)
             print(f"✅ Deleted curriculum: {curriculum_id}")
             return True
         
@@ -295,7 +345,8 @@ class FirebaseService:
         curriculum_id: str,
         section_id: str,
         section_data: dict,
-        org: str
+        org: str,
+        caller_uid: Optional[str] = None
     ) -> bool:
         """
         Update a specific section within a curriculum document.
@@ -323,6 +374,15 @@ class FirebaseService:
             
             # Get current data
             curriculum = doc.to_dict()
+            if org == PERSONAL_SPACE_ID and caller_uid is not None:
+                # Public space: only the owner or a 'collaborate' invitee may write.
+                if curriculum.get('teacherUid') != caller_uid:
+                    collab = next((x for x in curriculum.get('sharedWith', []) if x.get('uid') == caller_uid), None)
+                    # Co-editing is governed by the OWNER's plan, computed live (TASK-031).
+                    if (not collab or collab.get('accessType') != 'collaborate'
+                            or not entitlements.owner_allows_coedit(curriculum.get('teacherUid'), org)):
+                        logger.warning(f"Unauthorized section write by {caller_uid} on {curriculum_id}")
+                        return False
             sections = curriculum.get('outline', {}).get('sections', [])
             
             # Find and update the specific section

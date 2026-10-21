@@ -15,6 +15,13 @@ without touching the database.
 import time
 from typing import Dict, List, Optional
 
+from firebase.public_space import (
+    PERSONAL_SPACE_ID,
+    PERSONAL_SPACE_IDS,
+    PERSONAL_SPACE_TYPE,
+    SPACE_TYPE,
+)
+
 # "A few minutes is fine" per tasks/firestore-reorg-spec.md Round 2 section A.
 CACHE_TTL_SECONDS = 300
 
@@ -38,6 +45,10 @@ def match_org(email: str, registry: Dict[str, dict]) -> Optional[str]:
     domain = email.rsplit("@", 1)[-1]
 
     for org_id, org_data in (registry or {}).items():
+        # The reserved personal workspace is never domain/allow-list matched: it is
+        # reached only by the "no org matched" fallback in resolve_space().
+        if org_id in PERSONAL_SPACE_IDS or (org_data or {}).get(SPACE_TYPE) in (PERSONAL_SPACE_TYPE, "public"):
+            continue
         domains: List[str] = [d.lower() for d in (org_data or {}).get("domains", []) or []]
         allowed: List[str] = [a.lower() for a in (org_data or {}).get("allowed_emails", []) or []]
         if domain in domains or email in allowed:
@@ -67,8 +78,14 @@ def _fetch_registry(db) -> Dict[str, dict]:
         data = doc.to_dict() or {}
         registry[doc.id] = {
             "name": data.get("name", doc.id),
+            "type": data.get(SPACE_TYPE),
             "domains": data.get("domains", []) or [],
             "allowed_emails": data.get("allowed_emails", []) or [],
+            # Org plan fields (TASK-031). Missing -> plan "org", unlimited pool/cap/seats.
+            "plan": data.get("plan"),
+            "pool": data.get("pool"),
+            "collaborator_cap": data.get("collaborator_cap"),
+            "seats": data.get("seats"),
         }
     return registry
 
@@ -91,6 +108,22 @@ def get_org_from_email(email: str, db=None) -> Optional[str]:
     """
     registry = _get_registry(db)
     return match_org(email, registry)
+
+
+def resolve_space(email: str, email_verified: bool, db=None) -> Optional[str]:
+    """
+    Resolve an email to the space it belongs in.
+
+    - matches an org (domain or allowed_emails) -> that orgId (the org always wins)
+    - otherwise a verified email -> "personal"
+    - otherwise -> None
+    """
+    org_id = get_org_from_email(email, db)
+    if org_id:
+        return org_id
+    if email_verified is True and (email or "").strip():
+        return PERSONAL_SPACE_ID
+    return None
 
 
 def get_org_info(org_id: str, db=None) -> Optional[dict]:

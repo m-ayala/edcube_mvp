@@ -60,6 +60,14 @@
         }
       ],
       "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "teacher_profiles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "has_public_courses", "order": "ASCENDING" },
+        { "fieldPath": "name_lower", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

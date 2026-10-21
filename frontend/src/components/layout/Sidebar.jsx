@@ -6,6 +6,8 @@ import { BookOpen, FilePlus, User, Search as SearchIcon, LogOut, FileText } from
 import edcubeLogo from '../../assets/edcube_logo.png';
 import { logoutTeacher } from '../../firebase/authService';
 import { useNotifications } from '../../contexts/NotificationContext';
+import { useAuth } from '../../contexts/AuthContext';
+import UsageMeter from './UsageMeter';
 
 const COLLAPSED_W = 48;
 const EXPANDED_W = 237;
@@ -38,6 +40,7 @@ const Sidebar = () => {
   const [expanded, setExpanded] = useState(false);
   const [hovered, setHovered] = useState(null);
   const { unreadCount } = useNotifications();
+  const { isPublicUser } = useAuth();
 
   const handleLogout = async () => {
     try {
@@ -161,7 +164,7 @@ const Sidebar = () => {
 
         {/* Navigates OUT of the app shell (no sidebar/layout on that route) —
             deliberately a plain button, not a NavLink/navItems entry. */}
-        <button
+        {!isPublicUser && (<button
           onClick={() => navigate('/afterschool-synopsis')}
           onMouseEnter={() => setHovered('__afterschool-synopsis')}
           onMouseLeave={() => setHovered(null)}
@@ -188,8 +191,11 @@ const Sidebar = () => {
           <span style={{ ...label(expanded), color: hovered === '__afterschool-synopsis' ? ACTIVE : INACTIVE }}>
             Synopsis
           </span>
-        </button>
+        </button>)}
       </nav>
+
+      {/* Plan usage (public users only; hidden while the sidebar is collapsed) */}
+      {isPublicUser && expanded && <UsageMeter compact />}
 
       {/* Footer: Sign Out */}
       <Divider expanded={expanded} />

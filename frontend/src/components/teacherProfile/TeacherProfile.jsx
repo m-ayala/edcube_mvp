@@ -9,13 +9,17 @@ import ProfileCourseGrid from './ProfileCourseGrid';
 import ResourceLibrary from './ResourceLibrary';
 import EditProfileModal from '../modals/EditProfileModal';
 import NotificationBell from '../notifications/NotificationBell';
+import UsageMeter from '../layout/UsageMeter';
 import { navSectionsFromDoc, builderBlocksMissing, outlineExtrasOf } from '../../utils/builderCourse';
 import { fetchCourseDocument } from '../../services/courseBuilderApi';
 import './TeacherProfile.css';
 
+// Thrown when a public-space viewer can no longer open a course (private or deleted).
+class CourseUnavailableError extends Error {}
+
 const TeacherProfile = () => {
   const { teacherUid } = useParams();
-  const { currentUser } = useAuth();
+  const { currentUser, isPublicUser } = useAuth();
   const navigate = useNavigate();
 
   const [profile, setProfile] = useState(null);
@@ -103,7 +107,8 @@ const TeacherProfile = () => {
   // that is refused (e.g. a private course shared with you) and some topic's blocks are not in the
   // list payload, the course opens with `blocksIncomplete`, which stops the workspace from saving.
   const loadCourseForNav = async (course) => {
-    if (!navSectionsFromDoc(course)) return { sections: legacySections(course), extraFormData: {}, extraState: {} };
+    const isBuilt = !!navSectionsFromDoc(course);
+    if (!isBuilt && !isPublicUser) return { sections: legacySections(course), extraFormData: {}, extraState: {} };
     let doc = course;
     let incomplete = false;
     try {
@@ -111,8 +116,12 @@ const TeacherProfile = () => {
       doc = { ...course, ...full };
     } catch (err) {
       console.error('Could not load the full course document:', err);
+      // Public space: a course made private (or deleted) since the list loaded is gone for this viewer.
+      if (isPublicUser && (err.status === 404 || err.status === 403)) throw new CourseUnavailableError();
+      if (!isBuilt) return { sections: legacySections(course), extraFormData: {}, extraState: {} };
       incomplete = builderBlocksMissing(course);
     }
+    if (!isBuilt) return { sections: legacySections(course), extraFormData: {}, extraState: {} };
     return {
       sections: navSectionsFromDoc(doc),
       extraFormData: { numDays: doc.numDays, hoursPerDay: doc.hoursPerDay },
@@ -123,12 +132,17 @@ const TeacherProfile = () => {
   // Opening a built course waits on a network fetch: show it on the clicked card and ignore
   // further clicks until it finishes (the ref blocks a second click in the same tick).
   const [openingId, setOpeningId] = useState(null);
+  const [unavailable, setUnavailable] = useState(false);
   const openingRef = useRef(false);
   const withOpening = (course, fn) => async () => {
     if (openingRef.current) return;
     openingRef.current = true;
     setOpeningId(course.id || course.courseId);
-    try { await fn(); } finally { openingRef.current = false; setOpeningId(null); }
+    setUnavailable(false);
+    try { await fn(); } catch (err) {
+      if (err instanceof CourseUnavailableError) setUnavailable(true);
+      else throw err;
+    } finally { openingRef.current = false; setOpeningId(null); }
   };
 
   const handleCourseClick = (course) => withOpening(course, () => openCourse(course))();
@@ -149,7 +163,7 @@ const TeacherProfile = () => {
         },
         sections,
         curriculumId: course.courseId || course.id,
-        isPublic: course.isPublic || true,
+        isPublic: course.isPublic ?? true, // public-only list; the route omits the field
         isOwner: isOwnProfile,
         ownerName: profile?.display_name || '',
         ...extraState
@@ -211,6 +225,18 @@ const TeacherProfile = () => {
         isOwnProfile={isOwnProfile}
         onEditClick={handleEditClick}
       />
+
+      {/* Plan usage — own profile, public users only (UsageMeter renders nothing otherwise) */}
+      {isOwnProfile && <UsageMeter />}
+
+      {unavailable && (
+        <div role="alert" style={{
+          margin: '0 0 16px', padding: '12px 16px', borderRadius: '10px',
+          backgroundColor: '#FEF3C7', border: '1px solid #FCD34D', color: '#92400E', fontSize: '15px',
+        }}>
+          This course is private or no longer available
+        </div>
+      )}
 
       {/* Public Courses Section */}
       <div className="profile-courses-section">

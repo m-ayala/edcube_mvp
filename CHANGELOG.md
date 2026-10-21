@@ -400,3 +400,81 @@ Frontend: block links panel shows three groups with one Generate button; images 
 
 ## 2026-10-20 — TASK-029 — Block-aware Links & Resources prompts and video filters
 All resource prompts now live in backend/populator/block_resource_prompts.py, with a "where to look" note (block-writing prompts first, then this file). Planning differs per block type (content, worksheet, activity) with multi-subject examples and student-level wording for younger grades. Videos are filtered before scoring: missing/private, age-restricted, and longer than 15 minutes (or the block's length if shorter, minimum 3) are dropped, then videos judged inappropriate or in the wrong language. generate-block-links accepts optional blockSubtype and blockDurationMinutes (old payloads still work); the page sends both.
+
+## 2026-10-19 — Public release PR-1 (formerly TASK-027 on branch public-release, carried forward in TASK-030) — Public release phase 0: security hardening
+Every model-calling route and every route that took a raw teacherUid now requires the
+signed-in user's token (`require_org`), which also rejects unverified emails (403). A
+client-sent teacherUid is optional and must match the token (else 403); the visibility
+toggle and course sharing are owner-only, and sharing checks recipients are teachers in the
+caller's org. Frontend: new `services/authFetch.js` used for all protected calls;
+generate-curriculum and generate-blocks now show the server error instead of sticking on
+"Starting... 0%"; the profile page's always-true isPublic is fixed. Left open by design:
+synopsis and after-school routes (including their /enhance, /parse-flyer, /parse-food model
+calls), /contact and /orgs/check-email. Verified by route audit, a stubbed-verifier check
+script (13/13), lint (33, unchanged) and build; not run in a browser. No automated test
+coverage for this module.
+
+## 2026-10-19 — Public release PR-2 (formerly TASK-028 on branch public-release, carried forward in TASK-030) — Public release phase 1: public space and signup
+Anyone with a verified email that matches no org now lands in the reserved `Users/public`
+space (never domain-matched; an org domain or allowed email always goes to its org). New
+POST /api/account/bootstrap creates the teacher doc (plan free), profile and an `org` custom
+claim, enforces the signup cap in a transaction (waitlist past it) and is idempotent; GET
+/api/account/me returns space and plan. `require_org` accepts bootstrapped public users.
+check-email reports space and waitlist, and keeps the old answer until the space doc exists.
+Frontend: signup no longer writes the teacher doc, login bootstraps, AuthContext exposes
+space/plan/isPublicUser, new waitlist screen, Synopsis hidden for public users. Firestore
+rules: claim-based access, a stricter `Users/public` block (private courses stay private,
+plan/usage/waitlist closed to clients). Person-run: `scripts/create_public_space.py`
+(dry-run first), then deploy backend and rules. Verified by check scripts, lint (33,
+unchanged), build and reading; not run in a browser or rules emulator. No automated test
+coverage for this module.
+
+## 2026-10-19 — Public release PR-3 (formerly TASK-029 on branch public-release, carried forward in TASK-030) — Public release phase 2: monthly quotas
+New usage service keeps per-user monthly counters (courses, generates, Edo tokens; UTC month)
+at `Users/{org}/usage/{uid}/months/{YYYY-MM}`, written for everyone but limited only in the
+public space (limits come from the `plans` map on `Users/public`, with defaults). Charges are
+transactional and refunded when a route fails. Course builds count once (at generate-curriculum
+or at save-course for uploads), AI generation routes count as generates, Edo counts real
+tokens per reply. Over-limit requests get HTTP 402 `quota_exceeded` (kind, limit, used,
+resets_at, plan); Edo chips are throttled to 30/min (429 `rate_limited`). New GET
+/api/account/usage. Org users are unlimited and fail open. Verified by check scripts, an extra
+FastAPI 0.109 refund/streaming check, lint (33, unchanged), build and reading. No automated
+test coverage for this module.
+
+## 2026-10-19 — Public release PR-4 (formerly TASK-030 on branch public-release, carried forward in TASK-030) — Public release phase 3: plan and usage screens
+Frontend: public-space users now see a Free/Pro badge and usage meter (sidebar, own
+profile), a single "limit reached" modal on any quota 402 (fired centrally from
+`services/authFetch.js`, and from `chatWithEdo`), and an "Upgrade to Pro" request form that
+posts to the existing contact route. Edo shows remaining allowance and disables input at
+zero. Usage comes from `GET /api/account/usage` via a new `UsageContext`; org users never
+fetch usage or see any of this. Backend: `routes/contact.py` accepts `type` "pro" in
+addition to "demo" (demo behaviour unchanged).
+
+## 2026-10-19 — Public release PR-5 (formerly TASK-031 on branch public-release, carried forward in TASK-030) — Public release phase 4: discovery and collaboration
+Public space only; org behaviour unchanged. GET /api/teachers/ for public users returns
+`{teachers, next_cursor}` (name-prefix search, cursor paging, only teachers with a public
+course, caller excluded, no email); orgs still get the bare list. `has_public_courses` on the
+teacher profile is kept in step on save, delete and visibility change. /api/notifications/share
+accepts `recipient_emails` for public users (unknown and org emails both land in `not_found`;
+self, over-20 and rate-limit errors; 503 only on an auth outage). Public-only guards on delete
+and section writes; collaborators can read shared private courses. New composite index in
+`frontend/firestore.indexes.json` (wired in firebase.json). Frontend: server search with Load
+more, email-chip share modal, Public/Private wording, "private or no longer available" screens,
+Edo 402 shows one message, old error wording restored for ordinary failures. Person-run: export
+existing indexes, then deploy `firestore.indexes.json`. Open: org members can delete other
+members' public courses and overwrite org sections (not changed). Verified by check scripts,
+lint (32), build and reading; no automated test coverage for this module.
+
+## 2026-10-19 — Public release PR-6 (formerly TASK-032 on branch public-release, carried forward in TASK-030) — Docs for the public release
+ARCHITECTURE.md now documents the `Users/public` pseudo-org (space doc, plans, cap, usage,
+waitlist), space resolution and the bootstrap flow, auth via `require_org`, the quota
+contract (route table, counting and refund rules, 402/429, `/api/account/usage`),
+public visibility, discovery and invite-by-email, the Firestore rules summary, refreshed
+known gaps, and a "Public launch checklist" (person-run steps and non-code items).
+CLAUDE.md gained a "Public space" note and an updated known-gaps entry. Docs only.
+
+## 2026-10-21 — TASK-030 — Public release carried forward onto current main
+Branch public-release (f4bd3fd) re-applied on main after the edcubeai-fdba7 migration and the Browserbase Links & Resources work. Merge fixes only: new Firestore clients use `firebase.project.firestore_client()` (database `default`); generate-block-links (Browserbase and legacy paths) gets token auth, the "generates" charge and refunds on swallowed failures; the block-links panel handles quota 402 without a second error; firestore.indexes.json merged. Old public-release entries relabelled PR-1..PR-6 so they do not clash with main's TASK-027..029; ARCHITECTURE.md and CLAUDE.md updated (project/database note, task references). Verified by import check, five check scripts, lint (27 errors, 5 warnings, within baseline), build and diff review; not run in a browser. No automated test coverage for this module.
+
+## 2026-10-21 — TASK-031 — Accounts, plans, entitlements, admin, deactivation (backend)
+Plans trial / teacher / org with every limit, the trial length (30 days, a placeholder), collaborator caps and feature flags in one place: `EdCube/platform_config` (code defaults in `services/platform_config.py`, cached 5 min). `Accounts/{uid}` holds plan, trial dates, bonus credits, memberships and status; `AdminAudit` logs every admin change. `services/entitlements.py` `can()` decides AI, sharing, invites and co-editing: an ended trial disables AI and new sharing (402 `plan_inactive`, upgrade message pointing to a waitlist, no prices) while viewing and manual editing always work; co-editing follows the course owner's plan, computed live (`update_section` and `/update-course`). Workspaces: header `X-EdCube-Workspace` (personal or the caller's org; no header keeps org members in their org); `Users/public` renamed `Users/personal` (old names kept as aliases). Admin routes under `/api/admin` (claim `admin`): set plan, grant credits, deactivate, reactivate. Self deactivate/reactivate with a 30-day grace (410 `grace_period_over` after). `/save-course` is no longer charged; `/generate-blocks` is plan-gated. Scripts: `setup_launch_accounts.py`, `purge_deactivated.py` (both dry-run by default), `create_personal_space.py`. Signup cap now off by default. Verified by import check, six check scripts, lint (within baseline), build and diff review; Firestore rules read only. No automated test suite.

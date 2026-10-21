@@ -27,6 +27,10 @@ const Login = () => {
       await loginTeacher(email, password);
       navigate('/my-courses');
     } catch (err) {
+      if (err.code === 'waitlisted') {
+        navigate('/waitlist', { state: { message: err.message } });
+        return;
+      }
       setError(err.message);
       if (err.message?.includes('verify your email')) setShowResend(true);
     } finally {

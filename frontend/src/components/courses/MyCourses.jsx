@@ -19,7 +19,7 @@ import { Plus, FolderPlus, ChevronRight } from 'lucide-react';
 const getCourseId = (curriculum) => curriculum.courseId || curriculum.id;
 
 const MyCourses = () => {
-  const { currentUser, org } = useAuth();
+  const { currentUser, org, isPublicUser } = useAuth();
   const navigate = useNavigate();
 
   const [curricula, setCurricula] = useState([]);
@@ -318,13 +318,13 @@ const MyCourses = () => {
           )}
 
           {publishedCourses.length > 0 && (
-            <CardRow label="Published Courses" count={publishedCourses.length}>
+            <CardRow label={isPublicUser ? 'Public Courses' : 'Published Courses'} count={publishedCourses.length}>
               {publishedCourses.map(renderCourse)}
             </CardRow>
           )}
 
           {draftCourses.length > 0 && (
-            <CardRow label="Draft Courses" count={draftCourses.length}>
+            <CardRow label={isPublicUser ? 'Private Courses' : 'Draft Courses'} count={draftCourses.length}>
               {draftCourses.map(renderCourse)}
             </CardRow>
           )}

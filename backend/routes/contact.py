@@ -30,7 +30,7 @@ class ContactSubmission(BaseModel):
     email: str
     org: Optional[str] = ""
     message: Optional[str] = ""
-    type: Literal["demo"]
+    type: Literal["demo", "pro"]
 
 
 def _send_email(submission: ContactSubmission):
@@ -38,7 +38,10 @@ def _send_email(submission: ContactSubmission):
         logger.warning("GMAIL_USER / GMAIL_APP_PASSWORD not set — skipping email")
         return
 
-    subject = f"EdCube demo request from {submission.name}"
+    if submission.type == "pro":
+        subject = f"EdCube Pro plan request from {submission.name}"
+    else:
+        subject = f"EdCube demo request from {submission.name}"
     body = (
         f"Name:         {submission.name}\n"
         f"Email:        {submission.email}\n"

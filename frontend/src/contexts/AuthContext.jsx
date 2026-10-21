@@ -1,7 +1,14 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../firebase/config';
-import { checkEmailOrg, logoutTeacher } from '../firebase/authService';
+import {
+  checkEmailOrg,
+  logoutTeacher,
+  fetchAccount,
+  bootstrapAccount,
+  isNotRegisteredError,
+  isNoSpaceError
+} from '../firebase/authService';
 
 const AuthContext = createContext();
 
@@ -29,34 +36,76 @@ export const AuthProvider = ({ children }) => {
   // session can reach this state on page reload -- surfaced here so the
   // post-sign-out redirect can explain why.
   const [orgError, setOrgError] = useState(null);
+  // 'org' | 'public' | null. Public users (anyone not matching a registered org)
+  // live in the shared "public" space (org id 'public', name 'EdCube') on a plan.
+  const [space, setSpace] = useState(null);
+  const [plan, setPlan] = useState(null);
 
   useEffect(() => {
+    const applyAccount = (acct) => {
+      setSpace(acct.space);
+      setOrg(acct.org_id);
+      setOrgName(acct.org_name);
+      setPlan(acct.plan ?? null);
+      setOrgError(null);
+    };
+    const clearAccount = () => {
+      setSpace(null);
+      setOrg(null);
+      setOrgName(null);
+      setPlan(null);
+    };
+
     // Subscribe to auth state changes
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      // Unverified accounts aren't usable yet (bootstrap needs a verified
+      // email); treat them as signed out until they verify and log in.
+      if (user && !user.emailVerified) {
+        setCurrentUser(null);
+        clearAccount();
+        setLoading(false);
+        return;
+      }
+
       setCurrentUser(user);
 
       if (user?.email) {
         try {
-          const result = await checkEmailOrg(user.email);
-          if (result.allowed) {
-            setOrg(result.org_id);
-            setOrgName(result.org_name);
-            setOrgError(null);
-          } else {
-            setOrg(null);
-            setOrgName(null);
-            setOrgError('Your organization is not registered with EdCube');
+          let acct;
+          try {
+            acct = await fetchAccount();
+          } catch (err) {
+            // Verified via the email link and landed on a signed-in session
+            // that was never bootstrapped: bootstrap once.
+            if (!isNotRegisteredError(err)) throw err;
+            acct = await bootstrapAccount(user, user.displayName);
+          }
+          applyAccount(acct);
+        } catch (err) {
+          if (isNoSpaceError(err)) {
+            // Truly no space (waitlisted, public signups not open, not allowed)
+            clearAccount();
+            setOrgError(err.message || 'Your organization is not registered with EdCube');
             await logoutTeacher();
             setCurrentUser(null);
+          } else {
+            // Transient failure: don't lock out an org member the old
+            // check-email path still recognizes.
+            console.error('Account resolution failed:', err);
+            try {
+              const result = await checkEmailOrg(user.email);
+              if (result.allowed && result.space !== 'public') {
+                applyAccount({ space: 'org', org_id: result.org_id, org_name: result.org_name, plan: null });
+              } else {
+                clearAccount();
+              }
+            } catch {
+              clearAccount();
+            }
           }
-        } catch (err) {
-          console.error('Org resolution failed:', err);
-          setOrg(null);
-          setOrgName(null);
         }
       } else {
-        setOrg(null);
-        setOrgName(null);
+        clearAccount();
       }
 
       setLoading(false);
@@ -71,7 +120,10 @@ export const AuthProvider = ({ children }) => {
     loading,
     org,
     orgName,
-    orgError
+    orgError,
+    space,
+    plan,
+    isPublicUser: space === 'public'
   };
 
   return (
