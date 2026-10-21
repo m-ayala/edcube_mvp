@@ -45,6 +45,91 @@ Format: `- [ ] TASK-XXX: description (suggested agent, optional)`
 
 ## Done
 
+- [x] TASK-029: Make "Links & Resources" generation follow each block's type and content, and filter
+      videos. (1) Move every resource prompt into one prompts file with a "where to look" note:
+      first the prompt that writes the block (outliner/block_prompts.py), then the resource
+      prompts. (2) Separate planning instructions per block type: worksheet = articles on each
+      item the worksheet tests, images of the actual items (both sides for matching), videos
+      optional; activity and content get their own versions. Examples from several subjects
+      (robotics, biology, history, chemistry, geography, art), never art-only wording. Send
+      the block's subtype and minutes from the page. (3) Video filters: length cap (15 min or
+      the block's length), drop YouTube age-restricted videos, age-appropriateness for the
+      grade, language, relevance judged with the video description. Requested by the person
+      2026-10-20 after testing TASK-027/028.
+      Assigned: coordinator (built directly at the person's request for speed) — started 2026-10-20.
+      QA PASS 2026-10-20: prompts moved to block_resource_prompts.py ("where to look" header, multi-subject examples marked as illustrations); video filters verified with stubs (age-restricted, too long, private/missing, not appropriate, wrong language all dropped; YouTube API failure falls back to oEmbed); real route calls with and without the new fields returned links, no 500, no keys in logs; compile ok, lint 33, build ok. Note: on the oEmbed fallback, age restriction cannot be detected (judge still checks appropriateness). No automated test coverage for this module.
+
+- [x] TASK-028: Split the block "Links & Resources" panel into three groups: Articles, Images,
+      Videos, with ONE Generate button for all three (calls the same route, now Browserbase
+      per TASK-027). Depends on TASK-027's response contract (above), can be built against it.
+      Images show as thumbnails (from `imageUrl`) with the caption, and clicking one opens the page it came
+      from (`url`). Articles and Videos stay as link rows (rename/remove still work). Keep links in
+      the block's existing `links` field, so there's no schema change. Group older saved links by type:
+      "video" goes to Videos, "image" to Images, anything else (incl. old "worksheet" or no type) to
+      Articles. "Add Link" and Library links: pick the group from the URL (YouTube/Vimeo is
+      video, direct image file is image, else article). Generate merges with existing links
+      without duplicates (same url/imageUrl) — this fixes today's repeated links. While generating,
+      say it can take up to a minute; show an empty state per group. (frontend-agent)
+      Note from TASK-027 QA: dedupe images on `imageUrl`, not `url` (two images can share one source page).
+      Assigned: frontend-agent — started 2026-10-20.
+      QA PASS 2026-10-20 (docs-qa-agent): diff limited to BlockView.jsx, CourseWorkspace.jsx, new blockLinks.js; no schema/save-path
+      change (blocks are saved whole, so imageUrl/caption/type round-trip; backend has no links filter). Real TASK-027 backend run
+      (10 links: 3 article, 4 image, 3 video): all landed in the right group, images all had imageUrl, re-merging added 0 duplicates.
+      Lint 33 (same as main), build passes. Minor: adding a link that already exists is silently ignored (no message). No automated test coverage.
+
+- [x] TASK-027: Switch the block "Links & Resources" Generate button (content, worksheet and
+      activity blocks; route POST /curriculum/generate-block-links) from YouTube/Google Custom
+      Search to Browserbase. Google Custom Search now returns 403 for every call, and the
+      current queries ignore the block's own content, so different blocks get the same videos.
+      Approved by the person 2026-10-19 after a test; the working prototype is
+      /private/tmp/claude-501/-Users-manaswiniayala-Desktop-edcube-mvp/58a153c9-3a30-4358-b46a-b1f8d27ffc2e/scratchpad/bb_block_resources.py
+      (results and HTML previews in the same folder). Port it properly; don't import from there.
+      What one Generate click does:
+      1. Plan: one LLM call reads the block (title + full content + subsection title,
+         subject/topic, grade) and plans three groups. ARTICLES: role-specific queries
+         (e.g. a student explainer, a teacher guide, a lesson plan), not generic "overview" queries.
+         IMAGES: one entry per concrete thing the block names (e.g. "Louis Comfort Tiffany
+         stained glass" because the block mentions it), max 3 subjects. VIDEOS: queries that
+         explain/demonstrate what this block covers. A group may be empty if it doesn't fit.
+      2. Search each group with Browserbase Search (POST https://api.browserbase.com/v1/search).
+         Video queries need "youtube video"/site:youtube.com added or no videos come back.
+      3. Read pages with Browserbase Fetch (POST /v1/fetch); for pages that come back blocked or
+         thin, use ONE real Browserbase browser session per request (Playwright connect_over_cdp,
+         no local browser download), because the account allows only 3 concurrent sessions. If a session
+         can't be created, continue with fetch-only results instead of failing.
+      4. Score articles and videos against the block (LLM, 0-10, calibrated so general topic
+         background scores low). Images: take real image URLs from result pages, download each,
+         and have the vision model confirm it shows the subject. Prefer museum, Wikimedia, and
+         other clearly reusable sources over store listings and Pinterest. Remove the same
+         picture appearing at different sizes or under two subjects.
+      5. Return up to 4 articles, up to 6 images, up to 3 videos. Target under ~60 seconds
+         (the prototype took 98-174s; cut candidate counts and run groups in parallel).
+      Response contract (frontend TASK-028 builds against this): keep `{"links": [...]}`; each
+      link has `url`, `label`, `type` where type is now "article" | "image" | "video". Image
+      links also have `imageUrl` (the direct picture) and `caption`; `url` is the page it came
+      from. Optional `reason` on any link. Request shape unchanged (optional extra fields are fine).
+      Keep it reversible: env RESOURCE_SEARCH_PROVIDER, default "browserbase"; "legacy" runs the
+      existing YouTube/worksheet path unchanged. Don't edit the old generators. Never log API
+      keys (the old Google handler writes its key into error logs; don't copy that). Add any new
+      dependency to requirements.txt. Note in the report that the person must add
+      BROWSERBASE_API_KEY to Cloud Run before deploying (it's in backend/.env locally).
+      Agents: generation-agent writes the Browserbase discovery module; then backend-agent wires
+      the route and the provider switch.
+      Assigned: generation-agent (discovery module), then backend-agent (route + provider switch) — started 2026-10-19.
+      QA PASS 2026-10-20 (docs-qa-agent): legacy path body identical to main (only the docstring changed); request model,
+      old generators, KB files untouched; py_compile passes. Real runs (Browserbase, OpenAI): Art content block 28s
+      (4 articles, 4 images, 3 videos), Art poster activity block 29s (2/5/3), grade-4 water cycle block 29s (4/3/3), run
+      together. Contract exact: types article|image|video, images carry imageUrl + caption, url = source page. All image
+      files load as real images (200-1280px), all source pages return 200, videos are YouTube, results differ between
+      the two Art blocks (one shared article), water cycle results fit the block (not Art-specific). Switch: legacy runs
+      old path (YouTube only), unknown value warns and uses browserbase, missing key warns and uses legacy. Bad key or
+      unreachable Browserbase returns {"links": []} in 3-4s, never a 500. INFO and DEBUG logs contain no key values,
+      connect URLs or key headers; browser session started fine. Notes (none blocking): (1) near-duplicate pictures can
+      still appear (Mucha "Job" and Lautrec "La Goulue" each twice as different scans in the poster block) and two
+      image links can share one source page url (Guimard, components block): TASK-028's merge should dedupe on imageUrl
+      for images, not on url alone. (2) One video was Spanish-language. (3) Planning prompt uses "poster activity" as an
+      example only; no taxonomy from the KB is hardcoded. (4) No automated test coverage for this module.
+
 - [x] TASK-026: Integrate the Course Builder (branch course-builder) onto the
       Firestore reorganisation (main = backend_cleanup): resolve the merge, move the
       knowledge-base additions to EdCube/knowledge_base, use org-scoped course paths.
@@ -68,7 +153,7 @@ Their results are recorded in CHANGELOG.md and in this file's git history.)
 
 Course Builder tasks, done on the course-builder branch before the reorg was merged.
 NOTE: their numbers TASK-006 to TASK-025 overlap the reorg's TASK-006 to TASK-013
-above; they are separate tasks. The next free task number is TASK-027.
+above; they are separate tasks. The next free task number is TASK-030.
 
 - [x] TASK-024: Stage 2 hours — frontend. Show each day as its hour subsections, move
       blocks between hours within the per-hour and per-day caps, whole hours only on
