@@ -13,6 +13,7 @@ import firebase_admin
 from firebase_admin import credentials, firestore, storage as fb_storage
 from datetime import datetime
 from schemas.curriculum_schema import CurriculumFields as F
+from firebase.project import firestore_client, STORAGE_BUCKET
 from firebase.paths import (
     org_col,
     afterschool_doc,
@@ -24,9 +25,6 @@ from firebase.paths import (
 
 logger = logging.getLogger(__name__)
 
-STORAGE_BUCKET = 'edcube-8fe7d.firebasestorage.app'
-
-
 class FirebaseService:
     """Service for Firebase Firestore operations"""
 
@@ -37,7 +35,7 @@ class FirebaseService:
             # Use Application Default Credentials (from gcloud auth)
             firebase_admin.initialize_app()
 
-        self.db = firestore.client()
+        self.db = firestore_client()
         self.bucket = fb_storage.bucket(STORAGE_BUCKET)
 
     # ── Org-scoped path helpers ──────────────────────────────────────────────

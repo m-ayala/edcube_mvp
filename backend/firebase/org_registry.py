@@ -53,7 +53,8 @@ def _get_db(db=None):
 
     if not firebase_admin._apps:
         firebase_admin.initialize_app()
-    return firestore.client()
+    from firebase.project import firestore_client
+    return firestore_client()
 
 
 def _fetch_registry(db) -> Dict[str, dict]:

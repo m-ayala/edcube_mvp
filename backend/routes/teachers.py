@@ -25,6 +25,7 @@ from schemas.curriculum_schema import CurriculumFields as CF
 import firebase_admin
 from firebase_admin import auth, firestore
 from firebase.paths import org_col, resolve_org
+from firebase.project import firestore_client
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -114,7 +115,7 @@ def require_org_for_uid(uid: str) -> str:
 
 def get_firestore_client():
     """Get Firestore client instance"""
-    return firestore.client()
+    return firestore_client()
 
 
 # ============================================================================

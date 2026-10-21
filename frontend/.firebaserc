@@ -1,12 +1,21 @@
 {
   "projects": {
-    "default": "edcube-8fe7d"
+    "default": "edcubeai-fdba7"
   },
   "targets": {
-    "edcube-8fe7d": {
+    "edcubeai-fdba7": {
       "hosting": {
         "edcubeai": [
-          "edcubeai"
+          "edcube1"
+        ],
+        "redirect": [
+          "edcubeone"
+        ],
+        "redirect-old-app": [
+          "edcubeai-fdba7-6c559"
+        ],
+        "app-default": [
+          "edcubeai-fdba7"
         ]
       }
     }

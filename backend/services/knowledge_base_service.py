@@ -35,6 +35,7 @@ from typing import Dict, List, Optional
 import firebase_admin
 from firebase_admin import firestore
 from firebase.paths import kb_col
+from firebase.project import firestore_client
 from services.kb_seed_data import KB_CATEGORY
 
 _cache: Dict[str, List[Dict]] = {}
@@ -43,7 +44,7 @@ _cache: Dict[str, List[Dict]] = {}
 def _get_db():
     if not firebase_admin._apps:
         firebase_admin.initialize_app()
-    return firestore.client()
+    return firestore_client()
 
 
 def _get_collection_cached(name: str) -> List[Dict]:

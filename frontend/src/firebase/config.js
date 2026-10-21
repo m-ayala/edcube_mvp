@@ -4,19 +4,24 @@ import { getFirestore } from 'firebase/firestore';
 import { getAnalytics } from 'firebase/analytics';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyB57JGSQrLa-tdnfBzh4exuU-XxoxDzgco",
-  authDomain: "edcube-8fe7d.firebaseapp.com",
-  projectId: "edcube-8fe7d",
-  storageBucket: "edcube-8fe7d.firebasestorage.app",
-  messagingSenderId: "890930502654",
-  appId: "1:890930502654:web:fcec2d031ae340b9467eaf",
-  measurementId: "G-BJ8KVYFK2B"
+  apiKey: "AIzaSyDd_LmlhSK7OyEKOtn3ZwRhECwVlXFHuV0",
+  authDomain: "edcubeai-fdba7.firebaseapp.com",
+  projectId: "edcubeai-fdba7",
+  storageBucket: "edcubeai-fdba7.firebasestorage.app",
+  messagingSenderId: "356089354206",
+  appId: "1:356089354206:web:21b1200a2cb7226fe26f4f",
+  measurementId: "G-3G704S82R3"
 };
+
+// edcubeai-fdba7's database is the named database `default`, not the implicit
+// `(default)` the SDK picks when no ID is given. Must match the backend's
+// FIRESTORE_DATABASE (backend/firebase/project.py) and firebase.json.
+const FIRESTORE_DATABASE = 'default';
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+export const db = getFirestore(app, FIRESTORE_DATABASE);
 export const analytics = getAnalytics(app);
 export default app;
 

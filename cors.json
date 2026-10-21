@@ -5,8 +5,14 @@
       "http://localhost:5174",
       "https://edcubeai.web.app",
       "https://edcubeai.firebaseapp.com",
-      "https://edcube-8fe7d.web.app",
-      "https://edcube-8fe7d.firebaseapp.com"
+      "https://edcube.org",
+      "https://www.edcube.org",
+      "https://edcube1.web.app",
+      "https://edcube1.firebaseapp.com",
+      "https://edcubeai-fdba7-6c559.web.app",
+      "https://edcubeai-fdba7-6c559.firebaseapp.com",
+      "https://edcubeai-fdba7.web.app",
+      "https://edcubeai-fdba7.firebaseapp.com"
     ],
     "method": ["GET", "POST", "PUT", "DELETE", "HEAD"],
     "header": ["*"],

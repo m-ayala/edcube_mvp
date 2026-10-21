@@ -1,0 +1,11 @@
+# Keep Cloud Build uploads small and secret-free (mirrors .dockerignore).
+.gcloudignore
+.git
+__pycache__
+*.pyc
+*.pyo
+.env
+.env.*
+venv/
+.venv/
+*.log

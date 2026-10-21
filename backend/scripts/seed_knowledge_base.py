@@ -32,6 +32,7 @@ import firebase_admin
 from firebase_admin import firestore
 
 from firebase.paths import kb_doc, kb_col
+from firebase.project import firestore_client
 from services.kb_seed_data import (  # noqa: F401  (re-exported for backward compatibility)
     AGE_BANDS,
     OBJECTIVES,
@@ -100,7 +101,7 @@ def main():
 
     if not firebase_admin._apps:
         firebase_admin.initialize_app()
-    db = firestore.client()
+    db = firestore_client()
 
     mode = "FORCE overwrite" if args.force else "merge (fill missing only)"
     print(f"Mode: {mode}{' [dry run]' if args.dry_run else ''}")

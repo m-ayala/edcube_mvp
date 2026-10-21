@@ -24,8 +24,14 @@ app.add_middleware(
     "http://localhost:5173",
     "http://localhost:5174",
     "http://localhost:5175",
-    "https://edcube-8fe7d.web.app",
-    "https://edcube-8fe7d.firebaseapp.com",
+    "https://edcube.org",
+    "https://www.edcube.org",
+    "https://edcube1.web.app",
+    "https://edcube1.firebaseapp.com",
+    "https://edcubeai-fdba7-6c559.web.app",
+    "https://edcubeai-fdba7-6c559.firebaseapp.com",
+    "https://edcubeai-fdba7.web.app",
+    "https://edcubeai-fdba7.firebaseapp.com",
     "https://edcubeai.web.app",
     "https://edcubeai.firebaseapp.com"
     ],
@@ -51,7 +57,10 @@ app.include_router(course_builder.router, prefix="/api", tags=["course-builder"]
 
 ALLOWED_ORIGINS = {
     "http://localhost:5173", "http://localhost:5174", "http://localhost:5175",
-    "https://edcube-8fe7d.web.app", "https://edcube-8fe7d.firebaseapp.com",
+    "https://edcube.org", "https://www.edcube.org",
+    "https://edcube1.web.app", "https://edcube1.firebaseapp.com",
+    "https://edcubeai-fdba7-6c559.web.app", "https://edcubeai-fdba7-6c559.firebaseapp.com",
+    "https://edcubeai-fdba7.web.app", "https://edcubeai-fdba7.firebaseapp.com",
     "https://edcubeai.web.app", "https://edcubeai.firebaseapp.com",
 }
 

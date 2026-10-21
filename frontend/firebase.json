@@ -1,20 +1,61 @@
 {
   "firestore": {
-    "rules": "firestore.rules"
+    "database": "default",
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
   },
-  "hosting": {
-    "target": "edcubeai",
-    "public": "dist",
-    "ignore": [
-      "firebase.json",
-      "**/.*",
-      "**/node_modules/**"
-    ],
-    "rewrites": [
-      {
-        "source": "**",
-        "destination": "/index.html"
-      }
-    ]
-  }
+  "hosting": [
+    {
+      "target": "edcubeai",
+      "public": "dist",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
+      "rewrites": [
+        {
+          "source": "**",
+          "destination": "/index.html"
+        }
+      ]
+    },
+    {
+      "target": "app-default",
+      "public": "dist",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
+      "rewrites": [
+        {
+          "source": "**",
+          "destination": "/index.html"
+        }
+      ]
+    },
+    {
+      "target": "redirect",
+      "public": "hosting-redirect",
+      "redirects": [
+        {
+          "source": "/:path*",
+          "destination": "https://edcube1.web.app/:path",
+          "type": 301
+        }
+      ]
+    },
+    {
+      "target": "redirect-old-app",
+      "public": "hosting-redirect",
+      "redirects": [
+        {
+          "source": "/:path*",
+          "destination": "https://edcube1.web.app/:path",
+          "type": 301
+        }
+      ]
+    }
+  ]
 }
