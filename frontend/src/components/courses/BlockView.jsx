@@ -1,6 +1,7 @@
 // src/components/courses/BlockView.jsx
 import { useState, useEffect, useRef } from 'react';
-import { ExternalLink, Trash2, Plus, Sparkles, Loader2, Library, Check, X, Pencil, Clock, ChevronRight, BookOpen } from 'lucide-react';
+import { ExternalLink, Trash2, Plus, Sparkles, Loader2, Library, Check, X, Pencil, Clock, ChevronRight, BookOpen, FileText, Image as ImageIcon, PlayCircle } from 'lucide-react';
+import { linkGroupOf, manualLink, mergeLinks } from '../../utils/blockLinks';
 import { getLibraryFolders } from '../../firebase/dbService';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -160,6 +161,8 @@ const BlockView = ({
   const [editingLinkId, setEditingLinkId] = useState(null);
   const [editingLinkLabel, setEditingLinkLabel] = useState('');
   const [hoveredLinkId, setHoveredLinkId] = useState(null);
+  // Image links whose picture failed to load (e.g. hotlinking blocked) show as a plain link row.
+  const [brokenImageIds, setBrokenImageIds] = useState(() => new Set());
 
   const [showLibraryPicker, setShowLibraryPicker] = useState(false);
   const [libraryFolders, setLibraryFolders] = useState([]);
@@ -212,8 +215,7 @@ const BlockView = ({
   const handleAddLink = () => {
     const url = newLinkUrl.trim();
     if (!url) return;
-    const label = newLinkLabel.trim() || url;
-    const updatedLinks = [...links, { id: `link-${Date.now()}`, url, label }];
+    const updatedLinks = mergeLinks(links, [manualLink(url, newLinkLabel.trim())]);
     setLinks(updatedLinks);
     setNewLinkUrl('');
     setNewLinkLabel('');
@@ -260,8 +262,7 @@ const BlockView = ({
   };
 
   const handleAddLibraryLink = (libLink) => {
-    const newLink = { id: `link-${Date.now()}`, url: libLink.url, label: libLink.title || libLink.url };
-    const updated = [...links, newLink];
+    const updated = mergeLinks(links, [manualLink(libLink.url, libLink.title)]);
     setLinks(updated);
     actions?.updateBlock?.(topicId, block.id, { links: updated });
     setShowLibraryPicker(false);
@@ -291,6 +292,101 @@ const BlockView = ({
   const isGenerating = linkGenStatus === 'generating';
   const genEmpty = linkGenStatus === 'empty';
   const genError = linkGenStatus === 'error';
+
+  const groupedLinks = { article: [], image: [], video: [] };
+  links.forEach(link => groupedLinks[linkGroupOf(link)].push(link));
+
+  const iconBtn = { background: 'none', border: 'none', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center', flexShrink: 0 };
+
+  const renderLinkRow = (link) => (
+    <div
+      key={link.id}
+      onMouseEnter={() => setHoveredLinkId(link.id)}
+      onMouseLeave={() => setHoveredLinkId(null)}
+      style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: '#FAFAF8', border: '1px solid rgba(0,0,0,0.08)', borderRadius: '8px', minWidth: 0 }}
+    >
+      <ExternalLink size={13} color="#6B7280" style={{ flexShrink: 0 }} />
+      {editingLinkId === link.id ? (
+        <>
+          <input
+            autoFocus type="text" value={editingLinkLabel}
+            onChange={e => setEditingLinkLabel(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleSaveLinkLabel(link.id); if (e.key === 'Escape') setEditingLinkId(null); }}
+            style={{ flex: 1, minWidth: 0, fontSize: '13.5px', color: '#111', fontFamily: "'DM Sans', sans-serif", border: '1px solid rgba(99,102,241,0.4)', borderRadius: '5px', padding: '2px 8px', outline: 'none', background: '#fff' }}
+          />
+          <button onClick={() => handleSaveLinkLabel(link.id)} style={{ ...iconBtn, color: '#2C5F3A' }}><Check size={13} /></button>
+          <button onClick={() => setEditingLinkId(null)} style={{ ...iconBtn, color: '#9CA3AF' }}><X size={13} /></button>
+        </>
+      ) : (
+        <>
+          <a href={link.url} target="_blank" rel="noopener noreferrer"
+            title={link.reason || link.url}
+            style={{ flex: 1, minWidth: 0, fontSize: '13.5px', color: '#2563EB', fontFamily: "'DM Sans', sans-serif", textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+            onMouseEnter={e => e.currentTarget.style.textDecoration = 'underline'}
+            onMouseLeave={e => e.currentTarget.style.textDecoration = 'none'}
+          >{link.label || link.caption || link.url}</a>
+          {hoveredLinkId === link.id && (
+            <button onClick={() => handleStartEditLabel(link)} style={{ ...iconBtn, color: '#9CA3AF' }}><Pencil size={12} /></button>
+          )}
+          <button onClick={() => handleRemoveLink(link.id)} style={{ ...iconBtn, color: '#F87171' }}><Trash2 size={12} /></button>
+        </>
+      )}
+    </div>
+  );
+
+  const renderImageCard = (link) => (
+    <div key={link.id} style={{ position: 'relative', background: '#FAFAF8', border: '1px solid rgba(0,0,0,0.08)', borderRadius: '8px', overflow: 'hidden', minWidth: 0 }}>
+      <a href={link.url} target="_blank" rel="noopener noreferrer" title={link.reason || link.url} style={{ display: 'block' }}>
+        <img
+          src={link.imageUrl || link.url}
+          alt={link.caption || link.label || ''}
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          onError={() => setBrokenImageIds(prev => new Set(prev).add(link.id))}
+          style={{ display: 'block', width: '100%', height: '120px', objectFit: 'cover', background: '#EEE' }}
+        />
+      </a>
+      <div style={{ padding: '6px 28px 7px 9px' }}>
+        <p style={{ margin: 0, fontSize: '12px', color: '#4B5563', lineHeight: 1.35, fontFamily: "'DM Sans', sans-serif", overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+          {link.caption || link.label}
+        </p>
+      </div>
+      <button
+        onClick={() => handleRemoveLink(link.id)}
+        aria-label="Remove image"
+        style={{ ...iconBtn, position: 'absolute', right: '6px', bottom: '6px', color: '#F87171' }}
+      ><Trash2 size={12} /></button>
+    </div>
+  );
+
+  const renderGroup = (key, title, Icon, emptyText) => {
+    const items = groupedLinks[key];
+    const images = key === 'image' ? items.filter(l => !brokenImageIds.has(l.id)) : [];
+    const rows = key === 'image' ? items.filter(l => brokenImageIds.has(l.id)) : items;
+    return (
+      <div key={key} style={{ marginTop: '14px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px', fontSize: '12px', fontWeight: '700', color: '#6B7280', fontFamily: "'DM Sans', sans-serif" }}>
+          <Icon size={13} /> {title}
+          {items.length > 0 && <span style={{ fontWeight: '500', color: '#AAA' }}>({items.length})</span>}
+        </div>
+        {items.length === 0 && (
+          <p style={{ margin: 0, fontSize: '13px', color: '#AAA', fontStyle: 'italic', fontFamily: "'DM Sans', sans-serif" }}>
+            {isGenerating ? 'Searching…' : emptyText}
+          </p>
+        )}
+        {images.length > 0 && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '8px', marginBottom: rows.length ? '8px' : 0 }}>
+            {images.map(renderImageCard)}
+          </div>
+        )}
+        {rows.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {rows.map(renderLinkRow)}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: '24px 48px 80px', position: 'relative', zIndex: 1 }}>
@@ -422,11 +518,11 @@ const BlockView = ({
 
         {/* Links & Resources */}
         <div style={{ background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.08)', borderRadius: '12px', padding: '20px 24px', boxShadow: '0 1px 4px rgba(0,0,0,0.05)', position: 'relative' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', marginBottom: '12px', gap: '8px' }}>
             <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#999', textTransform: 'uppercase', letterSpacing: '.06em', whiteSpace: 'nowrap' }}>
               Links & Resources
             </label>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
               <button onClick={() => setShowLinkInput(p => !p)} style={btnBase}>
                 <Plus size={13} /> Add Link
               </button>
@@ -481,51 +577,24 @@ const BlockView = ({
             </div>
           )}
 
-          {/* Existing links */}
-          {links.length > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: showLinkInput ? '12px' : 0 }}>
-              {links.map(link => (
-                <div
-                  key={link.id}
-                  onMouseEnter={() => setHoveredLinkId(link.id)}
-                  onMouseLeave={() => setHoveredLinkId(null)}
-                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: '#FAFAF8', border: '1px solid rgba(0,0,0,0.08)', borderRadius: '8px' }}
-                >
-                  <ExternalLink size={13} color="#6B7280" style={{ flexShrink: 0 }} />
-                  {editingLinkId === link.id ? (
-                    <>
-                      <input
-                        autoFocus type="text" value={editingLinkLabel}
-                        onChange={e => setEditingLinkLabel(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter') handleSaveLinkLabel(link.id); if (e.key === 'Escape') setEditingLinkId(null); }}
-                        style={{ flex: 1, fontSize: '13.5px', color: '#111', fontFamily: "'DM Sans', sans-serif", border: '1px solid rgba(99,102,241,0.4)', borderRadius: '5px', padding: '2px 8px', outline: 'none', background: '#fff' }}
-                      />
-                      <button onClick={() => handleSaveLinkLabel(link.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#2C5F3A', padding: '2px', display: 'flex', alignItems: 'center', flexShrink: 0 }}><Check size={13} /></button>
-                      <button onClick={() => setEditingLinkId(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: '2px', display: 'flex', alignItems: 'center', flexShrink: 0 }}><X size={13} /></button>
-                    </>
-                  ) : (
-                    <>
-                      <a href={link.url} target="_blank" rel="noopener noreferrer"
-                        style={{ flex: 1, fontSize: '13.5px', color: '#2563EB', fontFamily: "'DM Sans', sans-serif", textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                        onMouseEnter={e => e.currentTarget.style.textDecoration = 'underline'}
-                        onMouseLeave={e => e.currentTarget.style.textDecoration = 'none'}
-                      >{link.label}</a>
-                      {hoveredLinkId === link.id && (
-                        <button onClick={() => handleStartEditLabel(link)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: '2px', display: 'flex', alignItems: 'center', flexShrink: 0 }}><Pencil size={12} /></button>
-                      )}
-                      <button onClick={() => handleRemoveLink(link.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#F87171', padding: '2px', display: 'flex', alignItems: 'center', flexShrink: 0 }}><Trash2 size={12} /></button>
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
+          {isGenerating && (
+            <p style={{ margin: '0 0 4px', fontSize: '12.5px', color: '#4338CA', fontFamily: "'DM Sans', sans-serif" }}>
+              Finding articles, images and videos for this block. This can take up to a minute.
+            </p>
           )}
 
-          {links.length === 0 && !showLinkInput && !showLibraryPicker && (
+          {links.length === 0 && !isGenerating && !showLinkInput && !showLibraryPicker && (
             <p style={{ margin: 0, fontSize: '13.5px', color: '#AAA', fontStyle: 'italic', fontFamily: "'DM Sans', sans-serif" }}>
               No links yet — add a URL, pick from your library, or generate with AI.
             </p>
           )}
+
+          {/* Existing links, in three groups */}
+          <div style={{ marginBottom: showLinkInput ? '12px' : 0 }}>
+            {renderGroup('article', 'Articles', FileText, 'No articles yet.')}
+            {renderGroup('image', 'Images', ImageIcon, 'No images yet.')}
+            {renderGroup('video', 'Videos', PlayCircle, 'No videos yet.')}
+          </div>
 
           {/* Add link form */}
           {showLinkInput && (
