@@ -380,3 +380,23 @@ day-ideas, edit-outline and outline-to-sections have no sign-in check (same as g
 no Firestore but spend model calls. (4) frontend/.env.local sets VITE_COURSE_BUILDER=true, so a local run is
 flag ON unless changed. (5) A built course is stored about 3 times (see TASK-018): about 80 blocks do not
 fit the 1 MiB document limit; still needs a decision. No automated test coverage for this module.
+
+## 2026-10-20 — TASK-027 — Block Links & Resources via Browserbase
+`POST /api/curriculum/generate-block-links` now plans from the block's own content (one model call), searches
+and reads pages with Browserbase (one real browser session per request for blocked pages), scores articles and
+videos against the block, and checks images with the vision model. Returns up to 4 articles, 6 images, 3 videos in
+the same `{"links": [...]}` shape; `type` is "article" | "image" | "video", images add `imageUrl` and `caption`
+(`url` is the source page), any link may add `reason`. New: `backend/utils/browserbase_client.py`,
+`backend/populator/block_resource_finder.py`, `BROWSERBASE_API_KEY` and `RESOURCE_SEARCH_PROVIDER` in `config.py`,
+`playwright==1.64.0` in requirements. Old YouTube/worksheet logic moved unchanged into
+`_generate_block_links_legacy`. Verified with real calls: about 30s per block; bad key or unreachable Browserbase
+returns an empty list, no 500; no keys or connect URLs in logs. Deploy note: the person must add
+`BROWSERBASE_API_KEY` to Cloud Run before deploying; setting `RESOURCE_SEARCH_PROVIDER=legacy` rolls back (a
+missing key also falls back to legacy). Open notes: near-duplicate scans of one artwork can appear; frontend
+(TASK-028) should dedupe images on `imageUrl`. No automated test coverage for this module.
+
+## 2026-10-20 — TASK-028 — Links & Resources split into Articles, Images, Videos
+Frontend: block links panel shows three groups with one Generate button; images as thumbnails with caption (click opens source page, broken images fall back to a link row); Generate and Add Link/Library merge without duplicates (images matched on imageUrl); older links grouped by type. Links stay in the block's existing links field, no schema change.
+
+## 2026-10-20 — TASK-029 — Block-aware Links & Resources prompts and video filters
+All resource prompts now live in backend/populator/block_resource_prompts.py, with a "where to look" note (block-writing prompts first, then this file). Planning differs per block type (content, worksheet, activity) with multi-subject examples and student-level wording for younger grades. Videos are filtered before scoring: missing/private, age-restricted, and longer than 15 minutes (or the block's length if shorter, minimum 3) are dropped, then videos judged inappropriate or in the wrong language. generate-block-links accepts optional blockSubtype and blockDurationMinutes (old payloads still work); the page sends both.

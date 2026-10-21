@@ -20,6 +20,7 @@ import { useGeneration } from '../../contexts/GenerationContext';
 import BreakModal from '../modals/BreakModal';
 import ShareCourseModal from '../modals/ShareCourseModal';
 import { generateBlockLinks } from '../../utils/curriculumApi';
+import { mergeLinks } from '../../utils/blockLinks';
 import { addCourseToFolder } from '../../firebase/dbService';
 import { trackCourseCreated, trackCourseUpdated, trackPublicCourseViewed } from '../../firebase/analytics';
 import {
@@ -159,6 +160,8 @@ const CourseWorkspace = () => {
         topic: formData?.topic || '',
         gradeLevel: formData?.class || '',
         teacherUid: currentUser?.uid || null,
+        blockSubtype: blockData.subtype || blockData.subcategory || '',
+        blockDurationMinutes: Number(blockData.duration_minutes) || null,
       };
       console.log('[generateLinksForBlock] sending payload to backend:', payload);
       let raw;
@@ -174,10 +177,10 @@ const CourseWorkspace = () => {
       if (generated?.length > 0) {
         const existing = (handsOnResources[subsectionId] || [])
           .find(b => b.id === blockId)?.links || [];
-        const merged = [
-          ...existing,
-          ...generated.map(l => ({ id: `link-${Date.now()}-${Math.random().toString(36).slice(2)}`, ...l })),
-        ];
+        const merged = mergeLinks(
+          existing,
+          generated.map(l => ({ id: `link-${Date.now()}-${Math.random().toString(36).slice(2)}`, ...l })),
+        );
         actions.updateBlock(subsectionId, blockId, { links: merged });
         setLinkGenJobs(prev => ({ ...prev, [blockId]: 'done' }));
       } else {

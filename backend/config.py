@@ -21,6 +21,11 @@ class APIConfig:
     YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
     GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
     GOOGLE_CSE_ID = os.getenv("GOOGLE_CSE_ID")
+    BROWSERBASE_API_KEY = os.getenv("BROWSERBASE_API_KEY")
+
+    # Block "Links & Resources" provider: "browserbase" (default) or "legacy"
+    # (old YouTube/worksheet path). Unknown values fall back to browserbase.
+    RESOURCE_SEARCH_PROVIDER = os.getenv("RESOURCE_SEARCH_PROVIDER", "browserbase")
 
     # OpenAI settings
     OPENAI_MODEL = "gpt-4o"
@@ -195,3 +200,4 @@ OPENAI_TEMPERATURE = APIConfig.OPENAI_TEMPERATURE
 YOUTUBE_API_KEY = APIConfig.YOUTUBE_API_KEY
 GOOGLE_API_KEY = APIConfig.GOOGLE_API_KEY
 GOOGLE_CSE_ID = APIConfig.GOOGLE_CSE_ID
+BROWSERBASE_API_KEY = APIConfig.BROWSERBASE_API_KEY

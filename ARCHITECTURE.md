@@ -13,7 +13,8 @@ structure changes, don't let it drift from what's actually in the repo.
 - **Output rendering:** Puppeteer (HTML → PDF, worksheets and camp synopses),
   pptxgenjs (PPT decks)
 - **Content discovery:** YouTube Data API v3, YouTube transcript API, Google Custom
-  Search API (worksheets/activities)
+  Search API (worksheets/activities); block Links & Resources (articles, images, videos) uses
+  Browserbase search/fetch (`RESOURCE_SEARCH_PROVIDER=legacy` restores the YouTube path)
 - **Infra:** Google Cloud (Secret Manager, Cloud Run, Container Registry), Firebase
 
 ## Repo layout (top level)
