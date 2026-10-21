@@ -12,11 +12,6 @@ Public launch (plan: ~/.claude/plans/pasted-content-id-bccb-all-right-structured
 One branch per task (task/TASK-XXX-slug). Stop for the person's review at the end of each phase
 and before every commit. Target project edcubeai-fdba7 (Firestore DB "default").
 
-- [ ] TASK-031: Phase 1 — accounts, plans (trial 30-day placeholder / teacher / org), one central
-      config doc, the can() entitlement check, admin claim + override routes, personal workspace and
-      memberships (a user can be in personal + org), account deactivation with 30-day grace; dry-run
-      setup script: ICC = Org (unlimited), the person = admin + Teacher. Replaces public-release's
-      free/pro and signup cap/waitlist (removals paused for OK). (backend-agent)
 - [ ] TASK-032: Phase 1 — signup/login: individual via Google or email+password (no domain blocked),
       organizations via the enterprise waitlist (see TASK-035 note), one login for all, workspace switcher, email domain recorded
       at signup. (frontend-agent, small backend route)
@@ -84,7 +79,17 @@ and before every commit. Target project edcubeai-fdba7 (Firestore DB "default").
 
 ## In Progress
 
+
 ## Done
+
+- [x] TASK-031: Phase 1 — accounts, plans (trial 30-day placeholder / teacher / org), one central config doc, the can()
+      entitlement check, admin claim + override routes, personal workspace and memberships, deactivation with 30-day grace,
+      dry-run setup/purge scripts. (backend-agent) Branch task/TASK-031-accounts-plans, uncommitted.
+      QA PASS 2026-10-21 (attempt 2; attempt 1 failed on /update-course collaborator writes and ungated /generate-blocks, both fixed):
+      import ok; check_task031 111/0, public 43, usage 37, discovery 80, blocklinks 11, auth 13; lint 27 errors/5 warnings; build ok;
+      every curricula write route traced (owner-only, or update_section / update-course via the owner-plan rule). Rules read only.
+      Open: ICC staff personal plan defaults to trial (person to decide); signup cap/waitlist code kept, awaiting OK to remove;
+      frontend still sends/compares 'public' and ignores new codes (TASK-032/035); add_resources_to_curriculum has no callers.
 
 - [x] TASK-030: Phase 0 — bring branch public-release (commit f4bd3fd: token auth on every route,
       public space, free/pro quotas, waitlist, usage meter, sharing by email) forward onto current main,

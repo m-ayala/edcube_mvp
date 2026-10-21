@@ -21,6 +21,7 @@ from services.firebase_service import FirebaseService
 from schemas.generation_schema import GenerateRequest, GenerateResponse
 from services.generation_service import GenerationService
 from routes.teachers import verify_firebase_token, require_org, require_org_for_uid, resolve_caller_uid
+from services import entitlements
 from services.usage_service import enforce_quota, throttle_chips, safe_add_usage, refund_charge
 from schemas.teacher_schema import TEACHER_PROFILES_COLLECTION
 from firebase.paths import org_col
@@ -405,6 +406,9 @@ async def generate_blocks(body: GenerateBlocksRequest, current_user: dict = Depe
     expected_org = current_user["org"]
     if body.organizationId != expected_org:
         raise HTTPException(status_code=403, detail="Your organization is not registered with EdCube")
+    # Plan gate (TASK-031), before streaming starts; no extra charge (the course was charged at
+    # /generate-curriculum). course-builder/build-course reaches this same function, so it is gated too.
+    entitlements.enforce(current_user, entitlements.AI_GENERATE)
 
     async def generate():
         try:
@@ -588,6 +592,13 @@ async def update_collaborator_access(
         doc = firebase.curricula_col(org).document(curriculum_id).get()
         if not doc.exists or doc.to_dict().get('teacherUid') != from_uid:
             raise HTTPException(status_code=403, detail="Not authorized")
+        # Plan gate (TASK-031): moving someone to collaborate is a new collaborator slot.
+        current = {s_.get('uid'): s_ for s_ in (doc.to_dict().get('sharedWith') or [])}.get(uid)
+        if body.access_type == "collaborate":
+            if not current or current.get('accessType') != 'collaborate':
+                entitlements.enforce(current_user, entitlements.INVITE_COLLABORATOR, doc.to_dict())
+        elif not current:   # a brand-new share (changing an existing one to view isn't "new sharing")
+            entitlements.enforce(current_user, entitlements.SHARE_LINK_CREATE, doc.to_dict())
         course_name = doc.to_dict().get('courseName', '')
         await firebase.add_shared_with(curriculum_id, uid, body.access_type, org=org)
         profile_doc = org_col(firebase.db, org, TEACHER_PROFILES_COLLECTION).document(from_uid).get()
@@ -715,7 +726,9 @@ async def delete_curriculum(curriculum_id: str, teacherUid: Optional[str] = None
         raise HTTPException(status_code=500, detail=str(e))
     
 # In backend/routes/curriculum.py
-@router.post("/save-course", dependencies=[Depends(enforce_quota("courses"))])
+# Not quota-gated or charged (TASK-031): saving is manual editing and always allowed. The AI
+# course count happens at /generate-curriculum (AI builds) and /upload-course-file (AI parse).
+@router.post("/save-course")
 async def save_course(course_data: dict, teacherUid: Optional[str] = None, organizationId: Optional[str] = None, current_user: dict = Depends(require_org)):
     """Save course from CourseWorkspace
 
@@ -815,6 +828,8 @@ async def update_course(course_data: dict, teacherUid: Optional[str] = None, cur
             collab = next((s for s in shared if s.get('uid') == teacherUid), None)
             if not collab or collab.get('accessType') != 'collaborate':
                 raise HTTPException(status_code=404, detail="Course not found or unauthorized")
+            # Co-editing follows the OWNER's plan/status, live (TASK-031). Owners are never blocked.
+            entitlements.enforce_collaborator_write(current_user, doc_data.get('teacherUid'))
 
         # Prepare update data — only include fields present in the request.
         # Using .get() with defaults would overwrite sections/outline with [] or {}

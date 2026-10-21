@@ -30,8 +30,11 @@ service cloud.firestore {
 
     // ── Space membership via the `org` custom claim (TASK-028) ───────────
     // The backend (POST /api/account/bootstrap) sets the custom claim
-    // `org: "<orgId>" | "public"` after verifying the email. OR'd with the
+    // `org: "<orgId>" | "personal"` after verifying the email. OR'd with the
     // domain-based isOrgMember above so existing org users keep working.
+    // (Org members also have a personal workspace; they reach it through the
+    // backend, which resolves the X-EdCube-Workspace header, and through the
+    // Users/personal/teachers/{uid} doc checked in isPersonalOwner below.)
     function inSpace(orgId) {
       return request.auth != null
           && request.auth.token.email_verified == true
@@ -39,21 +42,32 @@ service cloud.firestore {
     }
 
     // Access to a REAL org's data (domain match or claim). The reserved
-    // public space is excluded on purpose: it has its own, stricter block
+    // personal workspace is excluded on purpose: it has its own, stricter block
     // (Firestore ORs overlapping matches, so the generic rules below must
-    // never apply to Users/public).
+    // never apply to Users/personal).
     function orgAccess(orgId) {
-      return orgId != 'public' && (isOrgMember(orgId) || inSpace(orgId));
+      return orgId != 'personal' && (isOrgMember(orgId) || inSpace(orgId));
     }
 
-    // Public-space helpers
-    function inPublic() {
-      return inSpace('public');
+    // Personal-workspace helper: the `org` claim is "personal" (non-org users),
+    // or the caller has a personal teachers doc (org members, whose claim is
+    // their org id).
+    function inPersonal() {
+      return inSpace('personal')
+          || (request.auth != null
+              && request.auth.token.email_verified == true
+              && exists(/databases/$(database)/documents/Users/personal/teachers/$(request.auth.uid)));
     }
 
     // ── EdCube (platform-wide knowledge base) ───────────────────────────
     // Seeded only via backend/scripts/seed_knowledge_base.py; read-only for
     // any authenticated user, never writable from clients.
+    // EdCube/platform_config (plan limits, trial length, feature flags): backend
+    // writes only, no client access (the app reads it through the API).
+    match /EdCube/platform_config {
+      allow read, write: if false;
+    }
+
     match /EdCube/knowledge_base {
       allow read: if request.auth != null;
 
@@ -62,49 +76,61 @@ service cloud.firestore {
       }
     }
 
-    // ── Users/public (reserved public space, TASK-028) ──────────────────
-    // Members are identified only by the `org == "public"` claim (this doc has
-    // no domains). Stricter than orgs: private courses stay private, a user can
-    // only see their own teachers doc, and plan/usage/waitlist are backend-only.
-    match /Users/public {
-      // Limits/plans are not secret; the doc itself is never client-writable.
-      allow read: if inPublic();
+    // ── Accounts (TASK-031) ─────────────────────────────────────────────
+    // Written by the backend only (Admin SDK bypasses rules). A user may read
+    // their own account doc (plan, trial dates, credits, status).
+    match /Accounts/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    // Admin change log: backend only, no client access at all.
+    match /AdminAudit/{entry} {
+      allow read, write: if false;
+    }
+
+    // ── Users/personal (reserved personal workspace, TASK-028; was Users/public) ──
+    // Members are identified by the `org == "personal"` claim or a personal
+    // teachers doc (this doc has no domains). Stricter than orgs: private
+    // courses stay private, a user can only see their own teachers doc, and
+    // usage/waitlist are backend-only. Plans live on Accounts/{uid}.
+    match /Users/personal {
+      allow read: if inPersonal();
 
       match /curricula/{curriculumId} {
-        allow read: if inPublic()
+        allow read: if inPersonal()
                     && (resource.data.teacherUid == request.auth.uid
                         || resource.data.get('isPublic', false) == true
                         || request.auth.uid in resource.data.get('sharedWithUids', []));
-        allow create: if inPublic()
+        allow create: if inPersonal()
                       && request.resource.data.teacherUid == request.auth.uid;
-        allow update, delete: if inPublic()
+        allow update, delete: if inPersonal()
                       && resource.data.teacherUid == request.auth.uid;
       }
 
       match /teacher_profiles/{uid} {
-        allow read: if inPublic();
-        allow write: if inPublic() && request.auth.uid == uid;
+        allow read: if inPersonal();
+        allow write: if inPersonal() && request.auth.uid == uid;
       }
 
       // Self only. `plan` / `plan_updated_at` are backend-written (admin SDK
-      // bypasses rules). No client delete: deleting would reset a Pro user to
-      // Free on re-bootstrap and skew user_count.
+      // bypasses rules). No client delete: deleting would reset a plan on re-bootstrap and skew user_count.
       match /teachers/{teacherUid} {
-        allow read: if inPublic() && request.auth.uid == teacherUid;
-        allow create: if inPublic() && request.auth.uid == teacherUid
+        allow read: if inPersonal() && request.auth.uid == teacherUid;
+        allow create: if inPersonal() && request.auth.uid == teacherUid
                       && !('plan' in request.resource.data)
                       && !('plan_updated_at' in request.resource.data);
-        allow update: if inPublic() && request.auth.uid == teacherUid
+        allow update: if inPersonal() && request.auth.uid == teacherUid
                       && !request.resource.data.diff(resource.data).affectedKeys()
                             .hasAny(['plan', 'plan_updated_at']);
 
         match /{subPath=**} {
-          allow read, write: if inPublic() && request.auth.uid == teacherUid;
+          allow read, write: if inPersonal() && request.auth.uid == teacherUid;
         }
       }
 
       match /notifications/{notifId} {
-        allow read, delete: if inPublic()
+        allow read, delete: if inPersonal()
                       && resource.data.toUid == request.auth.uid;
       }
 

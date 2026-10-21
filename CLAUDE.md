@@ -72,17 +72,18 @@ Agents should check their work against these, not just against the task descript
   the frontend path helpers (`firebase/paths.js`) is now unused. The route only serves
   once the backend is deployed (404 and fallback until then).
 
-- Public release (formerly TASK-027..032 on branch public-release, commit f4bd3fd, CHANGELOG "PR-1..PR-6"; carried forward onto main in TASK-030) is QA-passed but uncommitted and not deployed;
+- Public release (formerly TASK-027..032 on branch public-release, commit f4bd3fd, CHANGELOG "PR-1..PR-6"; carried forward onto main in TASK-030) is QA-passed but uncommitted and not deployed (TASK-031 accounts/plans builds on it, also uncommitted);
   the person-run launch steps are in `ARCHITECTURE.md` ("Public launch checklist"). Open:
   the org ownership gap (no task yet, needs the person's OK); synopsis LLM routes unauthenticated;
   throttles are in-memory per instance.
 
-## Public space
+## Personal workspace and plans
 
-`Users/public` is a reserved pseudo-org for self-serve users. Anything org-specific must be
-gated on `org != "public"` / `isPublicUser`, public users never share or see across spaces,
-and quota limits live in Firestore (`Users/public.plans`, `teachers/{uid}.plan`), never
-hardcoded. See `ARCHITECTURE.md` for space resolution, auth, quotas and rules.
+`Users/personal` (was `Users/public`) holds every user's personal workspace; org members have one
+too. Gate org-specific behaviour on `org != "personal"`. Plan limits, trial length and caps live in
+`EdCube/platform_config` via `services/platform_config.py`, never hardcoded. Access decisions go
+through `entitlements.can()`; co-editing follows the course owner's plan. A lapsed trial never
+locks viewing or manual editing. See `ARCHITECTURE.md` ("Accounts, plans, entitlements").
 
   ## Autonomy policy for subagents
 

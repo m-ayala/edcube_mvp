@@ -20,7 +20,8 @@ from firebase_admin import auth as fb_auth
 from .teachers import require_org
 from services.firebase_service import FirebaseService
 from firebase.paths import org_col
-from schemas.teacher_schema import TEACHER_PROFILES_COLLECTION, TEACHERS_COLLECTION, PUBLIC_SPACE_ID
+from services import entitlements
+from schemas.teacher_schema import TEACHER_PROFILES_COLLECTION, TEACHERS_COLLECTION, PERSONAL_SPACE_ID
 
 router = APIRouter(prefix="/api/notifications", tags=["notifications"])
 firebase = FirebaseService()
@@ -85,7 +86,7 @@ def _resolve_public_email(email: str) -> Optional[str]:
         return None
     except Exception as e:  # Auth backend trouble: don't report it as "not found"
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Could not look up that email right now")
-    if org_col(firebase.db, PUBLIC_SPACE_ID, TEACHERS_COLLECTION).document(uid).get().exists:
+    if org_col(firebase.db, PERSONAL_SPACE_ID, TEACHERS_COLLECTION).document(uid).get().exists:
         return uid
     return None
 
@@ -118,7 +119,18 @@ async def share_course(
     if (course_doc.to_dict() or {}).get("teacherUid") != from_uid:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the course owner can share this course")
 
-    is_public = org == PUBLIC_SPACE_ID
+    # Plan gate (TASK-031): view-only shares are `share_link_create`, collaborate shares are
+    # `invite_collaborator` (plan flag + per-course cap). Expired trial -> 402 plan_inactive.
+    course_data = course_doc.to_dict() or {}
+    types = {r.access_type for r in body.recipients} | ({body.access_type} if body.recipient_emails else set())
+    wants_collab = "collaborate" in types
+    wants_view = any(t != "collaborate" for t in types)
+    if wants_view:
+        entitlements.enforce(current_user, entitlements.SHARE_LINK_CREATE, course_data)
+    if wants_collab:
+        entitlements.enforce(current_user, entitlements.INVITE_COLLABORATOR, course_data)
+
+    is_public = org == PERSONAL_SPACE_ID
     emails: List[str] = []
     email_uids: List[str] = []
     not_found: List[str] = []

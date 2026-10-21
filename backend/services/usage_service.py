@@ -1,20 +1,23 @@
 # backend/services/usage_service.py
 """
-Per-user monthly usage + quota enforcement (TASK-029).
+Per-user monthly usage + quota enforcement (TASK-029, plan names reworked in TASK-031).
 
-Usage docs: `Users/{org}/usage/{uid}/months/{YYYY-MM}` (UTC month)
+Usage docs: `Users/{workspace}/usage/{uid}/months/{YYYY-MM}` (UTC month)
     {courses, generates, edo_tokens, updated_at}
-Written for every user (org users too, so AI cost is visible per user), but only
-the public space is ever limited:
-    org user      -> all limits None (unlimited)
-    public user   -> plan from Users/public/teachers/{uid}.plan, limits from the
-                     `plans` map on the Users/public doc (falls back to
-                     public_space.DEFAULT_PLANS). null = unlimited.
+Written for every user so AI cost is visible per user. Limits come from the plan:
+    org workspace   -> plan "org": unlimited for now (the org pool is TASK-033)
+    personal        -> the user's Accounts plan (trial | teacher), limits from the central
+                       config (services/platform_config.py). Legacy free/pro map to
+                       trial/teacher. null = unlimited.
+TRANSITIONAL (TASK-033 reworks this): counters are still monthly, Edo is still counted in
+tokens (config key legacy_edo_tokens_per_month), and there is no one-time trial grant or
+anniversary reset yet.
 
 Route integration:
     @router.post("/x", dependencies=[Depends(enforce_quota("generates"))])
-Runs after require_org and before any streaming starts. QuotaExceeded is turned
-into HTTP 402 by the handler in main.py.
+Runs after require_org and before any streaming starts. The entitlement check
+(entitlements.can) runs FIRST: an expired trial gets 402 {"code": "plan_inactive"} before
+any credit logic. QuotaExceeded is turned into HTTP 402 by the handler in main.py.
 """
 
 import logging
@@ -27,14 +30,11 @@ import firebase_admin
 from fastapi import Depends, HTTPException
 from firebase_admin import firestore
 
-from firebase.paths import PUBLIC_SPACE_ID, org_doc, org_col, usage_month_doc
-from firebase.public_space import (
-    DEFAULT_PLANS,
-    PLAN_FREE,
-    SPACE_PLANS,
-    TEACHER_PLAN,
-)
+from firebase.paths import PERSONAL_SPACE_ID, usage_month_doc
+from firebase.public_space import PLAN_ORG
 from routes.teachers import require_org
+from services import accounts_service, entitlements
+from services import platform_config as pc
 
 logger = logging.getLogger(__name__)
 
@@ -42,13 +42,6 @@ COURSES = "courses"
 GENERATES = "generates"
 EDO_TOKENS = "edo_tokens"
 KINDS = (COURSES, GENERATES, EDO_TOKENS)
-
-_PLANS_TTL_SECONDS = 300   # plans config, like org_registry
-_USER_PLAN_TTL_SECONDS = 60
-
-_plans_cache: Optional[Tuple[dict, float]] = None
-_user_plan_cache: Dict[str, Tuple[str, float]] = {}
-
 
 class QuotaExceeded(Exception):
     def __init__(self, kind: str, limit: int, used: int, resets_at: str, plan: Optional[str]):
@@ -85,54 +78,31 @@ def resets_at(now: Optional[datetime] = None) -> str:
 
 
 def clear_caches() -> None:
-    global _plans_cache
-    _plans_cache = None
-    _user_plan_cache.clear()
-
-
-def _plans_config(db=None) -> dict:
-    global _plans_cache
-    now = time.time()
-    if _plans_cache is not None and (now - _plans_cache[1]) < _PLANS_TTL_SECONDS:
-        return _plans_cache[0]
-    snap = org_doc(db or _db(), PUBLIC_SPACE_ID).get()
-    plans = ((snap.to_dict() or {}).get(SPACE_PLANS) if snap.exists else None)
-    if not isinstance(plans, dict) or not plans:
-        plans = DEFAULT_PLANS
-    _plans_cache = (plans, now)
-    return plans
+    pc.clear_cache()
+    accounts_service.clear_cache()
 
 
 def get_plan(org: str, uid: str, db=None) -> Optional[str]:
-    """'free' | 'pro' for public users, None for org users."""
-    if org != PUBLIC_SPACE_ID:
-        return None
-    now = time.time()
-    cached = _user_plan_cache.get(uid)
-    if cached is not None and (now - cached[1]) < _USER_PLAN_TTL_SECONDS:
-        return cached[0]
-    snap = org_col(db or _db(), PUBLIC_SPACE_ID, "teachers").document(uid).get()
-    plan = ((snap.to_dict() or {}).get(TEACHER_PLAN) if snap.exists else None) or PLAN_FREE
-    _user_plan_cache[uid] = (plan, now)
-    return plan
+    """'trial' | 'teacher' for the personal workspace (the user's Accounts plan; legacy
+    free/pro mapped), 'org' in an org workspace."""
+    if org != PERSONAL_SPACE_ID:
+        return PLAN_ORG
+    return accounts_service.personal_plan(accounts_service.get_account(uid, db))
 
 
 def get_limits(org: str, uid: str, db=None) -> Dict[str, Optional[int]]:
-    """{'courses','generates','edo_tokens'} -> int or None (unlimited)."""
-    if org != PUBLIC_SPACE_ID:
-        return {k: None for k in KINDS}
+    """{'courses','generates','edo_tokens'} -> int or None (unlimited). All numbers come
+    from the central config; org workspaces are unlimited until the pool lands (TASK-033)."""
+    if org != PERSONAL_SPACE_ID:
+        return {k: None for k in KINDS}   # org pool counters come with TASK-033
     db = db or _db()
-    plan = get_plan(org, uid, db)
-    plans = _plans_config(db)
-    defaults = DEFAULT_PLANS.get(plan) or DEFAULT_PLANS[PLAN_FREE]
-    cfg = plans.get(plan)
-    if not isinstance(cfg, dict):
-        cfg = defaults
-    out = {}
-    for k in KINDS:
-        key = f"{k}_per_month"
-        out[k] = cfg[key] if key in cfg else defaults.get(key)  # explicit null stays unlimited
-    return out
+    cfg = pc.plan_config(get_plan(org, uid, db), db)
+    limits = cfg.get("limits") or {}
+    return {
+        COURSES: limits.get("courses"),
+        GENERATES: limits.get("generates"),
+        EDO_TOKENS: cfg.get("legacy_edo_tokens_per_month"),
+    }
 
 
 def get_usage(org: str, uid: str, db=None, now: Optional[datetime] = None) -> Dict[str, int]:
@@ -222,10 +192,12 @@ def enforce_quota(kind: str):
 
     async def dep(current_user: dict = Depends(require_org)):
         org, uid = current_user["org"], current_user["uid"]
+        # Plan/state gate BEFORE any credit logic (expired trial -> 402 plan_inactive).
+        entitlements.enforce(current_user, entitlements.QUOTA_KIND_ACTION[kind])
         charged = False
         try:
             if kind == EDO_TOKENS:
-                if org == PUBLIC_SPACE_ID:
+                if org == PERSONAL_SPACE_ID:
                     check_remaining(org, uid, kind)
             else:
                 check_and_increment(org, uid, kind, 1)
@@ -235,7 +207,7 @@ def enforce_quota(kind: str):
             raise
         except Exception as e:  # noqa: BLE001
             # Fail open on infrastructure errors (org users: recording must never break
-            # the request; public users: see report) -- logged, nothing was charged.
+            # the request; personal users: see report) -- logged, nothing was charged.
             logger.warning("quota check failed open (%s %s %s): %s", org, uid, kind, e)
         try:
             yield current_user
@@ -257,6 +229,7 @@ _chip_hits: Dict[str, Deque[float]] = {}
 
 async def throttle_chips(current_user: dict = Depends(require_org)):
     """In-memory per-uid limiter (~30/min, per instance) for the uncounted chips route."""
+    entitlements.enforce(current_user, entitlements.AI_EDO)  # LLM-backed: off once a trial has ended
     uid, now = current_user["uid"], time.time()
     q = _chip_hits.setdefault(uid, deque())
     while q and now - q[0] > 60:

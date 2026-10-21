@@ -6,8 +6,8 @@ Used by the frontend signup flow to check whether an email is registered with
 an org *before* the user has signed in (so there's no Firebase token yet --
 this route is intentionally unauthenticated, same posture as POST /contact).
 
-Non-org emails resolve to the reserved public space (`Users/public`) once that
-doc exists (scripts/create_public_space.py). Until then the old
+Non-org emails resolve to the reserved personal workspace (`Users/personal`) once that
+doc exists (scripts/setup_launch_accounts.py). Until then the old
 `allowed: false` response is returned unchanged.
 """
 
@@ -15,8 +15,8 @@ from fastapi import APIRouter, Query
 
 from firebase.org_registry import get_org_from_email, get_org_info
 from firebase.public_space import (
-    PUBLIC_SPACE_ID,
-    PUBLIC_SPACE_NAME,
+    PERSONAL_SPACE_ID,
+    PERSONAL_SPACE_NAME,
     SPACE_MAX_USERS,
     SPACE_USER_COUNT,
     DEFAULT_MAX_USERS,
@@ -25,10 +25,10 @@ from firebase.public_space import (
 router = APIRouter(prefix="/api/orgs", tags=["orgs"])
 
 
-def _get_public_space_doc() -> dict:
-    """Return the Users/public doc as a dict, or {} if it doesn't exist."""
+def _get_personal_space_doc() -> dict:
+    """Return the Users/personal doc as a dict, or {} if it doesn't exist."""
     from firebase.org_registry import _get_db
-    snap = _get_db().collection("Users").document(PUBLIC_SPACE_ID).get()
+    snap = _get_db().collection("Users").document(PERSONAL_SPACE_ID).get()
     return (snap.to_dict() or {}) if snap.exists else {}
 
 
@@ -40,16 +40,17 @@ async def check_email(email: str = Query(...)):
         info = get_org_info(org_id) or {}
         return {"allowed": True, "org_id": org_id, "org_name": info.get("name", org_id), "space": "org"}
 
-    space = _get_public_space_doc()
+    space = _get_personal_space_doc()
     if not space:
         return {"allowed": False, "org_id": None, "org_name": None}
 
+    # The signup cap is disabled by default: a missing/null max_users means no cap.
     cap = space.get(SPACE_MAX_USERS)
     cap = DEFAULT_MAX_USERS if cap is None else cap
     return {
         "allowed": True,
-        "space": "public",
-        "org_id": PUBLIC_SPACE_ID,
-        "org_name": PUBLIC_SPACE_NAME,
-        "waitlisted": int(space.get(SPACE_USER_COUNT) or 0) >= int(cap),
+        "space": "personal",
+        "org_id": PERSONAL_SPACE_ID,
+        "org_name": PERSONAL_SPACE_NAME,
+        "waitlisted": cap is not None and int(space.get(SPACE_USER_COUNT) or 0) >= int(cap),
     }

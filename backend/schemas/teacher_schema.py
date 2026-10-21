@@ -24,12 +24,13 @@ from datetime import datetime
 
 from firebase.org_registry import get_org_from_email  # noqa: F401 (re-exported)
 from firebase.public_space import (  # noqa: F401 (re-exported schema constants)
-    PUBLIC_SPACE_ID,
-    PUBLIC_SPACE_NAME,
-    PUBLIC_SPACE_TYPE,
+    PERSONAL_SPACE_ID,
+    PERSONAL_SPACE_NAME,
+    PERSONAL_SPACE_TYPE,
     ORG_CLAIM,
-    PLAN_FREE,
-    PLAN_PRO,
+    PLAN_TRIAL,
+    PLAN_TEACHER,
+    PLAN_ORG,
     TEACHER_PLAN,
     TEACHER_PLAN_UPDATED_AT,
     PROFILE_NAME_LOWER,
@@ -48,7 +49,7 @@ from firebase.public_space import (  # noqa: F401 (re-exported schema constants)
 TEACHER_PROFILES_COLLECTION = "teacher_profiles"
 COURSES_COLLECTION = "curricula"  # Users/{org}/curricula
 COURSE_FOLDERS_COLLECTION = "course_folders"
-TEACHERS_COLLECTION = "teachers"  # Users/{org}/teachers/{uid} (signup doc; plan lives here in public)
+TEACHERS_COLLECTION = "teachers"  # Users/{org}/teachers/{uid} (signup doc; plans live on Accounts/{uid})
 
 
 # ============================================================================
@@ -151,7 +152,7 @@ def create_default_profile(user_data: dict, org_id: Optional[str] = None) -> dic
     Returns:
         dict: Default profile data ready for Firestore
     """
-    is_public = org_id == PUBLIC_SPACE_ID
+    is_public = org_id == PERSONAL_SPACE_ID
     display_name = user_data.get("name") or (user_data.get("email") or "").split("@")[0]
     profile = {
         TeacherProfileFields.TEACHER_UID: user_data["uid"],

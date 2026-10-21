@@ -14,6 +14,7 @@ from firebase_admin import credentials, firestore, storage as fb_storage
 from datetime import datetime
 from schemas.curriculum_schema import CurriculumFields as F
 from firebase.project import firestore_client, STORAGE_BUCKET
+from services import entitlements
 from firebase.paths import (
     org_col,
     afterschool_doc,
@@ -21,7 +22,7 @@ from firebase.paths import (
     summer_camps_doc,
     resolve_org as _resolve_org,
     DEFAULT_SYNOPSIS_ORG,
-    PUBLIC_SPACE_ID,
+    PERSONAL_SPACE_ID,
 )
 
 logger = logging.getLogger(__name__)
@@ -60,7 +61,7 @@ class FirebaseService:
         toggled, so it self-heals. Never raises: a failure here must not fail
         the course write that triggered it.
         """
-        if org != PUBLIC_SPACE_ID:
+        if org != PERSONAL_SPACE_ID:
             return None
         try:
             has_public = any(
@@ -190,16 +191,20 @@ class FirebaseService:
             # so same-org is already guaranteed structurally -- no separate
             # Firestore org check needed here.
             is_owner = curriculum.get('teacherUid') == teacherUid
+            if not is_owner and not entitlements.owner_allows_access(curriculum.get('teacherUid'), org):
+                # TASK-031: a deactivated owner's personal-workspace course is unreachable by
+                # others (view links, collaborators). Org-workspace courses are unaffected.
+                return None
             if not is_owner:
                 is_public = curriculum.get('isPublic', False)
                 if is_public:
                     curriculum['id'] = doc.id
-                    if org == PUBLIC_SPACE_ID:
+                    if org == PERSONAL_SPACE_ID:
                         curriculum.pop('teacherEmail', None)  # never expose emails of public users
                     return curriculum
-                if org == PUBLIC_SPACE_ID and teacherUid in (curriculum.get('sharedWithUids') or []):
+                if org == PERSONAL_SPACE_ID and teacherUid in (curriculum.get('sharedWithUids') or []):
                     # Public space: a Private course is readable by its invited
-                    # collaborators (mirrors the Users/public firestore rule).
+                    # collaborators (mirrors the Users/personal firestore rule).
                     curriculum['id'] = doc.id
                     curriculum.pop('teacherEmail', None)
                     return curriculum
@@ -273,7 +278,7 @@ class FirebaseService:
             # get_curriculum also returns other people's Public courses, so
             # ownership must be re-checked here. Enforced for the public space
             # (strangers share it); org behaviour is deliberately unchanged.
-            if org == PUBLIC_SPACE_ID and curriculum.get('teacherUid') != teacherUid:
+            if org == PERSONAL_SPACE_ID and curriculum.get('teacherUid') != teacherUid:
                 return False
 
             # Delete document
@@ -369,11 +374,13 @@ class FirebaseService:
             
             # Get current data
             curriculum = doc.to_dict()
-            if org == PUBLIC_SPACE_ID and caller_uid is not None:
+            if org == PERSONAL_SPACE_ID and caller_uid is not None:
                 # Public space: only the owner or a 'collaborate' invitee may write.
                 if curriculum.get('teacherUid') != caller_uid:
                     collab = next((x for x in curriculum.get('sharedWith', []) if x.get('uid') == caller_uid), None)
-                    if not collab or collab.get('accessType') != 'collaborate':
+                    # Co-editing is governed by the OWNER's plan, computed live (TASK-031).
+                    if (not collab or collab.get('accessType') != 'collaborate'
+                            or not entitlements.owner_allows_coedit(curriculum.get('teacherUid'), org)):
                         logger.warning(f"Unauthorized section write by {caller_uid} on {curriculum_id}")
                         return False
             sections = curriculum.get('outline', {}).get('sections', [])
