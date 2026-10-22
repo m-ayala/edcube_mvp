@@ -62,9 +62,12 @@ Agents should check their work against these, not just against the task descript
 
 ## Current known gaps (update this section as they close)
 
-- No automated test suite exists yet (no pytest, no jest/vitest — only eslint on the
-  frontend). `docs-qa-agent` verifies by other means until this is built out, and only
-  works on test coverage when the person explicitly approves it.
+- Automated tests exist (TASK-040). Backend: `cd backend && pip install -r requirements.txt -r requirements-dev.txt`
+  (the dev file downgrades httpx to 0.27.x because pinned starlette 0.35.1's TestClient breaks on httpx 0.28),
+  then `python -m pytest` (offline, ~10s, in-memory Firestore, no credentials). Firestore rules: Java 11+ is
+  required for the emulator (not installed on the founder machine yet, so the rules tests have not been run):
+  `cd frontend && npm run test:rules:install && npm run test:rules`. No frontend unit tests (only eslint);
+  the frontend half of outlier 6 (draft kept when a write is refused) is not covered by pytest.
 - `frontend/src/constants/blockCategories.js` now fetches the taxonomy from the backend
   route `GET /api/knowledge-base/objectives` (TASK-001), which calls
   `knowledge_base_service.get_objectives()`. The hardcoded array remains only as a

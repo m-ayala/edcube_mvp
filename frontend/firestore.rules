@@ -165,7 +165,9 @@ service cloud.firestore {
                       && !request.resource.data.diff(resource.data).affectedKeys()
                             .hasAny(['plan', 'plan_updated_at']);
 
-        match /{subPath=**} {
+        // `{sub}/{rest=**}` (not `{subPath=**}`): a bare recursive wildcard also matches
+        // the teachers doc itself (zero segments) and would OR-bypass the plan guard above.
+        match /{sub}/{rest=**} {
           allow read, write: if inPersonal() && request.auth.uid == teacherUid;
         }
       }

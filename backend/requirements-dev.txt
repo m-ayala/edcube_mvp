@@ -1,0 +1,15 @@
+# Test-only dependencies. Install AFTER requirements.txt, in the same virtualenv:
+#     pip install -r requirements.txt
+#     pip install -r requirements-dev.txt
+#     python -m pytest
+#
+# Version friction (why httpx is capped here): requirements.txt pins starlette==0.35.1 (via
+# fastapi==0.109.0) and httpx==0.28.1. starlette 0.35's TestClient passes `app=` to httpx.Client,
+# which httpx 0.28 removed, so every TestClient call fails with
+# "TypeError: Client.__init__() got an unexpected keyword argument 'app'".
+# The line below therefore DOWNGRADES httpx to 0.27.x in the test venv (pip prints a conflict
+# warning, which is expected and harmless: nothing in the app needs httpx 0.28 features).
+# Production/Docker images are untouched; they keep httpx 0.28.1 and never run the tests.
+# Newer fastapi/starlette (>=0.37, TestClient on httpx>=0.28) work with either httpx.
+pytest>=8
+httpx>=0.27,<0.28
