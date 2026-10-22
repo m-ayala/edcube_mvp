@@ -566,16 +566,16 @@ const PILLARS = [
 
 const SUBJECTS = [
   { name: 'Science', sub: 'Biology and chemistry', img: '/landing/science.jpg', fallback: 'linear-gradient(135deg,#E5F4E9,#A8D8B0)',
-    alt: 'Students working on a hands-on project at an ICC camp',
+    alt: 'Students watching a jar experiment at an ICC camp',
     pillars: ['Curiosity and patience through experiments', 'How ecosystems and batteries work', 'The ethics of waste and pollution', 'Climate action in our own community'] },
   { name: 'Technology', sub: 'Robotics and coding', img: '/landing/technology.jpg', fallback: 'linear-gradient(135deg,#E4EFF9,#A8CCEF)',
     alt: 'Students building a robot together at ICC',
     pillars: ['Teamwork and resilience while debugging', 'How robots sense, think, and move', 'Systems thinking and the ethics of technology', 'Robots that solve real problems around us'] },
   { name: 'Arts', sub: 'Visual art and design', img: '/landing/arts.jpg', fallback: 'linear-gradient(135deg,#FDEEE6,#F9C0C8)',
-    alt: 'A student coloring a drawing at an ICC art class',
+    alt: 'A student showing her sunflower painting at an ICC art class',
     pillars: ['Self-expression and confidence', 'Color, shape, and culture in art', 'Why patterns repeat across cultures', 'Public art made for the community'] },
   { name: 'Performing Arts', sub: 'Dance, music, and theater', img: '/landing/performing-arts.jpg', fallback: 'linear-gradient(135deg,#FDF5DC,#F9E0A0)',
-    alt: 'A student in a handmade costume at an ICC performance',
+    alt: 'Students performing a dance on stage at an ICC event',
     pillars: ['Collaboration and coordination', 'Rhythm, the math in music, and culture', 'Storytelling through movement and sound', 'Performing for community events'] },
 ];
 
