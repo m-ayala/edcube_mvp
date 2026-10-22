@@ -12,7 +12,7 @@ Rules
 - trial ended                    -> AI actions and new sharing denied, with an upgrade message
 - coedit                         -> governed by the COURSE OWNER's plan, computed live
 - invite_collaborator            -> plan must allow co-editing and the per-course cap must have room
-- credit counts                  -> NOT checked here: see CREDIT_HOOK (TASK-033)
+- credit counts                  -> NOT checked here: see CREDIT_HOOK (usage_service, TASK-033)
 
 In an org workspace the org's entitlements apply (plan "org"); in the personal
 workspace the user's own Accounts plan applies.
@@ -51,7 +51,7 @@ SHARING_ACTIONS = (SHARE_LINK_CREATE, INVITE_COLLABORATOR)
 ACTIONS = AI_ACTIONS + SHARING_ACTIONS + (COEDIT, MANUAL_EDIT, VIEW)
 
 # usage_service quota kind -> action
-QUOTA_KIND_ACTION = {"courses": AI_GENERATE_COURSE, "generates": AI_GENERATE, "edo_tokens": AI_EDO}
+QUOTA_KIND_ACTION = {"courses": AI_GENERATE_COURSE, "generates": AI_GENERATE, "edo_messages": AI_EDO}
 
 UPGRADE_MESSAGE_TRIAL_ENDED = (
     "Your free trial has ended. AI generation and new sharing are paused; your courses are safe, "
@@ -63,7 +63,7 @@ UPGRADE_MESSAGE_FEATURE = (
 )
 DEACTIVATED_MESSAGE = "This account is deactivated. Reactivate it to continue."
 
-# TASK-033 hook: after the plan/state checks pass for an AI action, the credit
+# TASK-033: after the plan/state checks pass for an AI action, the credit
 # reserve/confirm/refund (per-plan allowance, bonus_credits, org pool) runs. It is
 # deliberately NOT part of can(); enforce_quota applies it right after can() allows.
 CREDIT_HOOK = "usage_service.enforce_quota (credits are checked there, after can())"

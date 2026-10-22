@@ -22,7 +22,10 @@ from schemas.generation_schema import GenerateRequest, GenerateResponse
 from services.generation_service import GenerationService
 from routes.teachers import verify_firebase_token, require_org, require_org_for_uid, resolve_caller_uid
 from services import entitlements
-from services.usage_service import enforce_quota, throttle_chips, safe_add_usage, refund_charge
+from services.usage_service import (
+    enforce_quota, throttle_chips, refund_charge, defer_settlement, settle_charge, note_usage,
+    outline_is_usable, outlines_are_usable,
+)
 from schemas.teacher_schema import TEACHER_PROFILES_COLLECTION
 from firebase.paths import org_col
 
@@ -85,6 +88,14 @@ async def generate_curriculum(
 
     # Pre-generate course_id so file uploads go to the right storage path
     preset_course_id = str(uuid.uuid4())
+
+    # Credit rule (TASK-033): the 1 "courses" credit reserved by enforce_quota is CONFIRMED only
+    # if a usable course was produced AND delivered (usage_service.outline_is_usable: an outline
+    # with at least one titled section; legacy flow: also the candidate-subsection phase finished
+    # with at least one chain). Anything else is refunded, and the partial result is logged
+    # either way (usage_event -> TASK-034 UsageLog) via `partial`.
+    state = {"usable": False, "partial": {"flow": flow, "stage": "start", "outline_sections": 0,
+                                           "sections_with_chains": 0, "error": None}}
 
     async def generate():
         tmp_paths = []
@@ -201,7 +212,7 @@ async def generate_curriculum(
                         generate_course_outlines, course_inputs, combined_vision_images or None
                     )
                 except OutlineGenerationError as e:
-                    refund_charge(current_user, "courses")  # build produced nothing
+                    state["partial"].update(stage="outlines", error=str(e)[:300])  # nothing produced -> refunded in finally
                     yield f"data: {json.dumps({'phase': 1, 'message': f'Error: {str(e)}', 'progress': 0, 'error': True})}\n\n"
                     return
                 single_day = num_days <= 1
@@ -230,7 +241,10 @@ async def generate_curriculum(
                     payload['chosen_outline_legacy'] = outline_to_legacy(
                         outlines[0], course_name, detected_subject, detected_topic,
                         age_range_start, age_range_end)
+                state["partial"].update(stage="outlines_ready", outline_sections=len((outlines[0] or {}).get('days') or []))
                 yield f"data: {json.dumps(payload)}\n\n"
+                # Reached only if the client consumed the event (a dropped stream is not "delivered").
+                state["usable"] = outlines_are_usable(outlines)
                 return
 
             # ── Phase 1: Generate outline ───────────────────────────────────
@@ -257,10 +271,11 @@ async def generate_curriculum(
             )
 
             if not outline_data:
-                refund_charge(current_user, "courses")
+                state["partial"].update(stage="outline", error="no outline")
                 yield f"data: {json.dumps({'phase': 1, 'message': 'Error: Failed to generate outline', 'progress': 0, 'error': True})}\n\n"
                 return
 
+            state["partial"].update(stage="outline_ready", outline_sections=len((outline_data or {}).get('sections') or []))
             yield f"data: {json.dumps({'type': 'outline_ready', 'outline': outline_data, 'phase': 1, 'message': 'Outline ready! Proposing subsections...', 'progress': 50})}\n\n"
             await asyncio.sleep(0.2)
 
@@ -270,16 +285,22 @@ async def generate_curriculum(
                     yield f"data: {json.dumps({'phase': 1.5, 'message': event['message'], 'progress': event['progress']})}\n\n"
                     await asyncio.sleep(0)
                 elif event['type'] == 'subsections_ready':
+                    state["partial"]["stage"] = "subsections"
+                    if event.get('chains'):
+                        state["partial"]["sections_with_chains"] += 1
                     yield f"data: {json.dumps({'type': 'subsections_ready', 'section_id': event['section_id'], 'chains': event['chains'], 'progress': event['progress']})}\n\n"
                     await asyncio.sleep(0)
                 elif event['type'] == 'candidates_complete':
                     # Nothing is saved yet — the teacher still needs to review and
                     # select before any block content (and any Firestore write) happens.
+                    state["partial"]["stage"] = "candidates_complete"
                     yield f"data: {json.dumps({'type': 'candidates_complete', 'preset_course_id': preset_course_id, 'course_attachments': course_attachments, 'phase': 1.5, 'message': 'Candidates ready for review!', 'progress': 70})}\n\n"
+                    state["usable"] = (outline_is_usable(outline_data)
+                                       and state["partial"]["sections_with_chains"] > 0)
 
         except Exception as e:
             logger.error(f"generate-curriculum error: {e}", exc_info=True)
-            refund_charge(current_user, "courses")
+            state["partial"]["error"] = str(e)[:300]
             yield f"data: {json.dumps({'message': f'Error: {str(e)}', 'error': True})}\n\n"
         finally:
             for p in tmp_paths:
@@ -287,7 +308,12 @@ async def generate_curriculum(
                     os.remove(p)
                 except OSError:
                     pass
+            # Confirm the course credit only for a usable course; refund otherwise (also on a
+            # dropped stream or an error). Partial results are logged either way.
+            settle_charge(current_user, "courses", state["usable"], action="generate_course",
+                          usable=state["usable"], course_id=preset_course_id, partial=state["partial"])
 
+    defer_settlement(current_user, "courses")   # the stream settles the credit when it ends
     return StreamingResponse(
         generate(),
         media_type="text/event-stream",
@@ -1292,7 +1318,7 @@ async def course_builder_edit_outline(body: EditOutlineRequest, current_user: di
         raise HTTPException(status_code=502, detail=str(e))
 
 
-@router.post("/curriculum/chat", dependencies=[Depends(enforce_quota("edo_tokens"))])
+@router.post("/curriculum/chat", dependencies=[Depends(enforce_quota("edo_messages"))])
 async def chat_with_edo(request: EdoChatRequest, current_user: dict = Depends(require_org)):
     """
     Edo AI curriculum assistant — returns 2-3 structured suggestion blocks.
@@ -1667,10 +1693,14 @@ Respond ONLY with valid JSON. No markdown, no preamble."""
             response_format={"type": "json_object"}
         )
 
-        # Record Edo token usage (TASK-029). No usage on the response -> record nothing
-        # (the pre-check still gates the next message); never breaks the reply.
+        # Edo is counted per MESSAGE (TASK-033): enforce_quota reserved 1 before this call and
+        # confirms it when the reply returns (refunds if we raise). Token counts are only
+        # attached for the TASK-034 cost log (usage_service.log_usage_event); never breaks the reply.
         _u = getattr(response, "usage", None)
-        safe_add_usage(org, current_user["uid"], "edo_tokens", getattr(_u, "total_tokens", 0) or 0)
+        note_usage(current_user, "edo_messages", action="edo_chat", model="gpt-4o",
+                   tokens=getattr(_u, "total_tokens", None),
+                   prompt_tokens=getattr(_u, "prompt_tokens", None),
+                   completion_tokens=getattr(_u, "completion_tokens", None))
 
         raw = response.choices[0].message.content
         try:

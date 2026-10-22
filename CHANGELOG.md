@@ -482,3 +482,14 @@ Plans trial / teacher / org with every limit, the trial length (30 days, a place
 ## 2026-10-21 — TASK-032 — Signup and login: Google, organization waitlist, workspace switcher
 Backend: org staff get the Teacher plan free in their personal workspace (`plan_source "org_member"`, admin-set plans never overwritten). Removed the never-live signup cap and capacity waitlist (`max_users`, `user_count`, `waitlisted`, `Users/personal/waitlist`). New `POST /api/waitlist` (open, validated, throttled per IP and email, stored in `PaidWaitlist`, emailed) and `GET /api/admin/waitlist` (+CSV, formula-escaped); rules deny `PaidWaitlist`. `purge_deactivated.py` now keeps the login and org data of anyone in an org (only personal content purged); the dry run prints a PATH line. Launch backfill moves org staff to Teacher.
 Frontend: signup choice (individual via Google or email, organization via the waitlist form, no account created), Google sign-in with redirect fallback, `AuthContext` built around the active workspace and memberships, `X-EdCube-Workspace` header on every token-carrying call, sidebar workspace switcher (only with more than one workspace), plan labels (Free trial / Teacher / org name), deactivated-account message. Deleted `Waitlist.jsx` and its route. No prices anywhere.
+
+## 2026-10-21 — TASK-033 — credit counters (reserve, confirm, refund)
+Backend: `usage_service.py` rewritten around three counters (`courses`, `generates`, `edo_messages`; Edo now per message).
+Credits are reserved in a Firestore transaction before a route runs and confirmed or refunded after it (streaming routes settle
+when the stream ends); reservations expire after `credit_reservation_ttl_minutes`. Trial is a one-time allowance that never resets;
+Teacher resets monthly on the `plan_started_at` anniversary (day clamped to month end, UTC, no rollover; `reset_rule: calendar`
+available); orgs draw from a shared pool (`null` = unlimited, ICC). The presser pays in the workspace they act in. Admin-granted
+bonus credits are spent after the plan allowance. Generate Course counts only when a usable course is produced; partial results are
+logged through a `log_usage_event` hook for TASK-034. Added `GET /api/admin/accounts/{uid}/usage`; `GET /api/account/usage` now
+returns per-kind credits (legacy `limits`/`usage` keys and an `edo_tokens` alias kept). Removed `check_and_increment`,
+`add_usage`, `safe_add_usage` and the `legacy_edo_tokens_per_month` config. No frontend change.
