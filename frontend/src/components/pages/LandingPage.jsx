@@ -107,7 +107,7 @@ const LandingPage = () => {
         <div className="wrap">
           <div className="sec-head">
             <p className="sec-label">Our framework</p>
-            <h2 className="sec">Built on the Holistic Framework.</h2>
+            <h2 className="sec">Every course rests on four pillars.</h2>
           </div>
           {/* Four pillars holding up the curriculum */}
           <div className="temple">
@@ -163,7 +163,7 @@ const LandingPage = () => {
         body="Describe your course and EdCube builds the outline with you. Shape it by adding, removing, and reordering blocks, with content, worksheets, and activities for all four pillars."
         bullets={[
           'Course outlines built with you, block by block',
-          'Holistic Framework built into every course',
+          'All four pillars built into every course',
           'Content, worksheets, and activities for every pillar',
         ]}
         visual={<CreatePreview />}
