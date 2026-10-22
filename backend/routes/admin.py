@@ -4,6 +4,7 @@ Admin routes (TASK-031). Every route requires the custom claim `admin: true`
 (routes.teachers.require_admin). Every change is logged to `AdminAudit/{autoId}`.
 
 GET   /api/admin/accounts?email=            look an account up by email
+GET   /api/admin/accounts/recent?limit=50   newest Accounts first (limit 1-200)
 GET   /api/admin/accounts/{uid}             one Accounts doc + effective plan/limits
 PATCH /api/admin/accounts/{uid}/plan        {plan, started_at?} sets plan_source "admin", recomputes dates
 GET   /api/admin/accounts/{uid}/usage       credit counters per kind (personal plan + each org pool)
@@ -87,6 +88,22 @@ async def find_account(email: str = Query(...), admin: dict = Depends(require_ad
         return {"accounts": [], "auth_user": {"uid": u.uid, "email": u.email}}
     except Exception:  # noqa: BLE001
         return {"accounts": []}
+
+
+@router.get("/accounts/recent")
+async def recent_accounts(limit: int = Query(default=50, ge=1, le=200),
+                          admin: dict = Depends(require_admin), db=Depends(get_db)):
+    """Newest Accounts first. Declared before /accounts/{uid} so "recent" is not read as a uid."""
+    from google.cloud.firestore import Query as FsQuery
+    snaps = accounts_col(db).order_by("created_at", direction=FsQuery.DESCENDING).limit(limit).stream()
+    rows = []
+    for sn in snaps:
+        a = sn.to_dict() or {}
+        pv = accts.public_view(a) or {}
+        rows.append({"uid": sn.id, "email": a.get("email"), "plan": accts.personal_plan(a),
+                     "plan_source": a.get("plan_source"), "created_at": pv.get("created_at"),
+                     "status": a.get("status") or accts.STATUS_ACTIVE, "email_domain": a.get("email_domain")})
+    return {"accounts": rows, "count": len(rows)}
 
 
 @router.get("/accounts/{uid}")

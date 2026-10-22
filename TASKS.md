@@ -12,13 +12,6 @@ Public launch (plan: ~/.claude/plans/pasted-content-id-bccb-all-right-structured
 One branch per task (task/TASK-XXX-slug). Stop for the person's review at the end of each phase
 and before every commit. Target project edcubeai-fdba7 (Firestore DB "default").
 
-- [ ] TASK-035: Phase 4 — credit counters in the UI, per-feature pause, upgrade messages, admin page
-      (plans, credits, cost export). NO PAYMENTS (person, 2026-10-21): every Upgrade / enterprise
-      button opens "Join the waitlist for when we open paid and enterprise versions" — saves name,
-      email, interest (Teacher / School-Org), school name + staff size for orgs, note; backend-only
-      collection + email to the person; admin page lists it. Replaces public-release's Upgrade-to-Pro
-      contact form. No price shown, nothing that implies payment. Stripe comes later as its own task.
-      (frontend-agent, small backend route)
 - [ ] TASK-036: Phase 5 — sharing/collaboration backend: view-only links (no account, revocable),
       owner's plan governs co-editing, 3 collaborators incl. pending invites, invites to non-users,
       lapse/resubscribe, removal, delete warning count, rules. Outlier cases 1–14. (backend-agent)
@@ -74,6 +67,25 @@ and before every commit. Target project edcubeai-fdba7 (Firestore DB "default").
 
 
 ## Done
+
+- [x] TASK-035: Phase 4 — credit counters in the UI, per-feature pause, upgrade messages, admin page
+      (plans, credits, cost export). NO PAYMENTS (person, 2026-10-21): every Upgrade / enterprise
+      button opens "Join the waitlist for when we open paid and enterprise versions" — saves name,
+      email, interest (Teacher / School-Org), school name + staff size for orgs, note; backend-only
+      collection + email to the person; admin page lists it. Replaces public-release's Upgrade-to-Pro
+      contact form. No price shown, nothing that implies payment. Stripe comes later as its own task.
+      (frontend-agent, small backend route)
+      Assigned: backend-agent (small), then frontend-agent — started 2026-10-21. Branch task/TASK-035-credits-ui-admin.
+
+      QA PASS 2026-10-21: import main ok; backend checks task031 111, task032 49, task033 84, task034 63, usage, public, discovery, blocklinks pass, auth 13 pass (ADC noise only);
+      lint 26 errors/5 warnings (limit 27/6), build ok; e2e/run35.mjs re-run with vite on stubbed auth/API: 52/52 pass.
+      Read: every useAiGate use gates only AI triggers (Generate/Ask buttons, Edo chips, outline chat send, upload); save/edit/typing never gated; Edo text input gated by edo_messages or trial end only,
+      Edo chips by generates. Kind mapping matches the TASK-033 table (generate-curriculum=courses; curriculum/generate, generate-block-links, generate-description, generate-synopsis, edit-outline,
+      plan-day(s), day-ideas, upload-course-file=generates; chat=edo_messages). No Pro/price/payment wording, nothing posts to /api/contact; Upgrade buttons all open JoinWaitlistModal.
+      Admin: client redirect on !isAdmin; every /api/admin route (incl. recent, usage-log, cost-summary, waitlist) has require_admin; CSVs via authFetch. /accounts/recent is declared before {uid}.
+      402 additions are additive. ICC (unlimited pool): meter hidden, gate open (limit null), no pauses.
+      Open notes: not exercised in a browser: CourseUpload, BlockView Generate, CourseViewPage/PlanStage buttons (code read only); recent-accounts order_by created_at skips accounts without that field and
+      needs the Firestore single-field index (automatic); the "Upgrade" link on the meter shows for trial only; no automated frontend tests.
 
 - [x] TASK-034: Phase 3 — usage and cost log per AI action (user, plan, action, course, Browserbase
       search/fetch counts, model, tokens, success, time) + admin export. (backend-agent)

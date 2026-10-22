@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { BookOpen, FilePlus, User, Search as SearchIcon, LogOut, FileText, Building2, UserRound } from 'lucide-react';
+import { BookOpen, FilePlus, User, Search as SearchIcon, LogOut, FileText, Building2, UserRound, ShieldCheck } from 'lucide-react';
 import edcubeLogo from '../../assets/edcube_logo.png';
 import { logoutTeacher } from '../../firebase/authService';
 import { useNotifications } from '../../contexts/NotificationContext';
@@ -20,6 +20,8 @@ const navItems = [
   { to: '/profile',         label: 'Profile',       Icon: User },
   { to: '/search',          label: 'Search',        Icon: SearchIcon },
 ];
+
+const adminItem = { to: '/admin', label: 'Admin', Icon: ShieldCheck };
 
 const Divider = ({ expanded }) => (
   <div style={{ height: 1, background: '#DFDFDF', margin: expanded ? '0 14px' : '0 8px' }} />
@@ -40,7 +42,7 @@ const Sidebar = () => {
   const [expanded, setExpanded] = useState(false);
   const [hovered, setHovered] = useState(null);
   const { unreadCount } = useNotifications();
-  const { isPublicUser, memberships, activeWorkspace, setActiveWorkspace } = useAuth();
+  const { isPublicUser, isAdmin, memberships, activeWorkspace, setActiveWorkspace } = useAuth();
   const showSwitcher = memberships.length > 1;
 
   const handleSwitch = async (ws) => {
@@ -153,7 +155,7 @@ const Sidebar = () => {
 
       {/* Nav */}
       <nav style={{ flex: 1, padding: '16px 0', display: 'flex', flexDirection: 'column' }}>
-        {navItems.map(({ to, label: text, Icon }) => {
+        {(isAdmin ? [...navItems, adminItem] : navItems).map(({ to, label: text, Icon }) => {
           const IconComp = Icon;
           return (
             <NavLink
@@ -242,8 +244,8 @@ const Sidebar = () => {
         </button>)}
       </nav>
 
-      {/* Plan usage (public users only; hidden while the sidebar is collapsed) */}
-      {isPublicUser && expanded && <UsageMeter compact />}
+      {/* Credit counters (hidden for unlimited org pools and while the sidebar is collapsed) */}
+      {expanded && <UsageMeter compact />}
 
       {/* Footer: Sign Out */}
       <Divider expanded={expanded} />

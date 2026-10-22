@@ -4,6 +4,8 @@ import { ExternalLink, Trash2, Plus, Sparkles, Loader2, Library, Check, X, Penci
 import { linkGroupOf, manualLink, mergeLinks } from '../../utils/blockLinks';
 import { getLibraryFolders } from '../../firebase/dbService';
 import { useAuth } from '../../contexts/AuthContext';
+import { useAiGate } from '../../contexts/usageContextCore';
+import AiPausedHint from '../AiPausedHint';
 
 const TYPE_COLORS = {
   content:   { bg: '#EAF0FF', text: '#2A4A9A', border: '#BFD0FF', label: 'Content' },
@@ -144,6 +146,7 @@ const BlockView = ({
   handsOnResources,
   onNavigateToBlock,
 }) => {
+  const genPaused = useAiGate('generates');
   const { org } = useAuth();
   const [localTitle, setLocalTitle] = useState(block?.title || '');
   const [localContent, setLocalContent] = useState(block?.content || '');
@@ -531,12 +534,14 @@ const BlockView = ({
               </button>
               <button
                 onClick={() => onGenerateLinks?.(block.id, topicId, block)}
-                disabled={isGenerating || !onGenerateLinks}
+                disabled={isGenerating || !onGenerateLinks || genPaused.blocked}
+                title={genPaused.blocked ? genPaused.message : undefined}
                 style={{ ...btnBase, background: isGenerating ? '#F0F4FF' : '#F5F3EE', color: isGenerating ? '#4338CA' : '#555', border: isGenerating ? '1px solid rgba(99,102,241,0.3)' : '1px solid rgba(0,0,0,0.12)', cursor: isGenerating ? 'default' : 'pointer', opacity: (!onGenerateLinks && !isGenerating) ? 0.5 : 1 }}
               >
                 {isGenerating ? <><Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> Generating…</> : <><Sparkles size={13} /> Generate</>}
               </button>
             </div>
+            <AiPausedHint kind="generates" style={{ width: '100%' }} />
             {(genEmpty || genError) && (
               <p style={{ margin: '6px 0 0', fontSize: '12px', color: genError ? '#B91C1C' : '#888', fontFamily: "'DM Sans', sans-serif" }}>
                 {genError ? 'Generation failed. Try again.' : 'No results found. Try adding a title or description first.'}

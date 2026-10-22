@@ -317,11 +317,28 @@ Contracts:
   (`QuotaExceeded` handler in `main.py`; streaming routes return it as JSON before the stream starts).
 - **429** `{"detail": {"code": "rate_limited"}}` with `Retry-After` (Edo chips throttle, invite-by-email lookups).
 - **`GET /api/account/usage`**: `{plan, space, workspace, pool, period_start, period_end, resets_at, trial_ends_at,
-  credits: {kind: {limit, used, reserved, remaining, bonus_remaining, resets_at}}, limits, usage}`; `null` limit/remaining =
-  unlimited. `limits`/`usage` are the old flat keys plus an `edo_tokens` alias of `edo_messages`, kept for the current
-  `UsageMeter` until TASK-035. The frontend `UsageContext.jsx` fetches it for public users only and listens for the 402
-  and "AI call succeeded" events dispatched by `authFetch`.
+  credits: {kind: {limit, used, reserved, remaining, bonus_remaining, resets_at}}, limits, usage, is_trial,
+  trial_days_left}`; `null` limit/remaining = unlimited. `limits`/`usage` are the old flat keys plus an `edo_tokens`
+  alias of `edo_messages` (no longer read by the frontend). The 402 `quota_exceeded` body also carries `message` and `is_trial`.
 - **`GET /api/admin/accounts/{uid}/usage`** (admin): personal counters plus each org pool the account belongs to.
+- **`GET /api/admin/accounts/recent?limit=`** (admin): newest accounts first (1-200); declared before `/accounts/{uid}`.
+
+**Usage UI and pause rules (TASK-035, frontend).** `contexts/UsageContext.jsx` fetches `/api/account/usage` for the
+active workspace (personal plan or org pool), refreshes on workspace switch and after AI calls (`authFetch` events), and
+exposes `gate(kind)` / `useAiGate(kind)` -> `{blocked, reason, message}`. A kind is blocked when its `remaining` is 0
+(limit not null), when the server just answered 402 for it, or for every kind when the trial has ended (`plan_inactive`).
+Only AI triggers use the gate: Generate Course (`courses`); Edo generate chips, block-link Generate, description and
+synopsis, Course Builder outline chat, plan-day/ideas, course upload (`generates`); Edo text input (`edo_messages`).
+Saving, editing, typing in course fields and viewing are never gated. `UsageMeter` (sidebar) shows one counter per kind
+and is hidden for an org pool with no limits (ICC sees no change). `authFetch` turns `quota_exceeded`, `plan_inactive`
+and `plan_upgrade_required` 402s into `QuotaExceededModal`, and a 403 `account_deactivated` into a sign-out.
+**No payments:** every Upgrade / enterprise button opens `JoinWaitlistModal` ("Join the waitlist for when we open paid
+and enterprise versions"; `POST /api/waitlist`, source `upgrade`); no prices, no checkout.
+
+**Admin page (`/admin`, `components/admin/*`, `services/adminApi.js`).** Visible in the sidebar and routable only when
+`isAdmin`; every call goes through `authFetch` to `/api/admin/*`, where `require_admin` is the real gate. Tabs: Accounts
+(recent list, email search, set plan, grant credits, deactivate/reactivate with confirmation), Waitlist (filter, CSV),
+Costs (`cost-summary`, usage-log CSV).
 
 ### Usage and cost log (TASK-034)
 

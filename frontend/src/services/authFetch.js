@@ -37,8 +37,22 @@ export const notifyQuotaExceeded = (detail) => {
   window.dispatchEvent(new CustomEvent(QUOTA_EVENT, { detail }));
 };
 
-// True when `detail` is the backend's 402 quota payload.
-export const isQuotaDetail = (detail) => !!detail && typeof detail === 'object' && detail.code === 'quota_exceeded';
+// 402 codes that stop an AI action or a sharing action and open a modal:
+// a used-up credit (quota_exceeded), an ended trial (plan_inactive) or a plan that
+// does not include the action (plan_upgrade_required).
+export const BLOCK_CODES = ['quota_exceeded', 'plan_inactive', 'plan_upgrade_required'];
+
+// True when `detail` is one of the backend's blocking 402 payloads. The name is kept
+// from when quota_exceeded was the only one, so every existing caller covers all three.
+export const isQuotaDetail = (detail) => !!detail && typeof detail === 'object' && BLOCK_CODES.includes(detail.code);
+
+// Mid-session deactivation: any call answered 403 account_deactivated.
+export const DEACTIVATED_EVENT = 'edcube:account-deactivated';
+export const DEACTIVATED_MESSAGE = 'This account is deactivated.';
+export const isDeactivatedDetail = (detail) => !!detail && typeof detail === 'object' && detail.code === 'account_deactivated';
+export const notifyDeactivated = (detail) => {
+  window.dispatchEvent(new CustomEvent(DEACTIVATED_EVENT, { detail }));
+};
 
 // True for an error produced from a quota 402 (see errorFromResponse).
 export const isQuotaError = (err) => !!err && err.status === 402 && err.quota === true;
@@ -50,6 +64,11 @@ export const authFetch = async (url, options = {}) => {
     try {
       const detail = (await res.clone().json()).detail;
       if (isQuotaDetail(detail)) notifyQuotaExceeded(detail);
+    } catch { /* non-JSON body */ }
+  } else if (res.status === 403) {
+    try {
+      const detail = (await res.clone().json()).detail;
+      if (isDeactivatedDetail(detail)) notifyDeactivated(detail);
     } catch { /* non-JSON body */ }
   } else if (res.ok && (options.method || 'GET').toUpperCase() !== 'GET') {
     window.dispatchEvent(new Event(USAGE_CHANGED_EVENT));

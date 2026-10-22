@@ -7,6 +7,8 @@ import { Send } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useGeneration } from '../../contexts/GenerationContext';
 import { FONT, T, EDO_GREEN, EDO_ORANGE } from '../../constants/editorTheme';
+import { useAiGate } from '../../contexts/usageContextCore';
+import AiPausedHint from '../AiPausedHint';
 import { editOutline, fetchObjectiveCategories } from '../../services/courseBuilderApi';
 import { CHIP_COLORS } from './builderTheme';
 
@@ -46,6 +48,7 @@ const daysText = (nums, total) => {
 };
 
 const OutlineStageInner = () => {
+  const genGate = useAiGate('generates');
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   const { genState, selectBuilderOutline, applyBuilderEdit, undoBuilderEdit, proceedToPlanning, backToBuilderOutline } = useGeneration();
@@ -115,7 +118,7 @@ const OutlineStageInner = () => {
   const send = async (e) => {
     e.preventDefault();
     const text = message.trim();
-    if (!text || busy) return;
+    if (!text || busy || genGate.blocked) return;
     setBusy(true);
     setError('');
     setUndoNote('');
@@ -310,13 +313,15 @@ const OutlineStageInner = () => {
                   />
                   <button
                     type="submit"
-                    disabled={busy || !message.trim()}
+                    disabled={busy || !message.trim() || genGate.blocked}
+                    title={genGate.blocked ? genGate.message : undefined}
                     aria-label="Send to Edo"
                     style={{ width: 44, minHeight: 44, border: 'none', borderRadius: 8, background: EDO_GREEN, color: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: busy || !message.trim() ? 0.5 : 1, cursor: busy || !message.trim() ? 'not-allowed' : 'pointer', flexShrink: 0 }}
                   >
                     <Send size={18} aria-hidden="true" />
                   </button>
                 </div>
+                <AiPausedHint kind="generates" style={{ marginTop: 8 }} />
               </form>
             </div>
           </aside>

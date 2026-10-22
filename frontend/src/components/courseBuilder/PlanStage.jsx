@@ -11,6 +11,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useGeneration } from '../../contexts/GenerationContext';
 import { FONT, T } from '../../constants/editorTheme';
 import { addCourseToFolder } from '../../firebase/dbService';
+import { useAiGate } from '../../contexts/usageContextCore';
+import AiPausedHint from '../AiPausedHint';
 import { fetchCourseDocument, fetchDayIdeas } from '../../services/courseBuilderApi';
 import { navSectionsFromDoc } from '../../utils/builderCourse';
 import { TOPIC_TINTS } from './builderTheme';
@@ -99,6 +101,7 @@ const PlanStageInner = () => {
   const [blocked, setBlocked] = useState(''); // why the last move was refused (shown to the teacher)
   const [confirmBack, setConfirmBack] = useState(false);
   const [confirmBuild, setConfirmBuild] = useState(false);
+  const genGate = useAiGate('generates');
   const [ideasBusy, setIdeasBusy] = useState(false);
   const [ideasError, setIdeasError] = useState('');
   const mounted = useRef(true);
@@ -257,7 +260,7 @@ const PlanStageInner = () => {
     });
   };
   const moreIdeas = async () => {
-    if (ideasBusy || !ready) return;
+    if (ideasBusy || !ready || genGate.blocked) return;
     setIdeasBusy(true);
     setIdeasError('');
     const forDay = dayId;
@@ -423,7 +426,7 @@ const PlanStageInner = () => {
               <>
                 <div style={{ fontSize: 17, fontWeight: 700, color: '#c53030' }}>Day {dayIndex + 1} could not be planned</div>
                 <div style={{ fontSize: 14, color: '#4a4a4a', lineHeight: 1.5 }}>{day.error || 'Something went wrong while planning this day.'} The other days are not affected.</div>
-                <button type="button" onClick={() => planOneDay(dayId)} style={{ ...buttonBase, fontSize: 14, padding: '12px 18px', border: 'none', background: T.primary, color: '#FFFFFF' }}>Try planning Day {dayIndex + 1} again</button>
+                <button type="button" onClick={() => planOneDay(dayId)} disabled={genGate.blocked} title={genGate.blocked ? genGate.message : undefined} style={{ ...buttonBase, fontSize: 14, padding: '12px 18px', border: 'none', background: T.primary, color: '#FFFFFF' }}>Try planning Day {dayIndex + 1} again</button>
               </>
             ) : (
               <>
@@ -511,9 +514,10 @@ const PlanStageInner = () => {
                     )}
                   </Droppable>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start' }}>
-                    <button type="button" onClick={moreIdeas} disabled={ideasBusy} style={{ ...buttonBase, fontSize: 13, padding: '10px 14px', border: `1px solid ${T.rowBorder}`, background: '#FFFFFF', color: T.crumbActive, cursor: ideasBusy ? 'wait' : 'pointer', opacity: ideasBusy ? 0.7 : 1 }}>
+                    <button type="button" onClick={moreIdeas} disabled={ideasBusy || genGate.blocked} title={genGate.blocked ? genGate.message : undefined} style={{ ...buttonBase, fontSize: 13, padding: '10px 14px', border: `1px solid ${T.rowBorder}`, background: '#FFFFFF', color: T.crumbActive, cursor: ideasBusy ? 'wait' : 'pointer', opacity: ideasBusy ? 0.7 : 1 }}>
                       {ideasBusy ? 'Thinking of more ideas...' : 'More ideas'}
                     </button>
+                    <AiPausedHint kind="generates" />
                     {ideasError && <div role="alert" style={{ fontSize: 13, fontWeight: 500, color: '#c53030', lineHeight: 1.5 }}>{ideasError}</div>}
                   </div>
                 </section>

@@ -1,5 +1,5 @@
 // frontend/src/utils/curriculumApi.js
-import { workspaceHeader, authFetch, legacyErrorFromResponse, isQuotaDetail, notifyQuotaExceeded, QUOTA_MESSAGE, USAGE_CHANGED_EVENT } from '../services/authFetch';
+import { workspaceHeader, authFetch, legacyErrorFromResponse, isQuotaDetail, isDeactivatedDetail, notifyDeactivated, notifyQuotaExceeded, QUOTA_MESSAGE, USAGE_CHANGED_EVENT } from '../services/authFetch';
 
 const API_BASE_URL = `${import.meta.env.VITE_API_BASE_URL}/api`;
 
@@ -47,6 +47,7 @@ export const chatWithEdo = async ({
         quotaErr.quota = true;
         throw quotaErr;
       }
+      if (response.status === 403 && isDeactivatedDetail(error.detail)) notifyDeactivated(error.detail);
       throw new Error(typeof error.detail === 'string' && error.detail ? error.detail : 'Chat failed');
     }
 

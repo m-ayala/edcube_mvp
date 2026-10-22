@@ -33,8 +33,6 @@ from typing import Any, Dict, Optional, Set
 
 logger = logging.getLogger(__name__)
 
-USAGE_LOG_COLLECTION = "UsageLog"
-
 _current: "contextvars.ContextVar[Optional[CostTracker]]" = contextvars.ContextVar("edcube_cost_tracker", default=None)
 
 
