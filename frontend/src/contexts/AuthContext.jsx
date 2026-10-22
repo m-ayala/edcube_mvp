@@ -9,7 +9,7 @@ import {
   isNotRegisteredError,
   isNoSpaceError
 } from '../firebase/authService';
-import { setActiveWorkspaceHeader } from '../services/authFetch';
+import { setActiveWorkspaceHeader, DEACTIVATED_EVENT, DEACTIVATED_MESSAGE } from '../services/authFetch';
 
 const AuthContext = createContext();
 
@@ -172,6 +172,20 @@ export const AuthProvider = ({ children }) => {
     // Cleanup subscription
     return unsubscribe;
   }, [applyAccount, clearAccount]);
+
+  // Any API call answered 403 account_deactivated mid-session: sign out and show why on
+  // the login page (orgError is what Login reads).
+  useEffect(() => {
+    const onDeactivated = async (e) => {
+      const d = e.detail;
+      clearAccount();
+      setOrgError((d && typeof d.message === 'string' && d.message) || DEACTIVATED_MESSAGE);
+      try { await logoutTeacher(); } catch { /* already signed out */ }
+      setCurrentUser(null);
+    };
+    window.addEventListener(DEACTIVATED_EVENT, onDeactivated);
+    return () => window.removeEventListener(DEACTIVATED_EVENT, onDeactivated);
+  }, [clearAccount]);
 
   const setActiveWorkspace = useCallback(async (ws) => {
     const raw = rawRef.current;

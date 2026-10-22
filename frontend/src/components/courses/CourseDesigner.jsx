@@ -4,6 +4,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { Paperclip, X, FileText, FileSpreadsheet, Image, Presentation } from 'lucide-react';
 import { trackAiOutlineGenerated } from '../../firebase/analytics';
 import { useGeneration } from '../../contexts/GenerationContext';
+import { useAiGate } from '../../contexts/usageContextCore';
+import AiPausedHint from '../AiPausedHint';
 import { COURSE_BUILDER_ENABLED } from '../../constants/featureFlags';
 
 // Map file extension → icon + label
@@ -34,6 +36,8 @@ const CourseDesigner = () => {
   const location = useLocation();
   const { targetFolderId } = location.state || {};
   const { genState, startGeneration, clearGeneration } = useGeneration();
+  // A new AI course uses one 'courses' credit; when none is left only this button pauses.
+  const courseGate = useAiGate('courses');
   // Message from the Course Builder when it sent the teacher back here (e.g. after a refresh).
   const builderNotice = location.state?.notice || null;
 
@@ -152,6 +156,7 @@ const CourseDesigner = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (courseGate.blocked) return;
     if (!org) {
       alert('Unable to generate course: Organization ID not found. Please refresh the page and try again.');
       return;
@@ -545,19 +550,21 @@ const CourseDesigner = () => {
         </div>
 
         {/* Submit */}
+        <AiPausedHint kind="courses" style={{ marginBottom: '10px' }} />
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || courseGate.blocked}
+          title={courseGate.blocked ? courseGate.message : undefined}
           style={{
             width: '100%',
             padding: '14px',
-            background: loading ? '#a0aec0' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            background: (loading || courseGate.blocked) ? '#a0aec0' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
             color: 'white',
             border: 'none',
             borderRadius: '10px',
             fontSize: '16px',
             fontWeight: '700',
-            cursor: loading ? 'not-allowed' : 'pointer',
+            cursor: (loading || courseGate.blocked) ? 'not-allowed' : 'pointer',
             letterSpacing: '0.3px',
           }}
         >

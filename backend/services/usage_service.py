@@ -103,8 +103,17 @@ class QuotaExceeded(Exception):
         self.kind, self.limit, self.used, self.resets_at, self.plan = kind, limit, used, resets_at, plan
         self.remaining, self.pool, self.workspace, self.trial_ends_at = remaining, pool, workspace, trial_ends_at
 
+    def message(self) -> str:
+        what = {"courses": "courses", "generates": "generations", "edo_messages": "Edo messages"}.get(self.kind, self.kind)
+        if self.pool:
+            return f"Your organization's pool has no {what} left."
+        if self.plan == "trial":
+            return f"You've used all of your free trial {what}."
+        return f"You've used all of your {what} for this period."
+
     def to_detail(self) -> dict:
-        return {"code": "quota_exceeded", "kind": self.kind, "limit": self.limit,
+        return {"code": "quota_exceeded", "message": self.message(), "is_trial": self.plan == "trial",
+                "kind": self.kind, "limit": self.limit,
                 "used": self.used, "remaining": self.remaining, "resets_at": self.resets_at,
                 "plan": self.plan, "pool": self.pool, "workspace": self.workspace,
                 "trial_ends_at": self.trial_ends_at}
@@ -404,7 +413,13 @@ def usage_overview(org: str, uid: str, db=None, now: Optional[datetime] = None) 
         remaining = None if limit is None else max(0, limit - used - reserved) + bonus_rem
         credits[k] = {"limit": limit, "used": used, "reserved": reserved, "remaining": remaining,
                       "bonus_remaining": bonus_rem, "resets_at": scope["resets_at"]}
+    ends = scope["trial_ends_at"]
+    days_left = None
+    if scope["plan"] == "trial" and ends:
+        e = datetime.fromisoformat(ends) if isinstance(ends, str) else ends
+        days_left = max(0, int(-(-(e - now).total_seconds() // 86400)))   # ceil
     return {"plan": scope["plan"], "workspace": org, "pool": scope["pool"],
+            "is_trial": scope["plan"] == "trial", "trial_days_left": days_left,
             "space": "org" if scope["pool"] else "personal",
             "period_start": _iso(scope["period_start"]), "period_end": _iso(scope["period_end"]),
             "resets_at": scope["resets_at"], "trial_ends_at": scope["trial_ends_at"], "credits": credits}

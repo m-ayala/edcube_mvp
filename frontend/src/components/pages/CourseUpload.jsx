@@ -2,10 +2,13 @@
 import { useNavigate } from 'react-router-dom';
 import { authFetch } from '../../services/authFetch';
 import { useAuth } from '../../contexts/AuthContext';
+import { useAiGate } from '../../contexts/usageContextCore';
+import AiPausedHint from '../AiPausedHint';
 
 const CourseUpload = () => {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
+  const genGate = useAiGate('generates');
   const [selectedFile, setSelectedFile] = useState(null);
   const [dragActive, setDragActive] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -57,7 +60,7 @@ const handleUpload = async () => {
 
     if (!response.ok) {
       console.error('Backend error:', result);
-      const quota = response.status === 402 && result.detail?.code === 'quota_exceeded';
+      const quota = response.status === 402 && ['quota_exceeded', 'plan_inactive', 'plan_upgrade_required'].includes(result.detail?.code);
       const err = new Error(quota ? 'Monthly limit reached' : (typeof result.detail === 'string' && result.detail ? result.detail : 'Upload failed'));
       err.status = response.status;
       err.quota = quota;
@@ -202,9 +205,11 @@ const handleUpload = async () => {
             </div>
           </div>
 
+          <AiPausedHint kind="generates" style={{ marginBottom: '10px' }} />
           <button
             onClick={handleUpload}
-            disabled={!selectedFile || uploading}
+            disabled={!selectedFile || uploading || genGate.blocked}
+            title={genGate.blocked ? genGate.message : undefined}
             style={{
               width: '100%',
               padding: '15px',

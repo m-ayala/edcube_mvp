@@ -16,6 +16,8 @@ import {
   Clock, Grid2x2, Pencil,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useAiGate } from '../../contexts/usageContextCore';
+import AiPausedHint from '../AiPausedHint';
 import { generateSynopsis, generateCourseDescription } from '../../utils/curriculumApi';
 import html2pdf from 'html2pdf.js';
 import { INCOMPLETE_COURSE_MESSAGE } from '../../utils/builderCourse';
@@ -425,6 +427,7 @@ const CourseViewPage = () => {
   // ── Description state ─────────────────────────────────────────────────
   const [courseDescription, setCourseDescription] = useState(incomingFormData?.courseDescription || '');
   const [descriptionLoading, setDescriptionLoading] = useState(false);
+  const genGate = useAiGate('generates');
   const [descriptionError, setDescriptionError] = useState(null);
 
   // ── Synopsis state ────────────────────────────────────────────────────
@@ -786,7 +789,8 @@ const CourseViewPage = () => {
                 <div style={{ marginTop: '14px', display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <button
                     onClick={handleGenerateDescription}
-                    disabled={descriptionLoading}
+                    disabled={descriptionLoading || genGate.blocked}
+                    title={genGate.blocked ? genGate.message : undefined}
                     style={{
                       display: 'flex', alignItems: 'center', gap: '7px',
                       padding: '9px 18px',
@@ -814,6 +818,7 @@ const CourseViewPage = () => {
                       </>
                     )}
                   </button>
+                  <AiPausedHint kind="generates" style={{ margin: 0 }} />
                   {descriptionError && (
                     <span style={{ fontSize: '12px', color: '#c0392b', fontFamily: SANS }}>
                       {descriptionError}
@@ -1001,10 +1006,12 @@ const CourseViewPage = () => {
                       })}
 
                       {/* Generate button */}
+                      <AiPausedHint kind="generates" style={{ marginTop: '16px' }} />
                       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '24px' }}>
                         <button
                           onClick={handleGenerateSynopsis}
-                          disabled={selectedBlockIds.size === 0 || synopsisLoading}
+                          disabled={selectedBlockIds.size === 0 || synopsisLoading || genGate.blocked}
+                          title={genGate.blocked ? genGate.message : undefined}
                           style={{
                             fontFamily: SANS, fontSize: '14px', fontWeight: '600',
                             padding: '10px 24px', borderRadius: '10px', cursor: selectedBlockIds.size === 0 || synopsisLoading ? 'not-allowed' : 'pointer',

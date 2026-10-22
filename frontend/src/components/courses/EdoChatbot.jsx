@@ -6,9 +6,9 @@ import { chatWithEdo, generateEdoChips } from '../../utils/curriculumApi';
 import { trackEdoMessageSent } from '../../firebase/analytics';
 import { getSubcategoriesForType, getCategoryColor } from '../../constants/blockCategories';
 
-import { useAuth } from '../../contexts/AuthContext';
-import { useUsage } from '../../contexts/usageContextCore';
-import { formatResetDate, percentUsed } from '../../utils/usageFormat';
+import { useUsage, useAiGate } from '../../contexts/usageContextCore';
+import { counterText } from '../../utils/usageFormat';
+import AiPausedHint from '../AiPausedHint';
 import { EDO_GREEN, EDO_ORANGE } from '../../constants/editorTheme';
 
 // Render inline bold: splits on **text** markers and wraps in <strong>
@@ -213,14 +213,15 @@ const TRAY_DROPPABLE = {
 };
 
 const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onClose, trayItems = [], setTrayItems, handsOnResources = {}, currentPage = null, curriculumId = null }) => {
-  const { isPublicUser } = useAuth();
-  const { usage, limits, resetsAt, isExhausted, openUpgrade } = useUsage();
-  // Public users only: Edo allowance state. Org users have no limits, so none of
-  // this ever shows or disables anything for them.
-  const edoLimited = isPublicUser && limits?.edo_tokens != null;
-  const edoBlocked = isPublicUser && isExhausted('edo_tokens');
-  const edoLeftPct = edoLimited ? 100 - percentUsed(usage?.edo_tokens ?? 0, limits.edo_tokens) : null;
-  const quotaReply = (err, fallback) => (err?.quota ? 'You have reached this month\'s limit.' : fallback);
+  const { credits, isTrial, openUpgrade } = useUsage();
+  const edoGate = useAiGate('edo_messages');
+  const genGate = useAiGate('generates');
+  // Edo messages and Generate actions are separate credits: each pauses only its own buttons.
+  const edoBlocked = edoGate.blocked;
+  const genBlocked = genGate.blocked;
+  const edoCredit = credits?.edo_messages;
+  const edoLimited = !!edoCredit && edoCredit.limit != null;
+  const quotaReply = (err, fallback) => (err?.quota ? 'That is paused for now. You can keep editing by hand.' : fallback);
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -480,7 +481,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
 
   // ── Generate handlers ──────────────────────────────────────────────────
   const handleGenerateSection = async () => {
-    if (isTyping) return;
+    if (isTyping || genBlocked) return;
     addTextMessage('user', 'Generate a new section');
     setIsTyping(true);
     try {
@@ -503,7 +504,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
   };
 
   const handleGenerateSubsection = async (targetSection) => {
-    if (isTyping) return;
+    if (isTyping || genBlocked) return;
     setSubsectionSectionPicker(false);
     addTextMessage('user', `Generate a new subsection for "${targetSection.title}"`);
     setIsTyping(true);
@@ -535,7 +536,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
   };
 
   const handleGenerateBlock = async (blockType, subcategory = null) => {
-    if (isTyping) return;
+    if (isTyping || genBlocked) return;
     setSelectedBlockType(null);
     const typeLabels = { content: 'content block', worksheet: 'worksheet', activity: 'activity' };
     const typeLabel = typeLabels[blockType] || 'block';
@@ -1119,28 +1120,28 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
         }}>
           <button
             onClick={handleGenerateSection}
-            disabled={isTyping}
+            disabled={isTyping || genBlocked}
             style={{
               padding: '7px 4px', backgroundColor: '#DCFCE7',
               border: '1.5px solid #86EFAC', borderRadius: '8px',
-              cursor: isTyping ? 'not-allowed' : 'pointer',
+              cursor: (isTyping || genBlocked) ? 'not-allowed' : 'pointer',
               fontSize: '12.7px', fontWeight: '700', color: '#166534',
               fontFamily: "'DM Sans', sans-serif",
-              opacity: isTyping ? 0.55 : 1, transition: 'all 0.15s', textAlign: 'center',
+              opacity: (isTyping || genBlocked) ? 0.55 : 1, transition: 'all 0.15s', textAlign: 'center',
             }}
           >
             ✨ + Section
           </button>
           <button
             onClick={() => setSubsectionSectionPicker(true)}
-            disabled={isTyping}
+            disabled={isTyping || genBlocked}
             style={{
               padding: '7px 4px', backgroundColor: '#DCFCE7',
               border: '1.5px solid #86EFAC', borderRadius: '8px',
-              cursor: isTyping ? 'not-allowed' : 'pointer',
+              cursor: (isTyping || genBlocked) ? 'not-allowed' : 'pointer',
               fontSize: '12.7px', fontWeight: '700', color: '#166534',
               fontFamily: "'DM Sans', sans-serif",
-              opacity: isTyping ? 0.55 : 1, transition: 'all 0.15s', textAlign: 'center',
+              opacity: (isTyping || genBlocked) ? 0.55 : 1, transition: 'all 0.15s', textAlign: 'center',
             }}
           >
             ✨ + Subsection
@@ -1187,16 +1188,16 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
               <button
                 key={section.id}
                 onClick={() => handleGenerateSubsection(section)}
-                disabled={isTyping}
+                disabled={isTyping || genBlocked}
                 style={{
                   padding: '4px 10px',
                   backgroundColor: '#DCFCE7',
                   border: '1px solid #86EFAC',
                   borderRadius: '20px',
-                  cursor: isTyping ? 'not-allowed' : 'pointer',
+                  cursor: (isTyping || genBlocked) ? 'not-allowed' : 'pointer',
                   fontSize: '12px', fontWeight: '600', color: '#166534',
                   fontFamily: "'DM Sans', sans-serif",
-                  opacity: isTyping ? 0.55 : 1,
+                  opacity: (isTyping || genBlocked) ? 0.55 : 1,
                   whiteSpace: 'nowrap', maxWidth: '150px',
                   overflow: 'hidden', textOverflow: 'ellipsis',
                 }}
@@ -1273,14 +1274,14 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
               </span>
               <button
                 onClick={() => handleGenerateBlock(selectedBlockType)}
-                disabled={isTyping}
+                disabled={isTyping || genBlocked}
                 style={{
                   marginLeft: 'auto', padding: '3px 9px',
                   backgroundColor: meta.bg, border: `1px solid ${meta.border}`,
-                  borderRadius: '6px', cursor: isTyping ? 'not-allowed' : 'pointer',
+                  borderRadius: '6px', cursor: (isTyping || genBlocked) ? 'not-allowed' : 'pointer',
                   fontSize: '11.5px', fontWeight: '700', color: meta.color,
                   fontFamily: "'DM Sans', sans-serif", flexShrink: 0,
-                  opacity: isTyping ? 0.55 : 1,
+                  opacity: (isTyping || genBlocked) ? 0.55 : 1,
                 }}
               >
                 Any ✨
@@ -1303,16 +1304,16 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
                   <button
                     key={chip}
                     onClick={() => handleGenerateBlock(selectedBlockType, chip)}
-                    disabled={isTyping}
+                    disabled={isTyping || genBlocked}
                     style={{
                       padding: '4px 10px',
                       backgroundColor: meta.bg,
                       border: `1px solid ${meta.border}`,
                       borderRadius: '20px',
-                      cursor: isTyping ? 'not-allowed' : 'pointer',
+                      cursor: (isTyping || genBlocked) ? 'not-allowed' : 'pointer',
                       fontSize: '12px', fontWeight: '600', color: meta.color,
                       fontFamily: "'DM Sans', sans-serif",
-                      opacity: isTyping ? 0.55 : 1,
+                      opacity: (isTyping || genBlocked) ? 0.55 : 1,
                       transition: 'all 0.12s',
                       whiteSpace: 'nowrap',
                     }}
@@ -1361,16 +1362,16 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
                             <button
                               key={sub}
                               onClick={() => handleGenerateBlock(selectedBlockType, sub)}
-                              disabled={isTyping}
+                              disabled={isTyping || genBlocked}
                               style={{
                                 padding: '3px 9px',
                                 backgroundColor: '#FFFFFF',
                                 border: `1px solid ${catColor.border}`,
                                 borderRadius: '20px',
-                                cursor: isTyping ? 'not-allowed' : 'pointer',
+                                cursor: (isTyping || genBlocked) ? 'not-allowed' : 'pointer',
                                 fontSize: '11.5px', fontWeight: '600', color: catColor.text,
                                 fontFamily: "'DM Sans', sans-serif",
-                                opacity: isTyping ? 0.55 : 1,
+                                opacity: (isTyping || genBlocked) ? 0.55 : 1,
                                 whiteSpace: 'nowrap',
                                 transition: 'all 0.12s',
                               }}
@@ -1416,13 +1417,16 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
 
       {edoBlocked && (
         <div data-testid="edo-exhausted" style={{ padding: '8px 12px', borderTop: '1px solid #E7E5E4', backgroundColor: '#FFF4E8', fontSize: '12.5px', color: '#7A4A12', fontFamily: "'DM Sans', sans-serif", flexShrink: 0 }}>
-          You've used this month's Edo allowance{resetsAt ? ` — resets ${formatResetDate(resetsAt)}` : ''}.{' '}
-          <button onClick={openUpgrade} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: EDO_ORANGE, fontWeight: 700, textDecoration: 'underline', fontSize: 'inherit', fontFamily: 'inherit' }}>Upgrade</button>
+          {edoGate.message}{' '}
+          <button onClick={openUpgrade} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: EDO_ORANGE, fontWeight: 700, textDecoration: 'underline', fontSize: 'inherit', fontFamily: 'inherit' }}>Join the waitlist</button>
         </div>
+      )}
+      {genBlocked && !edoBlocked && (
+        <AiPausedHint kind="generates" style={{ margin: 0, borderRadius: 0, flexShrink: 0 }} />
       )}
       {!edoBlocked && edoLimited && (
         <div data-testid="edo-allowance" style={{ padding: '3px 12px 0', borderTop: '1px solid #E7E5E4', fontSize: '11.5px', color: '#8A8580', fontFamily: "'DM Sans', sans-serif", flexShrink: 0, backgroundColor: 'white' }}>
-          Edo: {edoLeftPct}% left this month
+          {counterText('edo_messages', edoCredit, { isTrial })}
         </div>
       )}
 

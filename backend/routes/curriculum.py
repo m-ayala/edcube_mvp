@@ -212,7 +212,7 @@ async def generate_curriculum(
                         generate_course_outlines, course_inputs, combined_vision_images or None
                     )
                 except OutlineGenerationError as e:
-                    state["partial"].update(stage="outlines", error=str(e)[:300])  # nothing produced -> refunded in finally
+                    state["partial"].update(stage="outlines", error=type(e).__name__)  # class name only (never model output); nothing produced -> refunded in finally
                     yield f"data: {json.dumps({'phase': 1, 'message': f'Error: {str(e)}', 'progress': 0, 'error': True})}\n\n"
                     return
                 single_day = num_days <= 1
@@ -300,7 +300,7 @@ async def generate_curriculum(
 
         except Exception as e:
             logger.error(f"generate-curriculum error: {e}", exc_info=True)
-            state["partial"]["error"] = str(e)[:300]
+            state["partial"]["error"] = type(e).__name__   # class name only, never the message
             yield f"data: {json.dumps({'message': f'Error: {str(e)}', 'error': True})}\n\n"
         finally:
             for p in tmp_paths:
@@ -1707,7 +1707,7 @@ Respond ONLY with valid JSON. No markdown, no preamble."""
         # confirms it when the reply returns (refunds if we raise). Token counts are only
         # attached for the TASK-034 cost log (usage_service.log_usage_event); never breaks the reply.
         _u = getattr(response, "usage", None)
-        note_usage(current_user, "edo_messages", action="edo_chat", model="gpt-4o",
+        note_usage(current_user, "edo_messages", action="edo_chat", model=getattr(response, "model", None),
                    tokens=getattr(_u, "total_tokens", None),
                    prompt_tokens=getattr(_u, "prompt_tokens", None),
                    completion_tokens=getattr(_u, "completion_tokens", None))

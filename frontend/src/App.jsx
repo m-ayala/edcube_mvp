@@ -22,6 +22,7 @@ import AfterschoolSynopsisPage from './components/afterschoolSynopsis/Afterschoo
 import CourseBuilderShell from './components/courseBuilder/CourseBuilderShell';
 import OutlineStage from './components/courseBuilder/OutlineStage';
 import PlanStage from './components/courseBuilder/PlanStage';
+import AdminPage from './components/admin/AdminPage';
 import { COURSE_BUILDER_ENABLED } from './constants/featureFlags';
 
 function App() {
@@ -60,6 +61,8 @@ function App() {
             <Route path="/profile" element={<TeacherProfile />} />
             <Route path="/profile/:teacherUid" element={<TeacherProfile />} />
             <Route path="/search" element={<Search />} />
+            {/* Admin only: AdminPage redirects anyone without the admin claim */}
+            <Route path="/admin" element={<AdminPage />} />
           </Route>
 
           {/* Standalone public routes — no sidebar, no auth required */}

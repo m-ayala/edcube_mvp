@@ -12,3 +12,10 @@ export const useUsage = () => {
   }
   return context;
 };
+
+// Pause state for one AI feature: { blocked, reason, message }. `kind` is
+// 'courses' | 'generates' | 'edo_messages'. Safe outside a provider (never blocked).
+export const useAiGate = (kind) => {
+  const context = useContext(UsageContext);
+  return context ? context.gate(kind) : { blocked: false, reason: null, message: '' };
+};

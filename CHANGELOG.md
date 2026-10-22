@@ -496,3 +496,15 @@ returns per-kind credits (legacy `limits`/`usage` keys and an `edo_tokens` alias
 
 ## 2026-10-21 — TASK-034 — usage and cost log
 Backend: every AI action now writes one `UsageLog/{autoId}` row (user, email domain, plan, workspace, action, credit kind, charged, course id, Browserbase search / fetch / render pages / sessions / seconds, LLM calls with model and tokens, success, error code, duration, time, estimated cost). A per-request collector (`services/cost_tracker.py`) is started by `enforce_quota`, `throttle_chips` and the new `track_ai`, and records at all LLM call sites and in `browserbase_client`; it reaches worker threads because `ThreadPoolExecutor.submit` now copies the submitter's context. The write runs in a two-thread background pool and fails open. Added `GET /api/admin/usage-log` (json or csv) and `GET /api/admin/cost-summary` (per action, per user, per credit kind). Prices live only in `platform_config.cost_rates` and are all 0 placeholders until filled in. Firestore rules deny all client access to `UsageLog`. No prompt or response content is stored. No frontend change, no credit behaviour change.
+
+## 2026-10-21 — TASK-035 — Credit counters UI, per-feature pause, waitlist upgrade path, admin page
+Backend: `GET /api/admin/accounts/recent` (declared before `/accounts/{uid}`); 402 `quota_exceeded` gains
+`message` and `is_trial`; `/api/account/usage` gains `is_trial` and `trial_days_left`; the duplicate
+`USAGE_LOG_COLLECTION` in `cost_tracker.py` removed; `partial.error` stores only the exception class name; the Edo
+cost note uses `response.model`.
+Frontend: `UsageContext` reads `credits` and exposes `useAiGate(kind)`; `UsageMeter` shows one counter per credit
+type in the sidebar (hidden for unlimited org pools); only the exhausted feature pauses (Edo messages, generates,
+courses), an ended trial pauses all AI with a message, and editing/saving/viewing never pause. `authFetch` handles
+`plan_inactive`, `plan_upgrade_required` and 403 `account_deactivated`. New `JoinWaitlistModal` replaces
+`UpgradeToProModal` (no payment, no price); new `/admin` page (accounts, waitlist, costs with CSV export through
+`authFetch`), admin-only link in the sidebar.
