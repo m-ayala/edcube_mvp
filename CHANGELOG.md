@@ -517,3 +517,6 @@ New public pages `/share/:token` (read-only course from a view-only link, no acc
 
 ## 2026-10-22 — TASK-038 — forking audit and wording
 Audit: no fork, copy or duplicate-course feature exists in the frontend or backend (only internal helpers), so nothing was removed. Landing page no longer mentions forking or remixing and no longer says "real-time" editing; it now describes sharing a course with view or edit access. Follow-ups from TASK-037: an invite page now forgets the remembered invite token when the invite is unavailable or expired, and sign-out clears local course drafts and any pending invite token (best effort, sign-out still works if storage fails).
+
+## 2026-10-22 — TASK-042 — landing page redesign
+Frontend: `LandingPage.jsx` rewritten. New order: hero, demo video, MLA framework, four flip cards, Create / Collaborate / Discover feature rows, Edo AI preview, mission and vision, audience marquee, founder, CTA. Sora only. Copy reworded to match what is built (no fork, public publishing, comments, real-time editing or citation promises). Photos and screenshots load from `frontend/public/landing/` with placeholders until the files are added (pending from the person).
