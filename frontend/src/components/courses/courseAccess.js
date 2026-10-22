@@ -82,6 +82,17 @@ export const clearDraft = (courseId) => {
   try { window.localStorage.removeItem(draftKey(courseId)); } catch { /* best effort */ }
 };
 
+// Sign-out cleanup: drop every local course draft so the next person on this browser never sees them.
+export const clearAllDrafts = () => {
+  try {
+    const store = window.localStorage;
+    for (let i = store.length - 1; i >= 0; i--) {
+      const k = store.key(i);
+      if (k && k.startsWith('edcube.draft.')) store.removeItem(k);
+    }
+  } catch { /* best effort */ }
+};
+
 export const copyText = async (text) => {
   try {
     await navigator.clipboard.writeText(text);

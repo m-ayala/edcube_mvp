@@ -248,10 +248,10 @@ const LandingPage = () => {
                 Co-design curriculum with your fellow teachers.
               </h2>
               <p style={{ fontSize: 15, color: '#6B6459', lineHeight: 1.7, maxWidth: 400 }}>
-                Invite colleagues to contribute to your courses. Fork a peer's curriculum and adapt it to your class. Build a shared knowledge base across your entire department.
+                Invite colleagues to contribute to your courses. Share a course with a peer so you can adapt it together. Build a shared knowledge base across your entire department.
               </p>
               <ul style={{ marginTop: 16, listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {['Real-time collaborative editing', 'Fork & remix courses with attribution', 'Org-wide course discovery feed'].map(item => (
+                {['Collaborative course editing', 'Share courses with view or edit access', 'Org-wide course discovery feed'].map(item => (
                   <li key={item} style={{ fontSize: 14, color: '#6B6459', display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span className="feat-check" />{item}
                   </li>
@@ -442,7 +442,7 @@ const MockCollabScreen = () => (
       <span>Ms. Kumar · just now</span>
     </div>
     <div className="comment-bubble right">
-      <p>Love it. Can we fork this for the 6th grade version too?</p>
+      <p>Love it. Let's adapt Section 4 for our 6th graders too.</p>
       <span>Mr. Lee · 2 min ago</span>
     </div>
   </MockVisualWrapper>
