@@ -99,6 +99,17 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // View-only share links (TASK-036): the doc id IS the secret token, so no client may read, list
+    // or write them. The public viewer goes through GET /api/share/{token} on the backend.
+    match /ShareLinks/{token} {
+      allow read, write: if false;
+    }
+
+    // Course invites (TASK-036): hold invitee emails and secret tokens; backend only.
+    match /Invites/{inviteId} {
+      allow read, write: if false;
+    }
+
     // ── Users/personal (reserved personal workspace, TASK-028; was Users/public) ──
     // Members are identified by the `org == "personal"` claim or a personal
     // teachers doc (this doc has no domains). Stricter than orgs: private
@@ -108,13 +119,23 @@ service cloud.firestore {
       allow read: if inPersonal();
 
       match /curricula/{curriculumId} {
+        // TASK-036: owner or someone in sharedWithUids only. The old "isPublic = visible to all EdCube
+        // users" read is gone; strangers see a course only through a view-only link (backend route).
         allow read: if inPersonal()
                     && (resource.data.teacherUid == request.auth.uid
-                        || resource.data.get('isPublic', false) == true
                         || request.auth.uid in resource.data.get('sharedWithUids', []));
+        // Sharing state is written by the backend only (it enforces the owner's plan and the
+        // collaborator cap), so a client can neither add collaborators nor hand the course to someone.
         allow create: if inPersonal()
-                      && request.resource.data.teacherUid == request.auth.uid;
-        allow update, delete: if inPersonal()
+                      && request.resource.data.teacherUid == request.auth.uid
+                      && request.resource.data.get('sharedWith', []).size() == 0
+                      && request.resource.data.get('sharedWithUids', []).size() == 0;
+        allow update: if inPersonal()
+                      && resource.data.teacherUid == request.auth.uid
+                      && request.resource.data.teacherUid == resource.data.teacherUid
+                      && !request.resource.data.diff(resource.data).affectedKeys()
+                            .hasAny(['sharedWith', 'sharedWithUids']);
+        allow delete: if inPersonal()
                       && resource.data.teacherUid == request.auth.uid;
       }
 

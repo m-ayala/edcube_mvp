@@ -87,6 +87,7 @@ def _fetch_registry(db) -> Dict[str, dict]:
             "plan_started_at": data.get("plan_started_at"),   # anchors the org pool's monthly period (TASK-033)
             "collaborator_cap": data.get("collaborator_cap"),
             "seats": data.get("seats"),
+            "allow_public_links": data.get("allow_public_links"),   # TASK-036: False = org forbids view-only links
         }
     return registry
 

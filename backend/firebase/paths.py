@@ -58,6 +58,8 @@ ACCOUNTS_COLLECTION = "Accounts"          # Accounts/{uid}
 ADMIN_AUDIT_COLLECTION = "AdminAudit"     # AdminAudit/{autoId}
 PAID_WAITLIST_COLLECTION = "PaidWaitlist" # PaidWaitlist/{autoId} (TASK-032)
 USAGE_LOG_COLLECTION = "UsageLog"         # UsageLog/{autoId} (TASK-034)
+SHARE_LINKS_COLLECTION = "ShareLinks"     # ShareLinks/{token} (TASK-036), view-only links, backend-only
+INVITES_COLLECTION = "Invites"            # Invites/{id} (TASK-036), collaborator/view invites, backend-only
 
 # Synopsis / afterschool routes have no auth today and are ICC-specific.
 # Multi-org synopsis is out of scope (tasks/firestore-reorg-spec.md, decision 4).
@@ -137,6 +139,16 @@ def paid_waitlist_col(db):
 def usage_log_col(db):
     """`UsageLog` -- one doc per AI action with its cost (TASK-034), written by the backend only."""
     return db.collection(USAGE_LOG_COLLECTION)
+
+
+def share_links_col(db):
+    """`ShareLinks` -- view-only share links, doc id = the unguessable token (TASK-036), backend only."""
+    return db.collection(SHARE_LINKS_COLLECTION)
+
+
+def invites_col(db):
+    """`Invites` -- pending/accepted/cancelled/expired course invites (TASK-036), backend only."""
+    return db.collection(INVITES_COLLECTION)
 
 
 def admin_audit_col(db):

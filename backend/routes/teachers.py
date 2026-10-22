@@ -358,6 +358,10 @@ async def get_teacher_profile(
         # Sharing/public courses are same-org only (tasks/firestore-reorg-spec.md,
         # decision 3), so the caller's org is always the target teacher's org.
         org = current_user["org"]
+        if org == PERSONAL_SPACE_ID and teacher_uid != current_user["uid"]:
+            # TASK-036: there is no teacher directory in the personal workspace any more, so another
+            # person's profile is not browsable (people reach each other through links and invites).
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Teacher profile not found for UID: {teacher_uid}")
 
         # Get teacher profile
         profile_ref = org_col(db, org, TEACHER_PROFILES_COLLECTION).document(teacher_uid)
@@ -371,13 +375,16 @@ async def get_teacher_profile(
 
         profile_data = profile_doc.to_dict()
 
-        # Count public courses for this teacher
-        courses_query = (
-            org_col(db, org, COURSES_COLLECTION)
-            .where(CF.TEACHER_UID, "==", teacher_uid)
-            .where(CF.IS_PUBLIC, "==", True)
-        )
-        public_courses = list(courses_query.stream())
+        # Count public courses for this teacher (always 0 in the personal workspace: retired in TASK-036)
+        if org == PERSONAL_SPACE_ID:
+            public_courses = []
+        else:
+            courses_query = (
+                org_col(db, org, COURSES_COLLECTION)
+                .where(CF.TEACHER_UID, "==", teacher_uid)
+                .where(CF.IS_PUBLIC, "==", True)
+            )
+            public_courses = list(courses_query.stream())
         
         # Build public response
         response_data = {
@@ -408,83 +415,6 @@ async def get_teacher_profile(
 
 PUBLIC_LIST_DEFAULT_LIMIT = 20
 PUBLIC_LIST_MAX_LIMIT = 50
-HAS_PUBLIC_COURSES = "has_public_courses"
-
-
-def _encode_cursor(name_lower: str, uid: str) -> str:
-    return base64.urlsafe_b64encode(json.dumps([name_lower, uid]).encode()).decode()
-
-
-def _decode_cursor(cursor: str):
-    try:
-        name_lower, uid = json.loads(base64.urlsafe_b64decode(cursor.encode()).decode())
-        if not isinstance(name_lower, str) or not isinstance(uid, str):
-            raise ValueError("bad cursor")
-        return name_lower, uid
-    except Exception:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid cursor")
-
-
-def _public_profile(profile_data: dict, public_course_count: int) -> TeacherProfilePublic:
-    return TeacherProfilePublic(
-        teacher_uid=profile_data[TPF.TEACHER_UID],
-        display_name=profile_data[TPF.DISPLAY_NAME],
-        subjects_taught=profile_data.get(TPF.SUBJECTS_TAUGHT, []),
-        grades_taught=profile_data.get(TPF.GRADES_TAUGHT, []),
-        bio=profile_data.get(TPF.BIO, ""),
-        profile_picture_url=profile_data.get(TPF.PROFILE_PICTURE_URL),
-        public_course_count=public_course_count,
-    )
-
-
-def _list_public_space_teachers(db, caller_uid: str, q: Optional[str], limit: int, cursor: Optional[str]) -> dict:
-    """
-    Public-space discovery: paginated, prefix-searchable, only teachers whose
-    profile has has_public_courses == true (missing flag == excluded), caller
-    excluded. Needs the composite index (has_public_courses, name_lower) on
-    teacher_profiles -- see frontend/firestore.indexes.json.
-    """
-    col = org_col(db, PERSONAL_SPACE_ID, TEACHER_PROFILES_COLLECTION)
-    query = col.where(HAS_PUBLIC_COURSES, "==", True)
-    q = (q or "").strip().lower()[:100]
-    if q:
-        query = query.where(PROFILE_NAME_LOWER, ">=", q).where(PROFILE_NAME_LOWER, "<=", q + "\uf8ff")
-    query = query.order_by(PROFILE_NAME_LOWER)
-    if cursor:
-        c_name, c_uid = _decode_cursor(cursor)
-        c_snap = col.document(c_uid).get()
-        query = query.start_after(c_snap if c_snap.exists else {PROFILE_NAME_LOWER: c_name})
-    # +2: room for the (at most one) caller row plus one lookahead row.
-    docs = list(query.limit(limit + 2).stream())
-    rows = [d for d in docs if d.id != caller_uid]
-    page = rows[:limit]
-    has_more = len(rows) > limit
-
-    teachers = []
-    for d in page:
-        data = d.to_dict() or {}
-        uid = data.get(TPF.TEACHER_UID) or d.id
-        data[TPF.TEACHER_UID] = uid
-        n = len(list(
-            org_col(db, PERSONAL_SPACE_ID, COURSES_COLLECTION)
-            .where(CF.TEACHER_UID, "==", uid)
-            .where(CF.IS_PUBLIC, "==", True)
-            .stream()
-        ))
-        if n == 0:
-            # Stale flag (should be rare): hide the teacher and heal the flag.
-            try:
-                col.document(d.id).update({HAS_PUBLIC_COURSES: False})
-            except Exception:
-                pass
-            continue
-        teachers.append(_public_profile(data, n))
-
-    next_cursor = None
-    if has_more and page:
-        last = page[-1].to_dict() or {}
-        next_cursor = _encode_cursor(last.get(PROFILE_NAME_LOWER, ""), page[-1].id)
-    return {"teachers": teachers, "next_cursor": next_cursor}
 
 
 @router.get("/", response_model=None)
@@ -499,16 +429,15 @@ async def list_all_teachers(
     Org callers: unchanged -- a bare List[TeacherProfilePublic] of every teacher
     in the org (q / limit / cursor are ignored).
 
-    Public-space callers: {"teachers": [TeacherProfilePublic...], "next_cursor": str|null},
-    only teachers with at least one Public course, caller excluded, ordered by
-    lowercased name.
+    Personal-workspace callers (TASK-036): the public teacher directory/search is RETIRED. The response
+    keeps its old shape, {"teachers": [], "next_cursor": null}, and exposes nobody: people share through
+    view-only links and invites instead.
     """
     try:
         # Resolve the caller's org_id from their email domain
         caller_org_id = current_user["org"]
         if caller_org_id == PERSONAL_SPACE_ID:
-            limit = max(1, min(limit, PUBLIC_LIST_MAX_LIMIT))
-            return _list_public_space_teachers(db, current_user["uid"], q, limit, cursor)
+            return {"teachers": [], "next_cursor": None}
 
         profiles_query = org_col(db, caller_org_id, TEACHER_PROFILES_COLLECTION).where(TPF.ORG_ID, "==", caller_org_id)
         profiles = profiles_query.stream()
@@ -565,6 +494,9 @@ async def get_teacher_public_courses(
     """
     try:
         org = current_user["org"]
+        if org == PERSONAL_SPACE_ID:
+            # TASK-036: no public courses in the personal workspace; nothing is browsable by others.
+            return {"success": True, "courses": []}
         courses_query = (
             org_col(db, org, COURSES_COLLECTION)
             .where(CF.TEACHER_UID, "==", teacher_uid)

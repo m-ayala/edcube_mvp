@@ -33,16 +33,18 @@ class ContactSubmission(BaseModel):
     type: Literal["demo", "pro"]
 
 
-def send_notification_email(subject: str, body: str, reply_to: Optional[str] = None):
-    """Send a plain-text notification to NOTIFY_TO via the Gmail account in the env.
-    Shared by /contact and /waitlist. No-op (with a warning) when credentials are unset."""
+def send_notification_email(subject: str, body: str, reply_to: Optional[str] = None, to: Optional[str] = None) -> bool:
+    """Send a plain-text email via the Gmail account in the env. Shared by /contact, /waitlist and
+    the invite emails (TASK-036). `to` defaults to NOTIFY_TO (the person); invites pass the invitee.
+    No-op (with a warning) when credentials are unset. Returns True if sent, False if skipped."""
     if not GMAIL_USER or not GMAIL_PASS:
         logger.warning("GMAIL_USER / GMAIL_APP_PASSWORD not set — skipping email")
-        return
+        return False
+    recipient = to or NOTIFY_TO
 
     msg = MIMEMultipart()
     msg["From"]    = GMAIL_USER
-    msg["To"]      = NOTIFY_TO
+    msg["To"]      = recipient
     msg["Subject"] = subject
     if reply_to:
         msg["Reply-To"] = reply_to
@@ -50,7 +52,8 @@ def send_notification_email(subject: str, body: str, reply_to: Optional[str] = N
 
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
         server.login(GMAIL_USER, GMAIL_PASS)
-        server.sendmail(GMAIL_USER, NOTIFY_TO, msg.as_string())
+        server.sendmail(GMAIL_USER, recipient, msg.as_string())
+    return True
 
 
 def _send_email(submission: ContactSubmission):

@@ -53,31 +53,10 @@ class FirebaseService:
         return _resolve_org(uid)
 
     async def sync_has_public_courses(self, org: str, uid: str) -> Optional[bool]:
-        """
-        Public space only (no-op returning None for orgs): recompute and store
-        `has_public_courses` on the owner's `teacher_profiles` doc, which powers
-        public teacher discovery. Recomputed from the source of truth (does this
-        owner have any curriculum with isPublic == true, limit 1) rather than
-        toggled, so it self-heals. Never raises: a failure here must not fail
-        the course write that triggered it.
-        """
-        if org != PERSONAL_SPACE_ID:
-            return None
-        try:
-            has_public = any(
-                True for _ in self.curricula_col(org)
-                .where('teacherUid', '==', uid)
-                .where('isPublic', '==', True)
-                .limit(1)
-                .stream()
-            )
-            ref = org_col(self.db, org, 'teacher_profiles').document(uid)
-            if ref.get().exists:
-                ref.update({'has_public_courses': has_public})
-            return has_public
-        except Exception as e:
-            logger.error(f"sync_has_public_courses failed for {uid}: {e}", exc_info=True)
-            return None
+        """RETIRED (TASK-036). The personal-workspace public teacher directory is gone, so nothing
+        reads `has_public_courses` any more and this no longer writes it. Kept as a no-op returning
+        None so existing call sites and signatures keep working."""
+        return None
 
     # ── Synopsis path helpers ─────────────────────────────────────────────────
     # Synopsis/afterschool routes have no auth and are ICC-specific today
@@ -196,17 +175,19 @@ class FirebaseService:
                 # others (view links, collaborators). Org-workspace courses are unaffected.
                 return None
             if not is_owner:
-                is_public = curriculum.get('isPublic', False)
-                if is_public:
+                if org == PERSONAL_SPACE_ID:
+                    # Personal workspace (TASK-036): readable by the owner and by people in
+                    # sharedWithUids only. `isPublic` ("visible to all EdCube users") is retired here;
+                    # non-members see a course only through a view-only link (GET /api/share/{token}).
+                    # sharedWithUids is re-read from the document on every call, so a removed or departed
+                    # collaborator loses access on their very next request.
+                    if teacherUid in (curriculum.get('sharedWithUids') or []):
+                        curriculum['id'] = doc.id
+                        curriculum.pop('teacherEmail', None)
+                        return curriculum
+                elif curriculum.get('isPublic', False):
+                    # Org workspace: unchanged. A published course is readable by every org member.
                     curriculum['id'] = doc.id
-                    if org == PERSONAL_SPACE_ID:
-                        curriculum.pop('teacherEmail', None)  # never expose emails of public users
-                    return curriculum
-                if org == PERSONAL_SPACE_ID and teacherUid in (curriculum.get('sharedWithUids') or []):
-                    # Public space: a Private course is readable by its invited
-                    # collaborators (mirrors the Users/personal firestore rule).
-                    curriculum['id'] = doc.id
-                    curriculum.pop('teacherEmail', None)
                     return curriculum
                 print(f"⚠️  Authorization failed: User {teacherUid} tried to access curriculum owned by {curriculum.get('teacherUid')}")
                 return None
@@ -256,41 +237,37 @@ class FirebaseService:
             print(f"❌ Error listing curricula: {str(e)}")
             raise
     
-    async def delete_curriculum(self, curriculum_id: str, teacherUid: str) -> bool:
+    async def delete_curriculum(self, curriculum_id: str, teacherUid: str, org: Optional[str] = None) -> bool:
         """
-        Delete a curriculum
-        
+        Delete a curriculum. OWNER ONLY in every workspace (TASK-041; before, an org member could delete
+        another member's published course because this reused get_curriculum, which also returns
+        others' public courses).
+
         Args:
             curriculum_id: Firestore document ID
-            teacherUid: User ID for authorization
-            
+            teacherUid: caller's uid
+            org: workspace the course lives in (the request's workspace). Resolved from the uid if
+                omitted (old behaviour).
+
         Returns:
-            True if deleted, False if not found
+            True if deleted, False if not found or the caller is not the owner
         """
         try:
-            # First verify ownership
-            org = _resolve_org(teacherUid)
-            curriculum = await self.get_curriculum(curriculum_id, teacherUid, org=org)
-
-            if not curriculum:
+            org = org or _resolve_org(teacherUid)
+            ref = self.curricula_col(org).document(curriculum_id)
+            doc = ref.get()
+            if not doc.exists:
                 return False
-
-            # get_curriculum also returns other people's Public courses, so
-            # ownership must be re-checked here. Enforced for the public space
-            # (strangers share it); org behaviour is deliberately unchanged.
-            if org == PERSONAL_SPACE_ID and curriculum.get('teacherUid') != teacherUid:
+            if (doc.to_dict() or {}).get('teacherUid') != teacherUid:
                 return False
-
-            # Delete document
-            self.curricula_col(org).document(curriculum_id).delete()
-            await self.sync_has_public_courses(org, teacherUid)
+            ref.delete()
             print(f"✅ Deleted curriculum: {curriculum_id}")
             return True
-        
+
         except Exception as e:
             print(f"❌ Error deleting curriculum: {str(e)}")
             raise
-    
+
     async def add_resources_to_curriculum(
         self,
         curriculum_id: str,
@@ -340,6 +317,23 @@ class FirebaseService:
         except Exception as e:
             print(f"❌ Error adding resources: {str(e)}")
             raise
+    @staticmethod
+    def section_write_denied(curriculum: dict, caller_uid: str, org: str) -> Optional[str]:
+        """None if `caller_uid` may write sections of this course, else why not (TASK-041): only the
+        owner, or someone with `collaborate` access, in EVERY workspace (org members no longer get
+        write access just by being in the org). In the personal workspace a collaborator also needs
+        the OWNER's plan to allow co-editing right now (live)."""
+        if curriculum.get('teacherUid') == caller_uid:
+            return None
+        collab = next((x for x in (curriculum.get('sharedWith') or []) if x.get('uid') == caller_uid), None)
+        if not collab:
+            return 'access_view_only'
+        if collab.get('accessType') != 'collaborate':
+            return 'access_view_only'
+        if org == PERSONAL_SPACE_ID and not entitlements.owner_allows_coedit(curriculum.get('teacherUid'), org):
+            return 'coediting_not_in_plan'
+        return None
+
     async def update_section(
         self,
         curriculum_id: str,
@@ -374,15 +368,9 @@ class FirebaseService:
             
             # Get current data
             curriculum = doc.to_dict()
-            if org == PERSONAL_SPACE_ID and caller_uid is not None:
-                # Public space: only the owner or a 'collaborate' invitee may write.
-                if curriculum.get('teacherUid') != caller_uid:
-                    collab = next((x for x in curriculum.get('sharedWith', []) if x.get('uid') == caller_uid), None)
-                    # Co-editing is governed by the OWNER's plan, computed live (TASK-031).
-                    if (not collab or collab.get('accessType') != 'collaborate'
-                            or not entitlements.owner_allows_coedit(curriculum.get('teacherUid'), org)):
-                        logger.warning(f"Unauthorized section write by {caller_uid} on {curriculum_id}")
-                        return False
+            if caller_uid is not None and self.section_write_denied(curriculum, caller_uid, org):
+                logger.warning(f"Unauthorized section write by {caller_uid} on {curriculum_id}")
+                return False
             sections = curriculum.get('outline', {}).get('sections', [])
             
             # Find and update the specific section

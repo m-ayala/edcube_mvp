@@ -41,54 +41,11 @@ class ShareCourseRequest(BaseModel):
     access_type: str = "view"  # "view" or "collaborate"; used for recipient_emails only
 
 
-# ── Invite-by-email guards (public space) ────────────────────────────────────
+# ── Invite-by-email (personal workspace) ────────────────────────────────────
+# Folded into the invite flow in routes/sharing.py + services/sharing_service.py (TASK-036). The old
+# existing-users-only email lookup (and its in-memory limiter) is gone: an email with no account now
+# gets a pending invite, and invites are rate limited per owner (sharing_service.INVITE_LIMITER).
 MAX_EMAILS_PER_REQUEST = 20
-LOOKUPS_PER_WINDOW = 30
-LOOKUP_WINDOW_SECONDS = 60
-_lookup_log: Dict[str, Deque[float]] = {}
-_lookup_lock = threading.Lock()
-
-
-def _charge_email_lookups(uid: str, n: int) -> None:
-    """
-    Per-uid sliding-window limit on email->account lookups (in-memory, per
-    process): LOOKUPS_PER_WINDOW per LOOKUP_WINDOW_SECONDS, each email counts as
-    one. Raises 429 {"detail": {"code": "rate_limited"}} without recording the
-    rejected attempt.
-    """
-    now = time.monotonic()
-    with _lookup_lock:
-        log = _lookup_log.setdefault(uid, deque())
-        while log and now - log[0] > LOOKUP_WINDOW_SECONDS:
-            log.popleft()
-        if len(log) + n > LOOKUPS_PER_WINDOW:
-            retry = int(LOOKUP_WINDOW_SECONDS - (now - log[0])) + 1 if log else LOOKUP_WINDOW_SECONDS
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail={"code": "rate_limited"},
-                headers={"Retry-After": str(max(retry, 1))},
-            )
-        log.extend([now] * n)
-        if len(_lookup_log) > 5000:  # opportunistic cleanup of idle uids
-            for k in [k for k, v in _lookup_log.items() if not v or now - v[-1] > LOOKUP_WINDOW_SECONDS]:
-                _lookup_log.pop(k, None)
-
-
-def _resolve_public_email(email: str) -> Optional[str]:
-    """
-    Email -> uid of a member of the public space, else None. "No account" and
-    "account exists but isn't in the public space" (e.g. an org user) are
-    deliberately indistinguishable to the caller.
-    """
-    try:
-        uid = fb_auth.get_user_by_email(email).uid
-    except (fb_auth.UserNotFoundError, ValueError):
-        return None
-    except Exception as e:  # Auth backend trouble: don't report it as "not found"
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Could not look up that email right now")
-    if org_col(firebase.db, PERSONAL_SPACE_ID, TEACHERS_COLLECTION).document(uid).get().exists:
-        return uid
-    return None
 
 
 @router.get("/")
@@ -119,6 +76,9 @@ async def share_course(
     if (course_doc.to_dict() or {}).get("teacherUid") != from_uid:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the course owner can share this course")
 
+    if org == PERSONAL_SPACE_ID:
+        return await _share_personal(body, current_user, course_doc.to_dict() or {})
+
     # Plan gate (TASK-031): view-only shares are `share_link_create`, collaborate shares are
     # `invite_collaborator` (plan flag + per-course cap). Expired trial -> 402 plan_inactive.
     course_data = course_doc.to_dict() or {}
@@ -130,43 +90,12 @@ async def share_course(
     if wants_collab:
         entitlements.enforce(current_user, entitlements.INVITE_COLLABORATOR, course_data)
 
-    is_public = org == PERSONAL_SPACE_ID
-    emails: List[str] = []
-    email_uids: List[str] = []
-    not_found: List[str] = []
-
-    if body.recipient_emails and not is_public:
+    # Org workspace: unchanged from before TASK-036 (uid recipients only; emails are a personal-workspace feature).
+    if body.recipient_emails:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Inviting by email is not available for your organization",
         )
-
-    if is_public:
-        if any(r.uid == from_uid for r in body.recipients):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                                detail={"code": "cannot_share_with_self", "message": "You can't share a course with yourself"})
-        if body.recipient_emails:
-            if body.access_type not in ("view", "collaborate"):
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="access_type must be 'view' or 'collaborate'")
-            if len(body.recipient_emails) > MAX_EMAILS_PER_REQUEST:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                                    detail={"code": "too_many_emails", "max": MAX_EMAILS_PER_REQUEST})
-            # normalise + de-dupe, preserving order
-            emails = list(dict.fromkeys(e.strip().lower() for e in body.recipient_emails if e and e.strip()))
-            own_email = (current_user.get("email") or "").strip().lower()
-            if own_email and own_email in emails:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                                    detail={"code": "cannot_share_with_self", "message": "You can't share a course with yourself"})
-            _charge_email_lookups(from_uid, len(emails))
-            for e in emails:
-                uid = _resolve_public_email(e)
-                if uid is None:
-                    not_found.append(e)
-                elif uid == from_uid:
-                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                                        detail={"code": "cannot_share_with_self", "message": "You can't share a course with yourself"})
-                elif uid not in email_uids:
-                    email_uids.append(uid)
 
     # Recipients must be teachers in the caller's own org (validated before any write).
     unknown = [
@@ -184,8 +113,6 @@ async def share_course(
     from_name = profile_doc.to_dict().get("display_name", "Someone") if profile_doc.exists else "Someone"
 
     recipients = list(body.recipients)
-    have = {r.uid for r in recipients}
-    recipients += [ShareRecipient(uid=u, access_type=body.access_type) for u in email_uids if u not in have]
 
     for recipient in recipients:
         notif_type = (
@@ -205,11 +132,69 @@ async def share_course(
         # Add recipient to sharedWith array in the curriculum document
         await firebase.add_shared_with(body.course_id, recipient.uid, recipient.access_type, org=org)
 
-    result = {"success": True, "shared_with": len(recipients)}
-    if is_public:
-        result["shared"] = [r.uid for r in recipients]
-        result["not_found"] = not_found
-    return result
+    return {"success": True, "shared_with": len(recipients)}
+
+
+async def _share_personal(body: ShareCourseRequest, current_user: dict, course: dict) -> dict:
+    """
+    Thin alias onto the invite flow (TASK-036) so the current frontend keeps working until TASK-037.
+    Personal workspace only; org sharing below is untouched.
+      recipient_emails -> sharing_service.invite_by_email: an existing account is added directly (and
+                          notified), anyone else gets a pending invite email. Capped per owner's plan,
+                          pending invites counted.
+      recipients (uids) -> gated one by one against the same cap, then added and notified.
+    Response keeps the old keys (success, shared_with, shared, not_found) and adds `invited` and `results`.
+    """
+    from services import sharing_service as ss
+    from routes.sharing import _send_invite_email
+    db = firebase.db
+    ws, from_uid = current_user["org"], current_user["uid"]
+    course = {**course, "id": body.course_id}
+    if any(r.uid == from_uid for r in body.recipients):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail={"code": "cannot_share_with_self", "message": "You can't share a course with yourself"})
+    emails: List[str] = []
+    if body.recipient_emails:
+        if body.access_type not in ("view", "collaborate"):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="access_type must be 'view' or 'collaborate'")
+        if len(body.recipient_emails) > MAX_EMAILS_PER_REQUEST:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                                detail={"code": "too_many_emails", "max": MAX_EMAILS_PER_REQUEST})
+        emails = list(dict.fromkeys(e.strip().lower() for e in body.recipient_emails if e and e.strip()))
+
+    unknown = [r.uid for r in body.recipients
+               if not org_col(db, ws, TEACHER_PROFILES_COLLECTION).document(r.uid).get().exists]
+    if unknown:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="One or more recipients don't have an EdCube account")
+
+    results, shared, invited = [], [], []
+    for r in body.recipients:                       # uid recipients: gate each one against the live cap
+        if not ss.entry_for(course, r.uid) or ss.entry_for(course, r.uid).get("accessType") != r.access_type:
+            live = ss.reconcile_course_invites(db, ws, course, body.course_id)
+            ss.gate_invite(db, current_user, course, r.access_type, live)
+        prev = ss.entry_for(course, r.uid)
+        prev = dict(prev) if prev else None
+        ss.add_shared(db, ws, course, r.uid, r.access_type)
+        if r.access_type == "collaborate":   # same post-write cap recheck as the invite route
+            ss._guard_after_write(db, current_user, course, [], rollback=lambda r=r, prev=prev: (
+                ss.add_shared(db, ws, course, r.uid, prev["accessType"]) if prev else ss.remove_shared(db, ws, course, r.uid)))
+        ss.notify(db, ws, r.uid, from_uid, ss.display_name(db, ws, from_uid, "Someone"),
+                  "course_share_collaborate" if r.access_type == "collaborate" else "course_share_view",
+                  body.course_id, body.course_name, r.access_type)
+        shared.append(r.uid)
+        results.append({"uid": r.uid, "status": "added", "access_type": r.access_type})
+    for e in emails:
+        ss.throttle(ss.INVITE_LIMITER, f"invite:{from_uid}")
+        res = ss.invite_by_email(db, current_user, course, e, body.access_type)
+        item = {"email": res["email"], "status": res["status"], "access_type": res["access_type"]}
+        if res["status"] == "invited":
+            item.update(await _send_invite_email(db, ws, from_uid, course, res["invite_id"], res["invite"], current_user))
+            invited.append(res["email"])
+        elif res.get("uid"):
+            shared.append(res["uid"])
+        results.append(item)
+    return {"success": True, "shared_with": len(shared) + len(invited), "shared": shared,
+            "not_found": [], "invited": invited, "results": results}
 
 
 class DeleteSeenRequest(BaseModel):
