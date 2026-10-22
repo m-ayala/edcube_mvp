@@ -1,10 +1,11 @@
 // frontend/src/services/synopsisService.js
+import { workspaceHeader } from './authFetch';
 
 const API_BASE = `${import.meta.env.VITE_API_BASE_URL}/api/synopsis`;
 
 const authHeader = async (currentUser) => {
   const token = await currentUser.getIdToken();
-  return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+  return { ...workspaceHeader(), Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 };
 
 // ── Public reads ──────────────────────────────────────────────────────────────
@@ -96,7 +97,7 @@ export const parseFlyer = async (currentUser, file) => {
   formData.append('file', file);
   const res = await fetch(`${API_BASE}/parse-flyer`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { ...workspaceHeader(), Authorization: `Bearer ${token}` },
     body: formData,
   });
   if (!res.ok) {
@@ -206,7 +207,7 @@ export const parseFoodImage = async (currentUser, file) => {
   formData.append('file', file);
   const res = await fetch(`${API_BASE}/parse-food`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { ...workspaceHeader(), Authorization: `Bearer ${token}` },
     body: formData,
   });
   if (!res.ok) {

@@ -13,7 +13,7 @@ import uvicorn
 from routes.file_upload import router as file_upload_router
 from routes.uploads import router as uploads_router
 import os
-from routes import curriculum, resources, topics, teachers, contact, notifications, synopsis, afterschool_synopsis, orgs, knowledge_base, course_builder, account, admin
+from routes import curriculum, resources, topics, teachers, contact, notifications, synopsis, afterschool_synopsis, orgs, knowledge_base, course_builder, account, admin, waitlist
 from services.usage_service import QuotaExceeded
 
 app = FastAPI(title="EdCube API")
@@ -58,6 +58,7 @@ app.include_router(knowledge_base.router, tags=["knowledge_base"])
 app.include_router(course_builder.router, prefix="/api", tags=["course-builder"])
 app.include_router(account.router, tags=["account"])
 app.include_router(admin.router, tags=["admin"])
+app.include_router(waitlist.router, tags=["waitlist"])
 
 ALLOWED_ORIGINS = {
     "http://localhost:5173", "http://localhost:5174", "http://localhost:5175",

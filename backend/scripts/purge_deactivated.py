@@ -10,6 +10,13 @@ For each such account it lists / deletes:
   - the Firebase Auth user (skip with --keep-auth)
   - finally Accounts/{uid}
 Org-workspace content (Users/<org>/...) is NEVER touched: it belongs to the org.
+
+ORG MEMBERS KEEP THEIR LOGIN (TASK-032). If the account has any org membership (a non-personal
+entry in Accounts.memberships, or a Users/<org>/teachers/{uid} doc), only the personal-workspace
+content above is purged. The Firebase Auth user and all org data are kept, and Accounts/{uid} is
+reset to an active record (status active, deactivated_at/delete_after cleared, memberships and
+plan kept) so they can still sign in to their org. The Auth user is deleted only for users with
+no org membership. The dry run prints which path each user takes.
 Cloud Storage objects are NOT deleted by this script (list them separately before --apply).
 Every deletion is logged to AdminAudit.
 
@@ -29,7 +36,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import firebase_admin
 from firebase_admin import auth
 
-from firebase.paths import PERSONAL_SPACE_ID, accounts_col, org_col
+from firebase.paths import ORGS_ROOT, PERSONAL_SPACE_ID, PERSONAL_SPACE_IDS, accounts_col, org_col
 from firebase.project import firestore_client
 from services import accounts_service as accts
 
@@ -47,6 +54,19 @@ def delete_doc_tree(doc_ref, apply):
         if apply:
             doc_ref.delete()
     return n
+
+
+def org_memberships(db, uid, data):
+    """Org ids (non-personal) this uid belongs to: Accounts.memberships plus any
+    Users/<org>/teachers/{uid} doc (covers accounts whose memberships list is stale)."""
+    orgs = {m.get("workspace") for m in (data.get("memberships") or [])
+            if m.get("workspace") and m.get("workspace") not in PERSONAL_SPACE_IDS}
+    for d in db.collection(ORGS_ROOT).list_documents():
+        if d.id in PERSONAL_SPACE_IDS or d.id in orgs:
+            continue
+        if org_col(db, d.id, "teachers").document(uid).get().exists:
+            orgs.add(d.id)
+    return sorted(orgs)
 
 
 def due_accounts(db, now, only_uid=None):
@@ -80,6 +100,7 @@ def main():
     for uid, data in due_accounts(db, now, args.uid):
         total += 1
         print(f"\n{uid} <{data.get('email')}> deactivated {data.get('deactivated_at')}, delete_after {data.get('delete_after')}")
+        orgs = org_memberships(db, uid, data)
         courses = list(org_col(db, PERSONAL_SPACE_ID, "curricula").where("teacherUid", "==", uid).stream())
         print(f"  personal courses: {len(courses)}")
         counts = {"courses": 0}
@@ -88,16 +109,27 @@ def main():
         for name in ("teacher_profiles", "teachers", "usage"):
             counts[name] = delete_doc_tree(org_col(db, PERSONAL_SPACE_ID, name).document(uid), apply)
         print(f"  {'deleted' if apply else 'would delete'} docs: {counts}")
-        print(f"  Firebase Auth user: {'kept (--keep-auth)' if args.keep_auth else ('deleted' if apply else 'would delete')}")
-        print(f"  Accounts/{uid}: {'deleted' if apply else 'would delete'}")
+        if orgs:
+            print(f"  PATH: org member ({', '.join(orgs)}) -- personal content only; Firebase Auth user KEPT, org data untouched")
+            print(f"  Accounts/{uid}: {'reset to active' if apply else 'would reset to active'} (login kept)")
+        else:
+            print("  PATH: personal-only -- full deletion")
+            print(f"  Firebase Auth user: {'kept (--keep-auth)' if args.keep_auth else ('deleted' if apply else 'would delete')}")
+            print(f"  Accounts/{uid}: {'deleted' if apply else 'would delete'}")
         if apply:
-            accts.log_admin_action(SCRIPT_ADMIN, "purge_deactivated", uid, {"email": data.get("email")}, counts, db)
-            if not args.keep_auth:
-                try:
-                    auth.delete_user(uid)
-                except Exception as e:
-                    print(f"  auth delete failed: {e}")
-            accounts_col(db).document(uid).delete()
+            accts.log_admin_action(SCRIPT_ADMIN, "purge_deactivated", uid,
+                                   {"email": data.get("email")},
+                                   {**counts, "path": "org_member_personal_only" if orgs else "full", "orgs": orgs}, db)
+            if orgs:
+                accounts_col(db).document(uid).update(
+                    {"status": accts.STATUS_ACTIVE, "deactivated_at": None, "delete_after": None})
+            else:
+                if not args.keep_auth:
+                    try:
+                        auth.delete_user(uid)
+                    except Exception as e:
+                        print(f"  auth delete failed: {e}")
+                accounts_col(db).document(uid).delete()
             accts.invalidate(uid)
     print(f"\n{total} account(s) past their grace period." + ("" if apply else " Dry run: nothing was deleted."))
 

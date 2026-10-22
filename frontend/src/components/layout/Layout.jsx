@@ -1,9 +1,11 @@
 import { useRef, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
+import { useAuth } from '../../contexts/AuthContext';
 
 const Layout = () => {
   const blobsRef = useRef(null);
+  const { activeWorkspace } = useAuth();
 
   useEffect(() => {
     const el = blobsRef.current;
@@ -50,7 +52,8 @@ const Layout = () => {
         position: 'relative',
         zIndex: 1
       }}>
-        <Outlet />
+        {/* Keyed by workspace so a switch remounts the page and refetches its data. */}
+        <Outlet key={activeWorkspace || 'none'} />
       </main>
     </div>
   );

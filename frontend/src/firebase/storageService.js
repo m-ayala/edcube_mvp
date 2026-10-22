@@ -2,6 +2,7 @@
 // Uploads go through the FastAPI backend to avoid Firebase Storage CORS issues.
 
 import { auth } from './config';
+import { workspaceHeader } from '../services/authFetch';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL;
 
@@ -29,7 +30,7 @@ export const uploadProfilePicture = async (file, _userId) => {
 
   const res = await fetch(`${API_BASE}/api/upload/profile-picture`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { ...workspaceHeader(), Authorization: `Bearer ${token}` },
     body: formData,
   });
 

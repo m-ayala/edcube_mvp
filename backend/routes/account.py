@@ -27,16 +27,12 @@ from firebase.org_registry import resolve_space, get_org_info
 from firebase.paths import (
     PERSONAL_SPACE_ID,
     ORG_CLAIM,
-    WAITLIST_COLLECTION,
     org_doc,
     org_col,
     invalidate_uid_caches,
 )
 from firebase.public_space import (
     PERSONAL_SPACE_NAME,
-    SPACE_USER_COUNT,
-    SPACE_MAX_USERS,
-    DEFAULT_MAX_USERS,
     ADMIN_CLAIM,
     PLAN_ORG,
 )
@@ -53,11 +49,6 @@ from services import platform_config as pc
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/account", tags=["account"])
-
-WAITLISTED_MESSAGE = (
-    "EdCube is at capacity right now — you're on the waitlist and we'll email you."
-)
-
 
 class BootstrapRequest(BaseModel):
     # Optional: the signup form's name. Falls back to the token's `name`, then the
@@ -100,34 +91,15 @@ def _ensure_profile(db, org_id: str, user: dict, display_name: str) -> None:
     ref.set(create_default_profile({**user, "name": display_name}, org_id))
 
 
-def _signup_cap(data: dict) -> Optional[int]:
-    """Signup cap on the personal space doc. DISABLED by default: a missing or null
-    max_users means no cap (spec: anyone can sign up). Kept, not deleted, pending the
-    person's approval to remove the cap/waitlist code."""
-    cap = data.get(SPACE_MAX_USERS)
-    cap = DEFAULT_MAX_USERS if cap is None else cap
-    return None if cap is None else int(cap)
-
-
-def _personal_txn(transaction, space_ref, teacher_ref, waitlist_ref, user, display_name):
-    """Runs inside a Firestore transaction; returns 'exists' | 'created' | 'waitlisted' | 'no_space'."""
+def _personal_txn(transaction, space_ref, teacher_ref, user, display_name):
+    """Runs inside a Firestore transaction; returns 'exists' | 'created' | 'no_space'.
+    Signup is unlimited: there is no cap and no capacity waitlist."""
     space = space_ref.get(transaction=transaction)
     if not space.exists:
         return "no_space"
     teacher = teacher_ref.get(transaction=transaction)
     if teacher.exists:
         return "exists"
-    data = space.to_dict() or {}
-    count = int(data.get(SPACE_USER_COUNT) or 0)
-    cap = _signup_cap(data)
-    if cap is not None and count >= cap:
-        transaction.set(waitlist_ref, {
-            "email": user["email"].lower(),
-            "uid": user["uid"],
-            "created_at": firestore.SERVER_TIMESTAMP,
-        })
-        return "waitlisted"
-    transaction.update(space_ref, {SPACE_USER_COUNT: count + 1})
     transaction.set(teacher_ref, _teacher_doc_body(user["email"], display_name, PERSONAL_SPACE_ID))
     return "created"
 
@@ -186,7 +158,7 @@ async def bootstrap(
                 teacher_ref.set(_teacher_doc_body(email, display_name, space))
             _ensure_profile(db, space, user, display_name)
             _set_org_claim(uid, space)
-            # Org members also get a personal workspace (never cap-blocked, no waitlist).
+            # Org members also get a personal workspace .
             personal_teacher = org_col(db, PERSONAL_SPACE_ID, TEACHERS_COLLECTION).document(uid)
             if not personal_teacher.get().exists:
                 personal_teacher.set(_teacher_doc_body(email, display_name, PERSONAL_SPACE_ID))
@@ -194,16 +166,10 @@ async def bootstrap(
         else:
             space_ref = org_doc(db, PERSONAL_SPACE_ID)
             teacher_ref = org_col(db, PERSONAL_SPACE_ID, TEACHERS_COLLECTION).document(uid)
-            waitlist_ref = org_col(db, PERSONAL_SPACE_ID, WAITLIST_COLLECTION).document(email.lower())
             txn_fn = firestore.transactional(_personal_txn)
-            outcome = txn_fn(db.transaction(), space_ref, teacher_ref, waitlist_ref, user, display_name)
+            outcome = txn_fn(db.transaction(), space_ref, teacher_ref, user, display_name)
             if outcome == "no_space":
                 raise HTTPException(status_code=503, detail="Public signups are not open yet")
-            if outcome == "waitlisted":
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail={"code": "waitlisted", "message": WAITLISTED_MESSAGE},
-                )
             created = outcome == "created"
             _ensure_profile(db, PERSONAL_SPACE_ID, user, display_name)
             _set_org_claim(uid, PERSONAL_SPACE_ID)

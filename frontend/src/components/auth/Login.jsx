@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { loginTeacher, resendVerificationEmail } from '../../firebase/authService';
 import { useAuth } from '../../contexts/AuthContext';
+import GoogleButton, { OrDivider } from './GoogleButton';
 
 const Login = () => {
   const { orgError } = useAuth();
@@ -27,10 +28,6 @@ const Login = () => {
       await loginTeacher(email, password);
       navigate('/my-courses');
     } catch (err) {
-      if (err.code === 'waitlisted') {
-        navigate('/waitlist', { state: { message: err.message } });
-        return;
-      }
       setError(err.message);
       if (err.message?.includes('verify your email')) setShowResend(true);
     } finally {
@@ -139,6 +136,13 @@ const Login = () => {
             background: '#fff', borderRadius: 18, border: '0.5px solid #E5E0D8',
             padding: '28px 28px'
           }}>
+
+            <GoogleButton
+              disabled={loading}
+              onSuccess={() => navigate('/my-courses')}
+              onError={(err) => setError(err.message)}
+            />
+            <OrDivider />
 
             {error && (
               <div style={{

@@ -1,4 +1,5 @@
 // frontend/src/utils/teacherService.js
+import { workspaceHeader } from './authFetch';
 
 const API_BASE_URL = `${import.meta.env.VITE_API_BASE_URL}/api/teachers`;
 
@@ -13,7 +14,7 @@ const getAuthHeader = async (currentUser) => {
   const idToken = await currentUser.getIdToken();
   return {
     'Content-Type': 'application/json',
-    'Authorization': `Bearer ${idToken}`
+    ...workspaceHeader(), 'Authorization': `Bearer ${idToken}`
   };
 };
 

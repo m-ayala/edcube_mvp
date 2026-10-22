@@ -34,7 +34,6 @@ from firebase.public_space import (  # noqa: F401 (re-exported schema constants)
     TEACHER_PLAN,
     TEACHER_PLAN_UPDATED_AT,
     PROFILE_NAME_LOWER,
-    WAITLIST_COLLECTION,
     USAGE_COLLECTION,
 )
 

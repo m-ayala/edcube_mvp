@@ -33,11 +33,27 @@ class ContactSubmission(BaseModel):
     type: Literal["demo", "pro"]
 
 
-def _send_email(submission: ContactSubmission):
+def send_notification_email(subject: str, body: str, reply_to: Optional[str] = None):
+    """Send a plain-text notification to NOTIFY_TO via the Gmail account in the env.
+    Shared by /contact and /waitlist. No-op (with a warning) when credentials are unset."""
     if not GMAIL_USER or not GMAIL_PASS:
         logger.warning("GMAIL_USER / GMAIL_APP_PASSWORD not set — skipping email")
         return
 
+    msg = MIMEMultipart()
+    msg["From"]    = GMAIL_USER
+    msg["To"]      = NOTIFY_TO
+    msg["Subject"] = subject
+    if reply_to:
+        msg["Reply-To"] = reply_to
+    msg.attach(MIMEText(body, "plain"))
+
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        server.login(GMAIL_USER, GMAIL_PASS)
+        server.sendmail(GMAIL_USER, NOTIFY_TO, msg.as_string())
+
+
+def _send_email(submission: ContactSubmission):
     if submission.type == "pro":
         subject = f"EdCube Pro plan request from {submission.name}"
     else:
@@ -48,17 +64,7 @@ def _send_email(submission: ContactSubmission):
         f"Organization: {submission.org or '—'}\n\n"
         f"Message:\n{submission.message or '—'}"
     )
-
-    msg = MIMEMultipart()
-    msg["From"]    = GMAIL_USER
-    msg["To"]      = NOTIFY_TO
-    msg["Subject"] = subject
-    msg["Reply-To"] = submission.email
-    msg.attach(MIMEText(body, "plain"))
-
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-        server.login(GMAIL_USER, GMAIL_PASS)
-        server.sendmail(GMAIL_USER, NOTIFY_TO, msg.as_string())
+    send_notification_email(subject, body, reply_to=submission.email)
 
 
 @router.post("/contact")

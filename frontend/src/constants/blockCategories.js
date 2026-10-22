@@ -10,6 +10,7 @@
 
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../firebase/config';
+import { workspaceHeader } from '../services/authFetch';
 
 const API_BASE_URL = `${import.meta.env.VITE_API_BASE_URL}/api`;
 
@@ -130,7 +131,7 @@ async function loadObjectivesFromBackend(user) {
   try {
     const idToken = await user.getIdToken();
     const response = await fetch(`${API_BASE_URL}/knowledge-base/objectives`, {
-      headers: { Authorization: `Bearer ${idToken}` },
+      headers: { ...workspaceHeader(), Authorization: `Bearer ${idToken}` },
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();

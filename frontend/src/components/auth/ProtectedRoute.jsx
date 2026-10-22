@@ -4,7 +4,11 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 
 const ProtectedRoute = ({ children }) => {
-  const { currentUser, orgError } = useAuth();
+  const { currentUser, orgError, resolving } = useAuth();
+
+  // Account still resolving after a sign-in: wait so no page calls the API before
+  // the active-workspace header is set.
+  if (currentUser && resolving) return null;
 
   if (!currentUser) {
     // Signed out because their org isn't registered (see AuthContext) ->

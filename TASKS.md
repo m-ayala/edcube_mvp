@@ -12,9 +12,6 @@ Public launch (plan: ~/.claude/plans/pasted-content-id-bccb-all-right-structured
 One branch per task (task/TASK-XXX-slug). Stop for the person's review at the end of each phase
 and before every commit. Target project edcubeai-fdba7 (Firestore DB "default").
 
-- [ ] TASK-032: Phase 1 — signup/login: individual via Google or email+password (no domain blocked),
-      organizations via the enterprise waitlist (see TASK-035 note), one login for all, workspace switcher, email domain recorded
-      at signup. (frontend-agent, small backend route)
 - [ ] TASK-033: Phase 2 — credit counters: reserve → confirm/refund in transactions; trial one-time
       allowance, paid monthly on plan-start anniversary, no rollover; org pool; every AI route;
       Generate Course counts only when a usable course is produced; Edo counted per message. (backend-agent)
@@ -80,7 +77,23 @@ and before every commit. Target project edcubeai-fdba7 (Firestore DB "default").
 ## In Progress
 
 
+
 ## Done
+
+- [x] TASK-032: Phase 1 — signup/login: individual via Google or email+password (no domain blocked),
+      organizations via the enterprise waitlist (see TASK-035 note), one login for all, workspace switcher, email domain recorded
+      at signup. (frontend-agent, small backend route)
+      Also (person, 2026-10-21): (a) ICC/org staff get the Teacher plan free in their personal workspace;
+      (b) delete the unused signup-cap / capacity-waitlist code (never live); (c) permanent deletion keeps
+      the login for anyone who belongs to an org (only personal content is purged). Enterprise/paid
+      waitlist backend route is built here (the org signup option needs it); TASK-035 adds the in-app buttons.
+      Assigned: backend-agent, then frontend-agent — started 2026-10-21. Branch task/TASK-032-signup-login.
+      QA PASS 2026-10-21: import ok; backend checks task032 49, auth 13, public 37, usage 37, discovery 80, blocklinks 11, task031 111 all pass;
+      lint 26 errors/5 warnings (baseline 27/6), build ok; frontend e2e scripts re-run 19/19 (stubbed Firebase auth and API). Read only: firestore.rules
+      (personal curricula/teachers reads fit the frontend paths), real Google popup, real backend, reload persistence. Org default unchanged (backend
+      default_workspace = org; switcher only with >1 membership). Cap/waitlist code and Waitlist.jsx fully gone (grep clean). Purge: org members keep Auth + org data.
+      Open: UpgradeToProModal / QuotaExceededModal still old wording (TASK-035); Login.jsx "Sign up free" and SignupChoice "Start free" copy;
+      redirect-fallback sign-in returns via the auth listener (no getRedirectResult call, lastLogin not touched on that path); no automated tests for the frontend.
 
 - [x] TASK-031: Phase 1 — accounts, plans (trial 30-day placeholder / teacher / org), one central config doc, the can()
       entitlement check, admin claim + override routes, personal workspace and memberships, deactivation with 30-day grace,

@@ -89,11 +89,16 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Paid-plan interest list (TASK-032): backend only, no client access at all.
+    match /PaidWaitlist/{entry} {
+      allow read, write: if false;
+    }
+
     // ── Users/personal (reserved personal workspace, TASK-028; was Users/public) ──
     // Members are identified by the `org == "personal"` claim or a personal
     // teachers doc (this doc has no domains). Stricter than orgs: private
     // courses stay private, a user can only see their own teachers doc, and
-    // usage/waitlist are backend-only. Plans live on Accounts/{uid}.
+    // usage is backend-only. Plans live on Accounts/{uid}.
     match /Users/personal {
       allow read: if inPersonal();
 
@@ -114,7 +119,7 @@ service cloud.firestore {
       }
 
       // Self only. `plan` / `plan_updated_at` are backend-written (admin SDK
-      // bypasses rules). No client delete: deleting would reset a plan on re-bootstrap and skew user_count.
+      // bypasses rules). No client delete: deleting would reset a plan on re-bootstrap.
       match /teachers/{teacherUid} {
         allow read: if inPersonal() && request.auth.uid == teacherUid;
         allow create: if inPersonal() && request.auth.uid == teacherUid
@@ -134,7 +139,7 @@ service cloud.firestore {
                       && resource.data.toUid == request.auth.uid;
       }
 
-      // usage/** and waitlist/** (and anything else): no client access.
+      // usage/** (and anything else): no client access.
     }
 
     // ── Users/{orgId} (per-organization data) ───────────────────────────

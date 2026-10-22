@@ -4,6 +4,7 @@
 import { useAuth } from '../../contexts/AuthContext';
 import { useUsage } from '../../contexts/usageContextCore';
 import { formatResetDate, percentUsed } from '../../utils/usageFormat';
+import { planLabel, isPaidPlan } from '../../utils/planLabel';
 
 const GREEN = '#2C5F3A';
 const ORANGE = '#E8761A';
@@ -30,11 +31,12 @@ const Bar = ({ label, used, limit, edo, compact }) => {
 };
 
 const UsageMeter = ({ compact = false }) => {
-  const { isPublicUser } = useAuth();
+  const { isPublicUser, orgName, plan: authPlan } = useAuth();
   const { usage, limits, plan, resetsAt, loaded, openUpgrade } = useUsage();
   if (!isPublicUser || !loaded) return null;
 
-  const isPro = plan === 'pro';
+  const shownPlan = plan || authPlan;
+  const isPro = isPaidPlan(shownPlan);
   const resets = formatResetDate(resetsAt);
   return (
     <div
@@ -50,7 +52,7 @@ const UsageMeter = ({ compact = false }) => {
           fontSize: compact ? 11 : 12, fontWeight: 700, padding: '2px 8px', borderRadius: 10,
           background: isPro ? GREEN : '#FDEBDD', color: isPro ? '#fff' : ORANGE,
         }}>
-          {isPro ? 'Pro plan' : 'Free plan'}
+          {planLabel(shownPlan, orgName)}
         </span>
         {!isPro && (
           <button
