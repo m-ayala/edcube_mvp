@@ -147,7 +147,7 @@ const LandingPage = () => {
           'MLA framework built into every course',
           'Content, worksheets, and activities for every pillar',
         ]}
-        visual={<Screenshot name="create" bar="EdCube · Course Designer" label="Create" note="The course designer at the outline stage, with a sample course whose blocks are tagged with the four pillars." />}
+        visual={<CreatePreview />}
       />
 
       <FeatureBand
@@ -160,19 +160,19 @@ const LandingPage = () => {
           'Share a view-only link, no account needed',
           'You decide who can view and who can edit',
         ]}
-        visual={<Screenshot name="collaborate" bar="EdCube · Shared course" label="Collaborate" note="The invite-collaborators dialog with a collaborator list, or the share-link dialog, on the sample course." />}
+        visual={<CollaboratePreview />}
       />
 
       <FeatureBand
         tag="Discover" tagClass="tag-blue"
         title="Find courses from teachers around you."
-        body="Search the courses teachers in your school or organization have built, open their profiles, and ask to collaborate on the ones you like."
+        body="Search for teachers in your school or organization, open their profiles to see the courses they've built, and ask to collaborate on the ones you like."
         bullets={[
-          "Search your organization's courses",
+          'Search teachers in your organization',
           'Browse teacher profiles and their courses',
           'Request to collaborate on a course',
         ]}
-        visual={<Screenshot name="discover" bar="EdCube · Search" label="Discover" note="The Search page showing several courses from teachers in an organization." />}
+        visual={<DiscoverPreview />}
       />
 
       {/* 6. OUR APPROACH TO AI */}
@@ -291,34 +291,163 @@ const FeatureBand = ({ tag, tagClass, title, body, bullets, visual, reverse }) =
   </div>
 );
 
-// Shows /landing/<name>.png once the file exists; until then, a placeholder card.
-const Screenshot = ({ name, bar, label, note }) => {
-  const [missing, setMissing] = useState(false);
-  return (
-    <div className={missing ? 'shot' : 'shot shot-real'}>
-      <div className="shot-bar">
-        <i style={{ background: '#F9C0C8' }} />
-        <i style={{ background: '#F9E0A0' }} />
-        <i style={{ background: '#A8D8B0' }} />
-        <b>{bar}</b>
-      </div>
-      {missing ? (
-        <div className="shot-body">
-          <span className="lbl">Screenshot coming soon: {label}</span>
-          <p>{note}</p>
-        </div>
-      ) : (
-        <img
-          src={`/landing/${name}.png`}
-          alt={`EdCube ${label.toLowerCase()} screen`}
-          loading="lazy"
-          onError={() => setMissing(true)}
-          style={{ display: 'block', width: '100%', height: 'auto' }}
-        />
-      )}
+/* ─── App screen previews ────────────────────────────────────────
+   Static copies of real EdCube screens with sample data, built from the same styles as
+   CourseDesigner.jsx (Create Course), PersonalShareModal.jsx (Share) and Search.jsx (Search).
+   Decorative only: nothing here is interactive. */
+
+const APP_FONT = "'DM Sans', sans-serif";
+
+const AppFrame = ({ title, children, bg = '#fff' }) => (
+  <div className="shot shot-real" aria-hidden="true">
+    <div className="shot-bar">
+      <i style={{ background: '#F9C0C8' }} />
+      <i style={{ background: '#F9E0A0' }} />
+      <i style={{ background: '#A8D8B0' }} />
+      <b>{title}</b>
     </div>
-  );
+    <div style={{ background: bg, fontFamily: APP_FONT, padding: 22 }}>{children}</div>
+  </div>
+);
+
+const fieldLabel = { display: 'block', marginBottom: 5, fontWeight: 600, fontSize: 12.5, color: '#2d3748' };
+const fieldBox = {
+  padding: '8px 10px', fontSize: 13, border: '1px solid #e2e8f0', borderRadius: 7, background: '#fff', color: '#1a202c',
 };
+
+const Field = ({ label, value, style }) => (
+  <div style={{ marginBottom: 12, ...style }}>
+    <span style={fieldLabel}>{label}</span>
+    <div style={fieldBox}>{value}</div>
+  </div>
+);
+
+const CreatePreview = () => (
+  <AppFrame title="EdCube · Create Course" bg="#F8F9FB">
+    <div style={{ fontSize: 18, fontWeight: 700, color: '#1a202c', marginBottom: 3 }}>✨ EdCube AI Course Designer</div>
+    <div style={{ fontSize: 12.5, color: '#718096', marginBottom: 16, lineHeight: 1.45 }}>
+      Fill in your course details — attach any materials you already have and the AI will use everything to build your course.
+    </div>
+    <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: 16, marginBottom: 12 }}>
+      <div style={{ fontSize: 13.5, fontWeight: 700, color: '#2d3748', marginBottom: 12 }}>Course Details</div>
+      <Field label="Course Name" value="Ecosystems Around Us" />
+      <div style={{ display: 'flex', gap: 10 }}>
+        <Field label="Student Age Range" value="9 to 11 years old" style={{ flex: 1.3 }} />
+        <Field label="Number of Students" value="18" style={{ flex: 1 }} />
+      </div>
+      <div style={{ display: 'flex', gap: 10 }}>
+        <Field label="Number of Days" value="5" style={{ flex: 1 }} />
+        <Field label="Teaching Hours per Day" value="2" style={{ flex: 1 }} />
+      </div>
+      <Field
+        label="Objectives / Requirements / Notes"
+        value="Hands-on outdoor learning. Students should explore a local habitat and present what they find."
+        style={{ marginBottom: 0 }}
+      />
+    </div>
+    <div style={{
+      padding: 11, borderRadius: 9, textAlign: 'center', color: '#fff', fontWeight: 700, fontSize: 13.5,
+      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', letterSpacing: '0.3px',
+    }}>
+      ✨ Generate Course with AI
+    </div>
+  </AppFrame>
+);
+
+const shareSection = { fontSize: 11.5, fontWeight: 600, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 };
+const shareHint = { fontSize: 12, color: '#78716C', lineHeight: 1.45, marginBottom: 9 };
+const shareRow = {
+  display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 7,
+  backgroundColor: '#F9FAFB', border: '1px solid #F3F4F6', fontSize: 12.5,
+};
+const shareSmallBtn = (danger) => ({
+  border: `1px solid ${danger ? '#FCA5A5' : '#D1D5DB'}`, borderRadius: 6, padding: '3px 8px',
+  background: '#fff', color: danger ? '#B91C1C' : '#374151', fontSize: 11.5, flexShrink: 0,
+});
+
+const CollaboratePreview = () => (
+  <AppFrame title="EdCube · Share course" bg="rgba(0,0,0,0.06)">
+    <div style={{ background: '#fff', borderRadius: 12, boxShadow: '0 12px 36px rgba(0,0,0,0.16)', overflow: 'hidden' }}>
+      <div style={{ padding: '14px 18px 11px', borderBottom: '1px solid #F3F4F6', display: 'flex', justifyContent: 'space-between' }}>
+        <div>
+          <div style={{ fontSize: 15.5, fontWeight: 700, color: '#1C1917' }}>Share</div>
+          <div style={{ fontSize: 12, color: '#78716C', marginTop: 2 }}>Ecosystems Around Us</div>
+        </div>
+        <span style={{ fontSize: 20, color: '#9CA3AF', lineHeight: 1 }}>×</span>
+      </div>
+      <div style={{ padding: '14px 18px 16px' }}>
+        <div style={shareSection}>View-only links</div>
+        <div style={shareHint}>Anyone with a link can view this course without an account. They can&apos;t edit it. You can revoke a link at any time.</div>
+        <div style={shareRow}>
+          <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#1C1917', border: '1px solid #D1D5DB', borderRadius: 6, padding: '4px 8px', background: '#FAFAF9' }}>
+            edcube.app/share/k3f9q2
+          </span>
+          <span style={shareSmallBtn(false)}>Copy</span>
+          <span style={{ fontSize: 11.5, color: '#78716C', whiteSpace: 'nowrap' }}>12 views</span>
+        </div>
+
+        <div style={{ ...shareSection, marginTop: 16 }}>Collaborators</div>
+        <div style={shareHint}>
+          Invite people by email. They join for free on any plan and land directly in this course.{' '}
+          <strong style={{ color: '#44403C' }}>2 of 3 collaborators used</strong>
+        </div>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+          <span style={{ flex: 1, border: '1px solid #D1D5DB', borderRadius: 7, padding: '6px 9px', fontSize: 12.5, color: '#9CA3AF', background: '#FAFAF9' }}>Email address</span>
+          <span style={{ border: '1px solid #D1D5DB', borderRadius: 7, padding: '6px 8px', fontSize: 12.5, color: '#1C1917' }}>Can edit ▾</span>
+          <span style={{ padding: '6px 14px', backgroundColor: '#1C1917', color: '#fff', borderRadius: 7, fontSize: 12.5, fontWeight: 600 }}>Invite</span>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={shareRow}>
+            <span style={{ flex: 1, color: '#1C1917', fontWeight: 500 }}>Priya Raman</span>
+            <span style={{ color: '#57534E', fontSize: 11.5 }}>Can edit</span>
+            <span style={shareSmallBtn(true)}>Remove</span>
+          </div>
+          <div style={shareRow}>
+            <span style={{ flex: 1, color: '#1C1917', fontWeight: 500 }}>Daniel Ortiz</span>
+            <span style={{ color: '#57534E', fontSize: 11.5 }}>Can edit</span>
+            <span style={shareSmallBtn(true)}>Remove</span>
+          </div>
+          <div style={shareRow}>
+            <span style={{ flex: 1, color: '#1C1917', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>m.lee@school.org</span>
+            <span style={{ fontSize: 10.5, fontWeight: 600, color: '#92400E', background: '#FEF3C7', borderRadius: 999, padding: '2px 7px' }}>Pending</span>
+            <span style={{ color: '#57534E', fontSize: 11.5 }}>Can view</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </AppFrame>
+);
+
+const SEARCH_TEACHERS = ['Sarah Chen', 'Samuel Okafor', 'Sandra Ruiz', 'Sanjay Patel'];
+
+const DiscoverPreview = () => (
+  <AppFrame title="EdCube · Search" bg="#FAF7F0">
+    <div style={{ position: 'relative', marginBottom: 16 }}>
+      <span style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', fontSize: 15 }}>🔍</span>
+      <div style={{
+        padding: '11px 14px 11px 38px', fontSize: 14.5, border: '1px solid #8b7355', borderRadius: 11,
+        backgroundColor: '#fffdf7', color: '#2c3e50', boxShadow: '0 0 0 3px rgba(139,115,85,0.1)',
+      }}>
+        Sa
+      </div>
+    </div>
+    {SEARCH_TEACHERS.map((t, i) => (
+      <div key={t} style={{
+        display: 'flex', alignItems: 'center', gap: 12, padding: '10px 13px', marginBottom: 7, borderRadius: 10,
+        backgroundColor: i === 0 ? '#f5f5dc' : '#fffdf7', border: '1px solid #e8dcc8',
+        boxShadow: i === 0 ? '0 2px 8px rgba(0,0,0,0.08)' : 'none',
+      }}>
+        <div style={{
+          width: 34, height: 34, borderRadius: '50%', backgroundColor: '#8b7355', color: '#fff', flexShrink: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 600, fontSize: 13.5,
+        }}>
+          {t.split(' ').map(w => w[0]).join('')}
+        </div>
+        <span style={{ fontSize: 14.5, fontWeight: 500, color: '#2c3e50' }}>{t}</span>
+      </div>
+    ))}
+  </AppFrame>
+);
 
 const FlipCard = ({ subject }) => {
   const [open, setOpen] = useState(false);
@@ -581,6 +710,7 @@ const LANDING_CSS = `
 
   .band { padding: 40px 48px; }
   .feature-row { display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: center; max-width: 1100px; margin: 0 auto; }
+  .feature-row > * { min-width: 0; }
   .feature-row.reverse > .feature-visual { order: -1; }
   .feat-tag { display: inline-block; font-size: 12.1px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; padding: 4px 10px; border-radius: 100px; margin-bottom: 16px; }
   .tag-orange { background: #FDEEE6; color: #C05A2A; }
