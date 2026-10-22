@@ -1,5 +1,5 @@
 // frontend/src/utils/curriculumApi.js
-import { authFetch, legacyErrorFromResponse, isQuotaDetail, notifyQuotaExceeded, QUOTA_MESSAGE, USAGE_CHANGED_EVENT } from '../services/authFetch';
+import { workspaceHeader, authFetch, legacyErrorFromResponse, isQuotaDetail, notifyQuotaExceeded, QUOTA_MESSAGE, USAGE_CHANGED_EVENT } from '../services/authFetch';
 
 const API_BASE_URL = `${import.meta.env.VITE_API_BASE_URL}/api`;
 
@@ -28,7 +28,7 @@ export const chatWithEdo = async ({
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(idToken ? { Authorization: `Bearer ${idToken}` } : {})
+        ...(idToken ? { ...workspaceHeader(), Authorization: `Bearer ${idToken}` } : {})
       },
       body: JSON.stringify({
         message,

@@ -98,12 +98,12 @@ Users/{org}                                          (doc: { name, domains: [...
     └── summer_camps (doc) → weeks/{week}/camps/{camp}/entries/
 
 Users/personal                                       (doc: reserved personal-workspace pseudo-org, see below)
-├── curricula/, teacher_profiles/, teachers/{uid}, notifications/   (same shapes as an org)
-└── waitlist/{email}                                 backend-only
+└── curricula/, teacher_profiles/, teachers/{uid}, notifications/   (same shapes as an org)
 
 EdCube/platform_config                               (doc: plan limits, trial length, caps; backend-written)
 Accounts/{uid}                                       (plan, trial dates, credits, memberships, status; backend-written)
 AdminAudit/{autoId}                                  (one doc per admin/self account change; backend-only)
+PaidWaitlist/{autoId}                                (paid / enterprise interest list, TASK-032; backend-only)
 ```
 
 Only `icc` is a real org today — Round 2 (TASK-006b) dropped `test-org` entirely; it was
@@ -117,16 +117,15 @@ personal and an org workspace at once. It reuses the org tree shape, is never do
 (`match_org` skips it) and anything org-specific must be gated on `org != "personal"`. Constants
 live in `backend/firebase/public_space.py` (kept filename; `PERSONAL_SPACE_ID = "personal"`, the
 old `PUBLIC_*` names and a claim of `"public"` are still accepted as aliases).
-- **Space doc fields:** `name`, `type: "personal"`, `domains: []`, `allowed_emails: []`,
-  `max_users` (signup cap, now null = no cap by default; the cap/waitlist code is kept pending the
-  person's OK to remove it), `user_count`. Plans/limits no longer live here.
+- **Space doc fields:** `name`, `type: "personal"`, `domains: []`, `allowed_emails: []`. Signup is
+  unlimited: the old signup cap (`max_users`/`user_count`) and capacity waitlist were removed in
+  TASK-032. Plans/limits no longer live here.
 - **`Users/personal/teachers/{uid}`:** the teachers doc created by bootstrap. Plans live on
   `Accounts/{uid}`; the old `plan` fields stay rules-protected.
 - **`teacher_profiles/{uid}` (personal):** no `email` stored; `name_lower`; `has_public_courses`
   (maintained by `FirebaseService.sync_has_public_courses`, self-healing).
 - **`Users/{org}/usage/{uid}/months/{YYYY-MM}`:** `{courses, generates, edo_tokens, updated_at}`,
   UTC month, written for every user, limited only in the personal workspace. Backend-only.
-- **`Users/personal/waitlist/{email}`:** written only if a signup cap is set and reached.
 - Created by `backend/scripts/setup_launch_accounts.py` (or `create_personal_space.py`). Until
   that doc exists, `check-email` reports non-org emails as not allowed and bootstrap returns 503.
 
@@ -140,9 +139,12 @@ old `PUBLIC_*` names and a claim of `"public"` are still accepted as aliases).
   Legacy `free`/`pro` map to `trial`/`teacher`.
 - **`Accounts/{uid}`** (`services/accounts_service.py`): `email`, `email_domain`, `plan` (the
   PERSONAL workspace plan), `plan_started_at`, `trial_ends_at`, `plan_source`
-  (`trial_default`|`admin`), `bonus_credits`, `is_admin`, `memberships`, `status`
+  (`trial_default`|`admin`|`org_member`), `bonus_credits`, `is_admin`, `memberships`, `status`
   (`active`|`deactivated`), `deactivated_at`, `delete_after`. Created by bootstrap (plan trial);
-  existing users are backfilled without touching plans.
+  existing users are backfilled without touching plans. Org staff (TASK-032): `ensure_account`
+  gives anyone with a real org membership plan `teacher` / `plan_source: org_member` in their
+  personal workspace, free; an admin-set plan (`plan_source: admin`) is never overwritten, and
+  leaving the org never downgrades.
 - **`can(user, action, course)`** (`services/entitlements.py`) returns a Decision. Deactivated:
   everything denied. `view` and `manual_edit`: always allowed (nothing is deleted or locked when a
   trial ends). Ended personal trial: AI actions and new sharing denied with an upgrade message
@@ -160,7 +162,10 @@ old `PUBLIC_*` names and a claim of `"public"` are still accepted as aliases).
 - **Deactivation:** `POST /api/account/deactivate|reactivate`. Deactivated accounts are denied
   everywhere except `/me` and reactivate; their personal courses become unreachable to others;
   org courses are unaffected. After `delete_after`, `scripts/purge_deactivated.py --apply`
-  (dry-run by default, person-run) deletes personal data and the Auth user.
+  (dry-run by default, person-run) deletes personal data and the Auth user. Anyone with an org
+  membership (a non-personal entry in `memberships`, or a `Users/<org>/teachers/{uid}` doc) keeps
+  their Auth user, org data and login: only personal content is purged and `Accounts/{uid}` is reset
+  to active. The dry run prints a `PATH:` line per user.
 - **Error codes:** 402 `plan_inactive` (trial ended), 402 `plan_upgrade_required` (reasons
   `coediting_not_in_plan`, `sharing_not_in_plan`, `collaborator_cap_reached`), 403
   `account_deactivated`, 403 `coediting_not_in_plan` (collaborator write when the owner's plan
@@ -196,19 +201,16 @@ registered (e.g. verified through the email link into a live session) and expose
 `email_verified` check (not `require_org`, since a new public user has no space yet):
 - org email: creates the teachers doc and profile, sets the claim, `plan: null`;
 - public: one Firestore transaction on `Users/personal`. If the teachers doc exists it
-  does nothing; if `user_count >= max_users` it writes `waitlist/{email}` and answers
-  403 `{"code": "waitlisted", "message": ...}` (the frontend shows `Waitlist.jsx` and
-  signs the user out); otherwise it increments `user_count` and creates the teachers doc
-  with `plan: "free"`. Then it ensures the profile, sets the claim (merged with existing
+  does nothing; otherwise it creates the teachers doc (no cap, no waitlist: signup is
+  unlimited and no email domain is blocked). Then it ensures the profile, sets the claim (merged with existing
   claims) and returns `{space, org_id, org_name, plan, created}`.
-- **Signup cap:** `max_users` / `user_count` on `Users/personal`. Change the cap in Firestore.
 
 Other routes:
 - **`GET /api/account/me`** (`require_org`): `{space: "org"|"public", org_id, org_name, plan}`.
 - **`GET /api/orgs/check-email?email=`** (`routes/orgs.py`, no auth, since there is no
   token before signup): org email → `{allowed: true, space: "org", org_id, org_name}`;
-  otherwise, if `Users/personal` exists → `{allowed: true, space: "public", org_id: "public",
-  org_name, waitlisted: bool}`; otherwise `{allowed: false}`. The frontend's
+  otherwise, if `Users/personal` exists → `{allowed: true, space: "personal", org_id: "personal",
+  org_name}` (no `waitlisted` field any more); otherwise `{allowed: false}`. The frontend's
   `checkEmailOrg` calls it at signup and login.
 - **`require_org_for_uid(uid)`**: legacy non-token variant, unused by routes (kept for compatibility).
 - Sharing and public courses never cross spaces: once the space is resolved, every
@@ -228,7 +230,39 @@ authoritative: `resolve_caller_uid(current_user, claimed_uid)` returns the token
 `teacherUid`/`teacher_uid` differs; a stale `organizationId` is ignored or rejected (403)
 in favour of the resolved space. The frontend attaches the token through
 `frontend/src/services/authFetch.js`. The only unauthenticated routes are `/contact`,
-`/orgs/check-email` and the synopsis routes (see Known gaps).
+`/orgs/check-email`, `POST /api/waitlist` and the synopsis routes (see Known gaps).
+
+### Signup, login, workspaces, waitlist (TASK-032)
+
+- **Signup** (`/signup`, `SignupChoice.jsx`): two cards. Individual: "Continue with Google"
+  (`GoogleButton.jsx`) or email + password; any email domain is accepted. Organization:
+  `OrgWaitlistForm.jsx` ("Join the waitlist for when we open paid and enterprise versions"); it
+  calls `POST /api/waitlist` and creates NO Firebase account. Existing org staff just log in.
+  There are no prices anywhere. One login page serves everyone; the account's memberships decide
+  the workspace.
+- **Google** (`signInWithGoogle` in `firebase/authService.js`): `signInWithPopup`, falling back to
+  `signInWithRedirect` when the popup is blocked. Login and signup are the same action. Google
+  tokens are `email_verified`, so no verification step; the backend bootstrap is provider-agnostic.
+  After a redirect return, the `AuthContext` auth-state listener resolves the account (`me`, then
+  bootstrap if not registered). Email/password users who have not verified are still refused.
+  A deactivated account is signed out with a message showing the restore-until date.
+- **Workspaces on the client** (`AuthContext.jsx`): `memberships`, `activeWorkspace`,
+  `setActiveWorkspace`, `isAdmin`, `isPersonalWorkspace` (`isPublicUser` kept as an alias).
+  `org` is the Firestore path id of the ACTIVE workspace (an org id, or `personal`), so direct
+  Firestore reads (`dbService`, folders, lastLogin) follow the switcher. Default workspace: the
+  stored per-uid choice (`localStorage`), else the backend's `default_workspace` (the org for org
+  staff, so nothing changes for them until they switch). `services/authFetch.js` holds the active
+  workspace and sends `X-EdCube-Workspace` on every token-carrying call (the plain-`fetch` services
+  add `workspaceHeader()` too); bootstrap and the first `me` go out without it. The sidebar shows a
+  workspace switcher only with more than one membership (org staff have org + personal);
+  `Layout` keys the page outlet by workspace so a switch refetches. `ProtectedRoute` and
+  `NotificationContext` wait for the account to resolve. Plan names: `utils/planLabel.js`
+  (Free trial / Teacher / the org's name).
+- **Waitlist** (`routes/waitlist.py`): `POST /api/waitlist` is open (a valid token only attaches
+  the uid): validated fields, throttles per IP (10 per 10 min) and per email (3 per hour; 429
+  `{code: "rate_limited"}`), stored in `PaidWaitlist/{autoId}` (rules deny all client access),
+  emailed via `contact.send_notification_email`. `GET /api/admin/waitlist` (`require_admin`) lists
+  newest first, filter `?interest=`, `?format=csv` with a formula-injection guard.
 
 ### Quotas (public release PR-3)
 
@@ -317,7 +351,7 @@ Contracts:
   client-writable. Curricula: read if owner, `isPublic`, or in `sharedWithUids`; create/update/delete
   owner only. `teacher_profiles`: read by members, write by self. `teachers/{uid}`: self only;
   `plan` / `plan_updated_at` cannot be written by clients; no client delete. `notifications`:
-  read/delete own. `usage/**` and `waitlist/**`: no client access.
+  read/delete own. `usage/**`: no client access. `PaidWaitlist/{entry}`: no client access at all.
 - The org block: members read curricula, profiles, teachers, synopsis; owner-only writes;
   folders owner-only; notifications read/delete own.
 - Hosting/deploy config: `frontend/firebase.json` points Firestore at `firestore.rules` and
@@ -520,8 +554,9 @@ Everything below is run or decided by the person; nothing here is automatic. Run
    missing into `firestore.indexes.json`, then deploy it (`firebase deploy --only
    firestore:indexes`). If prompted to delete console-only indexes, answer no.
 5. Deploy the frontend (hosting target `edcubeai`).
-6. Smoke test: an org login; a gmail signup, verify, login; hit a free limit (402 modal);
-   the waitlist (temporarily set `max_users` at or below `user_count`, then restore it).
+6. Smoke test: an org login; ICC staff switching to the personal workspace; a gmail signup,
+   verify, login; Google sign-in (popup and redirect); hit a trial limit (402 modal); submit the
+   org waitlist form and check the `PaidWaitlist` doc and the notification email.
 
 **Non-code items**
 - Terms of Service and Privacy Policy pages.

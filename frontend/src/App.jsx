@@ -8,7 +8,6 @@ import { GenerationProvider } from './contexts/GenerationContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import Login from './components/auth/Login';
 import Signup from './components/auth/Signup';
-import Waitlist from './components/auth/Waitlist';
 import LandingPage from './components/pages/LandingPage';
 import Layout from './components/layout/Layout';
 import MyCourses from './components/courses/MyCourses';
@@ -37,7 +36,6 @@ function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
-          <Route path="/waitlist" element={<Waitlist />} />
           <Route path="/contact" element={<ContactPage />} />
 
           {/* Protected Routes — pathless layout wrapper */}

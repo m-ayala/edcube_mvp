@@ -17,9 +17,6 @@ from firebase.org_registry import get_org_from_email, get_org_info
 from firebase.public_space import (
     PERSONAL_SPACE_ID,
     PERSONAL_SPACE_NAME,
-    SPACE_MAX_USERS,
-    SPACE_USER_COUNT,
-    DEFAULT_MAX_USERS,
 )
 
 router = APIRouter(prefix="/api/orgs", tags=["orgs"])
@@ -44,13 +41,9 @@ async def check_email(email: str = Query(...)):
     if not space:
         return {"allowed": False, "org_id": None, "org_name": None}
 
-    # The signup cap is disabled by default: a missing/null max_users means no cap.
-    cap = space.get(SPACE_MAX_USERS)
-    cap = DEFAULT_MAX_USERS if cap is None else cap
     return {
         "allowed": True,
         "space": "personal",
         "org_id": PERSONAL_SPACE_ID,
         "org_name": PERSONAL_SPACE_NAME,
-        "waitlisted": cap is not None and int(space.get(SPACE_USER_COUNT) or 0) >= int(cap),
     }

@@ -19,6 +19,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { generateSynopsis, generateCourseDescription } from '../../utils/curriculumApi';
 import html2pdf from 'html2pdf.js';
 import { INCOMPLETE_COURSE_MESSAGE } from '../../utils/builderCourse';
+import { workspaceHeader } from '../../services/authFetch';
 
 const SERIF = "'DM Serif Display', serif";
 const SERIF_TEXT = "'DM Serif Text', Georgia, serif";
@@ -457,7 +458,7 @@ const CourseViewPage = () => {
       const idToken = await currentUser.getIdToken();
       await fetch(`${API_BASE}/api/update-course?teacherUid=${currentUser.uid}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
+        headers: { 'Content-Type': 'application/json', ...workspaceHeader(), 'Authorization': `Bearer ${idToken}` },
         body: JSON.stringify({ courseId: curriculumId, ...updates }),
       });
     } catch (err) {

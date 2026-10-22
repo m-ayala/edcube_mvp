@@ -3,7 +3,8 @@
 Accounts (TASK-031): `Accounts/{uid}`, written by the backend only.
 
     email, email_domain
-    plan ("trial"|"teacher"|"org"), plan_started_at, trial_ends_at, plan_source ("trial_default"|"admin")
+    plan ("trial"|"teacher"|"org"), plan_started_at, trial_ends_at,
+    plan_source ("trial_default"|"admin"|"org_member")
     bonus_credits {courses, generates, edo_messages}
     is_admin (mirror of the `admin` custom claim)
     memberships [{workspace: "personal"}, {workspace: "<orgId>", role}]
@@ -28,6 +29,7 @@ from firebase.paths import accounts_col, admin_audit_col
 from firebase.public_space import (
     LEGACY_PLAN_MAP,
     PERSONAL_SPACE_ID,
+    PERSONAL_SPACE_IDS,
     PLAN_ORG,
     PLAN_TEACHER,
     PLAN_TRIAL,
@@ -39,6 +41,10 @@ logger = logging.getLogger(__name__)
 
 PLAN_SOURCE_TRIAL_DEFAULT = "trial_default"
 PLAN_SOURCE_ADMIN = "admin"
+# TASK-032: org staff get the Teacher plan free in their PERSONAL workspace. If they later
+# leave the org (membership gone) the plan is deliberately left as is: no silent downgrade;
+# an admin can change it (set_plan -> plan_source "admin").
+PLAN_SOURCE_ORG_MEMBER = "org_member"
 STATUS_ACTIVE = "active"
 STATUS_DEACTIVATED = "deactivated"
 ROLE_MEMBER = "member"
@@ -146,21 +152,26 @@ def _memberships(org_id: Optional[str]) -> List[dict]:
 def ensure_account(uid: str, email: str, org_id: Optional[str] = None,
                    is_admin: bool = False, db=None, now: Optional[datetime] = None) -> Dict[str, Any]:
     """Idempotent create-or-backfill. A new account gets plan `trial` starting now (ends
-    now + trial_length_days from config). An existing account keeps its plan/dates; only
-    missing memberships, email fields and the admin mirror are filled in. Returns the doc."""
+    now + trial_length_days from config); if `org_id` is a real org the personal plan is
+    `teacher` with plan_source `org_member` instead (TASK-032, free for org staff).
+    An existing account keeps its plan/dates, except that an org member whose plan_source is
+    not `admin` (and not already `org_member`) is moved to teacher / org_member. An admin-set
+    plan is never overwritten, and losing org membership never downgrades. Other missing
+    memberships, email fields and the admin mirror are filled in. Returns the doc."""
     db = db or _db()
     now = now or _now()
     ref = accounts_col(db).document(uid)
     snap = ref.get()
     email_l = (email or "").strip().lower()
+    is_org_member = bool(org_id) and org_id not in PERSONAL_SPACE_IDS
     if not snap.exists:
         doc = {
             "email": email_l,
             "email_domain": email_domain(email_l),
-            "plan": PLAN_TRIAL,
+            "plan": PLAN_TEACHER if is_org_member else PLAN_TRIAL,
             "plan_started_at": now,
-            "trial_ends_at": trial_end(now, db),
-            "plan_source": PLAN_SOURCE_TRIAL_DEFAULT,
+            "trial_ends_at": None if is_org_member else trial_end(now, db),
+            "plan_source": PLAN_SOURCE_ORG_MEMBER if is_org_member else PLAN_SOURCE_TRIAL_DEFAULT,
             "bonus_credits": {"courses": 0, "generates": 0, "edo_messages": 0},
             "is_admin": bool(is_admin),
             "memberships": _memberships(org_id),
@@ -179,6 +190,9 @@ def ensure_account(uid: str, email: str, org_id: Optional[str] = None,
         patch["email"], patch["email_domain"] = email_l, email_domain(email_l)
     if bool(doc.get("is_admin")) != bool(is_admin):
         patch["is_admin"] = bool(is_admin)
+    if is_org_member and doc.get("plan_source") not in (PLAN_SOURCE_ADMIN, PLAN_SOURCE_ORG_MEMBER):
+        patch.update({"plan": PLAN_TEACHER, "plan_started_at": now, "trial_ends_at": None,
+                      "plan_source": PLAN_SOURCE_ORG_MEMBER})
     have = {m.get("workspace") for m in doc.get("memberships") or []}
     missing = [m for m in _memberships(org_id) if m["workspace"] not in have]
     if missing:

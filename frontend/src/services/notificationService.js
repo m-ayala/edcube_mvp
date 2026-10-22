@@ -1,10 +1,11 @@
 // frontend/src/services/notificationService.js
+import { workspaceHeader } from './authFetch';
 const API_BASE = `${import.meta.env.VITE_API_BASE_URL}/api/notifications`;
 const CURRICULUM_BASE = `${import.meta.env.VITE_API_BASE_URL}/api/curricula`;
 
 const authHeader = async (currentUser) => {
   const token = await currentUser.getIdToken();
-  return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+  return { ...workspaceHeader(), Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 };
 
 export const getNotifications = async (currentUser) => {

@@ -5,6 +5,16 @@
 // pass their own 'Content-Type' header as before.
 import { auth } from '../firebase/config';
 
+// The active workspace ('personal' or an org id) lives in this module so every
+// backend call can send it as `X-EdCube-Workspace` without threading React
+// state through. AuthContext is the only writer (setActiveWorkspaceHeader). Null
+// until an account is resolved, so bootstrap / me are sent without it and the
+// backend picks the default workspace.
+export const WORKSPACE_HEADER = 'X-EdCube-Workspace';
+let activeWorkspaceHeader = null;
+export const setActiveWorkspaceHeader = (ws) => { activeWorkspaceHeader = ws || null; };
+export const workspaceHeader = () => (activeWorkspaceHeader ? { [WORKSPACE_HEADER]: activeWorkspaceHeader } : {});
+
 export const authHeaders = async (extra = {}) => {
   const user = auth.currentUser;
   if (!user) {
@@ -13,7 +23,7 @@ export const authHeaders = async (extra = {}) => {
     throw err;
   }
   const token = await user.getIdToken();
-  return { ...extra, Authorization: `Bearer ${token}` };
+  return { ...extra, ...workspaceHeader(), Authorization: `Bearer ${token}` };
 };
 
 // Window events that UsageContext listens to. Dispatching from here means every

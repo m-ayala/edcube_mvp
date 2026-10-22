@@ -6,14 +6,17 @@ nothing is written without --apply.
 What it does (each step is skipped if already done):
   1. creates EdCube/platform_config from the code defaults (services/platform_config.py)
      if the doc is missing (an existing doc is never overwritten)
-  2. creates Users/personal (the personal workspace doc) if missing
+  2. creates Users/personal (the personal workspace doc, no signup cap) if missing
   3. sets Users/<org> (default: icc) to plan "org" with an unlimited pool
      (pool values null = unlimited; collaborator_cap / seats null = unlimited/org-defined;
      existing collaborator_cap / seats / pool values are kept)
   4. --admin-email: sets the custom claim admin=true and the Teacher plan (plan_source
      "admin") for that account. No email is hardcoded; omit the flag to skip this step.
-  5. backfills an Accounts/{uid} doc (plan trial, starting now) for every existing org
-     teacher that has none; existing Accounts docs only get missing memberships/fields.
+  5. backfills Accounts/{uid} for every existing org teacher. Org staff get the Teacher plan
+     free in their personal workspace (plan "teacher", plan_source "org_member"; TASK-032):
+     new docs are created that way, and existing docs on the default trial are moved to it.
+     A plan an admin set (plan_source "admin") is never overwritten. Losing org membership
+     later does NOT downgrade anyone. Existing docs also get missing memberships/fields.
 
 Usage (from backend/, Application Default Credentials like seed_knowledge_base.py):
     python scripts/setup_launch_accounts.py --admin-email you@example.com            # dry run
@@ -129,7 +132,7 @@ def step_admin(db, email, dry):
 
 
 def step_backfill(db, dry):
-    created = touched = skipped = 0
+    created = touched = upgraded = kept = skipped = 0
     for org in db.collection(ORGS_ROOT).stream():
         if org.id in PERSONAL_SPACE_IDS:
             continue
@@ -147,12 +150,20 @@ def step_backfill(db, dry):
             existing = accts.get_account(uid, db, fresh=True)
             if existing is None:
                 created += 1
-                say(dry, f"create Accounts/{uid} ({email}, org {org.id}, plan trial)")
+                say(dry, f"create Accounts/{uid} ({email}, org {org.id}, plan teacher, plan_source org_member)")
             else:
                 touched += 1
+                src = existing.get("plan_source")
+                if src == accts.PLAN_SOURCE_ADMIN:
+                    kept += 1
+                    print(f"  Accounts/{uid} ({email}): admin-set plan {existing.get('plan')!r} kept")
+                elif src != accts.PLAN_SOURCE_ORG_MEMBER:
+                    upgraded += 1
+                    say(dry, f"move Accounts/{uid} ({email}) from {existing.get('plan')!r} to teacher (org_member)")
             if not dry:
                 accts.ensure_account(uid, email, org_id=org.id, db=db)
-    print(f"Backfill: {created} Accounts to create, {touched} existing checked for missing fields, {skipped} skipped.")
+    print(f"Backfill: {created} Accounts to create (teacher/org_member), {touched} existing checked "
+          f"({upgraded} moved to teacher/org_member, {kept} admin-set plans kept), {skipped} skipped.")
 
 
 def main():

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { BookOpen, FilePlus, User, Search as SearchIcon, LogOut, FileText } from 'lucide-react';
+import { BookOpen, FilePlus, User, Search as SearchIcon, LogOut, FileText, Building2, UserRound } from 'lucide-react';
 import edcubeLogo from '../../assets/edcube_logo.png';
 import { logoutTeacher } from '../../firebase/authService';
 import { useNotifications } from '../../contexts/NotificationContext';
@@ -40,7 +40,14 @@ const Sidebar = () => {
   const [expanded, setExpanded] = useState(false);
   const [hovered, setHovered] = useState(null);
   const { unreadCount } = useNotifications();
-  const { isPublicUser } = useAuth();
+  const { isPublicUser, memberships, activeWorkspace, setActiveWorkspace } = useAuth();
+  const showSwitcher = memberships.length > 1;
+
+  const handleSwitch = async (ws) => {
+    if (ws === activeWorkspace) return;
+    await setActiveWorkspace(ws);
+    navigate('/my-courses');
+  };
 
   const handleLogout = async () => {
     try {
@@ -102,6 +109,47 @@ const Sidebar = () => {
       </div>
 
       <Divider expanded={expanded} />
+
+      {/* Workspace switcher: only for people with more than one workspace
+          (e.g. org staff who also have a personal workspace). */}
+      {showSwitcher && (
+        <div data-testid="workspace-switcher" style={{ padding: expanded ? '10px 14px 4px' : '10px 8px 4px' }}>
+          {expanded && (
+            <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: '#A89F94', margin: '0 2px 6px' }}>
+              Workspace
+            </div>
+          )}
+          {memberships.map((m) => {
+            const active = m.workspace === activeWorkspace;
+            const Icon = m.workspace === 'personal' ? UserRound : Building2;
+            const name = m.workspace === 'personal' ? 'My personal workspace' : (m.name || m.workspace);
+            return (
+              <button
+                key={m.workspace}
+                type="button"
+                data-workspace={m.workspace}
+                aria-pressed={active}
+                title={name}
+                onClick={() => handleSwitch(m.workspace)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: expanded ? 10 : 0, width: '100%',
+                  justifyContent: expanded ? 'flex-start' : 'center',
+                  padding: expanded ? '9px 10px' : '9px 0', marginBottom: 2,
+                  border: 'none', borderRadius: 10, cursor: 'pointer',
+                  background: active ? 'rgba(173,0,75,0.10)' : 'transparent',
+                  fontFamily: "'DM Sans', sans-serif",
+                }}
+              >
+                <Icon size={18} strokeWidth={1.75} color={active ? ACTIVE : INACTIVE} style={{ flexShrink: 0 }} />
+                <span style={{ ...label(expanded), color: active ? ACTIVE : '#6B6459', fontWeight: active ? 600 : 500, fontSize: 13, textAlign: 'left' }}>
+                  {name}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {showSwitcher && <Divider expanded={expanded} />}
 
       {/* Nav */}
       <nav style={{ flex: 1, padding: '16px 0', display: 'flex', flexDirection: 'column' }}>

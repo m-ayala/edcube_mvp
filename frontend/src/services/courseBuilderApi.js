@@ -1,7 +1,7 @@
 // frontend/src/services/courseBuilderApi.js
 // Course Builder network calls. Nothing is persisted server-side; callers keep state.
 
-import { authFetch, legacyErrorFromResponse, isQuotaDetail, QUOTA_MESSAGE } from './authFetch';
+import { workspaceHeader, authFetch, legacyErrorFromResponse, isQuotaDetail, QUOTA_MESSAGE } from './authFetch';
 
 const API = () => `${import.meta.env.VITE_API_BASE_URL}`;
 
@@ -14,7 +14,7 @@ export const fetchTaxonomy = (currentUser) => {
     taxonomyPromise = (async () => {
       const token = await currentUser.getIdToken();
       const res = await fetch(`${API()}/api/knowledge-base/taxonomy`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { ...workspaceHeader(), Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error(`Taxonomy request failed (${res.status})`);
       return res.json();

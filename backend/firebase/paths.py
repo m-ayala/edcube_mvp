@@ -42,7 +42,6 @@ from firebase.public_space import (  # noqa: F401 (re-exported)
     PERSONAL_SPACE_ID,
     PERSONAL_SPACE_IDS,
     ORG_CLAIM,
-    WAITLIST_COLLECTION,
     USAGE_COLLECTION,
 )
 
@@ -56,6 +55,7 @@ PLATFORM_CONFIG_DOC = "platform_config"   # EdCube/platform_config (TASK-031), s
 # Top-level, backend-written collections (TASK-031)
 ACCOUNTS_COLLECTION = "Accounts"          # Accounts/{uid}
 ADMIN_AUDIT_COLLECTION = "AdminAudit"     # AdminAudit/{autoId}
+PAID_WAITLIST_COLLECTION = "PaidWaitlist" # PaidWaitlist/{autoId} (TASK-032)
 
 # Synopsis / afterschool routes have no auth today and are ICC-specific.
 # Multi-org synopsis is out of scope (tasks/firestore-reorg-spec.md, decision 4).
@@ -114,6 +114,11 @@ def platform_config_doc(db):
 def accounts_col(db):
     """`Accounts` -- one doc per uid, written by the backend only."""
     return db.collection(ACCOUNTS_COLLECTION)
+
+
+def paid_waitlist_col(db):
+    """`PaidWaitlist` -- interest sign-ups for paid plans, written by the backend only."""
+    return db.collection(PAID_WAITLIST_COLLECTION)
 
 
 def admin_audit_col(db):

@@ -6,7 +6,7 @@ import { getNotifications, markNotificationsSeen, deleteNotification } from '../
 const NotificationContext = createContext(null);
 
 export const NotificationProvider = ({ children }) => {
-  const { currentUser } = useAuth();
+  const { currentUser, activeWorkspace, resolving } = useAuth();
   const [notifications, setNotifications] = useState([]);
 
   // Notifications are delete-on-seen (tasks/firestore-reorg-spec.md, decision
@@ -20,7 +20,7 @@ export const NotificationProvider = ({ children }) => {
   // what was just loaded (see markSeen below) don't hit a stale-closure
   // issue reading `notifications` state right after calling this.
   const refresh = useCallback(async () => {
-    if (!currentUser) return [];
+    if (!currentUser || resolving) return [];
     try {
       const data = await getNotifications(currentUser);
       setNotifications(data);
@@ -29,18 +29,20 @@ export const NotificationProvider = ({ children }) => {
       console.error('Notifications fetch failed:', err);
       return [];
     }
-  }, [currentUser]);
+  // activeWorkspace: notifications are per workspace, so re-read after a switch.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser, activeWorkspace, resolving]);
 
   // Poll every 30 s while logged in
   useEffect(() => {
-    if (!currentUser) {
-      setNotifications([]);
+    if (!currentUser || resolving) {
+      if (!currentUser) setNotifications([]);
       return;
     }
     refresh();
     const id = setInterval(refresh, 30000);
     return () => clearInterval(id);
-  }, [currentUser, refresh]);
+  }, [currentUser, resolving, refresh]);
 
   // Called when the bell opens: loads+displays the current list, then marks
   // everything just shown as seen (deleted server-side). The teacher keeps

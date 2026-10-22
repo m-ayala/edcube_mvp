@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { signupTeacher } from '../../firebase/authService';
+import GoogleButton, { OrDivider } from './GoogleButton';
+import SignupChoice from './SignupChoice';
+import OrgWaitlistForm from './OrgWaitlistForm';
 
 const Signup = () => {
   const [formData, setFormData] = useState({
@@ -12,6 +15,8 @@ const Signup = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+  // 'choose' | 'individual' | 'organization'
+  const [step, setStep] = useState('choose');
   const navigate = useNavigate();
 
   const handleChange = (e) => {
@@ -39,12 +44,8 @@ const Signup = () => {
     try {
       const result = await signupTeacher(formData.email, formData.password, formData.displayName);
       setSuccess(result.message);
-      setTimeout(() => navigate('/'), 3000);
+      setTimeout(() => navigate('/login'), 3000);
     } catch (err) {
-      if (err.code === 'waitlisted') {
-        navigate('/waitlist', { state: { message: err.message } });
-        return;
-      }
       setError(err.message);
     } finally {
       setLoading(false);
@@ -129,14 +130,24 @@ const Signup = () => {
               fontFamily: "'Sora', sans-serif", fontSize: 26, fontWeight: 800,
               letterSpacing: '-0.8px', color: '#1C1917', margin: '0 0 8px'
             }}>
-              Create your account
+              {step === 'organization' ? 'Bring EdCube to your school' : 'Create your account'}
             </h1>
             <p style={{ fontSize: 14, color: '#6B6459', margin: 0, lineHeight: 1.6 }}>
-              Start planning with EdCube.
+              {step === 'choose' ? 'How will you use EdCube?' : step === 'organization' ? "Tell us about your organization." : 'Start planning with EdCube.'}
             </p>
           </div>
 
-          {success ? (
+          {step === 'choose' ? (
+            <>
+              <SignupChoice onChoose={setStep} />
+              <p style={{ textAlign: 'center', fontSize: 13, color: '#6B6459', marginTop: 20, marginBottom: 0 }}>
+                Already have an account?{' '}
+                <Link to="/login" style={{ color: '#1C1917', fontWeight: 600, textDecoration: 'none' }}>Log in</Link>
+              </p>
+            </>
+          ) : step === 'organization' ? (
+            <OrgWaitlistForm onBack={() => setStep('choose')} />
+          ) : success ? (
             <div style={{
               background: '#E5F4E9', border: '0.5px solid #A8D8B0', borderRadius: 14,
               padding: '28px 24px', textAlign: 'center'
@@ -158,6 +169,13 @@ const Signup = () => {
               background: '#fff', borderRadius: 18, border: '0.5px solid #E5E0D8',
               padding: '28px 28px'
             }}>
+
+              <GoogleButton
+                disabled={loading}
+                onSuccess={() => navigate('/my-courses')}
+                onError={(err) => setError(err.message)}
+              />
+              <OrDivider />
 
               {error && (
                 <div style={{
@@ -183,9 +201,6 @@ const Signup = () => {
                 </label>
                 <input className="su-input" type="email" name="email" placeholder="you@yourschool.org"
                   value={formData.email} onChange={handleChange} required />
-                <p style={{ fontSize: 11, color: '#A89F94', marginTop: 5 }}>
-                  Sign up with any email address. School emails are automatically connected to your school's workspace.
-                </p>
               </div>
 
               <div style={{ marginBottom: 16 }}>
@@ -210,7 +225,7 @@ const Signup = () => {
 
               <p style={{ textAlign: 'center', fontSize: 13, color: '#6B6459', marginTop: 18, marginBottom: 0 }}>
                 Already have an account?{' '}
-                <Link to="/" style={{ color: '#1C1917', fontWeight: 600, textDecoration: 'none' }}>
+                <Link to="/login" style={{ color: '#1C1917', fontWeight: 600, textDecoration: 'none' }}>
                   Log in
                 </Link>
               </p>

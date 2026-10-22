@@ -38,12 +38,6 @@ ADMIN_CLAIM = "admin"
 # Space doc fields (Users/personal)
 SPACE_TYPE = "type"
 SPACE_NAME = "name"
-SPACE_MAX_USERS = "max_users"
-SPACE_USER_COUNT = "user_count"
-# Signup cap: DISABLED by default (spec: anyone can sign up). A missing or null
-# max_users means no cap; the cap/waitlist code is kept until the person approves
-# its removal (TASK-031 report).
-DEFAULT_MAX_USERS = None
 
 # Plan names (limits and feature flags live in the central config, never here:
 # see services/platform_config.py)
@@ -60,22 +54,19 @@ TEACHER_PLAN = "plan"
 TEACHER_PLAN_UPDATED_AT = "plan_updated_at"
 
 # Subcollections under Users/personal (backend-only)
-WAITLIST_COLLECTION = "waitlist"
 USAGE_COLLECTION = "usage"
 
 # Profile field added for personal-workspace name search
 PROFILE_NAME_LOWER = "name_lower"
 
 
-def default_personal_space_doc(max_users=DEFAULT_MAX_USERS) -> dict:
-    """The `Users/personal` doc body used by the setup scripts. max_users None = no cap."""
+def default_personal_space_doc() -> dict:
+    """The `Users/personal` doc body used by the setup scripts (no signup cap)."""
     return {
         SPACE_NAME: PERSONAL_SPACE_NAME,
         SPACE_TYPE: PERSONAL_SPACE_TYPE,
         "domains": [],
         "allowed_emails": [],
-        SPACE_MAX_USERS: max_users,
-        SPACE_USER_COUNT: 0,
     }
 
 
