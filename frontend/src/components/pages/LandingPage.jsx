@@ -109,14 +109,33 @@ const LandingPage = () => {
             <p className="sec-label">Our framework</p>
             <h2 className="sec">Built on the MLA framework.</h2>
           </div>
-          <div className="pillars">
-            {PILLARS.map(p => (
-              <div key={p.name} className="pillar" style={{ background: p.bg }}>
-                <h3 style={{ color: p.color }}>{p.name}</h3>
-                <div className="kw">{p.keywords.map(k => <span key={k}>{k}</span>)}</div>
-              </div>
-            ))}
+          {/* Four pillars holding up the curriculum */}
+          <div className="temple">
+            <div className="pediment" aria-hidden="true" />
+            <div className="beam"><span>Curriculum</span></div>
+            <div className="columns">
+              {PILLARS.map(p => (
+                <div key={p.name} className="column">
+                  <div className="capital" style={{ background: p.color }} aria-hidden="true" />
+                  <div className="shaft" style={{ backgroundColor: p.shaft }}>
+                    <h3>{p.name}</h3>
+                    <ul className="carve">{p.keywords.map(k => <li key={k}>{k}</li>)}</ul>
+                  </div>
+                  <div className="col-base" style={{ background: p.color }} aria-hidden="true" />
+                </div>
+              ))}
+            </div>
+            <div className="steps" aria-hidden="true"><div /><div /></div>
           </div>
+          {/* Phones: the columns are too narrow for keywords, so list them here */}
+          <ul className="kw-legend">
+            {PILLARS.map(p => (
+              <li key={p.name}>
+                <b style={{ color: p.color }}>{p.name}</b>
+                <span>{p.keywords.join(' · ')}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       </section>
 
@@ -554,13 +573,13 @@ const EdoPreview = () => (
 /* ─── Content ────────────────────────────────────────────────── */
 
 const PILLARS = [
-  { name: 'Personal Growth', color: '#C05A2A', bg: '#FDEEE6', fill: 'pg',
+  { name: 'Personal Growth', color: '#C05A2A', bg: '#FDEEE6', shaft: '#F6B89B', fill: 'pg',
     keywords: ['Self-reflection', 'Emotional intelligence', 'Communication', 'Resilience', 'Collaboration', 'Leadership'] },
-  { name: 'Knowledge', color: '#1E5F99', bg: '#E4EFF9', fill: 'kn',
+  { name: 'Knowledge', color: '#1E5F99', bg: '#E4EFF9', shaft: '#A3CBF0', fill: 'kn',
     keywords: ['Core subject', 'Global perspectives', 'The arts', 'Sports', 'Personalized learning'] },
-  { name: 'Critical Thinking', color: '#2E7A43', bg: '#E5F4E9', fill: 'ct',
+  { name: 'Critical Thinking', color: '#2E7A43', bg: '#E5F4E9', shaft: '#A6DAB5', fill: 'ct',
     keywords: ['Analysis', 'Evaluation', 'Patterns and systems', 'Ethics', 'Discourse'] },
-  { name: 'Application', color: '#8A6B00', bg: '#FDF5DC', fill: 'ap',
+  { name: 'Application', color: '#8A6B00', bg: '#FDF5DC', shaft: '#F5D77E', fill: 'ap',
     keywords: ['Community', 'Environment', 'Health', 'Entrepreneurship', 'Real-world impact'] },
 ];
 
@@ -672,11 +691,23 @@ const LANDING_CSS = `
   .lp-root .sec-head h2.sec { font-size: 36px; margin-bottom: 0; }
   .body { font-size: 15px; color: #6B6459; line-height: 1.7; }
 
-  .pillars { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
-  .pillar { border-radius: 20px; padding: 28px 24px; text-align: left; }
-  .lp-root .pillar h3 { font-size: 19px; font-weight: 700; margin-bottom: 16px; }
-  .kw { display: flex; flex-wrap: wrap; gap: 8px; }
-  .kw span { background: rgba(255,255,255,0.75); border-radius: 100px; padding: 6px 12px; font-size: 13px; line-height: 1.2; color: #1C1917; }
+  .temple { max-width: 980px; margin: 0 auto; }
+  .pediment { height: 64px; margin: 0 -1%; background: #3A342E; clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+  .beam { background: #1C1917; color: #FAF8F4; text-align: center; padding: 22px 16px; border-radius: 6px; margin: 0 -1%; position: relative; z-index: 1; box-shadow: 0 10px 24px rgba(28,25,23,0.18); }
+  .beam span { font-size: 30px; font-weight: 700; letter-spacing: 0.32em; text-transform: uppercase; padding-left: 0.32em; }
+  .columns { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5%; padding: 0 3%; }
+  .column { display: flex; flex-direction: column; align-items: center; }
+  .capital { width: 100%; height: 18px; border-radius: 0 0 6px 6px; }
+  .shaft { width: 84%; flex: 1; min-height: 340px; padding: 26px 10px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 14px;
+    background-image: repeating-linear-gradient(90deg, rgba(255,255,255,0.28) 0 3px, transparent 3px 15px); box-shadow: inset 6px 0 10px rgba(255,255,255,0.25), inset -8px 0 12px rgba(28,25,23,0.08); }
+  .lp-root .shaft h3 { font-size: 17px; font-weight: 700; color: #1C1917; line-height: 1.25; }
+  .lp-root .carve { list-style: none; display: flex; flex-direction: column; align-items: center; gap: 7px; width: 100%; }
+  .carve li { max-width: 100%; background: rgba(255,255,255,0.72); border-radius: 100px; padding: 5px 9px; font-size: 12.5px; line-height: 1.25; color: #1C1917; }
+  .col-base { width: 100%; height: 20px; border-radius: 6px 6px 0 0; }
+  .steps div { height: 16px; background: #E2D9CC; border-radius: 3px; margin: 0 -1%; }
+  .steps div + div { background: #D3C8B8; margin: 0 -3%; height: 18px; }
+  .lp-root .kw-legend { display: none; list-style: none; margin-top: 24px; gap: 12px; text-align: left; }
+  .kw-legend li { display: flex; flex-direction: column; gap: 2px; font-size: 14px; color: #6B6459; line-height: 1.5; }
 
   .flips { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
   .flip { display: block; height: 430px; perspective: 1400px; cursor: pointer; border-radius: 22px; -webkit-tap-highlight-color: transparent; }
@@ -758,7 +789,9 @@ const LANDING_CSS = `
     .flips { grid-template-columns: 1fr 1fr; }
   }
   @media (max-width: 900px) {
-    .pillars { grid-template-columns: 1fr 1fr; }
+    .beam span { font-size: 24px; }
+    .shaft { min-height: 300px; }
+    .carve li { font-size: 10.5px; padding: 4px 6px; }
     .feature-row { grid-template-columns: 1fr; gap: 36px; }
     .feature-row > .feature-visual, .feature-row.reverse > .feature-visual { order: 2; }
   }
@@ -767,7 +800,16 @@ const LANDING_CSS = `
     .nav-hide { display: none; }
     .hero, .demo-wrap, .band, .band-label, .cta, .lp-footer { padding-left: 16px; padding-right: 16px; }
     .sec-pad { padding: 56px 16px; }
-    .pillars { grid-template-columns: 1fr; }
+    .pediment { height: 36px; }
+    .beam { padding: 14px 8px; }
+    .beam span { font-size: 18px; letter-spacing: 0.2em; padding-left: 0.2em; }
+    .columns { gap: 4%; padding: 0 2%; }
+    .capital { height: 12px; }
+    .col-base { height: 14px; }
+    .shaft { width: 80%; min-height: 230px; padding: 16px 0; justify-content: center; }
+    .lp-root .shaft h3 { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 15px; white-space: nowrap; }
+    .lp-root .carve { display: none; }
+    .lp-root .kw-legend { display: grid; }
     .lp-root .hero-title { font-size: 32px; letter-spacing: -0.8px; }
     .lp-root .hero-sub { font-size: 19px; }
     .lp-root .sec-head h2.sec { font-size: 28px; }
