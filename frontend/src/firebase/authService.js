@@ -11,6 +11,8 @@ import {
   signInWithPopup,
   signInWithRedirect
 } from 'firebase/auth';
+import { clearAllDrafts } from '../components/courses/courseAccess';
+import { forgetInvite } from '../utils/pendingInvite';
 import { setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from './config';
 import { orgSubDoc } from './paths';
@@ -259,6 +261,7 @@ export const signInWithGoogle = async () => {
  */
 export const logoutTeacher = async () => {
   try {
+    try { clearAllDrafts(); forgetInvite(); } catch { /* best effort */ }
     await signOut(auth);
     return { success: true };
   } catch (error) {

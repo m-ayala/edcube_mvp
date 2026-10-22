@@ -12,8 +12,6 @@ Public launch (plan: ~/.claude/plans/pasted-content-id-bccb-all-right-structured
 One branch per task (task/TASK-XXX-slug). Stop for the person's review at the end of each phase
 and before every commit. Target project edcubeai-fdba7 (Firestore DB "default").
 
-- [ ] TASK-038: Phase 6 — forking audit: no fork/copy feature exists; only the landing-page
-      testimonial mentions "fork" — reword if the person wants. (frontend-agent)
 - [ ] TASK-039: Phase 7 — email domain tagging (edu/k12, excluding personal providers), admin domain
       list (user counts, newest first), data model for later org domain verification. (backend-agent, frontend-agent)
 - [ ] TASK-040: Phase 8 — test suite: pytest + Firestore emulator, one test per outlier case. (docs-qa-agent)
@@ -56,7 +54,17 @@ and before every commit. Target project edcubeai-fdba7 (Firestore DB "default").
 
 
 
+
 ## Done
+
+- [x] TASK-038: Phase 6 — forking audit: no fork/copy feature exists; only the landing-page
+      testimonial mentions "fork" — reword if the person wants. (frontend-agent)
+      Coordinator decision: reword the testimonial (no fork feature exists, so the page should not
+      promise one). Also two small QA follow-ups from TASK-037: clear a remembered invite token when the
+      invite is unavailable/expired; clear local course drafts on logout.
+      Assigned: frontend-agent — started 2026-10-22. Branch task/TASK-038-fork-audit.
+      QA PASS 2026-10-22: audit confirmed independently, no fork/copy/duplicate-course feature in UI, routes or data (only internal helpers); nothing needed removing. Landing wording is text-only, no price or new promises, 'free' wording intact. InvitePage forgets the invite token on 404/410/unavailable; logout clears drafts and the invite token inside try/catch. Lint 26/5, build ok. Browser paths not run.
+
 
 - [x] TASK-037: Phase 5 — sharing/collaboration frontend: link viewer, invite + collaborator UI,
       live access loss in open sessions, delete confirmation. (frontend-agent)

@@ -60,11 +60,11 @@ const InvitePage = () => {
       .then((d) => {
         if (cancelled) return;
         if (d && d.available) setInfo({ status: 'available', data: d });
-        else setInfo({ status: 'unavailable', reason: d?.status });
+        else { forgetInvite(); setInfo({ status: 'unavailable', reason: d?.status }); }
       })
       .catch((err) => {
         if (cancelled) return;
-        if (err.status === 404) setInfo({ status: 'unavailable' });
+        if (err.status === 404 || err.status === 410) { forgetInvite(); setInfo({ status: 'unavailable' }); }
         else if (err.status === 429) setInfo({ status: 'rate_limited' });
         else setInfo({ status: 'error' });
       });
