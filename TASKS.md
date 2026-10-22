@@ -12,8 +12,6 @@ Public launch (plan: ~/.claude/plans/pasted-content-id-bccb-all-right-structured
 One branch per task (task/TASK-XXX-slug). Stop for the person's review at the end of each phase
 and before every commit. Target project edcubeai-fdba7 (Firestore DB "default").
 
-- [ ] TASK-039: Phase 7 — email domain tagging (edu/k12, excluding personal providers), admin domain
-      list (user counts, newest first), data model for later org domain verification. (backend-agent, frontend-agent)
 - [ ] TASK-040: Phase 8 — test suite: pytest + Firestore emulator, one test per outlier case. (docs-qa-agent)
 
 - [ ] TASK-025 (attempt 2): Small follow-ups from QA on TASK-023/024 — build rejects a day whose
@@ -53,9 +51,13 @@ and before every commit. Target project edcubeai-fdba7 (Firestore DB "default").
 
 
 
-
-
 ## Done
+
+- [x] TASK-039: Phase 7 — email domain tagging (edu/k12, excluding personal providers), admin domain
+      list (user counts, newest first), data model for later org domain verification. (backend-agent, frontend-agent)
+      Assigned: backend-agent, then frontend-agent — started 2026-10-22. Branch task/TASK-039-domain-tagging.
+      QA PASS 2026-10-22: no domain blocked (bootstrap, check-email, signup UI untouched); Accounts create and Domains count in one transaction, tagging failure falls back to a plain write, repeat login counts nothing; Domains and OrgDomainClaims hold no emails and are denied by rules; rules live only in platform_config (lausd.net education/low, personal providers on any TLD); admin routes admin-only, CSV formula-escaped, override sticky and audited; org resolution untouched (nothing reads verified_domains). import main ok, check_task039 ALL OK and earlier checks pass, lint 26/5, build ok, e2e t39 8/8. Not tested against live Firestore transactions. No automated test suite.
+
 
 - [x] TASK-038: Phase 6 — forking audit: no fork/copy feature exists; only the landing-page
       testimonial mentions "fork" — reword if the person wants. (frontend-agent)

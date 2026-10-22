@@ -104,7 +104,12 @@ EdCube/platform_config                               (doc: plan limits, trial le
 Accounts/{uid}                                       (plan, trial dates, credits, memberships, status; backend-written)
 AdminAudit/{autoId}                                  (one doc per admin/self account change; backend-only)
 PaidWaitlist/{autoId}                                (paid / enterprise interest list, TASK-032; backend-only)
+Domains/{domainKey}                                  (signup email-domain aggregate: tag, user_count; counts only, no emails; TASK-039; backend-only)
+OrgDomainClaims/{id}                                 (future org domain verification + course-move plan; uids and course ids only; TASK-039; data model only, backend-only)
 ```
+
+`Users/{orgId}.verified_domains` (future, TASK-039): `[ {domain, status, method, token, verified_at} ]`, a public DNS TXT token
+only. Not read by org resolution (`_fetch_registry`); membership still comes from `domains` / `allowed_emails`.
 
 Only `icc` is a real org today — Round 2 (TASK-006b) dropped `test-org` entirely; it was
 only ever an example org shape and was never migrated.
@@ -338,7 +343,23 @@ and enterprise versions"; `POST /api/waitlist`, source `upgrade`); no prices, no
 **Admin page (`/admin`, `components/admin/*`, `services/adminApi.js`).** Visible in the sidebar and routable only when
 `isAdmin`; every call goes through `authFetch` to `/api/admin/*`, where `require_admin` is the real gate. Tabs: Accounts
 (recent list, email search, set plan, grant credits, deactivate/reactivate with confirmation), Waitlist (filter, CSV),
-Costs (`cost-summary`, usage-log CSV).
+Domains (education domains with user counts, tag override), Costs (`cost-summary`, usage-log CSV).
+
+### Email-domain tagging (TASK-039)
+
+Nothing is blocked: every email domain can sign up. `services/domain_tagging.py` only labels domains.
+`classify_domain` returns `tag` (`education` | `personal` | `org_registered` | `other`), `confidence` (`high`/`medium`/`low`) and a `reason`.
+Precedence: registered org > personal provider > education rules (strongest hit) > keyword hint > other. All lists and regex rules live in
+`EdCube/platform_config.domain_rules` (code defaults in `services/platform_config.py`; an override replaces a list wholesale). Examples:
+`.edu`, `.k12.<st>.us`, `ac.<cc>` are education/high; `lausd.net` is education/low (name ending in `usd`); gmail, outlook, yahoo (any TLD) are personal.
+`stats_key` strips subdomains (`cs.ox.ac.uk` becomes `ox.ac.uk`). `ensure_account` creates `Accounts/{uid}` and increments `Domains/{key}.user_count`
+in ONE transaction, so repeat logins count nothing; if tagging throws it falls back to a plain account write. The Accounts doc also stores
+`domain_key`, `domain_tag`, `domain_tag_confidence`, `domain_tagged_at`. `Domains` holds `domain, tag, confidence, reason, tag_source (auto|admin),
+user_count, first_seen_at, last_seen_at, seen_domains, sample_orgs`; no emails. An admin tag (`tag_source: admin`) is sticky across new signups.
+Admin routes: `GET /api/admin/domains` (`?tag=&confidence=&limit=&format=csv`, newest first by `first_seen_at`, CSV formula-escaped) and
+`PATCH /api/admin/domains/{domain}` (`tag` incl. `auto` to reset; audited to `AdminAudit`). Frontend: Domains tab (`components/admin/DomainsTab.jsx`).
+`services/org_domains.py` holds shapes for the later verification and course-move flow only; no route calls it. Existing accounts are backfilled by
+`scripts/backfill_domains.py` (dry run by default, `--apply` writes, idempotent).
 
 ### Usage and cost log (TASK-034)
 
@@ -449,7 +470,7 @@ OWNER's plan decides; a collaborator's own plan never matters and collaborators 
   `Users/{orgId}` block uses it, so the generic rules can never apply to `public`
   (Firestore ORs overlapping matches).
 - `inPersonal()`: `inSpace('personal')` or a `Users/personal/teachers/{uid}` doc (org members).
-- `match /Accounts/{uid}`: read by self only; `Accounts`, `AdminAudit`, `UsageLog` and `EdCube/platform_config` are never client-writable.
+- `match /Accounts/{uid}`: read by self only; `Accounts`, `AdminAudit`, `UsageLog` and `EdCube/platform_config` are never client-writable. `Domains` and `OrgDomainClaims`: no client access.
 - `match /Users/personal` (stricter): space doc readable by personal members, never
   client-writable. Curricula: read if owner or in `sharedWithUids` (no `isPublic` read); create needs empty sharing fields; update/delete owner only and
   `sharedWith` / `sharedWithUids` / `teacherUid` cannot be changed by clients. `ShareLinks/{token}` and `Invites/{id}`: no client access. `teacher_profiles`: read by members, write by self. `teachers/{uid}`: self only;
@@ -661,6 +682,7 @@ Everything below is run or decided by the person; nothing here is automatic. Run
 6. Smoke test: an org login; ICC staff switching to the personal workspace; a gmail signup,
    verify, login; Google sign-in (popup and redirect); hit a trial limit (402 modal); submit the
    org waitlist form and check the `PaidWaitlist` doc and the notification email.
+7. `python scripts/backfill_domains.py` (dry run), then `--apply`: tags existing accounts and builds the `Domains` counts (TASK-039). Run after step 2; idempotent.
 
 **Non-code items**
 - Terms of Service and Privacy Policy pages.

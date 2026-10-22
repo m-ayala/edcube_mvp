@@ -67,6 +67,36 @@ DEFAULT_PLATFORM_CONFIG: Dict[str, Any] = {
             "per_render_page": 0,
         },
     },
+    # Email-domain tagging rules (TASK-039), read by services/domain_tagging.py; nothing is hardcoded there.
+    # A rule is {pattern: regex matched (re.search) on the lowercased full domain, confidence, reason}.
+    # Lists (not dicts) are REPLACED wholesale by an override in EdCube/platform_config -> domain_rules.
+    "domain_rules": {
+        # A label equal to one of these (gmail.com, yahoo.co.uk, hotmail.fr, gmx.de ...) is a personal provider.
+        "personal_brand_labels": ["gmail", "googlemail", "outlook", "hotmail", "live", "msn", "yahoo", "ymail",
+                                  "icloud", "aol", "proton", "protonmail", "gmx", "zoho", "yandex", "rocketmail",
+                                  "fastmail", "hey", "tutanota", "tuta", "qq", "163", "126", "naver", "rediffmail"],
+        # Exact domains (and their subdomains) that are personal providers.
+        "personal_domains": ["me.com", "mac.com", "mail.com", "pm.me", "proton.me", "comcast.net", "att.net",
+                             "verizon.net", "sbcglobal.net", "bellsouth.net", "cox.net", "charter.net", "mail.ru",
+                             "web.de"],
+        "education_rules": [
+            {"pattern": r"\.edu$", "confidence": "high", "reason": "US .edu domain"},
+            {"pattern": r"\.k12\.[a-z]{2}\.us$", "confidence": "high", "reason": "US K-12 (.k12.<state>.us)"},
+            {"pattern": r"(^|\.)k12\.", "confidence": "high", "reason": "k12 label"},
+            {"pattern": r"\.(ac|edu)\.[a-z]{2}$", "confidence": "high", "reason": "academic second-level domain (.ac.<cc> / .edu.<cc>)"},
+            {"pattern": r"\.(sch|school)\.(uk|nz|za|ie|ng|ke)$", "confidence": "high", "reason": "school second-level domain"},
+            {"pattern": r"\.(schule|school|schools)$", "confidence": "medium", "reason": "school top-level domain"},
+            {"pattern": r"(^|\.)[a-z0-9-]*isd\.[a-z.]+$", "confidence": "low", "reason": "US independent school district pattern (*isd.*)"},
+            {"pattern": r"(^|\.)[a-z0-9-]*schools\.org$", "confidence": "low", "reason": "US public school pattern (*schools.org)"},
+            {"pattern": r"(^|\.)[a-z0-9-]*sd\.org$", "confidence": "low", "reason": "US school district pattern (*sd.org)"},
+            {"pattern": r"usd[0-9]*\.org$", "confidence": "low", "reason": "US unified school district pattern (*usd*.org)"},
+            {"pattern": r"^[a-z]{2,}usd\.[a-z.]+$", "confidence": "low", "reason": "name ending in usd (unified school district)"},
+        ],
+        # Whole-or-partial words in the domain that suggest a school; lowest-confidence hints.
+        "keyword_hints": ["school", "academy", "university", "college", "district"],
+        # Second-level labels under a 2-letter ccTLD that make a 3-label stats key (cs.ox.ac.uk -> ox.ac.uk).
+        "second_level_labels": ["ac", "co", "edu", "org", "gov", "com", "net", "sch", "school", "or", "ne", "go"],
+    },
     "plans": {
         PLAN_TRIAL: {
             "limits": {"courses": 5, "generates": 50, "edo_messages": 75},
@@ -173,6 +203,10 @@ def deactivation_grace_days(db=None) -> int:
     return int(get_config(db).get("deactivation_grace_days") or 0)
 
 
+def domain_rules(db=None) -> Dict[str, Any]:
+    return get_config(db).get("domain_rules") or {}
+
+
 def config_document_body() -> Dict[str, Any]:
     """What the setup script writes when EdCube/platform_config is missing."""
     return copy.deepcopy(DEFAULT_PLATFORM_CONFIG)
@@ -181,5 +215,5 @@ def config_document_body() -> Dict[str, Any]:
 __all__ = [
     "DEFAULT_PLATFORM_CONFIG", "get_config", "clear_cache", "plan_config", "plan_limits",
     "collaborator_cap", "plan_features", "trial_length_days", "deactivation_grace_days",
-    "config_document_body", "PLANS", "LIMIT_KINDS",
+    "domain_rules", "config_document_body", "PLANS", "LIMIT_KINDS",
 ]
