@@ -13,6 +13,8 @@ const CourseViewer = ({
   onEditInWorkspace,
   onEditAsCollaborator,
   contentUnavailable = false,
+  hideBack = false,
+  extraActions = null,
   navigate
 }) => {
   const [collapsedSections, setCollapsedSections] = useState({});
@@ -482,6 +484,8 @@ const CourseViewer = ({
               Edit as Collaborator
             </button>
           )}
+          {extraActions}
+          {!hideBack && (
           <button
             onClick={() => navigate(-1)}
             style={{
@@ -492,6 +496,7 @@ const CourseViewer = ({
           >
             <ArrowLeft size={14} /> Back
           </button>
+          )}
         </div>
       </div>
 

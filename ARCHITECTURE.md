@@ -421,8 +421,24 @@ OWNER's plan decides; a collaborator's own plan never matters and collaborators 
   `GET .../collaborators`, `DELETE .../collaborators/{uid}`, `GET .../delete-impact`. Member: `POST .../leave`, `GET .../access`.
   Public/invitee: `GET /api/share/{token}`, `GET /api/invites/{token}`, `POST /api/invites/{token}/accept`. Personal
   `POST /api/notifications/share` is an alias onto the invite flow (old response keys kept, plus `invited` and `results`).
-- **Known gaps for TASK-037.** The frontend still deletes courses with the client SDK (cleanup is then lazy, no warning counts), still shows
-  Public/Private labels and the Search page to personal users, and has no `/share/:token` or `/invite/:token` page.
+- **Frontend (TASK-037).** API client `frontend/src/services/sharingApi.js` (errors carry `.status`/`.code`/`.reason`; calls go through
+  `authFetch` with `quietBlock` so a 402 shows inline, only the two public reads are plain fetches).
+  - Routes: `/share/:token` (`share/PublicSharePage`, read-only `CourseViewer` over the sanitized payload, no auth call, `noindex`) and
+    `/invite/:token` (`share/InvitePage`) sit outside `ProtectedRoute`. Signed out, the invite token is kept in localStorage
+    (`utils/pendingInvite.js`, 14 days); `PendingInviteRedirect` (mounted in the router) sends a signed-in user back to the invite, which accepts it
+    (403 `invite_email_mismatch` offers sign-out, 410/404 says it expired), then `setActiveWorkspace(r.workspace)` and opens the course. Unverified
+    accounts count as signed out, so the token survives signup, verification and login or Google.
+  - Share modal: `ShareCourseModal` picks `OrgShareModal` (original, unchanged) or `PersonalShareModal` (links, invites, collaborators, cap
+    message, "Join the waitlist" for every upgrade prompt, no payments).
+  - Live access: `courses/courseAccess.js` `useCourseAccess` polls `GET /api/curricula/{id}/access` (30s + focus) for non-owners in `CourseWorkspace`
+    and `CourseViewPage`; a refused save (`coediting_not_in_plan`, `access_view_only`, `account_deactivated`, 404) locks the same way. A lock keeps the editor
+    state mounted, writes a draft to localStorage `edcube.draft.{id}`, switches to the read-only `CourseViewer` with `AccessBanner` ("Copy my unsaved
+    changes"), and a restore (owner resubscribes) re-enables autosave, which saves the kept edits and clears the draft. 'removed' is final. A missing or
+    non-boolean `can_edit` never locks; owners are never locked. `authFetch` no longer signs a collaborator out for `account_deactivated` with reason `owner_deactivated`.
+  - Delete: `MyCourses` calls `GET .../delete-impact` then `DELETE /api/curricula/{id}`; `DeleteConfirmModal` names collaborators, pending
+    invites and links. No client-SDK delete of curricula remains.
+  - Personal retirements in the UI (guarded by `isPublicUser`): Public/Private labels and toggle, Public/Published rows in My Courses, Search (route
+    behind `OrgOnly`, hidden in the sidebar), other people's profiles, profile public-course count and list. Collaborators and viewers get `LeaveCourseButton`.
 
 ### Firestore rules summary (`frontend/firestore.rules`)
 

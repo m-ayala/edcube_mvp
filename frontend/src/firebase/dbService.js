@@ -94,22 +94,8 @@ export const getTeacherCurricula = async (teacherUid, org) => {
   }
 };
 
-/**
- * Delete a curriculum
- */
-export const deleteCurriculum = async (curriculumId, org) => {
-  try {
-    await deleteDoc(orgSubDoc(db, org, 'curricula', curriculumId));
-
-    return {
-      success: true,
-      message: 'Curriculum deleted successfully'
-    };
-  } catch (error) {
-    console.error('Delete curriculum error:', error);
-    throw error;
-  }
-};
+// Deleting a course is NOT done here: it goes through DELETE /api/curricula/{id} (services/sharingApi.js
+// deleteCourse) so collaborators lose access, pending invites are cancelled and links stop working.
 
 // ─── Resource Library ─────────────────────────────────────────────────────────
 

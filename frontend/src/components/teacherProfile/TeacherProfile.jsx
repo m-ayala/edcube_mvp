@@ -38,6 +38,11 @@ const TeacherProfile = () => {
   }, [teacherUid, currentUser]);
 
   const loadProfile = async () => {
+    // Personal workspace: other people's profiles are retired (there is no directory).
+    if (!isOwnProfile && isPublicUser) {
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       setError(null);
@@ -52,8 +57,8 @@ const TeacherProfile = () => {
 
       setProfile(profileData);
 
-      // Fetch public courses for this teacher
-      if (targetUid) {
+      // Fetch public courses for this teacher (the personal workspace has none)
+      if (targetUid && !isPublicUser) {
         try {
           const result = await getTeacherCourses(currentUser, targetUid);
           setCourses(result.courses || []);
@@ -179,6 +184,18 @@ const TeacherProfile = () => {
     setProfile(updatedProfile);
   };
 
+  // Personal workspace: someone else's profile is not available.
+  if (!isOwnProfile && isPublicUser) {
+    return (
+      <div className="teacher-profile-container">
+        <div className="profile-error">
+          <h2>This profile is not available</h2>
+          <button onClick={() => navigate('/profile')} className="retry-btn">Go to my profile</button>
+        </div>
+      </div>
+    );
+  }
+
   // Loading State
   if (loading) {
     return (
@@ -224,6 +241,7 @@ const TeacherProfile = () => {
         profile={profile}
         isOwnProfile={isOwnProfile}
         onEditClick={handleEditClick}
+        hidePublicCount={isPublicUser}
       />
 
       {/* Plan usage — own profile, public users only (UsageMeter renders nothing otherwise) */}
@@ -238,7 +256,8 @@ const TeacherProfile = () => {
         </div>
       )}
 
-      {/* Public Courses Section */}
+      {/* Public Courses Section (org workspaces only; the personal workspace has no public courses) */}
+      {!isPublicUser && (
       <div className="profile-courses-section">
         <h2 className="profile-courses-header">
           Public Courses {courses.length > 0 && `(${courses.length})`}
@@ -255,6 +274,7 @@ const TeacherProfile = () => {
           <ProfileCourseGrid courses={courses} onCourseClick={handleCourseClick} loadingId={openingId} />
         )}
       </div>
+      )}
 
       {/* Shared With Me — only visible to the owner */}
       {isOwnProfile && (

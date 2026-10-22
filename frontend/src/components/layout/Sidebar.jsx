@@ -155,7 +155,10 @@ const Sidebar = () => {
 
       {/* Nav */}
       <nav style={{ flex: 1, padding: '16px 0', display: 'flex', flexDirection: 'column' }}>
-        {(isAdmin ? [...navItems, adminItem] : navItems).map(({ to, label: text, Icon }) => {
+        {(isAdmin ? [...navItems, adminItem] : navItems)
+          // The teacher directory (Search) is retired in the personal workspace.
+          .filter(({ to }) => !(isPublicUser && to === '/search'))
+          .map(({ to, label: text, Icon }) => {
           const IconComp = Icon;
           return (
             <NavLink

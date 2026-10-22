@@ -49,7 +49,10 @@ export const isQuotaDetail = (detail) => !!detail && typeof detail === 'object' 
 // Mid-session deactivation: any call answered 403 account_deactivated.
 export const DEACTIVATED_EVENT = 'edcube:account-deactivated';
 export const DEACTIVATED_MESSAGE = 'This account is deactivated.';
-export const isDeactivatedDetail = (detail) => !!detail && typeof detail === 'object' && detail.code === 'account_deactivated';
+// A collaborator whose course OWNER was deactivated also gets 403 account_deactivated (reason
+// owner_deactivated). That is not the caller's own deactivation, so it must not sign them out.
+export const isDeactivatedDetail = (detail) => !!detail && typeof detail === 'object'
+  && detail.code === 'account_deactivated' && detail.reason !== 'owner_deactivated';
 export const notifyDeactivated = (detail) => {
   window.dispatchEvent(new CustomEvent(DEACTIVATED_EVENT, { detail }));
 };
@@ -59,11 +62,14 @@ export const isQuotaError = (err) => !!err && err.status === 402 && err.quota ==
 
 export const authFetch = async (url, options = {}) => {
   const headers = await authHeaders(options.headers || {});
-  const res = await fetch(url, { ...options, headers });
+  // `quietBlock: true` (sharing screens): a blocking 402 is shown inline by the caller, so the
+  // global limit-reached modal is not opened on top of it.
+  const { quietBlock, ...fetchOptions } = options;
+  const res = await fetch(url, { ...fetchOptions, headers });
   if (res.status === 402) {
     try {
       const detail = (await res.clone().json()).detail;
-      if (isQuotaDetail(detail)) notifyQuotaExceeded(detail);
+      if (isQuotaDetail(detail) && !quietBlock) notifyQuotaExceeded(detail);
     } catch { /* non-JSON body */ }
   } else if (res.status === 403) {
     try {
