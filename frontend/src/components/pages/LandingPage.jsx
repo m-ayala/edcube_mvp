@@ -211,11 +211,11 @@ const LandingPage = () => {
             <h2 className="sec">Why we exist.</h2>
           </div>
           <div className="mv">
-            <div className="mv-card">
+            <div className="mv-card" style={{ borderLeftColor: '#E8845A' }}>
               <h3 style={{ color: '#C05A2A' }}>Mission</h3>
               <p>To give every educator the tools, framework, and community to create holistic and innovative education, so every learner grows into a confident global citizen.</p>
             </div>
-            <div className="mv-card">
+            <div className="mv-card" style={{ borderLeftColor: '#7BAFD4' }}>
               <h3 style={{ color: '#1E5F99' }}>Vision</h3>
               <p>An education that keeps expanding in scope, reach, and impact, where every student graduates secure in their worth and ready to give back to society.</p>
             </div>
@@ -249,8 +249,13 @@ const LandingPage = () => {
             <p className="sec-label">Meet the founder</p>
           </div>
           <div className="founder">
-            <h3>Manaswini Ayalasomayajula</h3>
-            <div className="role">Founder, EdCube</div>
+            <div className="founder-head">
+              <img src="/landing/founder.jpg" alt="Manaswini Ayalasomayajula" className="founder-photo" />
+              <div>
+                <h3>Manaswini Ayalasomayajula</h3>
+                <div className="role">Founder, EdCube</div>
+              </div>
+            </div>
             <p>Manaswini is a robotics engineer turned educator. She is pursuing an MBA in Executive Management at the California Institute of Advanced Management.</p>
             <p>As Technical Program Manager at the India Community Center, she designs and runs STEAM programs for children ages 4 to 13. Working alongside teachers every day, she saw how much they give and how little support they get to build innovative and holistic curriculum. EdCube is her answer.</p>
           </div>
@@ -763,9 +768,9 @@ const LANDING_CSS = `
   .shot-body p { font-size: 14px; line-height: 1.6; color: #4A443C; }
 
   .mv { display: grid; grid-template-columns: 1fr; gap: 20px; max-width: 880px; margin: 0 auto; text-align: left; }
-  .mv-card { background: rgba(255,255,255,0.72); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 0.5px solid #E5E0D8; border-radius: 20px; padding: 44px 48px; }
-  .lp-root .mv-card h3 { font-size: 15px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; margin-bottom: 16px; }
-  .mv-card p { font-size: 30px; font-weight: 300; line-height: 1.35; letter-spacing: -0.3px; }
+  .mv-card { background: rgba(255,255,255,0.72); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 0.5px solid #E5E0D8; border-left: 6px solid; border-radius: 20px; padding: 40px 48px; }
+  .lp-root .mv-card h3 { font-size: 36px; font-weight: 700; letter-spacing: -0.8px; line-height: 1.15; margin-bottom: 14px; }
+  .mv-card p { font-size: 30px; font-weight: 300; line-height: 1.4; letter-spacing: -0.3px; color: #1C1917; }
 
   .marquee { overflow: hidden; margin-top: 40px; -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); }
   .track { display: flex; gap: 14px; width: max-content; animation: lp-scroll 28s linear infinite; }
@@ -774,8 +779,10 @@ const LANDING_CSS = `
   @keyframes lp-scroll { to { transform: translateX(calc(-50% - 7px)); } }
 
   .founder { max-width: 760px; margin: 40px auto 0; background: rgba(255,255,255,0.72); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 0.5px solid #E5E0D8; border-radius: 20px; padding: 44px; text-align: left; }
+  .founder-head { display: flex; align-items: center; gap: 22px; margin-bottom: 22px; }
+  .founder-photo { width: 104px; height: 104px; border-radius: 50%; object-fit: cover; flex-shrink: 0; border: 4px solid #fff; box-shadow: 0 0 0 2px #F6B89B, 0 8px 22px rgba(28,25,23,0.12); }
   .founder h3 { font-size: 26px; font-weight: 700; letter-spacing: -0.5px; }
-  .founder .role { font-size: 14px; font-weight: 700; color: #C05A2A; margin: 4px 0 18px; }
+  .founder .role { font-size: 14px; font-weight: 700; color: #C05A2A; margin-top: 4px; }
   .lp-root .founder p { font-size: 15.5px; line-height: 1.75; color: #6B6459; margin-bottom: 14px; }
 
   .cta { background: #1C1917; text-align: center; position: relative; overflow: hidden; min-height: 80vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 80px 48px; }
@@ -813,8 +820,12 @@ const LANDING_CSS = `
     .lp-root .hero-title { font-size: 32px; letter-spacing: -0.8px; }
     .lp-root .hero-sub { font-size: 19px; }
     .lp-root .sec-head h2.sec { font-size: 28px; }
-    .mv-card { padding: 28px 24px; }
+    .mv-card { padding: 26px 22px; }
+    .lp-root .mv-card h3 { font-size: 28px; }
     .mv-card p { font-size: 22px; }
+    .founder-head { gap: 16px; }
+    .founder-photo { width: 76px; height: 76px; }
+    .founder h3 { font-size: 21px; }
     .founder { padding: 28px; }
     .lp-root .cta-title { font-size: 34px; letter-spacing: -0.8px; }
   }
