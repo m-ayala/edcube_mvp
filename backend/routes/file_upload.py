@@ -8,7 +8,7 @@ import tempfile
 
 router = APIRouter()
 
-@router.post("/upload-course-file", dependencies=[Depends(enforce_quota("generates"))])
+@router.post("/upload-course-file", dependencies=[Depends(enforce_quota("generates", "upload_parse"))])
 async def upload_course_file(
     file: UploadFile = File(...),
     teacherUid: Optional[str] = Query(None),

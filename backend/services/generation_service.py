@@ -12,6 +12,7 @@ import json
 import logging
 from typing import Dict, List, Optional, Any
 from openai import AsyncOpenAI
+from services import cost_tracker
 from .prompt_builder import PromptBuilder
 
 logger = logging.getLogger(__name__)
@@ -78,6 +79,7 @@ class GenerationService:
                 temperature=0.7,
                 max_tokens=2000
             )
+            cost_tracker.record_llm(response)
             
             # Extract response
             raw_response = response.choices[0].message.content.strip()

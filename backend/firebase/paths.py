@@ -57,6 +57,7 @@ PLATFORM_CONFIG_DOC = "platform_config"   # EdCube/platform_config (TASK-031), s
 ACCOUNTS_COLLECTION = "Accounts"          # Accounts/{uid}
 ADMIN_AUDIT_COLLECTION = "AdminAudit"     # AdminAudit/{autoId}
 PAID_WAITLIST_COLLECTION = "PaidWaitlist" # PaidWaitlist/{autoId} (TASK-032)
+USAGE_LOG_COLLECTION = "UsageLog"         # UsageLog/{autoId} (TASK-034)
 
 # Synopsis / afterschool routes have no auth today and are ICC-specific.
 # Multi-org synopsis is out of scope (tasks/firestore-reorg-spec.md, decision 4).
@@ -131,6 +132,11 @@ def accounts_col(db):
 def paid_waitlist_col(db):
     """`PaidWaitlist` -- interest sign-ups for paid plans, written by the backend only."""
     return db.collection(PAID_WAITLIST_COLLECTION)
+
+
+def usage_log_col(db):
+    """`UsageLog` -- one doc per AI action with its cost (TASK-034), written by the backend only."""
+    return db.collection(USAGE_LOG_COLLECTION)
 
 
 def admin_audit_col(db):

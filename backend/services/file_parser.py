@@ -2,6 +2,7 @@ import os
 import json
 import base64
 from openai import AsyncOpenAI
+from services import cost_tracker
 from typing import List, Dict
 
 client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -175,6 +176,7 @@ CRITICAL RULES — read carefully:
         max_tokens=16000,
         response_format={"type": "json_object"}
     )
+    cost_tracker.record_llm(response)
 
     parsed_text = response.choices[0].message.content.strip()
     course_data = json.loads(parsed_text)

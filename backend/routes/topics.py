@@ -41,7 +41,7 @@ class GenerateVideosRequest(BaseModel):
     courseId: str
 
 
-@router.post("/populate-section", dependencies=[Depends(enforce_quota("generates"))])
+@router.post("/populate-section", dependencies=[Depends(enforce_quota("generates", "populate_section"))])
 async def populate_section(request: PopulateSectionRequest, current_user: dict = Depends(require_org)):
     """
     Populate a single section with video resources (Phase 2 on-demand).
@@ -157,7 +157,7 @@ async def get_section(curriculum_id: str, section_id: str, teacherUid: Optional[
         logger.error(f"Error fetching section: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/generate-videos", dependencies=[Depends(enforce_quota("generates"))])
+@router.post("/generate-videos", dependencies=[Depends(enforce_quota("generates", "generate_videos"))])
 async def generate_videos(request: GenerateVideosRequest, current_user: dict = Depends(require_org)):
     """Generate videos for a specific topic (Phase 2 on-demand)."""
     try:

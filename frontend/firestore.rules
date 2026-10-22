@@ -89,6 +89,11 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Cost log (TASK-034): one row per AI action, backend only, no client access at all.
+    match /UsageLog/{entry} {
+      allow read, write: if false;
+    }
+
     // Paid-plan interest list (TASK-032): backend only, no client access at all.
     match /PaidWaitlist/{entry} {
       allow read, write: if false;

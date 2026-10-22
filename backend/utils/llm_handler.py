@@ -14,6 +14,7 @@ from openai import (
     RateLimitError,
 )
 
+from services import cost_tracker
 from config import OPENAI_API_KEY, OPENAI_MODEL, OPENAI_TEMPERATURE
 
 # Initialize logger
@@ -99,6 +100,7 @@ def call_openai(
         logger.info(f"Calling OpenAI API with model: {OPENAI_MODEL}")
         try:
             response = client.chat.completions.create(**params)
+            cost_tracker.record_llm(response)
         except RateLimitError as e:
             logger.error(f"OpenAI quota/rate limit exceeded: {e}")
             raise OpenAIServiceError(

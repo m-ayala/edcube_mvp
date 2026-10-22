@@ -10,16 +10,21 @@ GET   /api/admin/accounts/{uid}/usage       credit counters per kind (personal p
 POST  /api/admin/accounts/{uid}/credits     {courses?, generates?, edo_messages?} adds to bonus_credits
 POST  /api/admin/accounts/{uid}/deactivate  deactivate (starts the grace period)
 POST  /api/admin/accounts/{uid}/reactivate  reactivate (admins are not bound by the grace period)
+GET   /api/admin/usage-log                  cost log rows, newest first (?from=&to=&uid=&action=&limit=&format=csv|json)
+GET   /api/admin/cost-summary               per action / per user / per credit kind aggregates (?from=&to=)
 
 There is no payment flow: plans change only through these routes.
 """
 
+import csv
+import io
 import logging
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 import firebase_admin
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from firebase_admin import auth
 from pydantic import BaseModel, Field
 
@@ -28,6 +33,7 @@ from firebase.public_space import PLANS
 from routes.teachers import require_admin
 from services import accounts_service as accts
 from services import platform_config as pc
+from services import usage_report
 
 logger = logging.getLogger(__name__)
 
@@ -138,3 +144,63 @@ async def admin_reactivate(uid: str, admin: dict = Depends(require_admin), db=De
     result = accts.reactivate(uid, db, enforce_grace=False)
     accts.log_admin_action(admin, "reactivate", uid, {"status": before.get("status")}, {"result": result}, db)
     return _view(uid, _load(uid, db))
+
+
+# ── Cost log (TASK-034) ─────────────────────────────────────────────────────
+
+def _csv_cell(v) -> str:
+    s = "" if v is None else str(v)
+    return "'" + s if s[:1] in ("=", "+", "-", "@", "\t", "\r") else s   # spreadsheet formula guard (as the waitlist export)
+
+
+def _window(frm: Optional[str], to: Optional[str]):
+    try:
+        return usage_report.window(frm, to)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="from/to must be an ISO date or datetime")
+
+
+@router.get("/usage-log")
+async def usage_log(
+    frm: Optional[str] = Query(default=None, alias="from"),
+    to: Optional[str] = Query(default=None),
+    uid: Optional[str] = Query(default=None),
+    action: Optional[str] = Query(default=None),
+    limit: int = Query(default=1000, ge=1, le=5000),
+    format: Literal["json", "csv"] = Query(default="json"),
+    admin: dict = Depends(require_admin),
+    db=Depends(get_db),
+):
+    """UsageLog rows, newest first. Reads at most the newest usage_report.MAX_SCAN rows of the window."""
+    start, end = _window(frm, to)
+    rows, truncated = usage_report.fetch_rows(db, start, end, uid=uid, action=action)
+    rows = rows[:limit]
+    if format == "csv":
+        buf = io.StringIO()
+        w = csv.writer(buf)
+        w.writerow(usage_report.CSV_FIELDS)
+        for r in rows:
+            flat = usage_report.flatten(r)
+            w.writerow([_csv_cell(flat.get(f)) for f in usage_report.CSV_FIELDS])
+        return Response(buf.getvalue(), media_type="text/csv",
+                        headers={"Content-Disposition": 'attachment; filename="edcube-usage-log.csv"'})
+    return {"rows": [usage_report.serialize(r) for r in rows], "count": len(rows), "truncated": truncated,
+            "window": {"from": start.isoformat(), "to": end.isoformat()}, "scan_limit": usage_report.MAX_SCAN}
+
+
+@router.get("/cost-summary")
+async def cost_summary(
+    frm: Optional[str] = Query(default=None, alias="from"),
+    to: Optional[str] = Query(default=None),
+    admin: dict = Depends(require_admin),
+    db=Depends(get_db),
+):
+    """Per action, per user and per credit kind: count, success rate, tokens, Browserbase calls and
+    estimated cost (sum / avg). Estimated cost is 0 until platform_config.cost_rates is filled in."""
+    start, end = _window(frm, to)
+    rows, truncated = usage_report.fetch_rows(db, start, end)
+    rates = (pc.get_config(db).get("cost_rates") or {})
+    return {"window": {"from": start.isoformat(), "to": end.isoformat()}, "scanned": len(rows),
+            "truncated": truncated, "scan_limit": usage_report.MAX_SCAN,
+            "rates_are_placeholder": bool(rates.get("is_placeholder", True)),
+            **usage_report.summarize(rows)}

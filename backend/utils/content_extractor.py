@@ -7,6 +7,7 @@ import logging
 import requests
 from bs4 import BeautifulSoup
 import openai
+from services import cost_tracker
 import json
 from typing import Dict, Optional, List
 
@@ -99,6 +100,7 @@ class ContentExtractor:
                 max_tokens=1000,
                 temperature=0.3
             )
+            cost_tracker.record_llm(response)
             
             # Parse JSON response
             response_text = response.choices[0].message.content.strip()
@@ -252,6 +254,7 @@ Return ONLY valid JSON with all activities found on this page.
                 temperature=0.3,
                 max_tokens=1500
             )
+            cost_tracker.record_llm(response)
             
             response_text = response.choices[0].message.content.strip()
             

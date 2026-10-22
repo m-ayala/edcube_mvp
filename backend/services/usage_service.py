@@ -58,10 +58,11 @@ Route integration (unchanged contract)
   entitlements.can() runs FIRST (expired trial -> 402 plan_inactive before any credit logic).
   Manual editing never goes through here, so it never pauses.
 
-TASK-034 hooks: log_usage_event(event) -- one event per settled hold (success or not) with the
-plan, workspace, kind, outcome and whatever the route attached via note_usage() (Edo tokens, partial
-course summary...). Today it writes one structured logger line "usage_event {...}"; TASK-034 replaces
-the body with the UsageLog write.
+TASK-034: log_usage_event(event) -- one event per settled hold (success or not) with the plan,
+workspace, kind, outcome, the per-request cost collector's Browserbase / LLM counts
+(services/cost_tracker.py) and whatever the route attached via note_usage() (partial course summary...).
+It writes the structured logger line "usage_event {...}" and enqueues a UsageLog/{autoId} write in a
+background thread (fail open). AI routes with no credit hold are logged by track_ai / throttle_chips.
 """
 
 import calendar
@@ -74,14 +75,14 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Deque, Dict, Optional, Tuple
 
 import firebase_admin
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 from firebase_admin import firestore
 
 from firebase.org_registry import get_org_info
 from firebase.paths import BONUS_LEDGER_ID, POOL_OWNER_ID, PERSONAL_SPACE_ID, accounts_col, credit_period_doc
 from firebase.public_space import PLAN_ORG
 from routes.teachers import require_org
-from services import accounts_service, entitlements
+from services import accounts_service, cost_tracker, entitlements
 from services import platform_config as pc
 
 logger = logging.getLogger(__name__)
@@ -418,13 +419,16 @@ def get_usage(org: str, uid: str, db=None, now: Optional[datetime] = None) -> Di
 # ── TASK-034 hooks ──────────────────────────────────────────────────────────
 
 def log_usage_event(event: Dict[str, Any]) -> None:
-    """TASK-034 HOOK. One event per settled credit hold. Today: a structured logger line.
-    TASK-034 replaces the body with a write to UsageLog/{autoId} (user, plan, action, course id,
-    Browserbase counts, model, tokens, success, timestamp). Never raises."""
+    """One event per settled credit hold (and per un-charged AI action, see finish_untracked).
+    Logs a structured line and enqueues the UsageLog write in the background. Never raises."""
     try:
         logger.info("usage_event %s", json.dumps(event, default=str, sort_keys=True))
     except Exception as e:  # noqa: BLE001
         logger.warning("usage event log failed: %s", e)
+    try:
+        cost_tracker.write_async(event)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("usage event enqueue failed: %s", e)
 
 
 def note_usage(current_user: dict, kind: str, **fields: Any) -> None:
@@ -461,9 +465,17 @@ def settle_charge(current_user: dict, kind: str, success: bool, **detail: Any) -
             refund(hold)
     except Exception as e:  # noqa: BLE001  (the reservation will simply expire)
         logger.warning("credit settle failed (%s %s %s success=%s): %s", hold["org"], hold["uid"], kind, success, e)
-    log_usage_event({"uid": hold["uid"], "workspace": hold["org"], "plan": hold["plan"], "pool": hold["pool"],
-                     "kind": kind, "amount": hold["amount"], "success": bool(success),
-                     "charged": bool(success), "at": _now().isoformat(), **hold["detail"]})
+    tracker = cost_tracker.for_user(current_user)
+    event = {"uid": hold["uid"], "workspace": hold["org"], "plan": hold["plan"], "pool": hold["pool"],
+             "kind": kind, "credit_kind": kind, "amount": hold["amount"], "success": bool(success),
+             "charged": bool(success), "at": _now().isoformat(), **hold["detail"]}
+    fields = cost_tracker.event_fields(tracker)
+    if fields.get("action"):
+        event.pop("action", None)          # the route's stable action name wins over per-call notes
+    event.update(fields)
+    if tracker is not None and not tracker.claim_log():
+        return
+    log_usage_event(event)
 
 
 def refund_charge(current_user: dict, kind: str) -> None:
@@ -473,6 +485,34 @@ def refund_charge(current_user: dict, kind: str) -> None:
 
 def confirm_charge(current_user: dict, kind: str, **detail: Any) -> None:
     settle_charge(current_user, kind, True, **detail)
+
+
+def _is_client_error(exc: BaseException) -> bool:
+    status = getattr(exc, "status_code", None)
+    return isinstance(exc, HTTPException) and isinstance(status, int) and 400 <= status <= 499
+
+
+def finish_untracked(current_user: dict, success: bool, error_code: Optional[str] = None,
+                     client_error: bool = False, **detail: Any) -> None:
+    """Log an AI action that has no credit hold (chips, generate-blocks, build-course, or a hold that
+    failed open): once per request, charged False. A 4xx rejection that did no work is skipped."""
+    try:
+        tracker = cost_tracker.for_user(current_user)
+        if tracker is None or not tracker.claim_log():
+            return
+        if not success and client_error and not tracker.has_activity():
+            return
+        event = {"uid": current_user.get("uid"), "workspace": current_user.get("org"),
+                 "success": bool(success), "charged": False, "error_code": error_code,
+                 "at": _now().isoformat(), **detail, **cost_tracker.event_fields(tracker)}
+        log_usage_event(event)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("usage finish failed: %s", e)
+
+
+def finish_stream(current_user: dict, success: bool, error_code: Optional[str] = None, **detail: Any) -> None:
+    """Streaming routes without a hold call this from the stream's finally."""
+    finish_untracked(current_user, success, error_code, **detail)
 
 
 # ── "usable course" (Generate Course billing rule) ──────────────────────────
@@ -492,14 +532,52 @@ def outlines_are_usable(outlines: Any) -> bool:
 
 # ── FastAPI dependencies ────────────────────────────────────────────────────
 
-def enforce_quota(kind: str):
+def _sniff_course_id(body: Any) -> Optional[str]:
+    """Best-effort course id from a JSON request body (the wire names differ per route)."""
+    if not isinstance(body, dict):
+        return None
+    for key in ("curriculum_id", "curriculumId", "courseId", "course_id", "presetCourseId"):
+        v = body.get(key)
+        if isinstance(v, str) and v:
+            return v
+    for nest in ("context", "course_context", "courseContext"):
+        v = body.get(nest)
+        if isinstance(v, dict):
+            for key in ("courseId", "curriculumId", "course_id"):
+                if isinstance(v.get(key), str) and v.get(key):
+                    return v[key]
+    return None
+
+
+async def _start_tracker(request: Request, current_user: dict, action: Optional[str], kind: Optional[str]):
+    """Begin the cost collector for this request (never raises)."""
+    try:
+        if not action:
+            ep = request.scope.get("endpoint")
+            action = getattr(ep, "__name__", None)
+        course_id = None
+        if "json" in (request.headers.get("content-type") or "").lower():
+            try:
+                course_id = _sniff_course_id(await request.json())
+            except Exception:  # noqa: BLE001
+                course_id = None
+        if not course_id:
+            course_id = request.query_params.get("curriculum_id") or request.query_params.get("courseId")
+        return cost_tracker.start(action, current_user, kind, course_id)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("cost tracker setup failed: %s", e)
+        return None
+
+
+def enforce_quota(kind: str, action: Optional[str] = None):
     """Dependency factory: reserve 1 credit of `kind` before the route runs; confirm when the
     route returns; refund if it raises (HTTP error or crash). Streaming routes call
-    defer_settlement() and settle themselves. 402 quota_exceeded when nothing is left."""
+    defer_settlement() and settle themselves. 402 quota_exceeded when nothing is left.
+    `action` is the stable UsageLog action name for the route (default: the endpoint function name)."""
     if kind not in KINDS:
         raise ValueError(f"unknown quota kind: {kind}")
 
-    async def dep(current_user: dict = Depends(require_org)):
+    async def dep(request: Request, current_user: dict = Depends(require_org)):
         org, uid = current_user["org"], current_user["uid"]
         # Plan/state gate BEFORE any credit logic (expired trial -> 402 plan_inactive).
         entitlements.enforce(current_user, entitlements.QUOTA_KIND_ACTION[kind])
@@ -511,14 +589,38 @@ def enforce_quota(kind: str):
         except Exception as e:  # noqa: BLE001
             # Fail open on infrastructure errors (logged; nothing was reserved or charged).
             logger.warning("credit reserve failed open (%s %s %s): %s", org, uid, kind, e)
+        await _start_tracker(request, current_user, action, kind)   # in this task's context: threads/streams inherit it
         try:
             yield current_user
-        except BaseException:
-            settle_charge(current_user, kind, False)   # route rejected/failed: no result delivered
+        except BaseException as e:
+            settle_charge(current_user, kind, False, error_code=cost_tracker.error_code_of(e))   # no result delivered
+            finish_untracked(current_user, False, cost_tracker.error_code_of(e), _is_client_error(e))   # only if the hold failed open
             raise
         hold = (current_user.get("_credit_holds") or {}).get(kind)
         if hold is not None and not hold["deferred"]:
             settle_charge(current_user, kind, True)
+        elif hold is None:
+            t = cost_tracker.for_user(current_user)
+            if t is not None and not t.deferred and not t.logged:
+                finish_untracked(current_user, True)     # settled by the route itself, or failed open
+
+    return dep
+
+
+def track_ai(action: str):
+    """Dependency factory for AI routes that carry no credit hold (generate-blocks, build-course):
+    starts the cost collector and logs one uncharged UsageLog row when the request ends. Streaming
+    routes call cost_tracker.defer(current_user) and finish_stream() from the stream's finally."""
+    async def dep(request: Request, current_user: dict = Depends(require_org)):
+        await _start_tracker(request, current_user, action, None)
+        try:
+            yield current_user
+        except BaseException as e:
+            finish_untracked(current_user, False, cost_tracker.error_code_of(e), _is_client_error(e))
+            raise
+        t = cost_tracker.for_user(current_user)
+        if t is not None and not t.deferred:
+            finish_untracked(current_user, True)
 
     return dep
 
@@ -527,8 +629,9 @@ _CHIPS_PER_MIN = 30
 _chip_hits: Dict[str, Deque[float]] = {}
 
 
-async def throttle_chips(current_user: dict = Depends(require_org)):
-    """In-memory per-uid limiter (~30/min, per instance) for the uncounted chips route."""
+async def throttle_chips(request: Request, current_user: dict = Depends(require_org)):
+    """In-memory per-uid limiter (~30/min, per instance) for the uncounted chips route. Also the
+    cost-log wrapper for chips (action edo_chips, no credit)."""
     entitlements.enforce(current_user, entitlements.AI_EDO)  # LLM-backed: off once a trial has ended
     uid, now = current_user["uid"], time.time()
     q = _chip_hits.setdefault(uid, deque())
@@ -538,4 +641,10 @@ async def throttle_chips(current_user: dict = Depends(require_org)):
         raise HTTPException(status_code=429, detail={"code": "rate_limited"},
                             headers={"Retry-After": str(max(1, int(60 - (now - q[0]))))})
     q.append(now)
-    return current_user
+    await _start_tracker(request, current_user, "edo_chips", None)
+    try:
+        yield current_user
+    except BaseException as e:
+        finish_untracked(current_user, False, cost_tracker.error_code_of(e), _is_client_error(e))
+        raise
+    finish_untracked(current_user, True)
