@@ -34,7 +34,7 @@ class GenerateResourceRequest(BaseModel):
     learningObjectives: Optional[list] = []
 
 
-@router.post("/generate-resource", dependencies=[Depends(enforce_quota("generates"))])
+@router.post("/generate-resource", dependencies=[Depends(enforce_quota("generates", "generate_resource"))])
 async def generate_resource(request: GenerateResourceRequest, current_user: dict = Depends(require_org)):
     """
     Generate a single worksheet or activity for a topic (Phase 3 on-demand).
@@ -162,7 +162,7 @@ class ActivityGenerationRequest(BaseModel):
     num_options: Optional[int] = 3
 
 
-@router.post("/worksheet-prompts", dependencies=[Depends(enforce_quota("generates"))])
+@router.post("/worksheet-prompts", dependencies=[Depends(enforce_quota("generates", "worksheet_prompts"))])
 async def get_worksheet_prompts(request: WorksheetPromptRequest, current_user: dict = Depends(require_org)):
     """
     Get worksheet type suggestions for a section.
@@ -184,7 +184,7 @@ async def get_worksheet_prompts(request: WorksheetPromptRequest, current_user: d
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/activity-prompts", dependencies=[Depends(enforce_quota("generates"))])
+@router.post("/activity-prompts", dependencies=[Depends(enforce_quota("generates", "activity_prompts"))])
 async def get_activity_prompts(request: ActivityPromptRequest, current_user: dict = Depends(require_org)):
     """
     Get activity type suggestions for a section.
@@ -206,7 +206,7 @@ async def get_activity_prompts(request: ActivityPromptRequest, current_user: dic
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/generate-worksheets", dependencies=[Depends(enforce_quota("generates"))])
+@router.post("/generate-worksheets", dependencies=[Depends(enforce_quota("generates", "generate_worksheets"))])
 async def generate_worksheets(request: WorksheetGenerationRequest, current_user: dict = Depends(require_org)):
     """
     Generate worksheet options for a section based on user's selected prompt.
@@ -234,7 +234,7 @@ async def generate_worksheets(request: WorksheetGenerationRequest, current_user:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/generate-activities", dependencies=[Depends(enforce_quota("generates"))])
+@router.post("/generate-activities", dependencies=[Depends(enforce_quota("generates", "generate_activities"))])
 async def generate_activities(request: ActivityGenerationRequest, current_user: dict = Depends(require_org)):
     """
     Generate activity options for a section based on user's selected prompt.

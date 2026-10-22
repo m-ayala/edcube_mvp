@@ -5,6 +5,7 @@ Filters based on quality and relevance to learning objectives
 
 import logging
 import openai
+from services import cost_tracker
 import json
 import os
 from typing import List, Dict, Optional
@@ -259,6 +260,7 @@ class ResourceFilter:
                 temperature=0.3,
                 max_tokens=500
             )
+            cost_tracker.record_llm(response)
             
             # Extract and parse response
             response_text = response.choices[0].message.content.strip()

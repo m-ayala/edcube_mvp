@@ -47,6 +47,26 @@ DEFAULT_PLATFORM_CONFIG: Dict[str, Any] = {
     "credit_reservation_ttl_minutes": 15,
     # Days a deactivated account stays restorable before permanent deletion.
     "deactivation_grace_days": 30,
+    # PLACEHOLDER PRICES (TASK-034). Every rate is 0 until the person fills in real vendor prices in
+    # EdCube/platform_config -> cost_rates (no deploy needed). They only drive the est_cost_usd fields
+    # of UsageLog rows; they never affect credits or limits. Token prices are USD per 1,000,000 tokens;
+    # a model not listed (or a dated variant) uses the longest matching prefix, else "default".
+    "cost_rates": {
+        "is_placeholder": True,
+        "currency": "USD",
+        "llm_per_1m_tokens": {
+            "default": {"input": 0, "output": 0},
+            "gpt-4o": {"input": 0, "output": 0},
+            "gpt-4o-mini": {"input": 0, "output": 0},
+        },
+        "browserbase": {
+            "per_search": 0,
+            "per_fetch": 0,
+            "per_session": 0,
+            "per_session_minute": 0,
+            "per_render_page": 0,
+        },
+    },
     "plans": {
         PLAN_TRIAL: {
             "limits": {"courses": 5, "generates": 50, "edo_messages": 75},

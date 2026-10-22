@@ -19,7 +19,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from routes.teachers import require_org, resolve_caller_uid
-from services.usage_service import enforce_quota, throttle_chips, refund_charge, defer_settlement, settle_charge
+from services.usage_service import enforce_quota, throttle_chips, refund_charge, defer_settlement, settle_charge, track_ai
 from outliner.course_day_planner import (
     DayPlanningError, library_topup_event, library_topup_enabled, library_topup_failed_event,
     library_topup_timeout, more_ideas, parse_context, plan_day,
@@ -61,7 +61,7 @@ class DayIdeasRequest(PlanDayRequest):
     count: int = Field(6, ge=2, le=10)
 
 
-@router.post("/course-builder/plan-days", dependencies=[Depends(enforce_quota("generates"))])
+@router.post("/course-builder/plan-days", dependencies=[Depends(enforce_quota("generates", "plan_days"))])
 async def course_builder_plan_days(body: PlanDaysRequest, current_user: dict = Depends(require_org)):
     """
     SSE. Plans days one after another (a day sees the topics of the days before it).
@@ -197,7 +197,7 @@ async def course_builder_plan_days(body: PlanDaysRequest, current_user: dict = D
     return StreamingResponse(generate(), media_type="text/event-stream", headers=SSE_HEADERS)
 
 
-@router.post("/course-builder/plan-day", dependencies=[Depends(enforce_quota("generates"))])
+@router.post("/course-builder/plan-day", dependencies=[Depends(enforce_quota("generates", "plan_day"))])
 async def course_builder_plan_day(body: PlanDayRequest, current_user: dict = Depends(require_org)):
     """Plan (or re-plan) a single day. Plain JSON: the day plan. 422 bad input, 502 AI failure."""
     try:
@@ -213,7 +213,7 @@ async def course_builder_plan_day(body: PlanDayRequest, current_user: dict = Dep
         raise HTTPException(status_code=502, detail="Could not plan this day. Please try again.")
 
 
-@router.post("/course-builder/day-ideas", dependencies=[Depends(enforce_quota("generates"))])
+@router.post("/course-builder/day-ideas", dependencies=[Depends(enforce_quota("generates", "day_ideas"))])
 async def course_builder_day_ideas(body: DayIdeasRequest, current_user: dict = Depends(require_org)):
     """More spare blocks for a day's library. Returns {day_id, block_minutes, topics (new only), blocks, warnings, notices}."""
     try:
@@ -256,7 +256,7 @@ class BuildCourseRequest(BaseModel):
     days: List[PlannedDay] = Field(..., max_length=60)
 
 
-@router.post("/course-builder/build-course")
+@router.post("/course-builder/build-course", dependencies=[Depends(track_ai("build_course"))])
 async def course_builder_build_course(body: BuildCourseRequest, current_user: dict = Depends(require_org)):
     """
     Build hand-off. Validates the teacher's finalized plan (including the server-side hard

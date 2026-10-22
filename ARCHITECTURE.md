@@ -309,7 +309,7 @@ through credits, so it never pauses; only the exhausted kind pauses.
 **Usable course.** `generate-curriculum` confirms its credit only if an outline with at least one titled section was
 produced and delivered (Course Builder flow: at least one usable candidate outline; legacy flow: also the candidate phase
 finished with at least one chain). Anything else is refunded, and the partial result (stage, section counts, error) is
-passed to `log_usage_event`, the hook TASK-034 turns into the `UsageLog` write.
+passed to `log_usage_event`, which (TASK-034) writes the `UsageLog` row; see "Usage and cost log" below.
 
 Contracts:
 - **402** `{"detail": {"code": "quota_exceeded", "kind": "courses"|"generates"|"edo_messages", "limit", "used",
@@ -322,6 +322,39 @@ Contracts:
   `UsageMeter` until TASK-035. The frontend `UsageContext.jsx` fetches it for public users only and listens for the 402
   and "AI call succeeded" events dispatched by `authFetch`.
 - **`GET /api/admin/accounts/{uid}/usage`** (admin): personal counters plus each org pool the account belongs to.
+
+### Usage and cost log (TASK-034)
+
+One `UsageLog/{autoId}` document (top level, backend-only) per AI action, charged or not: `uid`, `email_domain`, `plan`,
+`workspace`, `pool`, `action` (stable route name, e.g. `generate_course`, `edo_message`, `edo_chips`, `generate_block_links`),
+`credit_kind`, `charged`, `course_id` (sniffed from the request), `browserbase {search, fetch, render_pages, sessions,
+session_seconds}`, `used_browserbase`, `llm {calls, by_model{model: {prompt, completion, total}}, total_tokens}`, `success`,
+`error_code`, `partial`, `duration_ms`, `at`, `est_cost_usd {llm, browserbase, total}`, `est_cost_is_placeholder`. No prompt or
+response content is stored (only counts and ids; `partial.error` is an exception message cut to 300 characters).
+
+**Collector.** `services/cost_tracker.py` holds a mutable `CostTracker` in a `ContextVar`, started by `enforce_quota(kind, action)`,
+`throttle_chips` (chips, no credit) and `track_ai(action)` (generate-blocks, build-course: no credit hold), and also kept at
+`current_user["_cost"]` for stream generators. `record_llm(response)` runs after every `chat.completions.create` (10 sites);
+`browserbase_client` counts search, fetch, rendered pages, sessions and session seconds. Worker threads inherit the tracker
+because the module wraps `ThreadPoolExecutor.submit` at import so each job runs in a copy of the submitter's context
+(what `asyncio.to_thread` and anyio already do); the browser pool also holds an explicit reference. The synopsis portal
+(ICC admin, no tracker) is knowingly not logged. Hook: `usage_service.settle_charge` builds the event for credit-held routes
+(TASK-033 hook `log_usage_event`); `finish_untracked` / `finish_stream` log uncharged routes, once per request
+(`claim_log`). A 4xx rejection that did no work writes no row.
+
+**Writing.** `log_usage_event` enqueues the write on a two-thread background pool (`write_async`); failures are logged and
+never reach the request. `flush()` waits for pending writes (tests, shutdown).
+
+**Admin routes** (`require_admin`): `GET /api/admin/usage-log` (`from`, `to`, `uid`, `action`, `limit` default 1000 / max 5000,
+`format=json|csv`; default window 30 days; CSV cells guarded against spreadsheet formulas) and `GET /api/admin/cost-summary`
+(by_action, by_user, by_credit_kind; count, success rate, tokens, Browserbase calls, estimated cost). Both scan at most the
+newest 5000 rows of the window and report `truncated`; move to a scheduled rollup before the log outgrows that.
+
+**Cost rates (person must fill in).** `EdCube/platform_config.cost_rates` (defaults in `platform_config.py`, all 0 with
+`is_placeholder: true`): `llm_per_1m_tokens {default, gpt-4o, gpt-4o-mini: {input, output}}` in USD per million tokens (dated
+model names use the longest matching prefix) and `browserbase {per_search, per_fetch, per_session, per_session_minute,
+per_render_page}`. Until set, every `est_cost_usd` is 0 and the summary reports `rates_are_placeholder: true`. No prices live
+anywhere else in code.
 
 ### Visibility and collaboration
 
@@ -361,12 +394,12 @@ Contracts:
   `Users/{orgId}` block uses it, so the generic rules can never apply to `public`
   (Firestore ORs overlapping matches).
 - `inPersonal()`: `inSpace('personal')` or a `Users/personal/teachers/{uid}` doc (org members).
-- `match /Accounts/{uid}`: read by self only; `Accounts`, `AdminAudit` and `EdCube/platform_config` are never client-writable.
+- `match /Accounts/{uid}`: read by self only; `Accounts`, `AdminAudit`, `UsageLog` and `EdCube/platform_config` are never client-writable.
 - `match /Users/personal` (stricter): space doc readable by personal members, never
   client-writable. Curricula: read if owner, `isPublic`, or in `sharedWithUids`; create/update/delete
   owner only. `teacher_profiles`: read by members, write by self. `teachers/{uid}`: self only;
   `plan` / `plan_updated_at` cannot be written by clients; no client delete. `notifications`:
-  read/delete own. `usage/**`: no client access. `PaidWaitlist/{entry}`: no client access at all.
+  read/delete own. `usage/**`: no client access. `PaidWaitlist/{entry}` and `UsageLog/{entry}`: no client access at all.
 - The org block: members read curricula, profiles, teachers, synopsis; owner-only writes;
   folders owner-only; notifications read/delete own.
 - Hosting/deploy config: `frontend/firebase.json` points Firestore at `firestore.rules` and

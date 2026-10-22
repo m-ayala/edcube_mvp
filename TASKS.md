@@ -12,8 +12,6 @@ Public launch (plan: ~/.claude/plans/pasted-content-id-bccb-all-right-structured
 One branch per task (task/TASK-XXX-slug). Stop for the person's review at the end of each phase
 and before every commit. Target project edcubeai-fdba7 (Firestore DB "default").
 
-- [ ] TASK-034: Phase 3 — usage and cost log per AI action (user, plan, action, course, Browserbase
-      search/fetch counts, model, tokens, success, time) + admin export. (backend-agent)
 - [ ] TASK-035: Phase 4 — credit counters in the UI, per-feature pause, upgrade messages, admin page
       (plans, credits, cost export). NO PAYMENTS (person, 2026-10-21): every Upgrade / enterprise
       button opens "Join the waitlist for when we open paid and enterprise versions" — saves name,
@@ -76,6 +74,14 @@ and before every commit. Target project edcubeai-fdba7 (Firestore DB "default").
 
 
 ## Done
+
+- [x] TASK-034: Phase 3 — usage and cost log per AI action (user, plan, action, course, Browserbase
+      search/fetch counts, model, tokens, success, time) + admin export. (backend-agent)
+      Assigned: backend-agent — started 2026-10-21. Branch task/TASK-034-cost-logging.
+      QA PASS 2026-10-21: import main ok; backend checks task034 63, task033 84, task032 49, task031 111, usage 36, public 37, auth 13, discovery 80, blocklinks 11 pass;
+      lint 26 errors/5 warnings (limit 27/6), build ok. Also ran: submit-patch probe (Future type, exceptions, map, context reaches workers, TypeError on bad call)
+      and a hand estimate (1000 in/500 out gpt-4o-2024-08-06 at 2.5/10 + 1M in at default 1 = 1.0075; Browserbase 0.231). Read: all 10 LLM sites record, 15 AI routes wrapped.
+      Open notes: cost_rates are placeholders (0) until the person fills them in; partial.error (<=300 chars of an exception message) is stored; reloading cost_tracker would double-wrap submit (harmless).
 
 - [x] TASK-033: Phase 2 — credit counters: reserve → confirm/refund in transactions; trial one-time
       allowance, paid monthly on plan-start anniversary, no rollover; org pool; every AI route;

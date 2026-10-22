@@ -21,10 +21,10 @@ from services.firebase_service import FirebaseService
 from schemas.generation_schema import GenerateRequest, GenerateResponse
 from services.generation_service import GenerationService
 from routes.teachers import verify_firebase_token, require_org, require_org_for_uid, resolve_caller_uid
-from services import entitlements
+from services import entitlements, cost_tracker
 from services.usage_service import (
     enforce_quota, throttle_chips, refund_charge, defer_settlement, settle_charge, note_usage,
-    outline_is_usable, outlines_are_usable,
+    track_ai, finish_stream, outline_is_usable, outlines_are_usable,
 )
 from schemas.teacher_schema import TEACHER_PROFILES_COLLECTION
 from firebase.paths import org_col
@@ -36,7 +36,7 @@ firebase = FirebaseService()
 logger = logging.getLogger(__name__)
 
 
-@router.post("/generate-curriculum", dependencies=[Depends(enforce_quota("courses"))])
+@router.post("/generate-curriculum", dependencies=[Depends(enforce_quota("courses", "generate_course"))])
 async def generate_curriculum(
     course_name:     str   = Form(...),
     age_range_start: int   = Form(...),
@@ -345,7 +345,7 @@ class GenerateMoreSubsectionsRequest(BaseModel):
     existingSubsections: List[SubsectionLabel] = []
 
 
-@router.post("/generate-more-subsections", dependencies=[Depends(enforce_quota("generates"))])
+@router.post("/generate-more-subsections", dependencies=[Depends(enforce_quota("generates", "generate_more_subsections"))])
 async def generate_more_subsections(body: GenerateMoreSubsectionsRequest, current_user: dict = Depends(require_org)):
     """
     Phase 1.5 "generate more": propose one additional independent chain for a
@@ -418,7 +418,7 @@ class GenerateBlocksRequest(BaseModel):
     selections: List[SubsectionSelection]
 
 
-@router.post("/generate-blocks")
+@router.post("/generate-blocks", dependencies=[Depends(track_ai("generate_blocks"))])
 async def generate_blocks(body: GenerateBlocksRequest, current_user: dict = Depends(require_org)):
     """
     Stage 2 of course generation: take the teacher's Phase 1.5 selection (which
@@ -435,6 +435,8 @@ async def generate_blocks(body: GenerateBlocksRequest, current_user: dict = Depe
     # Plan gate (TASK-031), before streaming starts; no extra charge (the course was charged at
     # /generate-curriculum). course-builder/build-course reaches this same function, so it is gated too.
     entitlements.enforce(current_user, entitlements.AI_GENERATE)
+
+    gb_state = {"done": False, "error": None, "course_id": body.presetCourseId}
 
     async def generate():
         try:
@@ -554,12 +556,19 @@ async def generate_blocks(body: GenerateBlocksRequest, current_user: dict = Depe
                 organizationId=body.organizationId,
             )
 
+            gb_state["done"], gb_state["course_id"] = True, curriculum_id
             yield f"data: {json.dumps({'phase': 2, 'message': 'Complete!', 'progress': 100, 'curriculum_id': curriculum_id, 'done': True})}\n\n"
 
         except Exception as e:
             logger.error(f"generate-blocks error: {e}", exc_info=True)
+            gb_state["error"] = type(e).__name__
             yield f"data: {json.dumps({'message': f'Error: {str(e)}', 'error': True})}\n\n"
+        finally:
+            # Cost log (TASK-034): no credit is charged here, but the Browserbase / LLM cost is logged.
+            finish_stream(current_user, gb_state["done"], gb_state["error"] if not gb_state["done"] else None,
+                          course_id=gb_state["course_id"])
 
+    cost_tracker.defer(current_user)   # the stream finishes the cost record when it ends
     return StreamingResponse(
         generate(),
         media_type="text/event-stream",
@@ -1111,7 +1120,7 @@ async def update_course_info_notes(curriculum_id: str, body: CourseInfoNotesUpda
 # NEW UNIFIED GENERATION ENDPOINT
 # ============================================================================
 
-@router.post("/curriculum/generate", dependencies=[Depends(enforce_quota("generates"))], response_model=GenerateResponse)
+@router.post("/curriculum/generate", dependencies=[Depends(enforce_quota("generates", "generate_content"))], response_model=GenerateResponse)
 async def generate_curriculum_content(request: GenerateRequest, current_user: dict = Depends(require_org)):
     """
     Unified generation endpoint for sections, subsections, and topic boxes
@@ -1295,7 +1304,7 @@ class EditOutlineRequest(BaseModel):
     conversation_history: Optional[List[OutlineChatMessage]] = Field(default_factory=list, max_length=20)
 
 
-@router.post("/course-builder/edit-outline", dependencies=[Depends(enforce_quota("generates"))])
+@router.post("/course-builder/edit-outline", dependencies=[Depends(enforce_quota("generates", "edit_outline"))])
 async def course_builder_edit_outline(body: EditOutlineRequest, current_user: dict = Depends(require_org)):
     """Edo revises the chosen outline. Pure function of its inputs: nothing is stored,
     so the client can undo by keeping the previous outline it sent."""
@@ -1318,7 +1327,7 @@ async def course_builder_edit_outline(body: EditOutlineRequest, current_user: di
         raise HTTPException(status_code=502, detail=str(e))
 
 
-@router.post("/curriculum/chat", dependencies=[Depends(enforce_quota("edo_messages"))])
+@router.post("/curriculum/chat", dependencies=[Depends(enforce_quota("edo_messages", "edo_message"))])
 async def chat_with_edo(request: EdoChatRequest, current_user: dict = Depends(require_org)):
     """
     Edo AI curriculum assistant — returns 2-3 structured suggestion blocks.
@@ -1692,6 +1701,7 @@ Respond ONLY with valid JSON. No markdown, no preamble."""
             max_tokens=max_tokens,
             response_format={"type": "json_object"}
         )
+        cost_tracker.record_llm(response)
 
         # Edo is counted per MESSAGE (TASK-033): enforce_quota reserved 1 before this call and
         # confirms it when the reply returns (refunds if we raise). Token counts are only
@@ -1784,6 +1794,7 @@ Generate 7-9 chips total."""
             max_tokens=300,
             response_format={"type": "json_object"}
         )
+        cost_tracker.record_llm(response)
 
         raw = response.choices[0].message.content
         parsed = json.loads(raw)
@@ -1815,7 +1826,7 @@ class GenerateBlockLinksRequest(BaseModel):
     blockDurationMinutes: Optional[float] = None     # caps video length
 
 
-@router.post("/curriculum/generate-block-links", dependencies=[Depends(enforce_quota("generates"))])
+@router.post("/curriculum/generate-block-links", dependencies=[Depends(enforce_quota("generates", "generate_block_links"))])
 async def generate_block_links(request: GenerateBlockLinksRequest, current_user: dict = Depends(require_org)):
     """
     Generate resource links for a block. Provider is chosen by env
@@ -2023,7 +2034,7 @@ class GenerateDescriptionRequest(BaseModel):
     teacherUid: Optional[str] = None
 
 
-@router.post("/curriculum/generate-description", dependencies=[Depends(enforce_quota("generates"))])
+@router.post("/curriculum/generate-description", dependencies=[Depends(enforce_quota("generates", "generate_description"))])
 async def generate_description(request: GenerateDescriptionRequest, current_user: dict = Depends(require_org)):
     """
     Generate a one-paragraph course description based on the teacher's course info.
@@ -2077,6 +2088,7 @@ async def generate_description(request: GenerateDescriptionRequest, current_user
             temperature=0.7,
             max_tokens=300,
         )
+        cost_tracker.record_llm(response)
 
         description_text = response.choices[0].message.content.strip()
         logger.info(f"[generate-description] Generated description ({len(description_text)} chars) for course '{request.courseName}'")
@@ -2098,7 +2110,7 @@ class GenerateSynopsisRequest(BaseModel):
     selectedBlocks: List[SynopsisBlock]
 
 
-@router.post("/curriculum/generate-synopsis", dependencies=[Depends(enforce_quota("generates"))])
+@router.post("/curriculum/generate-synopsis", dependencies=[Depends(enforce_quota("generates", "generate_synopsis"))])
 async def generate_synopsis(request: GenerateSynopsisRequest, current_user: dict = Depends(require_org)):
     """
     Generate a parent-facing narrative synopsis of a completed course.
@@ -2159,6 +2171,7 @@ async def generate_synopsis(request: GenerateSynopsisRequest, current_user: dict
             temperature=0.7,
             max_tokens=1000,
         )
+        cost_tracker.record_llm(response)
 
         synopsis_text = response.choices[0].message.content.strip()
         logger.info(f"[generate-synopsis] Generated synopsis ({len(synopsis_text)} chars) for course '{request.courseName}'")

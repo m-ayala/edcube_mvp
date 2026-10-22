@@ -9,6 +9,7 @@ embeds a credential).
 import logging
 import re
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, List, Optional
 
@@ -16,6 +17,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from config import BROWSERBASE_API_KEY
+from services import cost_tracker   # per-request cost log (TASK-034); every call below is counted
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +38,7 @@ def search(query: str, num_results: int = 6, timeout: int = 30) -> List[Dict[str
     """Browserbase Search. Returns [{url, title}]; [] on any failure."""
     if not is_configured():
         return []
+    cost_tracker.record_search()
     try:
         r = requests.post(f"{BB_API}/search", headers=_headers(),
                           json={"query": query, "numResults": num_results}, timeout=timeout)
@@ -51,6 +54,7 @@ def fetch_html(url: str, timeout: int = 25) -> str:
     """Browserbase Fetch (plain HTTP via their proxy). Returns HTML, or '' on failure/non-HTML."""
     if not is_configured():
         return ""
+    cost_tracker.record_fetch()
     try:
         r = requests.post(f"{BB_API}/fetch", headers=_headers(), json={"url": url}, timeout=timeout)
         d = r.json()
@@ -94,6 +98,8 @@ class BrowserPool:
         self._browser = None
         self._page = None
         self._failed = False
+        self._tracker = cost_tracker.current()   # explicit reference: the browser thread reports to this request
+        self._opened_at = None
 
     def _open(self) -> bool:
         if self._failed or not is_configured():
@@ -106,6 +112,8 @@ class BrowserPool:
             r = requests.post(f"{BB_API}/sessions", headers=_headers(), json={"projectId": proj}, timeout=30)
             r.raise_for_status()
             connect_url = r.json()["connectUrl"]  # contains a credential: never log it
+            cost_tracker.record_session(self._tracker)
+            self._opened_at = time.monotonic()
             self._pw = sync_playwright().start()
             self._browser = self._pw.chromium.connect_over_cdp(connect_url)
             ctx = self._browser.contexts[0] if self._browser.contexts else self._browser.new_context()
@@ -126,6 +134,7 @@ class BrowserPool:
             if self._budget <= 0:
                 break
             self._budget -= 1
+            cost_tracker.record_render_page(self._tracker)
             try:
                 self._page.goto(u, wait_until="domcontentloaded", timeout=self._page_timeout_ms)
                 self._page.wait_for_timeout(1500)
@@ -143,6 +152,9 @@ class BrowserPool:
             return {}
 
     def _teardown(self):
+        if self._opened_at is not None:
+            cost_tracker.record_session_seconds(time.monotonic() - self._opened_at, self._tracker)
+            self._opened_at = None
         for fn in (lambda: self._browser and self._browser.close(),
                    lambda: self._pw and self._pw.stop()):
             try:
