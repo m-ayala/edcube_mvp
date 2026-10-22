@@ -12,9 +12,6 @@ Public launch (plan: ~/.claude/plans/pasted-content-id-bccb-all-right-structured
 One branch per task (task/TASK-XXX-slug). Stop for the person's review at the end of each phase
 and before every commit. Target project edcubeai-fdba7 (Firestore DB "default").
 
-- [ ] TASK-039: Phase 7 — email domain tagging (edu/k12, excluding personal providers), admin domain
-      list (user counts, newest first), data model for later org domain verification. (backend-agent, frontend-agent)
-- [ ] TASK-040: Phase 8 — test suite: pytest + Firestore emulator, one test per outlier case. (docs-qa-agent)
 
 - [ ] TASK-025 (attempt 2): Small follow-ups from QA on TASK-023/024 — build rejects a day whose
       hours list is shorter than its teaching hours (hour_missing) instead of silently
@@ -53,11 +50,20 @@ and before every commit. Target project edcubeai-fdba7 (Firestore DB "default").
 
 
 
-
-
 ## Done
 - [x] TASK-042: Landing page redesign (Create / Collaborate / Discover, MLA framework, flip cards, Edo preview, founder). (frontend-agent)
       QA PASS 2026-10-22: only LandingPage.jsx changed vs merge-base; eslint clean on the file, full lint 26 errors / 5 warnings = main, build passes. Copy matches the plan's rewording; no fork/copy, public publishing, comments, real-time editing or "every source cited" claims. Nav (logged in/out), /signup CTAs, #demo scroll, /demo_vid.mp4 kept; image slots fall back on error. Pending from the person: four photos (science, technology, arts, performing-arts .jpg) and three screenshots (create, collaborate, discover .png) in frontend/public/landing/. No automated test coverage for this module.
+
+- [x] TASK-040: Phase 8 — test suite: pytest + Firestore emulator, one test per outlier case. (docs-qa-agent)
+      Branch task/TASK-040-tests. Approved by the person's spec.
+      QA PASS 2026-10-22: backend pytest suite (98 tests) passes offline, also on fastapi 0.109/starlette 0.35.1/httpx 0.27. Outliers 1-14 each have a named test. Rules tests written but NOT run (no Java); one may expose a real rules gap (note on `{subPath=**}` at frontend/firestore.rules:168, see frontend/tests/rules). Frontend half of outlier 6 not covered by pytest.
+
+
+- [x] TASK-039: Phase 7 — email domain tagging (edu/k12, excluding personal providers), admin domain
+      list (user counts, newest first), data model for later org domain verification. (backend-agent, frontend-agent)
+      Assigned: backend-agent, then frontend-agent — started 2026-10-22. Branch task/TASK-039-domain-tagging.
+      QA PASS 2026-10-22: no domain blocked (bootstrap, check-email, signup UI untouched); Accounts create and Domains count in one transaction, tagging failure falls back to a plain write, repeat login counts nothing; Domains and OrgDomainClaims hold no emails and are denied by rules; rules live only in platform_config (lausd.net education/low, personal providers on any TLD); admin routes admin-only, CSV formula-escaped, override sticky and audited; org resolution untouched (nothing reads verified_domains). import main ok, check_task039 ALL OK and earlier checks pass, lint 26/5, build ok, e2e t39 8/8. Not tested against live Firestore transactions. No automated test suite.
+
 
 - [x] TASK-038: Phase 6 — forking audit: no fork/copy feature exists; only the landing-page
       testimonial mentions "fork" — reword if the person wants. (frontend-agent)

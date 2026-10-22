@@ -60,6 +60,8 @@ PAID_WAITLIST_COLLECTION = "PaidWaitlist" # PaidWaitlist/{autoId} (TASK-032)
 USAGE_LOG_COLLECTION = "UsageLog"         # UsageLog/{autoId} (TASK-034)
 SHARE_LINKS_COLLECTION = "ShareLinks"     # ShareLinks/{token} (TASK-036), view-only links, backend-only
 INVITES_COLLECTION = "Invites"            # Invites/{id} (TASK-036), collaborator/view invites, backend-only
+DOMAINS_COLLECTION = "Domains"            # Domains/{domainKey} (TASK-039), signup-domain aggregate (counts only), backend-only
+ORG_DOMAIN_CLAIMS_COLLECTION = "OrgDomainClaims"   # OrgDomainClaims/{id} (TASK-039), future org domain verification, backend-only
 
 # Synopsis / afterschool routes have no auth today and are ICC-specific.
 # Multi-org synopsis is out of scope (tasks/firestore-reorg-spec.md, decision 4).
@@ -149,6 +151,16 @@ def share_links_col(db):
 def invites_col(db):
     """`Invites` -- pending/accepted/cancelled/expired course invites (TASK-036), backend only."""
     return db.collection(INVITES_COLLECTION)
+
+
+def domains_col(db):
+    """`Domains` -- one doc per email domain (stats key), user counts only, no emails (TASK-039), backend only."""
+    return db.collection(DOMAINS_COLLECTION)
+
+
+def org_domain_claims_col(db):
+    """`OrgDomainClaims` -- an org's claim on a domain + the invite/course-move plan (TASK-039), backend only."""
+    return db.collection(ORG_DOMAIN_CLAIMS_COLLECTION)
 
 
 def admin_audit_col(db):

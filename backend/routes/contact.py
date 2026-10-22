@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-NOTIFY_TO   = "manaswini@indiacc.org"
+NOTIFY_TO   = os.getenv("NOTIFY_TO", "manaswini.ayala@gmail.com")
 GMAIL_USER  = os.getenv("GMAIL_USER", "")
 GMAIL_PASS  = os.getenv("GMAIL_APP_PASSWORD", "")
 

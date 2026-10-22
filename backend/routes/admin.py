@@ -12,6 +12,8 @@ POST  /api/admin/accounts/{uid}/credits     {courses?, generates?, edo_messages?
 POST  /api/admin/accounts/{uid}/deactivate  deactivate (starts the grace period)
 POST  /api/admin/accounts/{uid}/reactivate  reactivate (admins are not bound by the grace period)
 GET   /api/admin/usage-log                  cost log rows, newest first (?from=&to=&uid=&action=&limit=&format=csv|json)
+GET   /api/admin/domains                    signup email domains + user counts, newest first (?tag=&confidence=&limit=&format=csv|json) (TASK-039)
+PATCH /api/admin/domains/{domain}           {tag: education|personal|org_registered|other|auto} manual override (audited, sticks)
 GET   /api/admin/cost-summary               per action / per user / per credit kind aggregates (?from=&to=)
 
 There is no payment flow: plans change only through these routes.
@@ -29,10 +31,11 @@ from fastapi.responses import Response
 from firebase_admin import auth
 from pydantic import BaseModel, Field
 
-from firebase.paths import PERSONAL_SPACE_ID, accounts_col
+from firebase.paths import PERSONAL_SPACE_ID, accounts_col, domains_col
 from firebase.public_space import PLANS
 from routes.teachers import require_admin
 from services import accounts_service as accts
+from services import domain_tagging
 from services import sharing_service
 from services import platform_config as pc
 from services import usage_report
@@ -226,3 +229,66 @@ async def cost_summary(
             "truncated": truncated, "scan_limit": usage_report.MAX_SCAN,
             "rates_are_placeholder": bool(rates.get("is_placeholder", True)),
             **usage_report.summarize(rows)}
+
+
+# ── Email domains (TASK-039) ────────────────────────────────────────────────
+
+DOMAIN_SCAN_LIMIT = 5000
+DOMAIN_CSV_FIELDS = ["domain", "tag", "confidence", "tag_source", "user_count", "first_seen_at", "last_seen_at"]
+
+
+class DomainTagUpdate(BaseModel):
+    tag: Literal["education", "personal", "org_registered", "other", "auto"]
+
+
+def _iso(v):
+    return v.isoformat() if isinstance(v, datetime) else v
+
+
+def _domain_row(snap_id: str, d: dict) -> dict:
+    return {"domain": d.get("domain") or snap_id, "tag": d.get("tag"), "confidence": d.get("confidence"),
+            "reason": d.get("reason"), "tag_source": d.get("tag_source") or domain_tagging.SOURCE_AUTO,
+            "user_count": int(d.get("user_count") or 0), "first_seen_at": _iso(d.get("first_seen_at")),
+            "last_seen_at": _iso(d.get("last_seen_at")), "seen_domains": d.get("seen_domains") or [],
+            "sample_orgs": d.get("sample_orgs") or []}
+
+
+@router.get("/domains")
+async def list_domains(
+    tag: Optional[Literal["education", "personal", "org_registered", "other"]] = Query(default=None),
+    confidence: Optional[Literal["high", "medium", "low"]] = Query(default=None),
+    limit: int = Query(default=200, ge=1, le=2000),
+    format: Literal["json", "csv"] = Query(default="json"),
+    admin: dict = Depends(require_admin),
+    db=Depends(get_db),
+):
+    """Domains newest first (by first_seen_at) with user_count. Filtering is done in memory over the newest
+    DOMAIN_SCAN_LIMIT docs, so no composite index is needed. Counts only; no emails are stored."""
+    from google.cloud.firestore import Query as FsQuery
+    snaps = domains_col(db).order_by("first_seen_at", direction=FsQuery.DESCENDING).limit(DOMAIN_SCAN_LIMIT).stream()
+    rows = [_domain_row(sn.id, sn.to_dict() or {}) for sn in snaps]
+    if tag:
+        rows = [r for r in rows if r["tag"] == tag]
+    if confidence:
+        rows = [r for r in rows if r["confidence"] == confidence]
+    rows = rows[:limit]
+    if format == "csv":
+        buf = io.StringIO()
+        w = csv.writer(buf)
+        w.writerow(DOMAIN_CSV_FIELDS)
+        for r in rows:
+            w.writerow([_csv_cell(r.get(f)) for f in DOMAIN_CSV_FIELDS])
+        return Response(buf.getvalue(), media_type="text/csv",
+                        headers={"Content-Disposition": 'attachment; filename="edcube-domains.csv"'})
+    return {"domains": rows, "count": len(rows)}
+
+
+@router.patch("/domains/{domain}")
+async def set_domain_tag(domain: str, body: DomainTagUpdate, admin: dict = Depends(require_admin), db=Depends(get_db)):
+    key = domain_tagging.normalize(domain)
+    try:
+        change = domain_tagging.set_manual_tag(db, key, body.tag, admin)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="No users have signed up with that domain yet")
+    accts.log_admin_action(admin, "set_domain_tag", key, change["before"], change["after"], db)
+    return _domain_row(key, domains_col(db).document(key).get().to_dict() or {})

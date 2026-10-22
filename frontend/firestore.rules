@@ -105,6 +105,16 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Signup-domain aggregate (TASK-039): counts per email domain, read through the admin API only.
+    match /Domains/{domain} {
+      allow read, write: if false;
+    }
+
+    // Future org domain verification (TASK-039): uids and course ids, backend only.
+    match /OrgDomainClaims/{claimId} {
+      allow read, write: if false;
+    }
+
     // Course invites (TASK-036): hold invitee emails and secret tokens; backend only.
     match /Invites/{inviteId} {
       allow read, write: if false;
@@ -155,7 +165,9 @@ service cloud.firestore {
                       && !request.resource.data.diff(resource.data).affectedKeys()
                             .hasAny(['plan', 'plan_updated_at']);
 
-        match /{subPath=**} {
+        // `{sub}/{rest=**}` (not `{subPath=**}`): a bare recursive wildcard also matches
+        // the teachers doc itself (zero segments) and would OR-bypass the plan guard above.
+        match /{sub}/{rest=**} {
           allow read, write: if inPersonal() && request.auth.uid == teacherUid;
         }
       }

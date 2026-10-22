@@ -2,7 +2,7 @@
 """
 Accounts (TASK-031): `Accounts/{uid}`, written by the backend only.
 
-    email, email_domain
+    email, email_domain, domain_key, domain_tag, domain_tag_confidence, domain_tagged_at (TASK-039)
     plan ("trial"|"teacher"|"org"), plan_started_at, trial_ends_at,
     plan_source ("trial_default"|"admin"|"org_member")
     bonus_credits {courses, generates, edo_messages}
@@ -180,7 +180,21 @@ def ensure_account(uid: str, email: str, org_id: Optional[str] = None,
             "delete_after": None,
             "created_at": now,
         }
-        ref.set(doc)
+        # TASK-039: record + count the email domain in the SAME transaction that creates the account, so a
+        # repeat login (doc exists) counts nothing. Tagging must never break signup: fall back to a plain write.
+        try:
+            from services import domain_tagging
+            created = domain_tagging.create_account_with_domain(db, uid, doc, now)
+            if created is None:               # lost a race: someone created it first, treat as existing
+                invalidate(uid)
+                return get_account(uid, db, fresh=True) or doc
+            doc = created
+        except Exception as e:  # noqa: BLE001
+            logger.warning("domain tagging failed for %s, creating account without it: %s", uid, e)
+            if ref.get().exists:
+                invalidate(uid)
+                return get_account(uid, db, fresh=True) or doc
+            ref.set(doc)
         invalidate(uid)
         return doc
 

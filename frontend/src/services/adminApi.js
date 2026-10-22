@@ -54,3 +54,9 @@ const downloadCsv = async (path, params, filename) => {
 };
 export const downloadWaitlistCsv = (interest) => downloadCsv('/waitlist', { interest }, 'edcube-waitlist.csv');
 export const downloadUsageLogCsv = (from, to) => downloadCsv('/usage-log', { from, to }, 'edcube-usage-log.csv');
+
+export const listDomains = async ({ tag, confidence, limit } = {}) =>
+  json(await authFetch(`${BASE()}/domains${qs({ tag, confidence, limit, format: 'json' })}`), 'Could not load domains');
+export const setDomainTag = async (domain, tag) =>
+  json(await send(`/domains/${encodeURIComponent(domain)}`, 'PATCH', { tag }), 'Could not change the tag');
+export const downloadDomainsCsv = (tag, confidence) => downloadCsv('/domains', { tag, confidence }, 'edcube-domains.csv');

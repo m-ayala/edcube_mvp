@@ -8,8 +8,9 @@ SERVICE="edcube-backend"
 IMAGE="$REGION-docker.pkg.dev/$PROJECT/edcube/$SERVICE"
 
 # Backend config. Secrets live in Secret Manager in $PROJECT; plain values here.
-SECRETS="OPENAI_API_KEY=OPENAI_API_KEY:latest,GOOGLE_API_KEY=GOOGLE_API_KEY:latest,YOUTUBE_API_KEY=YOUTUBE_API_KEY:latest,GOOGLE_CSE_ID=GOOGLE_CSE_ID:latest,SYNOPSIS_DRIVE_FOLDER_ID=SYNOPSIS_DRIVE_FOLDER_ID:latest,BROWSERBASE_API_KEY=BROWSERBASE_API_KEY:latest"
-ENV_VARS="FIRESTORE_DATABASE=default,STORAGE_BUCKET=$PROJECT.firebasestorage.app"
+SECRETS="OPENAI_API_KEY=OPENAI_API_KEY:latest,GOOGLE_API_KEY=GOOGLE_API_KEY:latest,YOUTUBE_API_KEY=YOUTUBE_API_KEY:latest,GOOGLE_CSE_ID=GOOGLE_CSE_ID:latest,SYNOPSIS_DRIVE_FOLDER_ID=SYNOPSIS_DRIVE_FOLDER_ID:latest,BROWSERBASE_API_KEY=BROWSERBASE_API_KEY:latest,GMAIL_APP_PASSWORD=GMAIL_APP_PASSWORD:latest"
+# GMAIL_USER sends; NOTIFY_TO receives contact/waitlist mail; FRONTEND_URL is the base of emailed invite links.
+ENV_VARS="FIRESTORE_DATABASE=default,STORAGE_BUCKET=$PROJECT.firebasestorage.app,GMAIL_USER=manaswini.ayala@gmail.com,NOTIFY_TO=manaswini.ayala@gmail.com,FRONTEND_URL=https://edcube.org"
 
 echo "=== Building backend image (Cloud Build) ==="
 gcloud builds submit ./backend --tag $IMAGE --project $PROJECT --account $ACCOUNT

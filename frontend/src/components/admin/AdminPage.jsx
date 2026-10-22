@@ -8,10 +8,12 @@ import { useAuth } from '../../contexts/AuthContext';
 import AccountsTab from './AccountsTab';
 import WaitlistTab from './WaitlistTab';
 import CostsTab from './CostsTab';
+import DomainsTab from './DomainsTab';
 
 const TABS = [
   { id: 'accounts', label: 'Accounts' },
   { id: 'waitlist', label: 'Waitlist' },
+  { id: 'domains', label: 'Domains' },
   { id: 'costs', label: 'Costs' },
 ];
 
@@ -42,6 +44,7 @@ const AdminPage = () => {
       </div>
       {tab === 'accounts' && <AccountsTab />}
       {tab === 'waitlist' && <WaitlistTab />}
+      {tab === 'domains' && <DomainsTab />}
       {tab === 'costs' && <CostsTab />}
     </div>
   );
