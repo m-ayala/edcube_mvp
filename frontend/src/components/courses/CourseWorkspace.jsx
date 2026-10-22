@@ -19,6 +19,11 @@ import useAutosave from './useAutosave';
 import { useGeneration } from '../../contexts/GenerationContext';
 import BreakModal from '../modals/BreakModal';
 import ShareCourseModal from '../modals/ShareCourseModal';
+import AccessBanner from './AccessBanner';
+import LeaveCourseButton from './LeaveCourseButton';
+import {
+  useCourseAccess, lockFromAccess, lockFromSaveError, saveDraft, clearDraft, courseToText,
+} from './courseAccess';
 import { generateBlockLinks } from '../../utils/curriculumApi';
 import { mergeLinks } from '../../utils/blockLinks';
 import { authFetch } from '../../services/authFetch';
@@ -102,6 +107,47 @@ const CourseWorkspace = () => {
     if (editorRowRef.current) editorRowRef.current.inert = saveNotice?.kind === 'refused';
   }, [saveNotice]);
   const [outlineExtras, setOutlineExtras] = useState(incomingOutlineExtras || null); // saved outline fields other than sections
+
+  // ── Live access (TASK-037) ───────────────────────────────────────────
+  // The owner's plan decides who may co-edit, and an owner can remove someone at any time. `lock` is
+  // why this session can no longer save: 'plan' | 'view' | 'owner_deactivated' (shown read-only) or
+  // 'removed' (no access at all). Local edits are never dropped: they stay in the editor state and, when
+  // a lock is set, in a local draft (localStorage, keyed by course id) the teacher can copy.
+  const [lock, setLock] = useState(null);
+  const [accessRole, setAccessRole] = useState(null); // 'owner' | 'collaborate' | 'view' | ... from GET /api/curricula/{id}
+  const [restoreTick, setRestoreTick] = useState(0);
+  const lockRef = useRef(null);
+  const latestRef = useRef({});
+  useEffect(() => {
+    lockRef.current = lock;
+    latestRef.current = { courseName, sections, handsOnResources };
+  });
+  const unsavedText = () => courseToText(latestRef.current);
+  const lockWith = (reason) => {
+    if (!reason) return;
+    if (lockRef.current === 'removed' || lockRef.current === reason) return;
+    lockRef.current = reason;
+    saveDraft(curriculumId, courseToText(latestRef.current));
+    setLock(reason);
+  };
+  const applyAccess = (access) => {
+    setAccessRole(access.role);
+    const next = lockFromAccess(access);
+    if (next) { lockWith(next); return; }
+    if (lockRef.current && lockRef.current !== 'removed') {
+      // Restored (e.g. the owner subscribed again): edits made before the lock are saved again.
+      lockRef.current = null;
+      setLock(null);
+      setRestoreTick(t => t + 1);
+    }
+  };
+  useCourseAccess({
+    courseId: curriculumId,
+    enabled: !!currentUser && !!curriculumId && curriculumId !== 'new-course' && !isGenerating
+      && !(incomingIsOwner || accessRole === 'owner'),
+    onAccess: applyAccess,
+    onNoAccess: () => lockWith('removed'),
+  });
 
   // Phase 1.5 redesign (TASK-002/003/004) — content library + day lanes view.
   // Local feature flag only: gates the new panel alongside the existing
@@ -239,6 +285,7 @@ const CourseWorkspace = () => {
           return;
         }
         const data = await res.json();
+        if (data.access) applyAccess(data.access);
         setCourseAttachments(data.courseAttachments || []);
         setCourseInfoNotes(data.courseInfoNotes || '');
         if (data.outline) setOutlineExtras(outlineExtrasOf(data));
@@ -547,7 +594,12 @@ const CourseWorkspace = () => {
 
       result = await response.json();
       if (!result.success) {
-        throw new Error(result.error || result.detail || 'Unknown error');
+        // A refused save (view-only, owner's plan, deactivated owner, or access gone) never discards
+        // the edits: lockWith keeps them in the editor and in a local draft and shows the banner.
+        if (hasExistingId && !response.ok) lockWith(lockFromSaveError(response.status, result?.detail));
+        throw new Error(
+          (typeof result.detail === 'string' && result.detail) || result.detail?.message || result.error || 'Unknown error'
+        );
       }
     } catch (err) {
       // Built courses get a plain explanation; older courses keep the "Error" chip only.
@@ -555,6 +607,7 @@ const CourseWorkspace = () => {
       throw err;
     }
     if (isBuilderDoc) setSaveNotice(null);
+    if (hasExistingId) clearDraft(curriculumId);
 
     if (!hasExistingId && result.courseId) {
       setCurriculumId(result.courseId);
@@ -655,9 +708,9 @@ const CourseWorkspace = () => {
   // ── Autosave ─────────────────────────────────────────────────────────
   const saveStatus = useAutosave({
     performSave: saveCourse,
-    deps: [sections, courseName, videosByTopic, handsOnResources],
+    deps: [sections, courseName, videosByTopic, handsOnResources, restoreTick],
     delay: 2000,
-    enabled: !!org && !!currentUser && !readOnly && !isGenerating && !isSelectingSubsections
+    enabled: !!org && !!currentUser && !readOnly && !lock && !isGenerating && !isSelectingSubsections
       // A built course always has an id. Never let a Course Builder course create a second
       // document under a new id (an unsaved or half-loaded state would do exactly that).
       && !(loadedDayIdsRef.current.length > 0 && !(curriculumId && curriculumId !== 'new-course'))
@@ -819,10 +872,33 @@ const CourseWorkspace = () => {
     );
   }
 
+  // Access removed (owner removed you, you left elsewhere, or the course was deleted): nothing more can
+  // be saved. The unsaved text stays one click away.
+  if (lock === 'removed') {
+    return (
+      <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', fontFamily: "'DM Sans', sans-serif" }}>
+        <AccessBanner lock={lock} getUnsavedText={unsavedText} onBack={() => navigate('/my-courses')} />
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#555', padding: 24, textAlign: 'center' }}>
+          Your unsaved changes were not saved. Use &quot;Copy my unsaved changes&quot; above to keep them.
+        </div>
+      </div>
+    );
+  }
+
+  const viewOnly = readOnly || !!lock;
+  // Someone the course was shared with (personal workspace): may leave, and never manages sharing.
+  const isSharedMember = !!curriculumId && curriculumId !== 'new-course' && !isOwner && accessRole != null && accessRole !== 'owner';
+  const leaveStyle = {
+    display: 'inline-flex', alignItems: 'center', height: '34px', padding: '0 12px', borderRadius: '10px',
+    background: '#fff', border: '1px solid rgba(220,38,38,0.35)', color: '#B91C1C', cursor: 'pointer',
+    fontFamily: "'DM Sans', sans-serif", fontSize: '13.5px', fontWeight: 500, whiteSpace: 'nowrap', flexShrink: 0,
+  };
+
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
-      {readOnly ? (
+      {viewOnly ? (
         <>
+        {lock && <AccessBanner lock={lock} getUnsavedText={unsavedText} onBack={() => navigate('/my-courses')} />}
         {incomingBlocksIncomplete && (
           <div role="status" style={{
             padding: '12px 24px', background: '#FFF8E6', borderBottom: '1px solid #F2D58A',
@@ -839,8 +915,9 @@ const CourseWorkspace = () => {
           isOwner={isOwner}
           isCollaborator={incomingIsCollaborator || false}
           onEditInWorkspace={isOwner && !incomingBlocksIncomplete ? handleEditInWorkspace : null}
-          onEditAsCollaborator={incomingIsCollaborator && !incomingBlocksIncomplete ? handleEditAsCollaborator : null}
+          onEditAsCollaborator={incomingIsCollaborator && !incomingBlocksIncomplete && !lock ? handleEditAsCollaborator : null}
           contentUnavailable={!!incomingBlocksIncomplete}
+          extraActions={isSharedMember && isPublicUser ? <LeaveCourseButton courseId={curriculumId} style={leaveStyle} /> : null}
           navigate={navigate}
         />
         </>
@@ -929,22 +1006,23 @@ const CourseWorkspace = () => {
                   </div>
                 )}
 
-                <div
-                  onClick={handleToggleVisibility}
-                  title={isPublicUser
-                    ? (isPublic
-                      ? 'Public — visible to all EdCube users (click to make Private)'
-                      : 'Private — only you and people you invite (click to make Public)')
-                    : undefined}
-                  style={pillStyle('blue')}
-                >
-                  {isPublic ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
-                  {isPublic ? 'Public' : 'Private'}
-                </div>
+                {/* Org workspaces only: the personal workspace has no public/private visibility. */}
+                {!isPublicUser && (
+                  <div onClick={handleToggleVisibility} style={pillStyle('blue')}>
+                    {isPublic ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
+                    {isPublic ? 'Public' : 'Private'}
+                  </div>
+                )}
 
-                <button onClick={() => setShowShareModal(true)} style={pillStyle('blue')}>
-                  <Share2 size={15} /> Share
-                </button>
+                {!(isPublicUser && isSharedMember) && (
+                  <button onClick={() => setShowShareModal(true)} style={pillStyle('blue')}>
+                    <Share2 size={15} /> Share
+                  </button>
+                )}
+
+                {isPublicUser && isSharedMember && (
+                  <LeaveCourseButton courseId={curriculumId} style={leaveStyle} />
+                )}
 
                 {navPage === 'outline' && (
                   <button

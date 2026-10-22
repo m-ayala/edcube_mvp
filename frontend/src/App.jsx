@@ -23,6 +23,10 @@ import CourseBuilderShell from './components/courseBuilder/CourseBuilderShell';
 import OutlineStage from './components/courseBuilder/OutlineStage';
 import PlanStage from './components/courseBuilder/PlanStage';
 import AdminPage from './components/admin/AdminPage';
+import OrgOnly from './components/auth/OrgOnly';
+import PublicSharePage from './components/share/PublicSharePage';
+import InvitePage from './components/share/InvitePage';
+import PendingInviteRedirect from './components/share/PendingInviteRedirect';
 import { COURSE_BUILDER_ENABLED } from './constants/featureFlags';
 
 function App() {
@@ -32,6 +36,7 @@ function App() {
       <NotificationProvider>
       <GenerationProvider>
       <Router>
+        <PendingInviteRedirect />
         <Routes>
           {/* Public Routes */}
           <Route path="/" element={<LandingPage />} />
@@ -60,12 +65,14 @@ function App() {
             <Route path="/course-view" element={<CourseViewPage />} />
             <Route path="/profile" element={<TeacherProfile />} />
             <Route path="/profile/:teacherUid" element={<TeacherProfile />} />
-            <Route path="/search" element={<Search />} />
+            <Route path="/search" element={<OrgOnly><Search /></OrgOnly>} />
             {/* Admin only: AdminPage redirects anyone without the admin claim */}
             <Route path="/admin" element={<AdminPage />} />
           </Route>
 
           {/* Standalone public routes — no sidebar, no auth required */}
+          <Route path="/share/:token" element={<PublicSharePage />} />
+          <Route path="/invite/:token" element={<InvitePage />} />
           <Route path="/synopsis" element={<SynopsisPage />} />
           <Route path="/synopsis/:campSlug" element={<SynopsisPage />} />
           <Route path="/afterschool-synopsis" element={<AfterschoolSynopsisPage />} />

@@ -13,7 +13,8 @@ const getInitials = (name) => {
 const ProfileHeader = ({
   profile,
   isOwnProfile,
-  onEditClick
+  onEditClick,
+  hidePublicCount = false
 }) => {
   const [imageError, setImageError] = useState(false);
 
@@ -82,7 +83,7 @@ const ProfileHeader = ({
             )}
 
             {/* Public Course Count */}
-            {profile.public_course_count !== undefined && (
+            {!hidePublicCount && profile.public_course_count !== undefined && (
               <div className="profile-meta-item">
                 <span className="meta-label">Public Courses:</span>
                 <span className="meta-value">

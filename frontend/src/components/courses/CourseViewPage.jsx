@@ -22,6 +22,9 @@ import { generateSynopsis, generateCourseDescription } from '../../utils/curricu
 import html2pdf from 'html2pdf.js';
 import { INCOMPLETE_COURSE_MESSAGE } from '../../utils/builderCourse';
 import { workspaceHeader } from '../../services/authFetch';
+import AccessBanner from './AccessBanner';
+import LeaveCourseButton from './LeaveCourseButton';
+import { useCourseAccess, lockFromAccess } from './courseAccess';
 
 const SERIF = "'DM Serif Display', serif";
 const SERIF_TEXT = "'DM Serif Text', Georgia, serif";
@@ -368,7 +371,7 @@ const InlineField = ({ value, onChange, onSave, multiline = false, placeholder =
 const CourseViewPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { currentUser } = useAuth();
+  const { currentUser, isPublicUser } = useAuth();
 
   const {
     formData: incomingFormData,
@@ -437,6 +440,21 @@ const CourseViewPage = () => {
   const [showSelectionUI, setShowSelectionUI] = useState(false);
 
   const courseName = editableFormData.courseName || incomingFormData?.courseName || '';
+
+  // ── Live access for a course shared with this teacher (TASK-037) ──────────────────────────
+  // Checked on open, every ~30s and on window focus: an owner's plan change or removal reaches an
+  // open page without a reload. Owners are not polled.
+  const [rawLock, setRawLock] = useState(null);
+  useCourseAccess({
+    courseId: curriculumId,
+    enabled: !!currentUser && !!curriculumId && !isOwner,
+    immediate: true,
+    onAccess: (access) => setRawLock(lockFromAccess(access)),
+    onNoAccess: () => setRawLock('removed'),
+  });
+  // A viewer who never had edit access is not told "you now have view-only"; a collaborator is.
+  const lock = rawLock === 'removed' || isCollaborator ? rawLock : null;
+  const canLeave = !!curriculumId && !isOwner && (isPublicUser || isCollaborator);
 
   // Hydrate resource cache from subsection-level blocks
   useEffect(() => {
@@ -619,6 +637,14 @@ const CourseViewPage = () => {
 
   const ActiveTabIcon = TAB_ITEMS[activeView]?.icon || FileText;
 
+  if (lock === 'removed') {
+    return (
+      <div style={{ minHeight: '100vh', fontFamily: SANS, background: '#FAFAF9' }}>
+        <AccessBanner lock={lock} onBack={() => navigate('/my-courses')} />
+      </div>
+    );
+  }
+
   return (
     <div style={{
       minHeight: '100vh',
@@ -717,7 +743,7 @@ const CourseViewPage = () => {
               <Pencil size={15} /> Edit Workspace
             </button>
           )}
-          {isCollaborator && !blocksIncomplete && (
+          {isCollaborator && !blocksIncomplete && !lock && (
             <button
               onClick={handleEditAsCollaborator}
               style={{
@@ -729,8 +755,20 @@ const CourseViewPage = () => {
               <Pencil size={15} /> Edit as Collaborator
             </button>
           )}
+          {canLeave && (
+            <LeaveCourseButton
+              courseId={curriculumId}
+              style={{
+                display: 'inline-flex', alignItems: 'center', height: '37px', padding: '0 16px', borderRadius: '10px',
+                fontSize: '14px', fontWeight: '500', border: '1px solid rgba(220,38,38,0.35)', cursor: 'pointer',
+                whiteSpace: 'nowrap', background: '#fff', color: '#B91C1C', fontFamily: SANS,
+              }}
+            />
+          )}
         </div>
       </div>
+
+      {lock && <AccessBanner lock={lock} />}
 
       {blocksIncomplete && (
         <div role="status" style={{

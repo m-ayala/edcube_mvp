@@ -14,6 +14,7 @@ import FolderCard from './FolderCard';
 import CardRow from './CardRow';
 import AddFolderModal from './AddFolderModal';
 import DeleteConfirmModal from '../modals/DeleteConfirmModal';
+import { deleteCourse, getDeleteImpact } from '../../services/sharingApi';
 import { Plus, FolderPlus, ChevronRight } from 'lucide-react';
 
 const getCourseId = (curriculum) => curriculum.courseId || curriculum.id;
@@ -70,8 +71,9 @@ const MyCourses = () => {
     ? curricula.filter(c => (currentFolder?.courseIds || []).includes(getCourseId(c)))
     : ungroupedCourses;
 
-  const publishedCourses = displayedCourses.filter(c => c.isPublic);
-  const draftCourses = displayedCourses.filter(c => !c.isPublic);
+  // Personal workspace: no Public/Private split (public courses were retired); one list.
+  const publishedCourses = isPublicUser ? [] : displayedCourses.filter(c => c.isPublic);
+  const draftCourses = isPublicUser ? displayedCourses : displayedCourses.filter(c => !c.isPublic);
 
   const isRoot = folderPath.length === 0;
 
@@ -131,8 +133,34 @@ const MyCourses = () => {
   };
 
   // ─── Course actions ─────────────────────────────────────────────────────────
-  const handleDeleteClick = (curriculumId, courseName) => {
-    setDeleteModalData({ id: curriculumId, name: courseName });
+  // Deleting goes through the backend (DELETE /api/curricula/{id}) so collaborators, pending invites and
+  // view-only links are cleaned up. The dialog first asks how many people that affects.
+  const handleDeleteClick = async (curriculumId, courseName) => {
+    setDeleteModalData({ id: curriculumId, name: courseName, impact: null, checking: true, busy: false, error: '' });
+    try {
+      const impact = await getDeleteImpact(curriculumId);
+      setDeleteModalData(d => (d && d.id === curriculumId ? { ...d, impact, checking: false } : d));
+    } catch (err) {
+      const msg = err.code === 'owner_only' ? 'Only the course owner can delete this course.' : '';
+      setDeleteModalData(d => (d && d.id === curriculumId ? { ...d, checking: false, error: msg, blocked: !!msg } : d));
+    }
+  };
+
+  const confirmDelete = async () => {
+    const target = deleteModalData;
+    if (!target || target.blocked) return;
+    setDeleteModalData({ ...target, busy: true, error: '' });
+    try {
+      await deleteCourse(target.id);
+      setDeleteModalData(null);
+      loadData();
+    } catch (err) {
+      console.error('Delete error:', err);
+      const msg = err.code === 'owner_only'
+        ? 'Only the course owner can delete this course.'
+        : 'Error deleting course. Please try again.';
+      setDeleteModalData({ ...target, busy: false, error: msg, blocked: err.code === 'owner_only' });
+    }
   };
 
   // ─── Folder actions ─────────────────────────────────────────────────────────
@@ -318,13 +346,13 @@ const MyCourses = () => {
           )}
 
           {publishedCourses.length > 0 && (
-            <CardRow label={isPublicUser ? 'Public Courses' : 'Published Courses'} count={publishedCourses.length}>
+            <CardRow label="Published Courses" count={publishedCourses.length}>
               {publishedCourses.map(renderCourse)}
             </CardRow>
           )}
 
           {draftCourses.length > 0 && (
-            <CardRow label={isPublicUser ? 'Private Courses' : 'Draft Courses'} count={draftCourses.length}>
+            <CardRow label={isPublicUser ? 'Courses' : 'Draft Courses'} count={draftCourses.length}>
               {draftCourses.map(renderCourse)}
             </CardRow>
           )}
@@ -392,17 +420,12 @@ const MyCourses = () => {
       {deleteModalData && (
         <DeleteConfirmModal
           courseName={deleteModalData.name}
-          onConfirm={async () => {
-            try {
-              const { deleteCurriculum } = await import('../../firebase/dbService');
-              await deleteCurriculum(deleteModalData.id, org);
-              setDeleteModalData(null);
-              loadData();
-            } catch (error) {
-              console.error('Delete error:', error);
-              alert('Error deleting course. Please try again.');
-            }
-          }}
+          impact={deleteModalData.impact}
+          checking={deleteModalData.checking}
+          busy={deleteModalData.busy}
+          disabled={!!deleteModalData.blocked}
+          error={deleteModalData.error}
+          onConfirm={confirmDelete}
           onCancel={() => setDeleteModalData(null)}
         />
       )}

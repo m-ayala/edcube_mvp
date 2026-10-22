@@ -46,7 +46,8 @@ const CourseCard = ({
   const [hovered, setHovered] = useState(false);
   const { isPublicUser } = useAuth();
 
-  const isPublic = !!curriculum.isPublic;
+  // Personal workspace: public/private labels are retired, so a card never reads as "published".
+  const isPublic = !isPublicUser && !!curriculum.isPublic;
   const [c1, c2] = thumbFor(curriculum.courseName);
   const desc = descriptionText(curriculum);
   const duration = durationText(curriculum);
@@ -150,19 +151,17 @@ const CourseCard = ({
             width: '26px', height: '26px', borderRadius: '7px', background: '#F4ECF1',
             display: 'grid', placeItems: 'center', fontSize: '13px',
           }}>{glyphFor(curriculum)}</span>
-          <span
-            title={isPublicUser
-              ? (isPublic ? 'Public — visible to all EdCube users' : 'Private — only you and people you invite')
-              : undefined}
-            style={{
+          {!isPublicUser && (
+          <span style={{
             fontSize: '13px', fontWeight: 500, padding: '4px 11px', borderRadius: '7px',
             display: 'inline-flex', alignItems: 'center', gap: '5px',
             background: isPublic ? '#F0F4FF' : '#EDEDF1',
             color: isPublic ? '#3E62BC' : '#4E4E4E',
           }}>
             {!isPublic && <Lock size={11} />}
-            {isPublicUser ? (isPublic ? 'Public' : 'Private') : (isPublic ? 'Published' : 'Unpublished')}
+            {isPublic ? 'Published' : 'Unpublished'}
           </span>
+          )}
         </div>
 
         <h3 style={{

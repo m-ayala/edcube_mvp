@@ -12,8 +12,6 @@ Public launch (plan: ~/.claude/plans/pasted-content-id-bccb-all-right-structured
 One branch per task (task/TASK-XXX-slug). Stop for the person's review at the end of each phase
 and before every commit. Target project edcubeai-fdba7 (Firestore DB "default").
 
-- [ ] TASK-037: Phase 5 — sharing/collaboration frontend: link viewer, invite + collaborator UI,
-      live access loss in open sessions, delete confirmation. (frontend-agent)
 - [ ] TASK-038: Phase 6 — forking audit: no fork/copy feature exists; only the landing-page
       testimonial mentions "fork" — reword if the person wants. (frontend-agent)
 - [ ] TASK-039: Phase 7 — email domain tagging (edu/k12, excluding personal providers), admin domain
@@ -57,7 +55,25 @@ and before every commit. Target project edcubeai-fdba7 (Firestore DB "default").
 
 
 
+
 ## Done
+
+- [x] TASK-037: Phase 5 — sharing/collaboration frontend: link viewer, invite + collaborator UI,
+      live access loss in open sessions, delete confirmation. (frontend-agent)
+      Branch task/TASK-037-sharing-frontend. Uncommitted at QA time.
+      QA PASS 2026-10-22: lint 26 errors/5 warnings (limit 27/6), build ok; e2e t1/t2/t3 re-run against vite with stubbed auth/API: 22+26+32 all pass;
+      backend: import main ok, check_task036 ALL OK.
+      Read: unsaved edits survive every refusal path (403 coediting_not_in_plan / access_view_only / account_deactivated, 404, poll loss): editor state stays mounted,
+      draft written to localStorage before the lock state switches, autosave disabled while locked, draft cleared only after a successful save, localStorage errors swallowed
+      (copy button still works from memory). Polling only for non-owners (owner short-circuits on role), stops on unmount, busy-guarded, non-boolean can_edit never locks.
+      /share/:token uses a plain unauthenticated fetch and the sanitized payload only; /invite and /share sit outside ProtectedRoute; unverified accounts count as signed out so
+      PendingInviteRedirect cannot trap them and skips /invite and /share. Invite token kept in localStorage (14 days), accept then setActiveWorkspace then open the course.
+      Delete goes through DELETE /api/curricula/{id} with delete-impact counts; no client-SDK deleteDoc on curricula remains. Org share modal, visibility toggle, Search, profiles unchanged;
+      personal retirements only under isPublicUser. Upgrade prompts all open JoinWaitlistModal, no price/payment wording.
+      Open notes: (1) the real backend, Google redirect return and cross-tab behaviour were not exercised; (2) a delete-impact failure other than owner_only silently falls back to the plain
+      dialog without counts; (3) locally stored drafts (course text) are never cleared on logout or when the course is left, and only written on a lock, not on network/5xx save failures;
+      (4) an unavailable/expired invite does not clear the remembered token, so a signed-in user is bounced back to it until they press its button or Not now;
+      (5) on restore after a lapse the kept edits are saved over any newer owner edits (last write wins, as before); (6) polling continues in hidden tabs at 30s.
 
 - [x] TASK-036: Phase 5 — sharing/collaboration backend: view-only links (no account, revocable), owner's plan governs
       co-editing, max 3 collaborators incl. pending invites (teachers; org-defined for orgs), invites to non-users,
