@@ -43,6 +43,7 @@ from schemas.teacher_schema import (
     create_default_profile,
 )
 from services import accounts_service as accts
+from services import sharing_service
 from services import entitlements
 from services import platform_config as pc
 
@@ -263,6 +264,7 @@ async def deactivate(current_user: dict = Depends(verify_firebase_token), db=Dep
     if accts.is_deactivated(acct):
         return {"status": "deactivated", **_dates(acct)}
     patch = accts.deactivate(uid, db)
+    sharing_service.safe_reconcile_owner(uid, db)   # TASK-036: pending invites of a deactivated owner are cancelled
     accts.log_admin_action({"uid": uid, "email": current_user.get("email")}, "self_deactivate", uid,
                            {"status": "active"}, {"status": "deactivated", "delete_after": patch["delete_after"]}, db)
     return {"status": "deactivated", **_dates(patch)}

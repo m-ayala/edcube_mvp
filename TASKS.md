@@ -12,9 +12,6 @@ Public launch (plan: ~/.claude/plans/pasted-content-id-bccb-all-right-structured
 One branch per task (task/TASK-XXX-slug). Stop for the person's review at the end of each phase
 and before every commit. Target project edcubeai-fdba7 (Firestore DB "default").
 
-- [ ] TASK-036: Phase 5 — sharing/collaboration backend: view-only links (no account, revocable),
-      owner's plan governs co-editing, 3 collaborators incl. pending invites, invites to non-users,
-      lapse/resubscribe, removal, delete warning count, rules. Outlier cases 1–14. (backend-agent)
 - [ ] TASK-037: Phase 5 — sharing/collaboration frontend: link viewer, invite + collaborator UI,
       live access loss in open sessions, delete confirmation. (frontend-agent)
 - [ ] TASK-038: Phase 6 — forking audit: no fork/copy feature exists; only the landing-page
@@ -55,18 +52,34 @@ and before every commit. Target project edcubeai-fdba7 (Firestore DB "default").
 
 ## Needs Input
 
-- [ ] TASK-041: Org ownership gap (found during public-release work) — any org member can delete
-      another member's public course and overwrite sections of any org course (delete via
-      get_curriculum; populate-section / update_section lack an owner check). Already fixed for the
-      public space. Fix for orgs: owner-only delete; owner or collaborate-access for section writes.
-      NEEDS YOUR OK: changes org behaviour. Likely folds into TASK-036. (backend-agent)
-
 
 ## In Progress
 
 
 
 ## Done
+
+- [x] TASK-036: Phase 5 — sharing/collaboration backend: view-only links (no account, revocable), owner's plan governs
+      co-editing, max 3 collaborators incl. pending invites (teachers; org-defined for orgs), invites to non-users,
+      lapse/resubscribe, removal/leave, delete warning counts, rules. Outlier cases 1-11. (backend-agent)
+      Branch task/TASK-036-sharing-backend. Uncommitted at QA time.
+      QA PASS 2026-10-21 (attempt 2; attempt 1 failed on a leak of uploaded-file text through `objectives`): import main ok;
+      check_task036 157, task031 114, task032 49, task033 84, task034 62, usage 36, public 37, discovery 30, blocklinks 11, auth 13, no failures;
+      lint 26 errors/5 warnings (limit 27/6), build ok.
+      Read: public payload is a top-level whitelist + recursive key blacklist; every string is cut at "ATTACHED MATERIALS:" / "\n--- File:", keys with
+      interpret/requirement dropped; extracted text is written only to courseAttachments.extractedText (not exposed) and appended to `objectives`
+      (curriculum.py:169-173), so no other whitelisted saved field carries it verbatim. Residual: AI-written text derived from uploads is not stripped.
+      Revoked/deleted/deactivated/org-opt-out/unknown tokens give one 404; tokens and invite tokens use `secrets` (256 bit); invite accept checks the
+      verified token email; cap counts pending invites and is rechecked after the write; outlier 3/4/6/7/9/10 traced through update-course, section_write_denied,
+      remove_shared (one write), delete route. Org flows unchanged except TASK-041 (and view-only org share entries now get 403 not 404 on update-course).
+      Open notes: invite rate limit is in-memory per instance (many free accounts could spam invites); "added" vs "invited" tells an owner whether an email has an account;
+      the frontend still deletes via the client SDK so delete cleanup is lazy and the delete-warning counts are never shown; no tests live in tests/ (checks are in the scratchpad).
+      TASK-037 must: add /share/:token and /invite/:token pages, use `access` + 403 codes (access_view_only, coediting_not_in_plan, account_deactivated),
+      call DELETE /api/curricula/{id} with delete-impact, drop Public/Private labels and Search for personal users, handle 410 on the visibility toggle.
+      Deploy: set FRONTEND_URL on the backend (defaults to https://edcube.org).
+
+- [x] TASK-041: Org ownership gap (any org member could delete another's public course or overwrite sections) — folded into TASK-036 and
+      passed with it 2026-10-21: owner-only delete in every workspace (uses the request's workspace), owner-or-collaborate section writes in orgs.
 
 - [x] TASK-035: Phase 4 — credit counters in the UI, per-feature pause, upgrade messages, admin page
       (plans, credits, cost export). NO PAYMENTS (person, 2026-10-21): every Upgrade / enterprise

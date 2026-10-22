@@ -373,34 +373,56 @@ model names use the longest matching prefix) and `browserbase {per_search, per_f
 per_render_page}`. Until set, every `est_cost_usd` is 0 and the summary reports `rates_are_placeholder: true`. No prices live
 anywhere else in code.
 
-### Visibility and collaboration
+### Sharing and collaboration (TASK-036, supersedes the old Private/Public model)
 
-- **Separate worlds.** An org user only ever sees their own org's tree; public users only
-  `Users/personal`; there is no cross-space sharing, discovery or notification.
-- **Org semantics are unchanged:** `isPublic` makes a course readable by every org member
-  (and rules let any org member read the org's curricula and profiles).
-- **Public space: Private/Public.** A Private course is readable by its owner and the uids
-  in `sharedWithUids` only; a Public course by every public-space member (UI wording:
-  "visible to all EdCube users"). Enforced twice: backend (`FirebaseService.get_curriculum`
-  returns others' courses only if public or shared, and strips `teacherEmail`;
-  `delete_curriculum` and `update_section` require the owner, or a `collaborate`
-  invitee for sections; visibility change is owner-only) and `firestore.rules`
-  (`/Users/personal/curricula`).
-- **Discovery (public).** `GET /api/teachers/?q=&limit=&cursor=` returns
-  `{teachers, next_cursor}` for public callers (bare list for org callers, unchanged):
-  only teachers with `has_public_courses == true`, caller excluded, prefix match on
-  `name_lower`, ordered by it, `limit` clamped 1..50 (default 20), opaque cursor. A stale
-  flag (no public course found) hides the teacher and heals the flag. This needs the
-  composite index `teacher_profiles (has_public_courses, name_lower)` in
-  `frontend/firestore.indexes.json`. Profiles never show email.
-- **Invite by email (public only).** `POST /api/notifications/share` accepts
-  `recipient_emails` (+ `access_type` `view`|`collaborate`) in addition to the uid list; an org
-  caller sending emails gets 400. Max 20 emails per request (`too_many_emails`); own email is
-  rejected; lookups use `get_user_by_email` and succeed only if the account is in the
-  public space. The response carries `not_found: [emails]`: "no account" and "account
-  exists in another space" are deliberately indistinguishable. Enumeration note: a caller can
-  still learn which gmail addresses are EdCube public users from `not_found`, so lookups
-  are limited to 30 emails/min/uid (429 `rate_limited`, in-memory per instance).
+Code: `backend/services/sharing_service.py` (logic), `backend/routes/sharing.py` (HTTP). Rule of thumb: the course
+OWNER's plan decides; a collaborator's own plan never matters and collaborators join on any plan at no cost.
+
+- **Separate worlds.** An org user only sees their own org's tree; no cross-space sharing. Org semantics are unchanged:
+  `isPublic` makes a course readable by every org member, and the org visibility toggle, org library and org `/share`
+  (uid recipients, same-org only) work as before.
+- **Personal workspace.** A course is readable by its owner and the uids in `sharedWithUids` only. `isPublic`
+  ("visible to all EdCube users"), the public teacher directory (`GET /api/teachers/` returns `{teachers: [], next_cursor: null}`),
+  `has_public_courses` (`sync_has_public_courses` is a no-op), other people's profiles (404) and the visibility toggle (410
+  `personal_visibility_retired`) are retired.
+- **View-only links.** `ShareLinks/{token}`: token = `secrets.token_urlsafe(32)` and the doc id; fields course_id, workspace,
+  owner_uid, created_at, revoked_at, last_viewed_at, view_count. Any user may create one (trial active or any paid plan; max 20 active
+  per course; an org can opt out with `allow_public_links: false`). `GET /api/share/{token}` needs no auth, is rate limited 60/min per
+  IP (last X-Forwarded-For entry, correct for Cloud Run directly; in-memory per instance) and answers one identical 404 for revoked,
+  deleted, owner-deactivated, org-opt-out, ownership-changed and unknown tokens. Payload = top-level field whitelist
+  (`PUBLIC_COURSE_FIELDS`) + recursive removal of keys matching email / uid / shared / organizationId / storage path / extractedText /
+  interpret / requirement / leading underscore + every string cut at "ATTACHED MATERIALS:" and "--- File:" (course creation appends
+  uploaded-file text to `objectives` and the outline). Attachments are exposed as name, type, description only. Residual: AI-written
+  text derived from uploads is not stripped. Responses are `no-store`, `noindex`.
+- **Invites.** `Invites/{id}`: course_id, workspace, owner_uid, email, access_type (`collaborate`|`view`), status
+  (pending|accepted|cancelled|expired), 256-bit `token`, expires_at (14 days). An existing account in the workspace is added
+  directly and notified; otherwise a pending invite is created and emailed (`FRONTEND_URL/invite/{token}`; names stripped of control
+  characters). Accept (`POST /api/invites/{token}/accept`) needs a verified account whose token email equals the invited email
+  (403 `invite_email_mismatch`), 410 when cancelled/expired/used; accepting a view invite never downgrades existing collaborate
+  access. Invites are rate limited 30/hour per owner (in-memory per instance). Org workspaces can only invite their own domain.
+- **Cap.** Teachers: max 3 collaborators per course, pending collaborate invites count, checked before and again after the write
+  (rollback on race, 402 `plan_upgrade_required` / `collaborator_cap_reached` with counts); orgs use their own `collaborator_cap`.
+- **Lapse rules.** Co-edit permission is computed live from the owner's plan on every write (`access_info`,
+  `entitlements.enforce_collaborator_write`) and never stored. Owner lapses or deactivates: nothing is deleted, the owner keeps editing,
+  every collaborator becomes view-only (403 `coediting_not_in_plan` / `account_deactivated`, unsaved edits stay on their screen), pending
+  collaborate invites are cancelled (eagerly in admin set_plan / deactivate / self-deactivate, lazily on every invite read or accept) and no
+  new invites can be sent. Re-subscribe restores everyone. A collaborator's own trial expiring changes nothing but their AI credits.
+- **Removal / leave / delete.** Owner removal and leave change `sharedWith` and `sharedWithUids` in one write; every read and write
+  re-checks, so open sessions lose access on the next request (404). Delete is owner-only in every workspace: collaborators lose access,
+  links stop, pending invites are cancelled; `GET /api/curricula/{id}/delete-impact` gives the counts for the warning.
+  Contributions belong to the owner (everything lands on the one document, `teacherUid`).
+- **Outlier cases** (1 the presser pays credits - existing quota path; 2 zero-credit/expired collaborator edits manually - writes are
+  not credit gated; 3 owner lapse; 4 re-subscribe; 5 collaborator's trial; 6 immediate effect, unsaved edits kept client-side; 7 removal
+  immediate; 8 owner owns contributions; 9 delete; 10 4th collaborator blocked with a clear message; 11 unlimited courses as a collaborator).
+- **TASK-041 (org ownership).** Owner-only delete (`FirebaseService.delete_curriculum(..., org=)` uses the request's workspace), and
+  section writes (`section_write_denied`, also checked before AI in populate-section) need owner or collaborate access in orgs too.
+  An org view-only share entry now gets 403 `access_view_only` (was 404) on update-course.
+- **Routes.** Owner: `POST/GET /api/curricula/{id}/links`, `DELETE .../links/{token}`, `POST .../invites`, `DELETE .../invites/{id}`,
+  `GET .../collaborators`, `DELETE .../collaborators/{uid}`, `GET .../delete-impact`. Member: `POST .../leave`, `GET .../access`.
+  Public/invitee: `GET /api/share/{token}`, `GET /api/invites/{token}`, `POST /api/invites/{token}/accept`. Personal
+  `POST /api/notifications/share` is an alias onto the invite flow (old response keys kept, plus `invited` and `results`).
+- **Known gaps for TASK-037.** The frontend still deletes courses with the client SDK (cleanup is then lazy, no warning counts), still shows
+  Public/Private labels and the Search page to personal users, and has no `/share/:token` or `/invite/:token` page.
 
 ### Firestore rules summary (`frontend/firestore.rules`)
 
@@ -413,8 +435,8 @@ anywhere else in code.
 - `inPersonal()`: `inSpace('personal')` or a `Users/personal/teachers/{uid}` doc (org members).
 - `match /Accounts/{uid}`: read by self only; `Accounts`, `AdminAudit`, `UsageLog` and `EdCube/platform_config` are never client-writable.
 - `match /Users/personal` (stricter): space doc readable by personal members, never
-  client-writable. Curricula: read if owner, `isPublic`, or in `sharedWithUids`; create/update/delete
-  owner only. `teacher_profiles`: read by members, write by self. `teachers/{uid}`: self only;
+  client-writable. Curricula: read if owner or in `sharedWithUids` (no `isPublic` read); create needs empty sharing fields; update/delete owner only and
+  `sharedWith` / `sharedWithUids` / `teacherUid` cannot be changed by clients. `ShareLinks/{token}` and `Invites/{id}`: no client access. `teacher_profiles`: read by members, write by self. `teachers/{uid}`: self only;
   `plan` / `plan_updated_at` cannot be written by clients; no client delete. `notifications`:
   read/delete own. `usage/**`: no client access. `PaidWaitlist/{entry}` and `UsageLog/{entry}`: no client access at all.
 - The org block: members read curricula, profiles, teachers, synopsis; owner-only writes;
@@ -613,7 +635,8 @@ Everything below is run or decided by the person; nothing here is automatic. Run
 1. `python scripts/setup_launch_accounts.py --admin-email <you>` (dry run), then `--apply`: creates
    `EdCube/platform_config`, `Users/personal`, puts `icc` on the org plan, makes you admin + Teacher
    and backfills `Accounts`. Idempotent; never overwrites existing plans or limits.
-2. Deploy the backend to Cloud Run (`deploy.sh`; `BROWSERBASE_API_KEY` must be set on the service).
+2. Deploy the backend to Cloud Run (`deploy.sh`; `BROWSERBASE_API_KEY` must be set on the service; also set `FRONTEND_URL`,
+   the public site URL used in invite and share links, default `https://edcube.org`; it is not in `deploy.sh` yet).
 3. Deploy `firestore.rules` (`firebase deploy --only firestore:rules`).
 4. Export the existing indexes first (`firebase firestore:indexes`), merge anything
    missing into `firestore.indexes.json`, then deploy it (`firebase deploy --only

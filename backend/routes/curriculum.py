@@ -21,7 +21,8 @@ from services.firebase_service import FirebaseService
 from schemas.generation_schema import GenerateRequest, GenerateResponse
 from services.generation_service import GenerationService
 from routes.teachers import verify_firebase_token, require_org, require_org_for_uid, resolve_caller_uid
-from services import entitlements, cost_tracker
+from services import entitlements, cost_tracker, sharing_service
+from firebase.paths import PERSONAL_SPACE_ID
 from services.usage_service import (
     enforce_quota, throttle_chips, refund_charge, defer_settlement, settle_charge, note_usage,
     track_ai, finish_stream, outline_is_usable, outlines_are_usable,
@@ -631,7 +632,10 @@ async def update_collaborator_access(
         current = {s_.get('uid'): s_ for s_ in (doc.to_dict().get('sharedWith') or [])}.get(uid)
         if body.access_type == "collaborate":
             if not current or current.get('accessType') != 'collaborate':
-                entitlements.enforce(current_user, entitlements.INVITE_COLLABORATOR, doc.to_dict())
+                course_for_cap = {**doc.to_dict(), "id": curriculum_id}
+                live = sharing_service.reconcile_course_invites(firebase.db, org, course_for_cap, curriculum_id)
+                # pending collaborate invites count against the cap (TASK-036)
+                sharing_service.gate_invite(firebase.db, current_user, course_for_cap, "collaborate", live)
         elif not current:   # a brand-new share (changing an existing one to view isn't "new sharing")
             entitlements.enforce(current_user, entitlements.SHARE_LINK_CREATE, doc.to_dict())
         course_name = doc.to_dict().get('courseName', '')
@@ -666,16 +670,9 @@ async def remove_collaborator(
         doc = firebase.curricula_col(org).document(curriculum_id).get()
         if not doc.exists or doc.to_dict().get('teacherUid') != from_uid:
             raise HTTPException(status_code=403, detail="Not authorized")
-        course_name = doc.to_dict().get('courseName', '')
-        await firebase.remove_from_shared_with(curriculum_id, uid, org=org)
-        profile_doc = org_col(firebase.db, org, TEACHER_PROFILES_COLLECTION).document(from_uid).get()
-        from_name = profile_doc.to_dict().get("display_name", "Someone") if profile_doc.exists else "Someone"
-        await firebase.create_notification(
-            to_uid=uid, from_uid=from_uid, from_name=from_name,
-            notif_type="course_share_remove",
-            course_id=curriculum_id, course_name=course_name,
-            org=org,
-        )
+        # Same code path as DELETE /api/curricula/{id}/collaborators/{uid} (TASK-036): sharedWith and
+        # sharedWithUids change in one write, the person is notified, access ends on their next request.
+        sharing_service.remove_collaborator(firebase.db, org, {**doc.to_dict(), "id": curriculum_id}, from_uid, uid)
         return {"success": True}
     except HTTPException:
         raise
@@ -704,6 +701,12 @@ async def get_curriculum(curriculum_id: str, teacherUid: Optional[str] = None, c
         if not curriculum:
             raise HTTPException(status_code=404, detail="Curriculum not found")
 
+        # TASK-036: live role / edit right from the OWNER's current plan (never stored on the course),
+        # so the client can show view-only the moment a lapse happens. Additive field.
+        try:
+            curriculum["access"] = sharing_service.access_info(firebase.db, curriculum, teacherUid, org)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("access info failed: %s", e)
         return curriculum
 
     except HTTPException:
@@ -737,23 +740,43 @@ async def list_curricula(teacherUid: Optional[str] = None, current_user: dict = 
 @router.delete("/curricula/{curriculum_id}")
 async def delete_curriculum(curriculum_id: str, teacherUid: Optional[str] = None, current_user: dict = Depends(require_org)):
     """
-    Delete a curriculum
+    Delete a curriculum. OWNER ONLY in every workspace (TASK-041). Collaborators lose access, view-only
+    links stop working and pending invites are cancelled (GET /api/curricula/{id}/delete-impact returns
+    the counts for the confirmation dialog).
 
-    Args:
-        curriculum_id: Firestore document ID
-        teacherUid: User ID for authorization
-
-    NOTE: still takes a raw teacherUid instead of an Authorization token --
-    see this task's report for the TASK-008 frontend follow-up.
+    403 owner_only: the caller can see the course but doesn't own it. 404: no such course (or no access).
     """
     try:
         teacherUid = resolve_caller_uid(current_user, teacherUid)
-        success = await firebase.delete_curriculum(curriculum_id, teacherUid)
+        org = current_user["org"]
+        doc = firebase.curricula_col(org).document(curriculum_id).get()
+        if not doc.exists:
+            raise HTTPException(status_code=404, detail="Curriculum not found")
+        course = doc.to_dict() or {}
+        if course.get("teacherUid") != teacherUid:
+            visible = org != PERSONAL_SPACE_ID or any(s_.get("uid") == teacherUid for s_ in (course.get("sharedWith") or []))
+            if not visible:
+                raise HTTPException(status_code=404, detail="Curriculum not found")
+            raise HTTPException(status_code=403, detail={"code": "owner_only", "message": "Only the course owner can delete this course."})
 
+        course["id"] = curriculum_id
+        try:
+            impact = sharing_service.delete_impact(firebase.db, org, course)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("delete impact failed: %s", e)
+            impact = None
+
+        success = await firebase.delete_curriculum(curriculum_id, teacherUid, org=org)
         if not success:
             raise HTTPException(status_code=404, detail="Curriculum not found")
 
-        return {"message": "Curriculum deleted successfully"}
+        # Links and invites also re-check the course on every use; this makes the cleanup explicit.
+        try:
+            sharing_service.on_course_deleted(firebase.db, org, curriculum_id)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("post-delete cleanup failed for %s: %s", curriculum_id, e)
+
+        return {"message": "Curriculum deleted successfully", "impact": impact}
 
     except HTTPException:
         raise
@@ -861,8 +884,12 @@ async def update_course(course_data: dict, teacherUid: Optional[str] = None, cur
         if not is_owner:
             shared = doc_data.get('sharedWith', [])
             collab = next((s for s in shared if s.get('uid') == teacherUid), None)
-            if not collab or collab.get('accessType') != 'collaborate':
+            if not collab:
+                # Not (or no longer) shared with this user: a collaborator who was removed or who left
+                # gets this on their next save, and the client keeps the unsaved text locally.
                 raise HTTPException(status_code=404, detail="Course not found or unauthorized")
+            if collab.get('accessType') != 'collaborate':
+                raise HTTPException(status_code=403, detail={"code": "access_view_only", "message": "You have view-only access to this course."})
             # Co-editing follows the OWNER's plan/status, live (TASK-031). Owners are never blocked.
             entitlements.enforce_collaborator_write(current_user, doc_data.get('teacherUid'))
 
@@ -1237,10 +1264,14 @@ async def update_course_visibility(curriculum_id: str, body: VisibilityUpdate, t
             raise HTTPException(status_code=404, detail="Course not found or unauthorized")
         if doc.to_dict().get('teacherUid') != uid:
             raise HTTPException(status_code=403, detail="Only the course owner can change visibility")
+        if org == PERSONAL_SPACE_ID:
+            # TASK-036: "visible to all EdCube users" is retired in the personal workspace. Share with a
+            # view-only link or an invite instead. Org workspaces keep the toggle exactly as before.
+            raise HTTPException(status_code=410, detail={
+                "code": "personal_visibility_retired",
+                "message": "Personal courses can no longer be made public. Share a view-only link or invite someone instead."})
 
         await firebase.update_curriculum(curriculum_id, {'isPublic': body.isPublic}, org=org)
-        # Public space only (no-op for orgs): keep discovery's has_public_courses flag in step.
-        await firebase.sync_has_public_courses(org, uid)
         return {"success": True, "isPublic": body.isPublic}
 
     except HTTPException:

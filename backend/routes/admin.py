@@ -33,6 +33,7 @@ from firebase.paths import PERSONAL_SPACE_ID, accounts_col
 from firebase.public_space import PLANS
 from routes.teachers import require_admin
 from services import accounts_service as accts
+from services import sharing_service
 from services import platform_config as pc
 from services import usage_report
 
@@ -132,6 +133,9 @@ async def set_plan(uid: str, body: PlanUpdate, admin: dict = Depends(require_adm
         raise HTTPException(status_code=400, detail=f"plan must be one of {list(PLANS)}")
     before = _load(uid, db)
     patch = accts.set_plan(uid, body.plan, body.started_at, db)
+    # TASK-036 eager lapse: a plan that no longer allows co-editing cancels this owner's pending invites
+    # (collaborators keep their sharedWith entries, so re-subscribing restores edit automatically).
+    sharing_service.safe_reconcile_owner(uid, db)
     accts.log_admin_action(admin, "set_plan", uid,
                            {k: before.get(k) for k in ("plan", "plan_started_at", "trial_ends_at", "plan_source")},
                            patch, db)
@@ -151,6 +155,7 @@ async def grant_credits(uid: str, body: CreditGrant, admin: dict = Depends(requi
 async def admin_deactivate(uid: str, admin: dict = Depends(require_admin), db=Depends(get_db)):
     before = _load(uid, db)
     patch = accts.deactivate(uid, db)
+    sharing_service.safe_reconcile_owner(uid, db)   # TASK-036: pending invites of a deactivated owner are cancelled
     accts.log_admin_action(admin, "deactivate", uid, {"status": before.get("status")}, patch, db)
     return _view(uid, _load(uid, db))
 

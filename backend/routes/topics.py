@@ -13,6 +13,7 @@ import asyncio
 from services.orchestrator import CurriculumOrchestrator
 from services.firebase_service import FirebaseService
 from routes.teachers import require_org, require_org_for_uid, resolve_caller_uid
+from services import entitlements
 from services.usage_service import enforce_quota, throttle_chips, refund_charge, defer_settlement, settle_charge
 
 # Initialize logger
@@ -62,6 +63,23 @@ async def populate_section(request: PopulateSectionRequest, current_user: dict =
     """
     org = current_user["org"]
     ok = {"done": False}
+
+    # TASK-041 / TASK-036: only the owner, or someone with collaborate access, may write sections. Check
+    # BEFORE any AI work so a view-only user, or a collaborator whose owner's plan lapsed, is told with a
+    # clear code (and the credit reserved by the dependency is refunded when this raises) instead of a
+    # silent "Complete!" whose save was dropped. A missing course keeps its old behaviour.
+    existing = firebase.curricula_col(org).document(request.curriculum_id).get()
+    if existing.exists:
+        why = firebase.section_write_denied(existing.to_dict() or {}, current_user["uid"], org)
+        if why == "coediting_not_in_plan":
+            entitlements.enforce_collaborator_write(current_user, (existing.to_dict() or {}).get("teacherUid"))
+            raise HTTPException(status_code=403, detail={
+                "code": "coediting_not_in_plan",
+                "message": "Co-editing isn't available on this course right now because of the owner's plan."})
+        if why:
+            raise HTTPException(status_code=403, detail={
+                "code": "access_view_only",
+                "message": "You have view-only access to this course, so sections can't be changed."})
 
     async def generate():
         """Generator function for SSE streaming"""

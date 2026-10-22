@@ -104,6 +104,17 @@ def _org_cap(ws: str, db=None) -> Optional[int]:
     return info.get("collaborator_cap")   # None = org-defined/unlimited
 
 
+def collaborator_cap(user: dict, db=None) -> Optional[int]:
+    """Max collaborators per course for this owner/workspace (TASK-036): the org's own cap in an org
+    workspace (None = unlimited), else the personal plan's cap from the central config."""
+    ws = user.get("org")
+    if ws and ws != PERSONAL_SPACE_ID:
+        return _org_cap(ws, db)
+    uid = user.get("uid")
+    account = accts.get_account(uid, db) if uid else None
+    return pc.collaborator_cap(accts.personal_plan(account), db)
+
+
 def can(user: dict, action: str, course: Optional[dict] = None, *, db=None, now: Optional[datetime] = None) -> Decision:
     if action not in ACTIONS:
         raise ValueError(f"unknown action: {action}")
