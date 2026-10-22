@@ -19,7 +19,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from routes.teachers import require_org, resolve_caller_uid
-from services.usage_service import enforce_quota, throttle_chips, refund_charge
+from services.usage_service import enforce_quota, throttle_chips, refund_charge, defer_settlement, settle_charge
 from outliner.course_day_planner import (
     DayPlanningError, library_topup_event, library_topup_enabled, library_topup_failed_event,
     library_topup_timeout, more_ideas, parse_context, plan_day,
@@ -189,7 +189,11 @@ async def course_builder_plan_days(body: PlanDaysRequest, current_user: dict = D
                 if not t.done():
                     t.cancel()
             await asyncio.gather(planner, *topups, return_exceptions=True)
+            # Credit (TASK-033): one "generates" per run, charged only if at least one day was planned.
+            settle_charge(current_user, "generates", bool(planned_ok), action="plan_days",
+                          planned_days=len(planned_ok), failed_days=len(failed))
 
+    defer_settlement(current_user, "generates")   # the stream settles the credit when it ends
     return StreamingResponse(generate(), media_type="text/event-stream", headers=SSE_HEADERS)
 
 

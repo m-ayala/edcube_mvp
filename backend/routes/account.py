@@ -10,7 +10,7 @@ POST /api/account/bootstrap   -- called by the client after signup/login. Idempo
     claim. Uses verify_firebase_token (NOT require_org): a brand-new user has no
     workspace yet.
 GET  /api/account/me          -- workspace, memberships, account summary, entitlements.
-GET  /api/account/usage       -- plan, limits (null = unlimited), this month's usage.
+GET  /api/account/usage       -- credits per kind for the acting workspace (personal plan or org pool).
 POST /api/account/deactivate  -- self: deactivate now, restorable for the grace period.
 POST /api/account/reactivate  -- self: restore within the grace period.
 """
@@ -228,16 +228,21 @@ async def me(current_user: dict = Depends(require_workspace_lenient), db=Depends
 
 @router.get("/usage")
 async def usage(current_user: dict = Depends(require_org), db=Depends(get_db)):
-    """Plan, limits (null = unlimited) and this UTC month's usage for the caller."""
+    """Credits for the caller in the workspace they are acting in (X-EdCube-Workspace): the org
+    POOL in an org workspace (pool: true), their personal plan counters otherwise (TASK-033).
+
+    {plan, space, workspace, pool, period_start, period_end, resets_at, trial_ends_at,
+     credits: {courses|generates|edo_messages: {limit, used, reserved, remaining, bonus_remaining, resets_at}},
+     limits, usage}
+    null limit/remaining = unlimited; resets_at is null for a trial (one-time allowance; see
+    trial_ends_at). `limits`/`usage` are the pre-TASK-033 flat keys kept for the current UsageMeter,
+    plus an `edo_tokens` alias that mirrors edo_messages (removed when TASK-035 updates the frontend)."""
     from services import usage_service as us
-    org, uid = current_user["org"], current_user["uid"]
-    return {
-        "plan": us.get_plan(org, uid, db),
-        "space": "personal" if org == PERSONAL_SPACE_ID else "org",
-        "limits": us.get_limits(org, uid, db),
-        "usage": us.get_usage(org, uid, db),
-        "resets_at": us.resets_at(),
-    }
+    ov = us.usage_overview(current_user["org"], current_user["uid"], db)
+    limits = {k: ov["credits"][k]["limit"] for k in us.KINDS}
+    used = {k: ov["credits"][k]["used"] for k in us.KINDS}
+    limits["edo_tokens"], used["edo_tokens"] = limits[us.EDO_MESSAGES], used[us.EDO_MESSAGES]
+    return {**ov, "limits": limits, "usage": used}
 
 
 def _verified(current_user: dict) -> str:

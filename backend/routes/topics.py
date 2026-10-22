@@ -13,7 +13,7 @@ import asyncio
 from services.orchestrator import CurriculumOrchestrator
 from services.firebase_service import FirebaseService
 from routes.teachers import require_org, require_org_for_uid, resolve_caller_uid
-from services.usage_service import enforce_quota, throttle_chips, refund_charge
+from services.usage_service import enforce_quota, throttle_chips, refund_charge, defer_settlement, settle_charge
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -61,6 +61,7 @@ async def populate_section(request: PopulateSectionRequest, current_user: dict =
         StreamingResponse: Progress updates via SSE, final populated section
     """
     org = current_user["org"]
+    ok = {"done": False}
 
     async def generate():
         """Generator function for SSE streaming"""
@@ -101,13 +102,17 @@ async def populate_section(request: PopulateSectionRequest, current_user: dict =
             # Complete - send the populated section
             video_count = len(populated_section.get('video_resources', []))
             yield f"data: {json.dumps({'message': f'Complete! Found {video_count} videos', 'progress': 100, 'section': populated_section, 'done': True})}\n\n"
+            ok["done"] = True
 
         except Exception as e:
             error_msg = f"Error populating section: {str(e)}"
             logger.error(error_msg, exc_info=True)
-            refund_charge(current_user, "generates")
             yield f"data: {json.dumps({'message': error_msg, 'error': True})}\n\n"
-    
+        finally:
+            # Credit (TASK-033): charged only when the populated section was delivered.
+            settle_charge(current_user, "generates", ok["done"], action="populate_section")
+
+    defer_settlement(current_user, "generates")   # the stream settles the credit when it ends
     return StreamingResponse(
         generate(),
         media_type="text/event-stream",

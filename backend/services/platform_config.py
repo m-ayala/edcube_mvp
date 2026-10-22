@@ -40,8 +40,11 @@ DEFAULT_PLATFORM_CONFIG: Dict[str, Any] = {
     "trial_length_is_placeholder": True,
     # How paid-plan credits reset: on the anniversary of plan_started_at (days 29-31
     # clamp to month end). The trial allowance is a one-time grant and never resets.
-    # Enforced by TASK-033; stored here so there is one definition.
+    # "calendar" resets on the 1st of the month instead. Enforced by usage_service (TASK-033).
     "reset_rule": "anniversary",
+    # A credit reservation that is never confirmed or refunded (e.g. a crashed process) is
+    # released lazily after this many minutes (TASK-033).
+    "credit_reservation_ttl_minutes": 15,
     # Days a deactivated account stays restorable before permanent deletion.
     "deactivation_grace_days": 30,
     "plans": {
@@ -52,9 +55,6 @@ DEFAULT_PLATFORM_CONFIG: Dict[str, Any] = {
             "can_share_links": True,     # view-only links
             "can_coedit": False,
             "org_library": False,
-            # TRANSITIONAL (removed by TASK-033, which counts Edo per message): the
-            # token-based Edo cap the usage counters enforce until then.
-            "legacy_edo_tokens_per_month": 100000,
         },
         PLAN_TEACHER: {
             "limits": {"courses": 10, "generates": 150, "edo_messages": 500},
@@ -63,7 +63,6 @@ DEFAULT_PLATFORM_CONFIG: Dict[str, Any] = {
             "can_share_links": True,
             "can_coedit": True,
             "org_library": False,
-            "legacy_edo_tokens_per_month": None,
         },
         PLAN_ORG: {
             # Pooled across the org; the pool itself lives on the org doc (Users/{orgId}.pool).
@@ -73,7 +72,6 @@ DEFAULT_PLATFORM_CONFIG: Dict[str, Any] = {
             "can_share_links": True,
             "can_coedit": True,
             "org_library": True,
-            "legacy_edo_tokens_per_month": None,
         },
     },
 }

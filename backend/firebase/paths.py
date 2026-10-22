@@ -16,7 +16,8 @@ Target tree (see tasks/firestore-reorg-spec.md for the full picture):
     Users/{org}/teacher_profiles/{uid}
     Users/{org}/teachers/{uid}/courseFolders/**, libraryFolders/**
     Users/{org}/notifications/{id}                -- short-lived, delete-on-seen
-    Users/{org}/usage/{uid}/months/{YYYY-MM}      -- backend-only quota counters
+    Users/{org}/usage/{uid}/months/{YYYY-MM}      -- LEGACY monthly counters (pre TASK-033, no longer written)
+    Users/{org}/usage/{uid|_pool}/periods/{period_id|bonus}  -- credit counters (TASK-033), backend-only
     Users/{org}/synopsis/afterschool/months/**, entries/**
     Users/{org}/synopsis/summer_camps/weeks/{week}/camps/{camp}/entries/**
 
@@ -102,6 +103,17 @@ def summer_camps_doc(db, org: str):
 def usage_month_doc(db, org: str, uid: str, month_id: str):
     """`Users/{org}/usage/{uid}/months/{YYYY-MM}` -- backend-only monthly usage counters."""
     return org_col(db, org, USAGE_COLLECTION).document(uid).collection("months").document(month_id)
+
+
+POOL_OWNER_ID = "_pool"
+BONUS_LEDGER_ID = "bonus"
+
+
+def credit_period_doc(db, org: str, owner_id: str, period_id: str):
+    """`Users/{org}/usage/{owner_id}/periods/{period_id}` -- backend-only credit counters (TASK-033).
+    Personal: org="personal", owner_id=uid. Org pool: org=<orgId>, owner_id="_pool".
+    period_id: "trial" | "YYYY-MM-DD" (period start) | "bonus" (lifetime bonus-credit ledger)."""
+    return org_col(db, org, USAGE_COLLECTION).document(owner_id).collection("periods").document(period_id)
 
 
 # ── Platform (knowledge base) tree ──────────────────────────────────────────

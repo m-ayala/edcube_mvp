@@ -84,6 +84,7 @@ def _fetch_registry(db) -> Dict[str, dict]:
             # Org plan fields (TASK-031). Missing -> plan "org", unlimited pool/cap/seats.
             "plan": data.get("plan"),
             "pool": data.get("pool"),
+            "plan_started_at": data.get("plan_started_at"),   # anchors the org pool's monthly period (TASK-033)
             "collaborator_cap": data.get("collaborator_cap"),
             "seats": data.get("seats"),
         }

@@ -6,6 +6,7 @@ Admin routes (TASK-031). Every route requires the custom claim `admin: true`
 GET   /api/admin/accounts?email=            look an account up by email
 GET   /api/admin/accounts/{uid}             one Accounts doc + effective plan/limits
 PATCH /api/admin/accounts/{uid}/plan        {plan, started_at?} sets plan_source "admin", recomputes dates
+GET   /api/admin/accounts/{uid}/usage       credit counters per kind (personal plan + each org pool)
 POST  /api/admin/accounts/{uid}/credits     {courses?, generates?, edo_messages?} adds to bonus_credits
 POST  /api/admin/accounts/{uid}/deactivate  deactivate (starts the grace period)
 POST  /api/admin/accounts/{uid}/reactivate  reactivate (admins are not bound by the grace period)
@@ -22,7 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from firebase_admin import auth
 from pydantic import BaseModel, Field
 
-from firebase.paths import accounts_col
+from firebase.paths import PERSONAL_SPACE_ID, accounts_col
 from firebase.public_space import PLANS
 from routes.teachers import require_admin
 from services import accounts_service as accts
@@ -85,6 +86,21 @@ async def find_account(email: str = Query(...), admin: dict = Depends(require_ad
 @router.get("/accounts/{uid}")
 async def get_account(uid: str, admin: dict = Depends(require_admin), db=Depends(get_db)):
     return _view(uid, _load(uid, db))
+
+
+@router.get("/accounts/{uid}/usage")
+async def get_usage(uid: str, admin: dict = Depends(require_admin), db=Depends(get_db)):
+    """Credit counters per kind for the account's PERSONAL workspace (limit/used/reserved/remaining/
+    bonus_remaining) and, for each org membership, the org pool they draw from."""
+    from services import usage_service as us
+    acct = _load(uid, db)
+    pools = {}
+    for m in acct.get("memberships") or []:
+        ws = m.get("workspace")
+        if ws and ws != PERSONAL_SPACE_ID:
+            pools[ws] = us.usage_overview(ws, uid, db)
+    return {"uid": uid, "personal": us.usage_overview(PERSONAL_SPACE_ID, uid, db), "pools": pools,
+            "bonus_credits_granted": acct.get("bonus_credits") or {}}
 
 
 @router.patch("/accounts/{uid}/plan")

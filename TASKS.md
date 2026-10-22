@@ -12,9 +12,6 @@ Public launch (plan: ~/.claude/plans/pasted-content-id-bccb-all-right-structured
 One branch per task (task/TASK-XXX-slug). Stop for the person's review at the end of each phase
 and before every commit. Target project edcubeai-fdba7 (Firestore DB "default").
 
-- [ ] TASK-033: Phase 2 — credit counters: reserve → confirm/refund in transactions; trial one-time
-      allowance, paid monthly on plan-start anniversary, no rollover; org pool; every AI route;
-      Generate Course counts only when a usable course is produced; Edo counted per message. (backend-agent)
 - [ ] TASK-034: Phase 3 — usage and cost log per AI action (user, plan, action, course, Browserbase
       search/fetch counts, model, tokens, success, time) + admin export. (backend-agent)
 - [ ] TASK-035: Phase 4 — credit counters in the UI, per-feature pause, upgrade messages, admin page
@@ -79,6 +76,20 @@ and before every commit. Target project edcubeai-fdba7 (Firestore DB "default").
 
 
 ## Done
+
+- [x] TASK-033: Phase 2 — credit counters: reserve → confirm/refund in transactions; trial one-time
+      allowance, paid monthly on plan-start anniversary, no rollover; org pool; every AI route;
+      Generate Course counts only when a usable course is produced; Edo counted per message. (backend-agent)
+      Assigned: backend-agent — started 2026-10-21. Branch task/TASK-033-credits.
+      QA PASS 2026-10-21: import main ok; backend checks task033 84, task032 49, task031 111, usage 36, public 37, auth 13, discovery 80, blocklinks 11 pass;
+      lint 26 errors/5 warnings (limit 27/6), build ok. Also ran: anniversary clamp table (31 Jan to 28/29 Feb to 31 Mar), and a probe on pinned fastapi 0.109
+      (dependency confirm runs after the route returns but BEFORE a StreamingResponse starts, so deferred settlement is required and present; HTTP error and crash refund).
+      Read: reserve/confirm/refund are single real-SDK transactions (transaction.get on period, bonus and account docs, then set; no outside read feeds the decision);
+      every settle pops the hold so it is once-only; streaming routes settle in finally. The checks use a fake Firestore, so real conflict retry is unverified.
+      Open: (1) a deferred hold whose stream never starts (client gone before first chunk) frees only after the 15-min TTL. (2) A failed confirm is logged but the usage_event
+      still says charged. (3) Frontend still keys on edo_tokens: the 402 body now says kind edo_messages, so quotaTitle shows the generic title and Edo blocking relies on the usage
+      refetch (alias kept; TASK-035). (4) Trial 402 modal shows no reset date (null resets_at, trial_ends_at given; TASK-035). (5) generate-blocks/build-course stay uncharged by design.
+      (6) Check scripts ran on the fastapi 0.146 venv; the 0.109 probe was separate. (7) no frontend tests.
 
 - [x] TASK-032: Phase 1 — signup/login: individual via Google or email+password (no domain blocked),
       organizations via the enterprise waitlist (see TASK-035 note), one login for all, workspace switcher, email domain recorded

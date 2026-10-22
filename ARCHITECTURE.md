@@ -92,7 +92,7 @@ Users/{org}                                          (doc: { name, domains: [...
 ├── teacher_profiles/
 ├── teachers/{uid}/courseFolders/, libraryFolders/
 ├── notifications/                                   delete-on-seen inbox
-├── usage/{uid}/months/{YYYY-MM}                     backend-only monthly counters (every space)
+├── usage/{uid|_pool}/periods/{period_id|bonus}      backend-only credit counters (TASK-033); legacy months/ no longer written
 └── synopsis/
     ├── afterschool (doc) → months/{monthId}/entries/{entryId}   (entries nested inside their month)
     └── summer_camps (doc) → weeks/{week}/camps/{camp}/entries/
@@ -124,8 +124,9 @@ old `PUBLIC_*` names and a claim of `"public"` are still accepted as aliases).
   `Accounts/{uid}`; the old `plan` fields stay rules-protected.
 - **`teacher_profiles/{uid}` (personal):** no `email` stored; `name_lower`; `has_public_courses`
   (maintained by `FirebaseService.sync_has_public_courses`, self-healing).
-- **`Users/{org}/usage/{uid}/months/{YYYY-MM}`:** `{courses, generates, edo_tokens, updated_at}`,
-  UTC month, written for every user, limited only in the personal workspace. Backend-only.
+- **Credit counters (TASK-033), backend-only:** personal `Users/personal/usage/{uid}/periods/{period_id}`,
+  org pool `Users/{org}/usage/_pool/periods/{period_id}`, lifetime bonus ledger
+  `Users/personal/usage/{uid}/periods/bonus`. See "Quotas and credits". Old `months/{YYYY-MM}` docs are no longer written.
 - Created by `backend/scripts/setup_launch_accounts.py` (or `create_personal_space.py`). Until
   that doc exists, `check-email` reports non-org emails as not allowed and bootstrap returns 503.
 
@@ -264,49 +265,63 @@ in favour of the resolved space. The frontend attaches the token through
   emailed via `contact.send_notification_email`. `GET /api/admin/waitlist` (`require_admin`) lists
   newest first, filter `?interest=`, `?format=csv` with a formula-injection guard.
 
-### Quotas (public release PR-3)
+### Quotas and credits (TASK-033, replaces the TASK-029 token counters)
 
-`backend/services/usage_service.py`. Limits come from the central config (TASK-031), never code: org users are
-unlimited (but counted); personal users get their `Accounts` plan. `entitlements.can()` runs first
-(ended trial gives 402 `plan_inactive`).
+`backend/services/usage_service.py`. Every number (limits, TTL, reset rule) comes from `platform_config`
+or the org doc, never code. `entitlements.can()` runs first (ended trial gives 402 `plan_inactive`), then credits.
+
+Counters: `courses`, `generates`, `edo_messages` (Edo is one credit per MESSAGE; tokens are only logged).
 
 | Route(s) | Kind |
 |---|---|
-| `POST /generate-curriculum` (`/save-course` is manual and no longer charged) | `courses` (charge 1) |
-| `generate-more-subsections`, `curriculum/generate`, `curriculum/generate-block-links`, `curriculum/generate-description`, `curriculum/generate-synopsis`, `course-builder/{plan-days,plan-day,day-ideas,edit-outline}`, `populate-section`, `generate-videos`, `generate-resource`, `worksheet-prompts`, `activity-prompts`, `generate-worksheets`, `generate-activities`, `upload-course-file` | `generates` (charge 1) |
-| `POST /curriculum/chat` (Edo) | `edo_tokens` (pre-check, then real tokens recorded after the reply) |
+| `POST /generate-curriculum` | `courses` |
+| `generate-more-subsections`, `curriculum/generate`, `curriculum/generate-block-links`, `curriculum/generate-description`, `curriculum/generate-synopsis`, `course-builder/{plan-days,plan-day,day-ideas,edit-outline}`, `populate-section`, `generate-videos`, `generate-resource`, `worksheet-prompts`, `activity-prompts`, `generate-worksheets`, `generate-activities`, `upload-course-file` | `generates` |
+| `POST /curriculum/chat` (Edo) | `edo_messages` |
 | `POST /curriculum/chips` | uncounted; `throttle_chips`, 30/min/uid |
 
-Counting rules: one course per build flow. The charge is on `generate-curriculum`;
-`generate-blocks` / `build-course` and `update-course` do not charge, so a build counts
-once; `save-course` charges only because it is the creation path for uploads (the
-workspace uses `update-course` once it has a `curriculumId`). `plan-days` is one
-`generates` per run (not per day) and `upload-course-file` is one `generates`.
-`enforce_quota(kind)` is a route dependency that runs after `require_org` and before any
-streaming starts, using a Firestore transaction that reads and increments atomically.
+`generate-blocks`, `build-course`, `update-course` and `save-course` are not charged (a build counts once, at `generate-curriculum`).
+`plan-days` is one `generates` per run, charged only if at least one day was planned.
 
-Refunds (`refund_charge`, best-effort, never below 0, once per request): the dependency
-refunds if the route then raises an HTTP error or unhandled exception; streaming routes
-refund explicitly when they fail before producing a result (outline generation failed
-in `generate-curriculum`; `populate-section` error; `plan-days` fatal error before any
-day completed). Edo is the exception: the pre-check only blocks when `used >= limit`,
-so a reply can overshoot by one reply.
+**Who pays and which period.** The person pressing the button pays, in the workspace named by `X-EdCube-Workspace`:
+an org workspace the caller belongs to charges the org POOL (shared by all members; `Users/{org}.pool`, `null`/absent
+= unlimited, as for ICC, still counted with a per-user breakdown `by_user`); otherwise the caller's own personal plan.
+The course owner is never charged for a collaborator's click.
+- Trial: a ONE-TIME allowance (doc id `trial`), never resets; `resets_at` is null and `trial_ends_at` is given.
+- Teacher: monthly on the anniversary of `Accounts.plan_started_at`, 00:00 UTC, doc id = period start date; days 29-31
+  clamp to the month's last day (31 Jan, 28/29 Feb, 31 Mar). No rollover (each period is a fresh doc). Changing plan
+  changes `plan_started_at`, so a new period starts with no trial credits carried.
+- Org pool: monthly on `Users/{org}.plan_started_at`. Config `reset_rule: "calendar"` (or no anchor) uses calendar months.
+- Bonus credits (`Accounts.bonus_credits`, admin grant) are personal only, spent after the plan allowance, never reset;
+  consumption is tracked in the `bonus` ledger doc (`remaining = granted - used`).
 
-Fail open: if the quota check itself errors (infrastructure), the request proceeds and
-nothing is charged (logged). Recording tokens (`safe_add_usage`) never breaks a reply.
+**Doc shapes.** Period doc: `{period_id, period_start, period_end, plan, used: {kind: n}, reservations: {rid: {kind, amount,
+expires_at, created_at}}, by_user (pool only), updated_at}`. Bonus doc: `{used, reservations, updated_at}`.
+
+**Lifecycle.** `enforce_quota(kind)` reserves one credit in a single Firestore transaction (reads the period, account and
+bonus docs, then writes; reserved units count against what is left, so concurrent requests cannot overspend), the route runs,
+then it confirms (reservation becomes `used`) or refunds (any HTTP error, crash, or unusable result), exactly once per request.
+Streaming routes call `defer_settlement()` and settle with `settle_charge(success)` in the stream's `finally`
+(FastAPI 0.109 runs the dependency's exit code before a StreamingResponse starts). An unsettled reservation expires after
+`credit_reservation_ttl_minutes` (15) and is pruned lazily; a late confirm is still counted, a late refund is a no-op.
+Fail open: an infrastructure error in reserve lets the request through uncharged (logged). Manual editing never goes
+through credits, so it never pauses; only the exhausted kind pauses.
+
+**Usable course.** `generate-curriculum` confirms its credit only if an outline with at least one titled section was
+produced and delivered (Course Builder flow: at least one usable candidate outline; legacy flow: also the candidate phase
+finished with at least one chain). Anything else is refunded, and the partial result (stage, section counts, error) is
+passed to `log_usage_event`, the hook TASK-034 turns into the `UsageLog` write.
 
 Contracts:
-- **402** `{"detail": {"code": "quota_exceeded", "kind": "courses"|"generates"|"edo_tokens",
-  "limit", "used", "resets_at" (ISO UTC, start of next month), "plan"}}`, produced by the
-  `QuotaExceeded` handler in `main.py`. Streaming routes return it as plain JSON before
-  the stream starts.
-- **429** `{"detail": {"code": "rate_limited"}}` with a `Retry-After` header (Edo chips
-  throttle, and the invite-by-email lookups below).
-- **`GET /api/account/usage`**: `{plan, space, limits: {courses, generates, edo_tokens},
-  usage: {...}, resets_at}`; `null` limit = unlimited, `plan` is `null` for org users.
-  The frontend `UsageContext.jsx` fetches it for public users only, listens for the 402
-  and "AI call succeeded" window events dispatched by `authFetch`, and shows the usage
-  meter, the limit-reached modal and the Upgrade-to-Pro form (`POST /contact`, `type: "pro"`).
+- **402** `{"detail": {"code": "quota_exceeded", "kind": "courses"|"generates"|"edo_messages", "limit", "used",
+  "remaining", "resets_at" (ISO UTC, null for a trial), "plan", "pool", "workspace", "trial_ends_at"}}`
+  (`QuotaExceeded` handler in `main.py`; streaming routes return it as JSON before the stream starts).
+- **429** `{"detail": {"code": "rate_limited"}}` with `Retry-After` (Edo chips throttle, invite-by-email lookups).
+- **`GET /api/account/usage`**: `{plan, space, workspace, pool, period_start, period_end, resets_at, trial_ends_at,
+  credits: {kind: {limit, used, reserved, remaining, bonus_remaining, resets_at}}, limits, usage}`; `null` limit/remaining =
+  unlimited. `limits`/`usage` are the old flat keys plus an `edo_tokens` alias of `edo_messages`, kept for the current
+  `UsageMeter` until TASK-035. The frontend `UsageContext.jsx` fetches it for public users only and listens for the 402
+  and "AI call succeeded" events dispatched by `authFetch`.
+- **`GET /api/admin/accounts/{uid}/usage`** (admin): personal counters plus each org pool the account belongs to.
 
 ### Visibility and collaboration
 
@@ -532,8 +547,8 @@ directly, and never edit `knowledge_base_service.py`.
   doc and any curriculum in their org, including private ones (unchanged; the public space
   is stricter). Public clients can also write their own `has_public_courses` flag
   (harmless, self-heals).
-- Quota recording is synchronous Firestore I/O inside async dependencies, and Edo can
-  overshoot its token limit by one reply.
+- Credit reserve/confirm/refund is synchronous Firestore I/O inside async code. A deferred
+  reservation whose stream never starts is released only by the TTL.
 - The collection-group query that used to back `_find_curriculum_ref()` is gone — Round
   2 (TASK-006b) deleted it along with every other `collection_group()` call in the
   backend (synopsis camp/entry lookups included). No collection-group index is needed
