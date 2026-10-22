@@ -12,7 +12,6 @@ Public launch (plan: ~/.claude/plans/pasted-content-id-bccb-all-right-structured
 One branch per task (task/TASK-XXX-slug). Stop for the person's review at the end of each phase
 and before every commit. Target project edcubeai-fdba7 (Firestore DB "default").
 
-- [ ] TASK-040: Phase 8 — test suite: pytest + Firestore emulator, one test per outlier case. (docs-qa-agent)
 
 - [ ] TASK-025 (attempt 2): Small follow-ups from QA on TASK-023/024 — build rejects a day whose
       hours list is shorter than its teaching hours (hour_missing) instead of silently
@@ -52,6 +51,11 @@ and before every commit. Target project edcubeai-fdba7 (Firestore DB "default").
 
 
 ## Done
+
+- [x] TASK-040: Phase 8 — test suite: pytest + Firestore emulator, one test per outlier case. (docs-qa-agent)
+      Branch task/TASK-040-tests. Approved by the person's spec.
+      QA PASS 2026-10-22: backend pytest suite (98 tests) passes offline, also on fastapi 0.109/starlette 0.35.1/httpx 0.27. Outliers 1-14 each have a named test. Rules tests written but NOT run (no Java); one may expose a real rules gap (note on `{subPath=**}` at frontend/firestore.rules:168, see frontend/tests/rules). Frontend half of outlier 6 not covered by pytest.
+
 
 - [x] TASK-039: Phase 7 — email domain tagging (edu/k12, excluding personal providers), admin domain
       list (user counts, newest first), data model for later org domain verification. (backend-agent, frontend-agent)

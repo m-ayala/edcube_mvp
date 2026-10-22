@@ -610,6 +610,19 @@ resets on reload. Nothing triggers generation. Shared constants live in
 `frontend/src/constants/libraryView.js`, pure helpers in `frontend/src/utils/dayLanes.js`.
 The Edo suggestion tray (`edo-tray-*`, a cut) is untouched.
 
+## Tests
+
+- **Backend (`backend/tests/`, pytest):** `fakes.py` is an in-memory Firestore with versioned documents and
+  optimistic transactions (conflict then retry, so concurrent credit reservations are really exercised);
+  `conftest.py` stubs `firebase_admin` auth, `firebase.project.firestore_client`, OpenAI and Browserbase, neutralises
+  `.env`, and gives each test a `w` world (users, courses, requests). `test_outliers.py` has one test per Phase 8
+  outlier case (`test_outlier_01_` to `_14_`); the other files cover auth, plans/credits/periods, admin gating,
+  sharing/invites, domain classification, org workspaces and the cost log. Run `cd backend && python -m pytest`.
+  Versions: `requirements-dev.txt` pins httpx below 0.28 for the pinned starlette 0.35.1.
+- **Firestore rules (`frontend/tests/rules/`, own package):** `@firebase/rules-unit-testing` against
+  `frontend/firestore.rules`, project `demo-edcube`. Needs Java for the emulator: `npm run test:rules` in `frontend/`.
+- Not covered: frontend components, live Firestore transactions, real vendor calls.
+
 ## Agent-to-code ownership map
 
 | Code area | Owning agent |

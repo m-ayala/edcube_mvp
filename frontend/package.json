@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:rules:install": "npm --prefix tests/rules install --no-audit --no-fund",
+    "test:rules": "npm --prefix tests/rules test"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^18.0.1",
