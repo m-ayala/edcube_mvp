@@ -51,6 +51,8 @@ and before every commit. Target project edcubeai-fdba7 (Firestore DB "default").
 
 
 ## Done
+- [x] TASK-042: Landing page redesign (Create / Collaborate / Discover, MLA framework, flip cards, Edo preview, founder). (frontend-agent)
+      QA PASS 2026-10-22: only LandingPage.jsx changed vs merge-base; eslint clean on the file, full lint 26 errors / 5 warnings = main, build passes. Copy matches the plan's rewording; no fork/copy, public publishing, comments, real-time editing or "every source cited" claims. Nav (logged in/out), /signup CTAs, #demo scroll, /demo_vid.mp4 kept; image slots fall back on error. Pending from the person: four photos (science, technology, arts, performing-arts .jpg) and three screenshots (create, collaborate, discover .png) in frontend/public/landing/. No automated test coverage for this module.
 
 - [x] TASK-040: Phase 8 — test suite: pytest + Firestore emulator, one test per outlier case. (docs-qa-agent)
       Branch task/TASK-040-tests. Approved by the person's spec.

@@ -523,3 +523,6 @@ Backend: new `services/domain_tagging.py` (classify, subdomain-stripping stats k
 
 ## 2026-10-22 — TASK-040 — test suite
 Backend: pytest suite in `backend/tests/` (offline, in-memory Firestore with transaction conflict retry): 14 named outlier tests plus regression tests for auth, plan/credit limits and anniversary reset, Edo per-message charging, trial-ended 402, admin 403, share sanitizer, invite email mismatch, domain table, ICC org pool, org course ownership, cost log rows. `requirements-dev.txt` caps httpx below 0.28 for starlette 0.35.1. Frontend: Firestore rules tests in `frontend/tests/rules/` (own package, `npm run test:rules`); need Java, not yet run. No application code changed.
+
+## 2026-10-22 — TASK-042 — landing page redesign
+Frontend: `LandingPage.jsx` rewritten. New order: hero, demo video, MLA framework, four flip cards, Create / Collaborate / Discover feature rows, Edo AI preview, mission and vision, audience marquee, founder, CTA. Sora only. Copy reworded to match what is built (no fork, public publishing, comments, real-time editing or citation promises). Photos and screenshots load from `frontend/public/landing/` with placeholders until the files are added (pending from the person).
