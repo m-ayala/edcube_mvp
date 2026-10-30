@@ -14,6 +14,7 @@ import { useState, useRef } from 'react';
 import { Plus, X, HardDriveDownload, Upload } from 'lucide-react';
 import { PHOTO_MAX } from '../../constants/afterschoolSynopsisSchema';
 import { uploadPhoto } from '../../services/afterschoolSynopsisService';
+import BoldTextField from '../synopsis/BoldTextField';
 import {
   loadGoogleApis,
   getDriveAccessToken,
@@ -120,13 +121,12 @@ export default function BlockFields({
         onBlur={blurField}
       />
 
-      <textarea
+      {/* Ctrl+B / ⌘B bolds the selection; grows with the text (capped) so
+          long/AI-enhanced paragraphs stay fully visible and editable. */}
+      <BoldTextField
         value={value.raw_text || ''}
-        onChange={(e) => onChange('raw_text', e.target.value)}
+        onChange={(md) => onChange('raw_text', md)}
         placeholder={descPlaceholder}
-        // Grow with the text (capped) so long/AI-enhanced paragraphs stay
-        // fully visible and editable instead of hiding in a 4-line box.
-        rows={Math.min(20, Math.max(4, (value.raw_text || '').split('\n').length + 1))}
         style={{
           ...fieldInput,
           padding: '14px 16px', borderRadius: 12,

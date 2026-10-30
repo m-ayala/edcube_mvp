@@ -11,7 +11,7 @@
 // full blocks array; there is no separate "admin write" endpoint.
 
 import { useState, useEffect, useCallback } from 'react';
-import { ChevronDown, ChevronRight, Pencil, Download, X, Check } from 'lucide-react';
+import { ChevronDown, ChevronRight, Pencil, Download, X, Check, Sparkles } from 'lucide-react';
 import {
   GRADE_OPTIONS,
   SINGLE_BLOCK_TYPE,
@@ -22,6 +22,7 @@ import {
   getClassStatus,
   saveEntry,
   downloadNewsletterDoc,
+  enhanceText,
 } from '../../services/afterschoolSynopsisService';
 import BlockFields from './BlockFields';
 import AdminIntroView from './AdminIntroView';
@@ -83,6 +84,7 @@ export default function AdminClassView({ currentUser, monthId, monthLabel, month
   const [driveLinkDraft, setDriveLinkDraft] = useState('');
   const [savingDriveLink, setSavingDriveLink] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [enhancing, setEnhancing] = useState(false);
   const [downloading, setDownloading] = useState(false);
 
   const isIntro = grade === INTRO_OPTION;
@@ -136,6 +138,23 @@ export default function AdminClassView({ currentUser, monthId, monthLabel, month
       setSaving(false);
     }
   };
+
+  // Same Enhance with AI the teacher gets in EntryFormView.jsx, applied to
+  // the admin's inline edit draft (not saved until the admin hits Save).
+  const enhanceEdit = async () => {
+    if (!editDraft?.raw_text.trim()) return;
+    setEnhancing(true);
+    try {
+      const { enhanced_text } = await enhanceText(editDraft.raw_text);
+      if (enhanced_text) setEditDraft((prev) => ({ ...prev, raw_text: enhanced_text }));
+    } catch (err) {
+      alert(`Enhance failed: ${err.message}`);
+    } finally {
+      setEnhancing(false);
+    }
+  };
+
+  const enhanceDisabled = enhancing || saving || !editDraft?.raw_text.trim();
 
   const startEditDriveLink = (type, currentValue) => {
     setEditingDriveLinkType(type);
@@ -405,6 +424,21 @@ export default function AdminClassView({ currentUser, monthId, monthLabel, month
                                   }}
                                 >
                                   <X size={12} /> Cancel
+                                </button>
+                                <button
+                                  onClick={enhanceEdit}
+                                  disabled={enhanceDisabled}
+                                  style={{
+                                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                                    padding: '8px 16px', borderRadius: 100,
+                                    background: enhanceDisabled ? 'rgba(0,0,0,0.05)' : 'rgba(246,178,107,0.18)',
+                                    color: enhanceDisabled ? '#aaa' : '#7a4a00',
+                                    border: '1.5px solid ' + (enhanceDisabled ? 'rgba(0,0,0,0.08)' : 'rgba(246,178,107,0.5)'),
+                                    cursor: enhanceDisabled ? 'not-allowed' : 'pointer',
+                                    fontSize: 12, fontWeight: 500, fontFamily: FONT,
+                                  }}
+                                >
+                                  <Sparkles size={12} /> {enhancing ? 'Enhancing…' : 'Enhance with AI'}
                                 </button>
                               </div>
                             </>

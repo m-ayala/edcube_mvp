@@ -11,6 +11,7 @@ import {
   PHOTO_MAX,
 } from '../../constants/synopsisSchema';
 import { Sparkles } from 'lucide-react';
+import BoldTextField from './BoldTextField';
 import {
   getEntriesForCamp,
   saveEntries,
@@ -361,11 +362,10 @@ export default function CampEntryView({ camp, week, onBack, isAdmin = false }) {
                 />
 
                 {/* Description */}
-                <textarea
+                <BoldTextField
                   value={data.raw_text}
-                  onChange={e => setDayField(day, 'raw_text', e.target.value)}
+                  onChange={md => setDayField(day, 'raw_text', md)}
                   placeholder={`What did your camp do on ${DAY_LABELS[day]}?`}
-                  rows={4}
                   style={{
                     width: '100%', padding: '14px 16px', borderRadius: 12,
                     border: '1.5px solid rgba(255,255,255,0.9)', fontSize: 15, lineHeight: 1.65,

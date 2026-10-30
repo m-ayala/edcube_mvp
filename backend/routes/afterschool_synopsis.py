@@ -428,8 +428,8 @@ def _add_header_footer_title_block(doc: Document, *, grade_label: str, meta_text
         except Exception:
             pass
 
-    p_div = _para(doc, spc_b=6, spc_a=10)
-    _para_border_bottom(p_div, '1a1a1a', sz='12')
+    # Spacer only — no horizontal rule under the title/logo block.
+    _para(doc, spc_b=6, spc_a=10)
 
 
 def _add_section_heading(doc: Document, text: str, band_hex: str, page_break: bool) -> None:
