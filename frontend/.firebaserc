@@ -8,12 +8,6 @@
         "edcubeai": [
           "edcube1"
         ],
-        "redirect": [
-          "edcubeone"
-        ],
-        "redirect-old-app": [
-          "edcubeai-fdba7-6c559"
-        ],
         "app-default": [
           "edcubeai-fdba7"
         ]

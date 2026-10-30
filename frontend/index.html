@@ -5,6 +5,14 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>EdCube</title>
+    <script>
+      // edcube.org is the only public address: Firebase's default *.web.app /
+      // *.firebaseapp.com hosts serve this same build, so send them there.
+      // (Firebase Auth's /__/auth/ pages are served by Firebase, not this file.)
+      if (/\.(web\.app|firebaseapp\.com)$/.test(location.hostname)) {
+        location.replace('https://edcube.org' + location.pathname + location.search + location.hash);
+      }
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,300&family=DM+Serif+Display&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;1,9..144,300&display=swap" rel="stylesheet" />

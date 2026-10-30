@@ -74,28 +74,6 @@
           ]
         }
       ]
-    },
-    {
-      "target": "redirect",
-      "public": "hosting-redirect",
-      "redirects": [
-        {
-          "source": "/:path*",
-          "destination": "https://edcube1.web.app/:path",
-          "type": 301
-        }
-      ]
-    },
-    {
-      "target": "redirect-old-app",
-      "public": "hosting-redirect",
-      "redirects": [
-        {
-          "source": "/:path*",
-          "destination": "https://edcube1.web.app/:path",
-          "type": 301
-        }
-      ]
     }
   ]
 }
