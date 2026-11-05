@@ -134,13 +134,33 @@ def guidance_for(block_type: str) -> Dict[str, str]:
 # 1. Planning: block text -> what to search for
 # ----------------------------------------------------------------------------
 
-def build_plan_prompt(block_text: str, block_type: str, grade: str, max_image_subjects: int) -> str:
+def _teacher_request_part(teacher_request: str, kinds) -> str:
+    """What the teacher asked Edo to find for this block, when Discover was started from Edo."""
+    if not teacher_request:
+        return ""
+    only = ""
+    if kinds:
+        names = {"article": "ARTICLES", "image": "IMAGES", "video": "VIDEOS"}
+        only = (f"\nOnly {' and '.join(names[k] for k in kinds)} will be searched; leave the other "
+                f"group(s) empty.")
+    return f"""
+THE TEACHER ASKED EDO TO FIND:
+\"\"\"
+{teacher_request}
+\"\"\"
+This request comes first. Plan every query to find exactly what the teacher asked for, using any
+names, channels, sites, topics or styles they mention, while still fitting this block and grade.{only}
+"""
+
+
+def build_plan_prompt(block_text: str, block_type: str, grade: str, max_image_subjects: int,
+                      teacher_request: str = "", kinds=None) -> str:
     g = guidance_for(block_type)
     max_image_subjects = int(g.get("max_image_subjects", max_image_subjects))
     grade_part = f" for grade {grade}" if grade else ""
     return f"""A teacher has this {g['kind']}{grade_part}:
 {block_text}
-
+{_teacher_request_part(teacher_request, kinds)}
 The teacher pressed "Discover" to find links for this block. What to find depends on the block:
 - WORKSHEET or ACTIVITY block: worksheet links students and the teacher can use with it, as
   articles (printable worksheets, handouts, reference pages, procedures), videos (demonstrations,

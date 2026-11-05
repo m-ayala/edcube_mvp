@@ -152,6 +152,10 @@ export const generateBlockLinks = async ({
   topic = '',
   gradeLevel = '',
   teacherUid = null,
+  blockSubtype = '',
+  blockDurationMinutes = null,
+  teacherRequest = '', // Edo: what the teacher asked to find
+  kinds = null,        // Edo: subset of ['article', 'image', 'video']; null = all
 }) => {
   const response = await authFetch(`${API_BASE_URL}/curriculum/generate-block-links`, {
     method: 'POST',
@@ -166,6 +170,10 @@ export const generateBlockLinks = async ({
       topic,
       gradeLevel,
       teacherUid,
+      blockSubtype,
+      blockDurationMinutes,
+      ...(teacherRequest ? { teacherRequest } : {}),
+      ...(kinds?.length ? { kinds } : {}),
     }),
   });
   if (!response.ok) throw await legacyErrorFromResponse(response, 'Link generation failed');

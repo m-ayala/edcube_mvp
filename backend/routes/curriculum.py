@@ -1482,7 +1482,7 @@ async def chat_with_edo(request: EdoChatRequest, current_user: dict = Depends(re
             "outline": "Teacher is on the Course Outline page. Generate sections and subsections ONLY. Do NOT generate topic boxes, content blocks, worksheets, or activities. Use apply_field 'new_section' or 'new_subsection'.",
             "subsection": "Teacher is on the Subsection page. Generate topic boxes for this subsection ONLY. Use apply_field 'topic_full'. Do NOT generate sections, subsections, or resource blocks.",
             "topic": "Teacher is on the Topic page. Generate content blocks, worksheets, or activities ONLY. Use 'new_resource_content', 'new_resource_worksheet', or 'new_resource_activity'. Check existing_blocks and never repeat a title. Do NOT generate sections, subsections, or topic boxes.",
-            "block": "Teacher is on the Block editing page. Generate 2-3 improved versions of the existing block content ONLY. Use apply_field 'block_content'. Body = the complete improved block text (keep the **Header** structure for content blocks). Do NOT generate sections, subsections, topic boxes, or other resource types.",
+            "block": "Teacher is on the Block editing page. Generate 2-3 improved versions of the existing block content ONLY. Use apply_field 'block_content'. Body = the complete improved block text (keep the **Header** structure for content blocks). Do NOT generate sections, subsections, topic boxes, or other resource types. Exception: if the teacher asks you to find videos, articles, images or links for this block, respond with type 'discover'.",
         }
         page_guidance = page_guidance_map.get(current_page, page_guidance_map["outline"])
 
@@ -1554,6 +1554,22 @@ EDIT → {{"type": "edit", "label": "brief description of what changed", "text":
   Have a brief conversation first to understand exactly what to change (respond with "conversation").
   Only output type "edit" once the teacher confirms ("yes", "go ahead", "do it", "finalize").
   text = only the specific part being changed. Teacher will copy-paste it manually.
+
+DISCOVER → {{"type": "discover", "focus": "...", "kinds": ["video"], "message": "..."}}
+  When the teacher asks you to FIND, search for, look up, or link real web resources: videos,
+  articles, websites, readings, pictures, images, diagrams, printable worksheets or "links"
+  (e.g. "find me some videos on gear ratios", "any good articles about photosynthesis?",
+  "get links to Crash Course videos", "find pictures of the parts of a cell").
+  The app runs a real web search (the Discover button) and attaches what it finds to the block.
+  NEVER write URLs or invent links yourself in any response type.
+  - focus: what to search for, in the teacher's own words plus the block's topic, under 200 characters.
+    Keep any names they mention (channels, sites, people, styles).
+  - kinds: which groups to search: any of "video", "article", "image". Only the ones the teacher
+    asked for ("videos" → ["video"]; "pictures" → ["image"]; "links" or "resources" → all three).
+    "worksheets", "readings" and "websites" are "article".
+  - message: one short sentence saying what you are looking for.
+  This only works on a BLOCK page. If CURRENT PAGE is not BLOCK, do not use "discover": reply with
+  "conversation" and tell the teacher to open the block they want links for, then ask again.
 
 UNSURE: default to "conversation" and ask: "Want me to generate that as a card?" or "Should I write that up so you can copy it?"
 
@@ -1751,6 +1767,19 @@ Respond ONLY with valid JSON. No markdown, no preamble."""
             if response_type == "conversation":
                 return {"type": "conversation", "message": parsed.get("message", raw)}
 
+            if response_type == "discover":
+                # The client runs Discover (generate-block-links) on the open block with this focus.
+                if current_page != "block":
+                    return {"type": "conversation", "message": parsed.get("message") or
+                            "Open the block you want links for, then ask me again and I will search for them."}
+                kinds = [k for k in (parsed.get("kinds") or []) if k in ("article", "image", "video")]
+                return {
+                    "type": "discover",
+                    "focus": str(parsed.get("focus") or request.message)[:500],
+                    "kinds": sorted(set(kinds)) or ["article", "image", "video"],
+                    "message": str(parsed.get("message") or "Let me search the web for that."),
+                }
+
             if response_type == "edit":
                 return {
                     "type": "edit",
@@ -1855,6 +1884,8 @@ class GenerateBlockLinksRequest(BaseModel):
     teacherUid: Optional[str] = None
     blockSubtype: Optional[str] = ""                 # e.g. "Matching", "Labeling/diagramming"
     blockDurationMinutes: Optional[float] = None     # caps video length
+    teacherRequest: Optional[str] = Field("", max_length=500)  # Edo: what the teacher asked to find
+    kinds: Optional[List[str]] = Field(None, max_length=3)     # Edo: "article" | "image" | "video"; None = all
 
 
 @router.post("/curriculum/generate-block-links", dependencies=[Depends(enforce_quota("generates", "generate_block_links"))])
@@ -1905,6 +1936,8 @@ async def generate_block_links(request: GenerateBlockLinksRequest, current_user:
                 grade_level=request.gradeLevel or "",
                 block_subtype=request.blockSubtype or "",
                 block_duration_minutes=request.blockDurationMinutes,
+                teacher_request=request.teacherRequest or "",
+                kinds=request.kinds,
             ),
         )
         links = (result or {}).get("links") or []

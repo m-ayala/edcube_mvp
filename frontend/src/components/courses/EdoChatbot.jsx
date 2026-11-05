@@ -212,7 +212,7 @@ const TRAY_DROPPABLE = {
   SUBSECTION: 'edo-tray-subsections',
 };
 
-const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onClose, trayItems = [], setTrayItems, handsOnResources = {}, currentPage = null, curriculumId = null }) => {
+const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onClose, trayItems = [], setTrayItems, handsOnResources = {}, currentPage = null, curriculumId = null, onDiscoverLinks = null, linkGenJobs = {} }) => {
   const { credits, isTrial, openUpgrade } = useUsage();
   const edoGate = useAiGate('edo_messages');
   const genGate = useAiGate('generates');
@@ -424,6 +424,8 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
       });
       if (data.type === 'conversation') {
         addTextMessage('ai-text', data.message || "I'm not sure how to help with that — could you tell me more?");
+      } else if (data.type === 'discover') {
+        await runDiscover(data);
       } else if (data.type === 'edit') {
         addEditMessage(data.label, data.text);
       } else if (data.type === 'cards' && data.suggestions?.length > 0) {
@@ -435,6 +437,44 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
       addTextMessage('ai-text', quotaReply(err, "I'm having trouble connecting. Please try again in a moment."));
     } finally {
       setIsTyping(false);
+    }
+  };
+
+  // ── Discover from chat ─────────────────────────────────────────────────
+  // The teacher asked Edo to find links ("find me some videos on..."). Edo runs the same web search
+  // as the block's Discover button, steered by the request, and the links land in the block's
+  // Links & Resources (where the teacher can remove any of them).
+  const KIND_LABELS = { article: 'Article', image: 'Image', video: 'Video' };
+  const runDiscover = async ({ focus, kinds, message }) => {
+    const subId = currentPage?.subsectionId;
+    const blockId = currentPage?.blockId;
+    const block = currentPage?.page === 'block' ? (handsOnResources[subId] || []).find(b => b.id === blockId) : null;
+    if (!block) {
+      addTextMessage('ai-text', 'Open the block you want links for, then ask me again and I will search for them.');
+      return;
+    }
+    if (!onDiscoverLinks) {
+      addTextMessage('ai-text', 'Links cannot be added to this course from here.');
+      return;
+    }
+    if (genBlocked) {
+      addTextMessage('ai-text', 'Discover is paused for now. You can still add links by hand with "Add Link".');
+      return;
+    }
+    if (linkGenJobs[blockId] === 'generating') {
+      addTextMessage('ai-text', 'I am already searching for links for this block. They will show up under Links & Resources in a moment.');
+      return;
+    }
+    addTextMessage('ai-text', `${message || 'Let me search the web for that.'} This can take up to a minute.`);
+    const { added = [], error } = (await onDiscoverLinks(blockId, subId, block, { teacherRequest: focus, kinds })) || {};
+    if (error) {
+      addTextMessage('ai-text', quotaReply(error, 'The search did not work this time. Please try again in a moment.'));
+    } else if (added.length === 0) {
+      addTextMessage('ai-text', 'I could not find anything new that fits. Try different words, or name a site or channel you like.');
+    } else {
+      const lines = added.slice(0, 10).map(l => `- **${KIND_LABELS[l.type] || 'Link'}:** ${l.label || l.url}`);
+      const more = added.length > 10 ? `\n…and ${added.length - 10} more.` : '';
+      addTextMessage('ai-text', `I added ${added.length} link${added.length === 1 ? '' : 's'} to this block's Links & Resources:\n${lines.join('\n')}${more}\nRemove any you don't want.`);
     }
   };
 
@@ -544,6 +584,18 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
       ? `Generate a ${typeLabel} specifically about "${subcategory}" for this topic. Focus the entire block on this specific angle — be thorough and detailed.`
       : `Generate a ${typeLabel} for this topic`;
     await sendMessage(message);
+  };
+
+  // Same as the block's Discover button, from the chat (no Edo message is spent).
+  const handleFindLinks = async () => {
+    if (isTyping || genBlocked) return;
+    addTextMessage('user', 'Find videos and links for this block');
+    setIsTyping(true);
+    try {
+      await runDiscover({ focus: '', kinds: null, message: 'Searching for articles, images and videos for this block.' });
+    } finally {
+      setIsTyping(false);
+    }
   };
 
   const handleEnhance = async () => {
@@ -1412,6 +1464,24 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
           >
             ✦ Enhance This Block
           </button>
+          {onDiscoverLinks && (
+            <button
+              onClick={handleFindLinks}
+              disabled={isTyping || genBlocked}
+              title={genBlocked ? genGate.message : 'Or ask me, e.g. "find Crash Course videos on this"'}
+              style={{
+                width: '100%', padding: '7px 4px', marginTop: '6px',
+                backgroundColor: '#FFFFFF',
+                border: '1.5px solid rgba(0,0,0,0.12)', borderRadius: '8px',
+                cursor: (isTyping || genBlocked) ? 'not-allowed' : 'pointer',
+                fontSize: '12.7px', fontWeight: '700', color: '#444',
+                fontFamily: "'DM Sans', sans-serif",
+                opacity: (isTyping || genBlocked) ? 0.55 : 1, transition: 'all 0.15s', textAlign: 'center',
+              }}
+            >
+              🔎 Find videos & links
+            </button>
+          )}
         </div>
       )}
 
