@@ -7,9 +7,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
+import { Send } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useGeneration } from '../../contexts/GenerationContext';
-import { FONT, T } from '../../constants/editorTheme';
+import { FONT, T, EDO_GREEN, EDO_ORANGE } from '../../constants/editorTheme';
 import { addCourseToFolder } from '../../firebase/dbService';
 import { useAiGate } from '../../contexts/usageContextCore';
 import AiPausedHint from '../AiPausedHint';
@@ -104,6 +105,10 @@ const PlanStageInner = () => {
   const genGate = useAiGate('generates');
   const [ideasBusy, setIdeasBusy] = useState(false);
   const [ideasError, setIdeasError] = useState('');
+  const [edoTurns, setEdoTurns] = useState({}); // Edo chat per day: { [dayId]: [{ userMessage, reply, failed? }] }
+  const [edoMessage, setEdoMessage] = useState('');
+  const [edoBusy, setEdoBusy] = useState(false);
+  const edoInputRef = useRef(null);
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
 
@@ -259,24 +264,28 @@ const PlanStageInner = () => {
       return (st?.topics || []).filter((t) => used.has(t.id)).map((t) => t.title);
     });
   };
+  const ideasRequest = (forDay, extra) => {
+    const all = [...placed, ...library];
+    return fetchDayIdeas({
+      courseContext: builder.courseContext,
+      outline: builder.chosenOutline,
+      dayId: forDay,
+      earlierTopics: earlierTitles(),
+      currentTopics: day.topics.slice(0, 12).map((t) => ({
+        id: t.id, title: t.title, icon: t.icon, priority: t.priority,
+        blocks: all.filter((b) => b.topic_id === t.id),
+      })),
+      count: 6,
+      ...extra,
+    });
+  };
   const moreIdeas = async () => {
-    if (ideasBusy || !ready || genGate.blocked) return;
+    if (ideasBusy || edoBusy || !ready || genGate.blocked) return;
     setIdeasBusy(true);
     setIdeasError('');
     const forDay = dayId;
-    const all = [...placed, ...library];
     try {
-      const res = await fetchDayIdeas({
-        courseContext: builder.courseContext,
-        outline: builder.chosenOutline,
-        dayId: forDay,
-        earlierTopics: earlierTitles(),
-        currentTopics: day.topics.slice(0, 12).map((t) => ({
-          id: t.id, title: t.title, icon: t.icon, priority: t.priority,
-          blocks: all.filter((b) => b.topic_id === t.id),
-        })),
-        count: 6,
-      });
+      const res = await ideasRequest(forDay);
       if (!mounted.current) return;
       addDayIdeas(forDay, res);
       setAnnounce(res.blocks.length ? `Added ${plural(res.blocks.length, 'idea')} to the library.` : 'No new ideas came back.');
@@ -285,6 +294,39 @@ const PlanStageInner = () => {
       if (mounted.current) setIdeasError(`${err.message || 'Could not come up with more ideas.'} Your day has not been changed.`);
     } finally {
       if (mounted.current) setIdeasBusy(false);
+    }
+  };
+
+  // ── Edo (Stage 2) ─────────────────────────────────────────────────────
+  // The teacher asks Edo for blocks for the day in their own words. Edo's suggestions go into the
+  // day's library only (never placed on the day), so the teacher decides what to use.
+  const askEdo = async (e) => {
+    e.preventDefault();
+    const text = edoMessage.trim();
+    if (!text || edoBusy || ideasBusy || !ready || genGate.blocked) return;
+    setEdoBusy(true);
+    const forDay = dayId;
+    const n = dayIndex + 1;
+    const addTurn = (turn) => setEdoTurns((prev) => ({ ...prev, [forDay]: [...(prev[forDay] || []), turn] }));
+    try {
+      const res = await ideasRequest(forDay, { teacherRequest: text.slice(0, 2000), count: 4 });
+      if (!mounted.current) return;
+      addDayIdeas(forDay, res);
+      const titles = res.blocks.map((b) => `"${displayTitle(b)}"`);
+      const reply = res.blocks.length
+        ? `I added ${plural(res.blocks.length, 'block')} to the library for Day ${n}: ${joinList(titles)}. Drag the ones you want into the day, or use "Add to Hour".`
+        : 'I could not come up with blocks for that. Try saying it a different way.';
+      addTurn({ userMessage: text, reply });
+      setEdoMessage('');
+      setAnnounce(`Edo replied: ${reply}`);
+    } catch (err) {
+      if (!mounted.current) return;
+      addTurn({ userMessage: text, reply: `${err.message || 'Edo could not answer.'} Your day has not been changed. You can try again.`, failed: true });
+    } finally {
+      if (mounted.current) {
+        setEdoBusy(false);
+        edoInputRef.current?.focus();
+      }
     }
   };
 
@@ -514,7 +556,7 @@ const PlanStageInner = () => {
                     )}
                   </Droppable>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start' }}>
-                    <button type="button" onClick={moreIdeas} disabled={ideasBusy || genGate.blocked} title={genGate.blocked ? genGate.message : undefined} style={{ ...buttonBase, fontSize: 13, padding: '10px 14px', border: `1px solid ${T.rowBorder}`, background: '#FFFFFF', color: T.crumbActive, cursor: ideasBusy ? 'wait' : 'pointer', opacity: ideasBusy ? 0.7 : 1 }}>
+                    <button type="button" onClick={moreIdeas} disabled={ideasBusy || edoBusy || genGate.blocked} title={genGate.blocked ? genGate.message : undefined} style={{ ...buttonBase, fontSize: 13, padding: '10px 14px', border: `1px solid ${T.rowBorder}`, background: '#FFFFFF', color: T.crumbActive, cursor: ideasBusy ? 'wait' : 'pointer', opacity: ideasBusy ? 0.7 : 1 }}>
                       {ideasBusy ? 'Thinking of more ideas...' : 'More ideas'}
                     </button>
                     <AiPausedHint kind="generates" />
@@ -608,6 +650,51 @@ const PlanStageInner = () => {
                 </section>
               </div>
             </DragDropContext>
+
+            <aside aria-labelledby="pl-edo" style={{ background: '#FAFAF8', border: '1px solid #E7E5E4', borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ background: EDO_ORANGE, color: '#FFFFFF', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <div id="pl-edo" style={{ fontSize: 17, fontWeight: 700 }}>Edo</div>
+                <div style={{ fontSize: 13, fontWeight: 500 }}>Ask for blocks for Day {dayIndex + 1}</div>
+              </div>
+              <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 12, fontSize: 14, lineHeight: 1.5 }}>
+                <div style={{ background: '#FFFFFF', border: '1px solid #E7E5E4', color: '#1C1917', borderRadius: '14px 14px 14px 2px', padding: '8px 12px', alignSelf: 'flex-start', maxWidth: '92%' }}>
+                  Tell me what you want on this day, for example "a hands-on activity with the micro:bit" or "an easier worksheet for Hour 2". I will put new blocks in the library; nothing on your day changes until you move them in.
+                </div>
+                {(edoTurns[dayId] || []).map((t, i) => (
+                  <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div style={{ background: EDO_GREEN, color: '#FFFFFF', borderRadius: '14px 14px 2px 14px', padding: '8px 12px', alignSelf: 'flex-end', maxWidth: '92%', overflowWrap: 'anywhere' }}>{t.userMessage}</div>
+                    <div role={t.failed ? 'alert' : undefined} style={{ background: t.failed ? '#fff5f5' : '#FFFBF2', border: `1.5px solid ${t.failed ? '#feb2b2' : '#F5C98A'}`, color: t.failed ? '#c53030' : '#1C1917', borderRadius: '14px 14px 14px 2px', padding: '10px 12px', alignSelf: 'flex-start', maxWidth: '92%', overflowWrap: 'anywhere' }}>{t.reply}</div>
+                  </div>
+                ))}
+                {edoBusy && <div aria-live="polite" style={{ color: T.desc, fontWeight: 500 }}>Edo is thinking of blocks...</div>}
+                <form onSubmit={askEdo} style={{ display: 'flex', flexDirection: 'column', gap: 6, borderTop: '1px solid #E7E5E4', paddingTop: 12 }}>
+                  <label htmlFor="pl-edo-input" style={{ fontSize: 12, fontWeight: 600, color: '#6B7280' }}>Message Edo</label>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <input
+                      id="pl-edo-input"
+                      ref={edoInputRef}
+                      type="text"
+                      value={edoMessage}
+                      onChange={(e) => setEdoMessage(e.target.value)}
+                      readOnly={edoBusy}
+                      maxLength={2000}
+                      placeholder={`Ask Edo for a block on Day ${dayIndex + 1}`}
+                      style={{ flex: 1, minWidth: 0, fontFamily: FONT, fontSize: 14, padding: 12, border: '1px solid #D1D5DB', borderRadius: 8, minHeight: 44, boxSizing: 'border-box', background: '#FFFFFF' }}
+                    />
+                    <button
+                      type="submit"
+                      disabled={edoBusy || ideasBusy || !edoMessage.trim() || genGate.blocked}
+                      title={genGate.blocked ? genGate.message : undefined}
+                      aria-label="Send to Edo"
+                      style={{ width: 44, minHeight: 44, border: 'none', borderRadius: 8, background: EDO_GREEN, color: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: edoBusy || !edoMessage.trim() ? 0.5 : 1, cursor: edoBusy || !edoMessage.trim() ? 'not-allowed' : 'pointer', flexShrink: 0 }}
+                    >
+                      <Send size={18} aria-hidden="true" />
+                    </button>
+                  </div>
+                  <AiPausedHint kind="generates" style={{ marginTop: 8 }} />
+                </form>
+              </div>
+            </aside>
           </>
         )}
 

@@ -9,6 +9,8 @@ format is a poorer choice for this class.
 
 from typing import Dict, List, Optional
 
+from outliner.course_outline_prompts import requirements_block
+
 
 def _course_lines(outline_days: List[Dict]) -> str:
     out = []
@@ -78,9 +80,19 @@ _FIELD_RULES = """For each block give:
 - resources: for worksheets and activities, what is needed, with quantities worked out for the whole class; [] for content"""
 
 
+def _day_requirements(requirements: str) -> str:
+    block = requirements_block(requirements).strip()
+    if not str(requirements or "").strip() or str(requirements).strip().lower() == "none":
+        return block
+    return block + (
+        "\n- For today: every requirement that concerns this day, or the course as a whole, must show up"
+        "\n  in today's blocks (a requested tool, project, activity, standard, vocabulary or format)."
+    )
+
+
 def _head(*, day_number: int, num_days: int, day: Dict, outline_days: List[Dict], earlier_topics: List[str],
           age_min, age_max, band: Dict, num_students: int, time_lines: str, formats: Dict,
-          categories: List[Dict]) -> str:
+          categories: List[Dict], requirements: str = "") -> str:
     """Everything before the TASK section; shared by the day plan and the more-ideas prompt."""
     earlier = "\n".join(f"- {t}" for t in earlier_topics) if earlier_topics else "(nothing yet — this is the first day)"
     bullets = "\n".join(f"- {b}" for b in day.get("bullets", []))
@@ -95,6 +107,8 @@ TODAY MUST COVER
 
 ALREADY TAUGHT ON EARLIER DAYS (the one-hour lessons taught so far, in order)
 {earlier}
+
+{_day_requirements(requirements)}
 
 THE CLASS
 - Ages {age_min}–{age_max} ({band.get('label', 'unknown')}): {band.get('developmental_notes', '')} {band.get('pedagogy_notes', '')}
@@ -119,7 +133,8 @@ LEARNING OBJECTIVE CATEGORIES (the outline marked these for today: {day_obj})
 
 def build_day_prompt(*, day_number: int, num_days: int, day: Dict, outline_days: List[Dict],
                      earlier_topics: List[str], age_min, age_max, band: Dict, num_students: int,
-                     hours_per_day: int, spare: int, formats: Dict, categories: List[Dict]) -> str:
+                     hours_per_day: int, spare: int, formats: Dict, categories: List[Dict],
+                     requirements: str = "") -> str:
     """Plan a day as exactly `hours_per_day` named one-hour lessons of four 15-minute blocks."""
     n = hours_per_day
     slots = n * 4
@@ -129,7 +144,8 @@ def build_day_prompt(*, day_number: int, num_days: int, day: Dict, outline_days:
   sense on its own and written as its own block entry. All parts of one block stay in the same hour."""
     head = _head(day_number=day_number, num_days=num_days, day=day, outline_days=outline_days,
                  earlier_topics=earlier_topics, age_min=age_min, age_max=age_max, band=band,
-                 num_students=num_students, time_lines=time_lines, formats=formats, categories=categories)
+                 num_students=num_students, time_lines=time_lines, formats=formats, categories=categories,
+                 requirements=requirements)
     if n == 1:
         thread = 'The one lesson covers everything under "TODAY MUST COVER" and builds on the earlier days.'
     else:
@@ -170,6 +186,7 @@ RULES
 - A worksheet never asks about something its content block did not teach.
 - Do not re-teach what earlier days covered unless the block is marked as revision.
 - Touch every objective category today where it fits naturally; do not force one.
+- The teacher's requirements come first: where they ask for something specific, plan it exactly.
 - Exactly {n} {'hour' if n == 1 else 'hours'}, each with at least one content block, each with its planned blocks adding up to exactly 4.
 
 Return JSON: {{"hours": [{{"title": "...", "icon": "<one emoji>", "blocks": [{_BLOCK_SHAPE}], "spare_blocks": [{_BLOCK_SHAPE}]}}]}}"""
@@ -188,20 +205,31 @@ def _planned_lines(topics: List[Dict]) -> str:
 def build_more_ideas_prompt(*, day_number: int, num_days: int, day: Dict, outline_days: List[Dict],
                             earlier_topics: List[str], age_min, age_max, band: Dict, num_students: int,
                             formats: Dict, categories: List[Dict], current_topics: List[Dict],
-                            count: int) -> str:
+                            count: int, requirements: str = "", teacher_request: str = "") -> str:
     head = _head(day_number=day_number, num_days=num_days, day=day, outline_days=outline_days,
                  earlier_topics=earlier_topics, age_min=age_min, age_max=age_max, band=band,
                  num_students=num_students, time_lines="- Every block is exactly 15 minutes.",
-                 formats=formats, categories=categories)
+                 formats=formats, categories=categories, requirements=requirements)
+    if teacher_request:
+        ask = f"""The teacher asked Edo for this on Day {day_number}:
+\"\"\"
+{teacher_request}
+\"\"\"
+Propose about {count} NEW blocks that do exactly what the teacher asked, as spare options.
+- Every block must serve that request. Be literal: if the teacher names a type (content,
+  worksheet, activity), a format, a tool, a topic or a difficulty, use it.
+- Do not repeat the blocks above."""
+    else:
+        ask = f"""The teacher wants more ideas for Day {day_number}. Propose about {count} NEW blocks, as spare options.
+- Each must offer something different from the blocks above: a new angle, a harder or easier
+  version, extra practice, or a different format."""
     return f"""{head}
 
 TODAY'S HOURS, AND EVERYTHING ALREADY ON THE PLAN OR IN THE TEACHER'S LIBRARY (do not repeat any of these)
 {_planned_lines(current_topics)}
 
 TASK
-The teacher wants more ideas for Day {day_number}. Propose about {count} NEW blocks, as spare options.
-- Each must offer something different from the blocks above: a new angle, a harder or easier
-  version, extra practice, or a different format.
+{ask}
 - Every block belongs to one of the hours above: give that hour's id as "hour_id". Do NOT start
   new hours. Set "goes_with" to the id of an existing content block of that hour, or to the ref of
   a new content block you add in the same group.

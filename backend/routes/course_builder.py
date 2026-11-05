@@ -59,6 +59,8 @@ class DayIdeasRequest(PlanDayRequest):
     # and every new idea gets a home hour
     current_topics: List[Dict[str, Any]] = Field(default_factory=list, max_length=12)
     count: int = Field(6, ge=2, le=10)
+    # What the teacher asked Edo for on this day (Stage 2 chat). Empty = plain "More ideas".
+    teacher_request: str = Field("", max_length=2000)
 
 
 @router.post("/course-builder/plan-days", dependencies=[Depends(enforce_quota("generates", "plan_days"))])
@@ -219,7 +221,7 @@ async def course_builder_day_ideas(body: DayIdeasRequest, current_user: dict = D
     try:
         return await asyncio.to_thread(
             more_ideas, body.course_context, body.outline, body.day_id, body.current_topics,
-            body.earlier_topics, body.count)
+            body.earlier_topics, body.count, None, body.teacher_request)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     except (DayPlanningError, OpenAIServiceError) as e:

@@ -19,8 +19,32 @@ def _course_block(c: Dict) -> str:
         f"- Name: {c['course_name']}\n"
         f"- Students: ages {c['age_min']}–{c['age_max']}, {c['num_students']} in the class\n"
         f"- Time: {c['num_days']} days, {c['hours_per_day']} hours of teaching per day\n"
-        f"- Teacher's requirements: {c['requirements']}"
+        f"{requirements_block(c.get('requirements'))}"
     )
+
+
+def requirements_block(requirements) -> str:
+    """The teacher's own objectives / requirements, as a binding section of the prompt.
+
+    The teacher typed these on purpose, so they are instructions, not background: specific
+    items (named topics, tools, projects, standards, a day-by-day order, things to avoid)
+    must appear exactly as asked. Shared with the day-planning prompts.
+    """
+    text = str(requirements or "").strip()
+    if not text or text.lower() == "none":
+        return "\nTEACHER'S REQUIREMENTS\n(none given)"
+    return f"""
+TEACHER'S REQUIREMENTS (the teacher wrote these; they are instructions you MUST follow)
+\"\"\"
+{text}
+\"\"\"
+- Follow every requirement above. They take priority over the general guidance in this prompt
+  (age-group notes, objective categories, example structures) whenever the two conflict.
+- Be literal with specific requests: a named topic, tool, kit, software, project, standard,
+  vocabulary list, book, day-by-day order, or anything the teacher says to include or avoid
+  must appear exactly as asked, using the teacher's own words for names.
+- If the teacher lists objectives or goals, every one of them must be clearly covered.
+- Do not swap a requested item for something you think is better or more typical."""
 
 
 def _age_block(band: Dict) -> str:
@@ -60,7 +84,9 @@ RULES
 - Each day must need the day before it. A teacher should not be able to swap two days.
 - Pitch every day at the age group above, and at what fits in {course['hours_per_day']} hours.
 - Do not name individual worksheets or activities yet. That is the next step.
-- Honour the teacher's requirements in all three outlines.
+- All three outlines must follow every one of the teacher's requirements. The outlines may
+  differ in how they are organised, never in whether they do what the teacher asked. If the
+  teacher gave a day-by-day plan or order, every outline keeps it.
 
 Return JSON: {{"outlines": [{{"name": "...", "description": "...", "days": [{{"title": "...", "bullets": ["...", "...", "..."], "leads_to": "...", "objective_ids": ["..."]}}]}}]}}"""
 
@@ -88,7 +114,7 @@ Also give the outline a short name and a one-sentence description.
 RULES
 - Pitch the day at the age group above, and at what fits in {course['hours_per_day']} hours.
 - Do not name individual worksheets or activities yet. That is the next step.
-- Honour the teacher's requirements.
+- Follow every one of the teacher's requirements.
 
 Return JSON: {{"outlines": [{{"name": "...", "description": "...", "days": [{{"title": "...", "bullets": ["...", "...", "..."], "leads_to": "...", "objective_ids": ["..."]}}]}}]}}"""
 
@@ -124,6 +150,7 @@ RULES
   word for word.
 - Every day keeps a specific title, exactly 3 bullets of at most 12 words each, a
   "leads_to" sentence, and "objective_ids" using only the ids listed above.
+- Every day you rewrite must still follow the teacher's requirements above.
 - Keep the outline's "name" and "description" unless the message changes the approach.
 - Do not name individual worksheets or activities.
 - "reply": ONE short plain sentence giving the teacher your reason or approach. Plain
