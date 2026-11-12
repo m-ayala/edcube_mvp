@@ -210,6 +210,8 @@ export default function AdminClassView({ currentUser, monthId, monthLabel, month
       : { label: 'Not filled', color: '#8b7355', bg: '#F0EDE8' };
   };
 
+  const hasPhotos = (entry) => !!entry?.blocks?.some((b) => b.photo_urls?.length > 0);
+
   return (
     <div style={{ fontFamily: FONT }}>
       <div style={{ fontSize: 12, color: '#8b7355', marginBottom: 12 }}>
@@ -278,6 +280,11 @@ export default function AdminClassView({ currentUser, monthId, monthLabel, month
                   <span style={{ fontFamily: SERIF, fontSize: 15, fontWeight: 600, color: '#1C1917', flex: 1 }}>
                     {type}
                   </span>
+                  {hasPhotos(entry) && (
+                    <span style={{ fontSize: 11, fontWeight: 500, padding: '3px 10px', borderRadius: 100, background: '#d4f4dd', color: '#2d7a47' }}>
+                      ✓ Pictures added
+                    </span>
+                  )}
                   <span style={{ fontSize: 11, fontWeight: 500, padding: '3px 10px', borderRadius: 100, background: status.bg, color: status.color }}>
                     {status.label}
                   </span>
