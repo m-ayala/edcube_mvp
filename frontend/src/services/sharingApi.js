@@ -84,3 +84,11 @@ const publicGet = async (path, fallback) => {
 };
 export const getPublicShare = (token) => publicGet(`/api/share/${enc(token)}`, 'Could not load this course');
 export const getInviteInfo = (token) => publicGet(`/api/invites/${enc(token)}`, 'Could not load this invitation');
+
+// ── comments (owner, editors and commenters; viewers get 403 comments_not_allowed) ─────────
+export const listComments = (courseId) =>
+  call(`/api/curricula/${enc(courseId)}/comments`, { fallback: 'Could not load comments' });
+export const addComment = (courseId, text) =>
+  call(`/api/curricula/${enc(courseId)}/comments`, { method: 'POST', body: { text }, fallback: 'Could not post the comment' });
+export const deleteComment = (courseId, commentId) =>
+  call(`/api/curricula/${enc(courseId)}/comments/${enc(commentId)}`, { method: 'DELETE', fallback: 'Could not delete the comment' });

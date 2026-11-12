@@ -7,14 +7,18 @@ caller's current workspace)
   POST   /api/curricula/{id}/links                    create a view-only link        (can(share_link_create))
   GET    /api/curricula/{id}/links                    list links with view counts
   DELETE /api/curricula/{id}/links/{token}            revoke
-  POST   /api/curricula/{id}/invites                  {email, access_type: collaborate|view}
+  POST   /api/curricula/{id}/invites                  {email, access_type: collaborate|comment|view}
   DELETE /api/curricula/{id}/invites/{invite_id}      cancel a pending invite
   GET    /api/curricula/{id}/collaborators            active collaborators + pending invites + cap
   DELETE /api/curricula/{id}/collaborators/{uid}      remove a collaborator
   GET    /api/curricula/{id}/delete-impact            {collaborators, pending_invites, active_links}
 Any member
   POST   /api/curricula/{id}/leave                    a collaborator removes themself
-  GET    /api/curricula/{id}/access                   {role, can_edit, reason}, computed live (poll for plan changes)
+  GET    /api/curricula/{id}/access                   {role, can_edit, can_comment, reason}, computed live (poll for plan changes)
+Owner, editors (collaborate) and commenters (comment); viewers get 403 comments_not_allowed
+  GET    /api/curricula/{id}/comments                 oldest first, with can_delete per comment
+  POST   /api/curricula/{id}/comments                 {text}; notifies the owner
+  DELETE /api/curricula/{id}/comments/{comment_id}    the author or the owner
 Public / invitee
   GET    /api/share/{token}                           NO auth, rate limited per IP, read-only payload
   GET    /api/invites/{token}                         NO auth, landing-page info (course title, inviter)
@@ -120,7 +124,7 @@ def _json_safe(obj):
 
 class InviteBody(BaseModel):
     email: str
-    access_type: str = "collaborate"   # "collaborate" | "view"
+    access_type: str = "collaborate"   # "collaborate" | "comment" | "view"
 
 
 @router.post("/api/curricula/{course_id}/invites")
@@ -224,6 +228,46 @@ async def course_access(course_id: str, current_user: dict = Depends(require_org
     if info["role"] != "owner" and not entitlements.owner_allows_access(course.get("teacherUid"), ws, db):
         raise HTTPException(status_code=404, detail={"code": "course_not_found", "message": "Course not found."})
     return {"success": True, **info}
+
+
+# ── comments ────────────────────────────────────────────────────────────────────────────────────
+
+class CommentBody(BaseModel):
+    text: str
+
+
+def _commentable_course(db, current_user: dict, course_id: str):
+    ws = current_user["org"]
+    course = _course_or_404(db, ws, course_id)
+    info = ss.comment_access(db, course, current_user["uid"], ws)
+    if info["role"] is None:
+        raise HTTPException(status_code=404, detail={"code": "course_not_found", "message": "Course not found."})
+    if not info.get("can_comment"):
+        raise HTTPException(status_code=403, detail={"code": "comments_not_allowed",
+                                                     "message": "You have view-only access, so you can't see or add comments."})
+    return course, info
+
+
+@router.get("/api/curricula/{course_id}/comments")
+async def list_comments(course_id: str, current_user: dict = Depends(require_org), db=Depends(get_db)):
+    course, _ = _commentable_course(db, current_user, course_id)
+    return {"success": True, "comments": ss.list_comments(db, current_user["org"], course, current_user["uid"])}
+
+
+@router.post("/api/curricula/{course_id}/comments")
+async def add_comment(course_id: str, body: CommentBody, current_user: dict = Depends(require_org), db=Depends(get_db)):
+    course, info = _commentable_course(db, current_user, course_id)
+    ss.throttle(ss.COMMENT_LIMITER, f"comment:{current_user['uid']}")
+    comment = ss.add_comment(db, current_user["org"], course, current_user["uid"], info["role"], body.text)
+    return {"success": True, "comment": comment}
+
+
+@router.delete("/api/curricula/{course_id}/comments/{comment_id}")
+async def delete_comment(course_id: str, comment_id: str, current_user: dict = Depends(require_org), db=Depends(get_db)):
+    course, _ = _commentable_course(db, current_user, course_id)
+    if not ss.delete_comment(db, current_user["org"], course, current_user["uid"], comment_id):
+        raise HTTPException(status_code=404, detail={"code": "comment_not_found", "message": "Comment not found."})
+    return {"success": True}
 
 
 # ── invite landing + accept ─────────────────────────────────────────────────────────────────────

@@ -25,6 +25,7 @@ import { workspaceHeader } from '../../services/authFetch';
 import AccessBanner from './AccessBanner';
 import LeaveCourseButton from './LeaveCourseButton';
 import { useCourseAccess, lockFromAccess } from './courseAccess';
+import CourseComments from './CourseComments';
 
 const SERIF = "'DM Serif Display', serif";
 const SERIF_TEXT = "'DM Serif Text', Georgia, serif";
@@ -381,6 +382,7 @@ const CourseViewPage = () => {
     isOwner       = false,
     ownerName     = '',
     isCollaborator = false,
+    accessType: incomingAccessType = null,
     blocksIncomplete = false,
     outlineExtras = null,
   } = location.state || {};
@@ -445,11 +447,12 @@ const CourseViewPage = () => {
   // Checked on open, every ~30s and on window focus: an owner's plan change or removal reaches an
   // open page without a reload. Owners are not polled.
   const [rawLock, setRawLock] = useState(null);
+  const [liveRole, setLiveRole] = useState(null);
   useCourseAccess({
     courseId: curriculumId,
     enabled: !!currentUser && !!curriculumId && !isOwner,
     immediate: true,
-    onAccess: (access) => setRawLock(lockFromAccess(access)),
+    onAccess: (access) => { setRawLock(lockFromAccess(access)); setLiveRole(access?.role || null); },
     onNoAccess: () => setRawLock('removed'),
   });
   // A viewer who never had edit access is not told "you now have view-only"; a collaborator is.
@@ -1173,7 +1176,7 @@ const CourseViewPage = () => {
                       display: 'inline-flex', alignItems: 'center', height: '32px', padding: '0 16px',
                       borderRadius: '32px', fontSize: '12px', fontWeight: '500', background: '#f3f4f6', color: '#666',
                     }}>
-                      {isCollaborator ? 'Collaborator' : 'View Only'}
+                      {isCollaborator ? 'Collaborator' : (liveRole || incomingAccessType) === 'comment' ? 'Can comment' : 'View Only'}
                     </span>
                   )}
                 </div>
@@ -1273,6 +1276,9 @@ const CourseViewPage = () => {
                 </div>
               );
             })}
+
+            {/* Comments: owner, editors and commenters (renders nothing for viewers) */}
+            <CourseComments courseId={curriculumId} currentUser={currentUser} style={{ maxWidth: 'none', margin: '36px 0 48px' }} />
           </div>
         )}
 

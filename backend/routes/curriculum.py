@@ -591,7 +591,7 @@ async def get_shared_courses(current_user: dict = Depends(require_org)):
 
 
 class AccessTypeUpdate(BaseModel):
-    access_type: str  # "view" or "collaborate"
+    access_type: str  # "view" | "comment" | "collaborate"
 
 
 @router.get("/curricula/{curriculum_id}/shared-with")
@@ -628,6 +628,8 @@ async def update_collaborator_access(
         doc = firebase.curricula_col(org).document(curriculum_id).get()
         if not doc.exists or doc.to_dict().get('teacherUid') != from_uid:
             raise HTTPException(status_code=403, detail="Not authorized")
+        if body.access_type not in sharing_service.ACCESS_TYPES:
+            raise HTTPException(status_code=400, detail="access_type must be 'view', 'comment' or 'collaborate'")
         # Plan gate (TASK-031): moving someone to collaborate is a new collaborator slot.
         current = {s_.get('uid'): s_ for s_ in (doc.to_dict().get('sharedWith') or [])}.get(uid)
         if body.access_type == "collaborate":

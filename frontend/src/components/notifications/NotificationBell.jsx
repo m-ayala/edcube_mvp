@@ -203,8 +203,12 @@ const NotificationBell = () => {
                         ? <>{' shared '}<strong style={{ color: '#1C1917' }}>{notif.courseName}</strong>{' with you to view'}</>
                         : notif.type === 'course_share_collaborate'
                         ? <>{' shared '}<strong style={{ color: '#1C1917' }}>{notif.courseName}</strong>{' with you to collaborate'}</>
+                        : notif.type === 'course_share_comment'
+                        ? <>{' shared '}<strong style={{ color: '#1C1917' }}>{notif.courseName}</strong>{' with you to view and comment'}</>
+                        : notif.type === 'course_comment'
+                        ? <>{' commented on '}<strong style={{ color: '#1C1917' }}>{notif.courseName}</strong></>
                         : notif.type === 'course_share_update'
-                        ? <>{' updated your access to '}<strong style={{ color: '#1C1917' }}>{notif.courseName}</strong>{` to ${notif.accessType === 'collaborate' ? 'Collaborator' : 'Viewer'}`}</>
+                        ? <>{' updated your access to '}<strong style={{ color: '#1C1917' }}>{notif.courseName}</strong>{` to ${notif.accessType === 'collaborate' ? 'Collaborator' : notif.accessType === 'comment' ? 'Commenter' : 'Viewer'}`}</>
                         : notif.type === 'course_share_remove'
                         ? <>{' removed your access to '}<strong style={{ color: '#1C1917' }}>{notif.courseName}</strong></>
                         : <>{' sent you a notification about '}<strong style={{ color: '#1C1917' }}>{notif.courseName}</strong></>

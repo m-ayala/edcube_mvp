@@ -1,6 +1,6 @@
 // src/components/teacherProfile/ResourceLibrary.jsx
 import { useState, useEffect } from 'react';
-import { ChevronRight, ChevronDown, Plus, Trash2, FolderOpen, Folder, BookMarked, ExternalLink, Check, X, Edit2 } from 'lucide-react';
+import { ChevronRight, ChevronDown, Plus, Trash2, FolderOpen, Folder, BookMarked, ExternalLink, Check, X, Edit2, Star, PlayCircle, Image as ImageIcon, FileText } from 'lucide-react';
 import {
   getLibraryFolders,
   createLibraryFolder,
@@ -10,6 +10,9 @@ import {
   renameLibraryFolder
 } from '../../firebase/dbService';
 import { useAuth } from '../../contexts/AuthContext';
+import { useFavoriteLinks } from '../../hooks/useFavoriteLinks';
+import { typeFromUrl } from '../../utils/blockLinks';
+import FavoriteStar from '../common/FavoriteStar';
 
 const colors = {
   bg: '#FFFFFF',
@@ -36,6 +39,8 @@ const inputStyle = {
 
 const ResourceLibrary = ({ currentUser }) => {
   const { org } = useAuth();
+  const { favorites, loading: favLoading, isFavorite, toggleFavorite } = useFavoriteLinks();
+  const [tab, setTab] = useState('library'); // 'library' | 'favorites'
   const [folders, setFolders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expandedFolders, setExpandedFolders] = useState({});
@@ -167,12 +172,41 @@ const ResourceLibrary = ({ currentUser }) => {
         justifyContent: 'space-between',
         marginBottom: '6px'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <BookMarked size={20} color={colors.accent} />
-          <h2 style={{ margin: 0, fontSize: '24.2px', fontWeight: '700', color: colors.textPrimary }}>
-            Resource Library
-          </h2>
+        <div role="tablist" aria-label="Saved links" style={{ display: 'flex', alignItems: 'center', gap: '22px' }}>
+          {[
+            { id: 'library', label: 'Resource Library', Icon: BookMarked },
+            { id: 'favorites', label: 'Favorites', Icon: Star, count: favorites.length },
+          ].map((t) => {
+            const { id, label, count } = t;
+            const TabIcon = t.Icon;
+            const active = tab === id;
+            return (
+              <button
+                key={id}
+                role="tab"
+                aria-selected={active}
+                onClick={() => setTab(id)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '9px',
+                  background: 'none', border: 'none', cursor: 'pointer', padding: '0 0 6px',
+                  borderBottom: `2.5px solid ${active ? colors.accent : 'transparent'}`,
+                  color: active ? colors.textPrimary : '#9CA3AF', fontFamily: 'inherit',
+                }}
+              >
+                <TabIcon size={20} color={active ? (id === 'favorites' ? '#F59E0B' : colors.accent) : '#9CA3AF'}
+                  fill={id === 'favorites' && active ? '#F59E0B' : 'none'} />
+                <span style={{ fontSize: '24.2px', fontWeight: '700' }}>{label}</span>
+                {count > 0 && (
+                  <span style={{
+                    fontSize: '12.5px', fontWeight: '700', color: active ? '#92400E' : '#6B7280',
+                    background: active ? '#FEF3C7' : '#F3F4F6', borderRadius: '999px', padding: '2px 8px',
+                  }}>{count}</span>
+                )}
+              </button>
+            );
+          })}
         </div>
+        {tab === 'library' && (
         <button
           onClick={() => { setShowNewFolder(true); setNewFolderName(''); }}
           style={{
@@ -189,6 +223,7 @@ const ResourceLibrary = ({ currentUser }) => {
         >
           <Plus size={15} /> New Folder
         </button>
+        )}
       </div>
 
       {/* Private badge */}
@@ -198,8 +233,16 @@ const ResourceLibrary = ({ currentUser }) => {
         color: colors.textSecondary,
         fontStyle: 'italic'
       }}>
-        Only visible to you — save links here to quickly reuse them in your courses.
+        {tab === 'library'
+          ? 'Only visible to you — save links here to quickly reuse them in your courses.'
+          : 'Only visible to you — star any link in your library or in a course block to keep it here.'}
       </p>
+
+      {tab === 'favorites' && (
+        <FavoritesList favorites={favorites} loading={favLoading} onToggle={toggleFavorite} />
+      )}
+
+      {tab === 'library' && (<>
 
       {/* New Folder Input */}
       {showNewFolder && (
@@ -415,6 +458,11 @@ const ResourceLibrary = ({ currentUser }) => {
                             <ExternalLink size={11} />
                           </a>
                         </div>
+                        <FavoriteStar
+                          active={isFavorite(link.url)}
+                          onToggle={() => toggleFavorite({ url: link.url, title: link.title, description: link.description, kind: typeFromUrl(link.url), source: 'library' })}
+                          size={15}
+                        />
                         <button
                           onClick={() => handleDeleteLink(folder, link)}
                           style={{ background: 'none', border: 'none', cursor: 'pointer', color: colors.danger, display: 'flex', alignItems: 'center', padding: '2px', flexShrink: 0 }}
@@ -487,6 +535,75 @@ const ResourceLibrary = ({ currentUser }) => {
           })}
         </div>
       )}
+      </>)}
+    </div>
+  );
+};
+
+// ── Favorites tab ─────────────────────────────────────────────────────────────
+const KIND_ICON = { video: PlayCircle, image: ImageIcon, article: FileText };
+const SOURCE_LABEL = { library: 'Library', discover: 'Discover', block: 'Course block' };
+
+const FavoritesList = ({ favorites, loading, onToggle }) => {
+  if (loading) {
+    return <div style={{ padding: '32px', textAlign: 'center', color: colors.textSecondary, fontSize: '15.4px' }}>Loading favorites…</div>;
+  }
+  if (favorites.length === 0) {
+    return (
+      <div style={{
+        padding: '40px 24px', textAlign: 'center', backgroundColor: colors.accentLight,
+        borderRadius: '12px', border: `1px dashed ${colors.border}`,
+      }}>
+        <Star size={32} color="#E5C46B" style={{ marginBottom: '12px' }} />
+        <p style={{ margin: '0 0 6px', fontSize: '16.5px', fontWeight: '600', color: colors.textPrimary }}>No favorites yet</p>
+        <p style={{ margin: 0, fontSize: '14.3px', color: colors.textSecondary }}>
+          Click the ☆ next to any link — in a library folder or in a course block&apos;s links — to add it here.
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div style={{ border: `1px solid ${colors.border}`, borderRadius: '10px', overflow: 'hidden' }}>
+      {favorites.map((fav, idx) => {
+        const kind = fav.kind || typeFromUrl(fav.url);
+        const Icon = KIND_ICON[kind] || FileText;
+        return (
+          <div key={fav.id} style={{
+            display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px 18px',
+            borderTop: idx === 0 ? 'none' : `1px solid ${colors.border}`, backgroundColor: '#FAFAFA',
+          }}>
+            {kind === 'image' && (fav.imageUrl || fav.url) ? (
+              <img src={fav.imageUrl || fav.url} alt="" loading="lazy" referrerPolicy="no-referrer"
+                style={{ width: '44px', height: '44px', objectFit: 'cover', borderRadius: '6px', flexShrink: 0, background: '#EEE' }} />
+            ) : (
+              <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: '#F3F4F6', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Icon size={16} color="#6B7280" />
+              </div>
+            )}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ margin: '0 0 3px', fontSize: '14.3px', fontWeight: '600', color: colors.textPrimary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {fav.title || fav.url}
+              </p>
+              {fav.description && (
+                <p style={{ margin: '0 0 4px', fontSize: '13.2px', color: colors.textSecondary }}>{fav.description}</p>
+              )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                <a href={fav.url} target="_blank" rel="noopener noreferrer"
+                  style={{ fontSize: '13.2px', color: '#007bff', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '3px', fontWeight: '500' }}>
+                  {fav.url.length > 50 ? fav.url.slice(0, 50) + '…' : fav.url}
+                  <ExternalLink size={11} />
+                </a>
+                {SOURCE_LABEL[fav.source] && (
+                  <span style={{ fontSize: '11.5px', fontWeight: '600', color: '#6B7280', background: '#F3F4F6', borderRadius: '999px', padding: '1px 8px' }}>
+                    {SOURCE_LABEL[fav.source]}
+                  </span>
+                )}
+              </div>
+            </div>
+            <FavoriteStar active onToggle={() => onToggle(fav)} size={15} />
+          </div>
+        );
+      })}
     </div>
   );
 };

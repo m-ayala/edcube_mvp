@@ -308,6 +308,7 @@ const TeacherProfile = () => {
                     isOwner: false,
                     ownerName: '',
                     isCollaborator: accessType === 'collaborate',
+                    accessType,
                     ...extraState,
                   }
                 });

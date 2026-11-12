@@ -26,6 +26,7 @@ import {
 } from './courseAccess';
 import { generateBlockLinks } from '../../utils/curriculumApi';
 import { mergeLinks } from '../../utils/blockLinks';
+import CourseComments from './CourseComments';
 import { authFetch } from '../../services/authFetch';
 import { addCourseToFolder } from '../../firebase/dbService';
 import { trackCourseCreated, trackCourseUpdated, trackPublicCourseViewed } from '../../firebase/analytics';
@@ -49,6 +50,7 @@ const CourseWorkspace = () => {
     ownerName: incomingOwnerName,
     isOwner: incomingIsOwner,
     isCollaborator: incomingIsCollaborator,
+    accessType: incomingAccessType,
     targetFolderId,
     handsOnResources: incomingHandsOnResources,
     isGenerating: incomingIsGenerating,
@@ -924,6 +926,8 @@ const CourseWorkspace = () => {
           onEditAsCollaborator={incomingIsCollaborator && !incomingBlocksIncomplete && !lock ? handleEditAsCollaborator : null}
           contentUnavailable={!!incomingBlocksIncomplete}
           extraActions={isSharedMember && isPublicUser ? <LeaveCourseButton courseId={curriculumId} style={leaveStyle} /> : null}
+          accessType={isOwner ? null : (accessRole && accessRole !== 'owner' ? accessRole : (incomingAccessType || (incomingIsCollaborator ? 'collaborate' : null)))}
+          footer={<CourseComments courseId={curriculumId} currentUser={currentUser} />}
           navigate={navigate}
         />
         </>
@@ -1123,6 +1127,11 @@ const CourseWorkspace = () => {
                   navigate={navigate}
                   onNavigateToSubsection={navigateToSubsection}
                   pendingSubsectionIds={isGenerating ? genState.pendingSubsectionIds : null}
+                  footer={isGenerating ? null : (
+                    <div style={{ padding: '0 28px' }}>
+                      <CourseComments courseId={curriculumId} currentUser={currentUser} />
+                    </div>
+                  )}
                 />
               )}
 

@@ -120,7 +120,7 @@ def test_outlier_05_collaborators_own_trial_expiring_does_not_cost_edit_access(t
     r = w.UC("col", "k", objectives="after my trial ended")
     assert r.status_code == 200 and w.course("k")["objectives"] == "after my trial ended"
     r = w.req("col", "get", "/api/curricula/k")
-    assert r.json()["access"] == {"role": "collaborate", "can_edit": True, "reason": None}
+    assert r.json()["access"] == {"role": "collaborate", "can_edit": True, "can_comment": True, "reason": None}
 
 
 # 6 ---------------------------------------------------------------------------------------------

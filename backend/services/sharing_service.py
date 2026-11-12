@@ -10,9 +10,12 @@ Data model (both collections are backend-only; firestore.rules deny every client
       last_viewed_at, view_count
 
   Invites/{id}         id = Firestore auto id; `token` (256 bits) is what the emailed link carries
-      course_id, workspace, owner_uid, email (lowercased), access_type ("collaborate" | "view"),
+      course_id, workspace, owner_uid, email (lowercased), access_type ("collaborate" | "comment" | "view"),
       status (pending | accepted | cancelled | expired), token, created_at, expires_at,
       accepted_uid, accepted_at, cancelled_at, cancel_reason, email_sent_at
+
+  Users/{ws}/curricula/{id}/comments/{commentId}   backend-only (no client rule): author_uid, author_name,
+      text, created_at. Read/written by the owner, editors ("collaborate") and commenters ("comment").
 
   Users/{ws}/curricula/{id}.sharedWith / .sharedWithUids   unchanged. sharedWith is the source of
       truth for who is a collaborator; both fields are written in ONE update so the Firestore rules'
@@ -52,8 +55,13 @@ INVITE_TTL_DAYS = 14
 MAX_ACTIVE_LINKS_PER_COURSE = 20
 
 ACCESS_COLLABORATE = "collaborate"
+ACCESS_COMMENT = "comment"          # view + leave comments; never edits, never takes a collaborator slot
 ACCESS_VIEW = "view"
-ACCESS_TYPES = (ACCESS_COLLABORATE, ACCESS_VIEW)
+ACCESS_TYPES = (ACCESS_COLLABORATE, ACCESS_COMMENT, ACCESS_VIEW)
+# Higher = more access. Accepting an invite never lowers someone's existing access.
+ACCESS_RANK = {ACCESS_VIEW: 0, ACCESS_COMMENT: 1, ACCESS_COLLABORATE: 2}
+
+COMMENT_MAX_CHARS = 2000
 
 PENDING, ACCEPTED, CANCELLED, EXPIRED = "pending", "accepted", "cancelled", "expired"
 
@@ -101,6 +109,7 @@ class RateLimiter:
 
 PUBLIC_VIEW_LIMITER = RateLimiter(60, 60)       # public share/invite lookups: 60 / minute / IP
 INVITE_LIMITER = RateLimiter(30, 3600)          # invites sent: 30 / hour / owner
+COMMENT_LIMITER = RateLimiter(30, 600)          # comments posted: 30 / 10 minutes / user
 
 
 def throttle(limiter: RateLimiter, key: str) -> None:
@@ -113,6 +122,7 @@ def throttle(limiter: RateLimiter, key: str) -> None:
 def reset_limiters() -> None:
     PUBLIC_VIEW_LIMITER.reset()
     INVITE_LIMITER.reset()
+    COMMENT_LIMITER.reset()
 
 
 # ── small helpers ───────────────────────────────────────────────────────────────────────────────
@@ -185,22 +195,26 @@ def is_owner(course: dict, uid: str) -> bool:
 # ── access (computed live, used by get_curriculum / the access route) ───────────────────────────
 
 def access_info(db, course: dict, uid: str, workspace: str) -> dict:
-    """{role, can_edit, reason} for `uid` on `course`, from the OWNER's current plan. Never stored."""
+    """{role, can_edit, can_comment, reason} for `uid` on `course`, from the OWNER's current plan. Never stored.
+    Editors keep commenting when a plan lapse takes their edit right away (commenting is not plan-gated)."""
     owner_uid = course.get("teacherUid")
     if owner_uid == uid:
-        return {"role": "owner", "can_edit": True, "reason": None}
+        return {"role": "owner", "can_edit": True, "can_comment": True, "reason": None}
     entry = entry_for(course, uid)
     if not entry:
         return {"role": "org_viewer" if workspace != PERSONAL_SPACE_ID else None, "can_edit": False,
-                "reason": "access_view_only"}
+                "can_comment": False, "reason": "access_view_only"}
+    if entry.get("accessType") == ACCESS_COMMENT:
+        return {"role": "comment", "can_edit": False, "can_comment": True, "reason": "access_comment_only"}
     if entry.get("accessType") != ACCESS_COLLABORATE:
-        return {"role": "view", "can_edit": False, "reason": "access_view_only"}
+        return {"role": "view", "can_edit": False, "can_comment": False, "reason": "access_view_only"}
     if workspace != PERSONAL_SPACE_ID:
-        return {"role": "collaborate", "can_edit": True, "reason": None}   # org: unchanged from before TASK-036
+        return {"role": "collaborate", "can_edit": True, "can_comment": True, "reason": None}   # org: unchanged from before TASK-036
     if not entitlements.owner_allows_access(owner_uid, workspace, db):
-        return {"role": "collaborate", "can_edit": False, "reason": "owner_deactivated"}
+        return {"role": "collaborate", "can_edit": False, "can_comment": True, "reason": "owner_deactivated"}
     d = entitlements.can({"uid": None, "org": workspace}, entitlements.COEDIT, {"teacherUid": owner_uid}, db=db)
-    return {"role": "collaborate", "can_edit": d.allowed, "reason": None if d.allowed else (d.reason or "owner_plan_no_coediting")}
+    return {"role": "collaborate", "can_edit": d.allowed, "can_comment": True,
+            "reason": None if d.allowed else (d.reason or "owner_plan_no_coediting")}
 
 
 def write_denial(db, course: dict, uid: str, workspace: str) -> Optional[Tuple[int, dict]]:
@@ -215,6 +229,9 @@ def write_denial(db, course: dict, uid: str, workspace: str) -> Optional[Tuple[i
                          "message": "This course's owner has deactivated their account."}
         return 403, {"code": "coediting_not_in_plan", "reason": info["reason"],
                      "message": "Co-editing isn't available on this course right now because of the owner's plan. Your unsaved changes are still on your screen; copy them if you need to keep them."}
+    if info["role"] == "comment":
+        return 403, {"code": "access_view_only", "reason": info["reason"],
+                     "message": "You can view and comment on this course, but not edit it."}
     return 403, {"code": "access_view_only", "reason": info["reason"],
                  "message": "You have view-only access to this course."}
 
@@ -241,6 +258,11 @@ def remove_shared(db, workspace: str, course: dict, uid: str) -> bool:
     _write_shared(db, workspace, course["id"], shared)
     course["sharedWith"] = shared
     return True
+
+
+def share_notif_type(access_type: str) -> str:
+    return {ACCESS_COLLABORATE: "course_share_collaborate", ACCESS_COMMENT: "course_share_comment"}.get(
+        access_type, "course_share_view")
 
 
 def notify(db, workspace: str, to_uid: str, from_uid: str, from_name: str, notif_type: str,
@@ -369,7 +391,7 @@ def gate_invite(db, user: dict, course: dict, access_type: str, live_pending: Li
     """Raise the 402/403 the owner should see, or return. 'view' needs only link-sharing rights;
     'collaborate' needs owner_allows_coedit (plan flag) and room under the cap, pending counted.
     `exclude_invite_id`: re-sending an existing pending invite does not take a second slot."""
-    if access_type == ACCESS_VIEW:
+    if access_type in (ACCESS_VIEW, ACCESS_COMMENT):
         entitlements.enforce(user, entitlements.SHARE_LINK_CREATE, course)
         return
     pending = [(i, d) for i, d in live_pending if i != exclude_invite_id]
@@ -409,7 +431,7 @@ def invite_by_email(db, user: dict, course: dict, email: str, access_type: str,
     now = now or _now()
     ws, owner_uid = user["org"], user["uid"]
     if access_type not in ACCESS_TYPES:
-        raise HTTPException(status_code=400, detail={"code": "invalid_access_type", "message": "access_type must be 'collaborate' or 'view'."})
+        raise HTTPException(status_code=400, detail={"code": "invalid_access_type", "message": "access_type must be 'collaborate', 'comment' or 'view'."})
     email = normalize_email(email)
     if email == (user.get("email") or "").strip().lower():
         raise HTTPException(status_code=400, detail={"code": "cannot_invite_self", "message": "You can't invite yourself."})
@@ -440,8 +462,7 @@ def invite_by_email(db, user: dict, course: dict, email: str, access_type: str,
             if d.get("email") == email:
                 cancel_invite(db, iid, "added_directly", now=now)
         name = display_name(db, ws, owner_uid, "Someone")
-        notify(db, ws, existing_uid, owner_uid, name,
-               "course_share_collaborate" if access_type == ACCESS_COLLABORATE else "course_share_view",
+        notify(db, ws, existing_uid, owner_uid, name, share_notif_type(access_type),
                course["id"], course.get("courseName", ""), access_type)
         return {"status": "added", "email": email, "access_type": access_type, "uid": existing_uid}
 
@@ -485,7 +506,7 @@ def invite_email_content(db, inv: dict, course: dict, inviter_name: str) -> Tupl
     link = f"{frontend_url()}/invite/{inv['token']}"
     title = clean_text(course.get("courseName"), 150) or "a course"
     who = clean_text(inviter_name) or "A teacher"
-    what = "edit" if inv.get("access_type") == ACCESS_COLLABORATE else "view"
+    what = {ACCESS_COLLABORATE: "edit", ACCESS_COMMENT: "comment on"}.get(inv.get("access_type"), "view")
     subject = f"{who} invited you to {what} \"{title}\" on EdCube"
     body = (f"{who} invited you to {what} the course \"{title}\" on EdCube.\n\n"
             f"Open this link to accept (it's free to sign up):\n{link}\n\n"
@@ -553,7 +574,14 @@ def on_course_deleted(db, workspace: str, course_id: str, now: Optional[datetime
         if d.get("workspace") == workspace and not d.get("revoked_at"):
             share_links_col(db).document(snap.id).update({"revoked_at": now})
             n_links += 1
-    return {"pending_invites_cancelled": n_inv, "links_revoked": n_links}
+    n_comments = 0
+    try:
+        for snap in comments_col(db, workspace, course_id).stream():
+            comments_col(db, workspace, course_id).document(snap.id).delete()
+            n_comments += 1
+    except Exception as e:  # noqa: BLE001 -- a cleanup failure must not fail the delete
+        logger.warning("comment cleanup failed for %s: %s", course_id, e)
+    return {"pending_invites_cancelled": n_inv, "links_revoked": n_links, "comments_deleted": n_comments}
 
 
 # ── accepting an invite ─────────────────────────────────────────────────────────────────────────
@@ -610,8 +638,8 @@ def accept_invite(db, invite_id: str, inv: dict, uid: str, email: str, now: Opti
         raise HTTPException(status_code=400, detail={"code": "cannot_invite_self", "message": "You own this course."})
     ws = inv["workspace"]
     cur = entry_for(course, uid)
-    if not (cur and cur.get("accessType") == ACCESS_COLLABORATE and inv["access_type"] == ACCESS_VIEW):
-        add_shared(db, ws, course, uid, inv["access_type"])   # never downgrade collaborate -> view
+    if not (cur and ACCESS_RANK.get(cur.get("accessType"), 0) > ACCESS_RANK.get(inv["access_type"], 0)):
+        add_shared(db, ws, course, uid, inv["access_type"])   # never downgrade (collaborate > comment > view)
     _set_invite(db, invite_id, {"status": ACCEPTED, "accepted_uid": uid, "accepted_at": now})
     final = (entry_for(course, uid) or {}).get("accessType", inv["access_type"])
     return {"course_id": inv["course_id"], "workspace": ws, "access_type": final, "already_accepted": False}
@@ -726,3 +754,63 @@ def public_view(db, token: str, now: Optional[datetime] = None) -> Optional[dict
     except Exception as e:  # noqa: BLE001 -- a counter failure must not break viewing
         logger.warning("share link view counter failed: %s", e)
     return public_course_payload(db, link, course)
+
+
+# ── comments (owner, editors and commenters) ────────────────────────────────────────────────────
+
+def comments_col(db, workspace: str, course_id: str):
+    return course_ref(db, workspace, course_id).collection("comments")
+
+
+def comment_access(db, course: dict, uid: str, workspace: str) -> dict:
+    """access_info, with a deactivated owner closing the course to everyone else (as the access route does)."""
+    info = access_info(db, course, uid, workspace)
+    if info["role"] not in (None, "owner") and not entitlements.owner_allows_access(course.get("teacherUid"), workspace, db):
+        return {**info, "role": None, "can_comment": False}
+    return info
+
+
+def _comment_out(cid: str, d: dict, uid: str, is_course_owner: bool) -> dict:
+    return {"id": cid, "author_uid": d.get("author_uid"), "author_name": d.get("author_name") or "A teacher",
+            "author_role": d.get("author_role"), "text": d.get("text", ""), "created_at": _iso(d.get("created_at")),
+            "can_delete": is_course_owner or d.get("author_uid") == uid}
+
+
+def list_comments(db, workspace: str, course: dict, uid: str) -> List[dict]:
+    owner = is_owner(course, uid)
+    out = [_comment_out(s.id, s.to_dict() or {}, uid, owner) for s in comments_col(db, workspace, course["id"]).stream()]
+    out.sort(key=lambda c: c["created_at"] or "")
+    return out
+
+
+def add_comment(db, workspace: str, course: dict, uid: str, role: str, text: str,
+                now: Optional[datetime] = None) -> dict:
+    text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", text or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail={"code": "comment_empty", "message": "Write a comment first."})
+    if len(text) > COMMENT_MAX_CHARS:
+        raise HTTPException(status_code=400, detail={"code": "comment_too_long",
+                                                     "message": f"Comments can be up to {COMMENT_MAX_CHARS} characters."})
+    ref = comments_col(db, workspace, course["id"]).document()
+    doc = {"author_uid": uid, "author_name": display_name(db, workspace, uid, "A teacher"), "author_role": role,
+           "text": text, "created_at": now or _now()}
+    ref.set(doc)
+    owner_uid = course.get("teacherUid")
+    if owner_uid and owner_uid != uid:
+        try:
+            notify(db, workspace, owner_uid, uid, doc["author_name"], "course_comment", course["id"], course.get("courseName", ""))
+        except Exception as e:  # noqa: BLE001
+            logger.warning("comment notification failed: %s", e)
+    return _comment_out(ref.id, doc, uid, is_owner(course, uid))
+
+
+def delete_comment(db, workspace: str, course: dict, uid: str, comment_id: str) -> bool:
+    """The author or the course owner deletes a comment. False if there is no such comment; 403 otherwise refused."""
+    ref = comments_col(db, workspace, course["id"]).document(comment_id)
+    snap = ref.get()
+    if not snap.exists:
+        return False
+    if not (is_owner(course, uid) or (snap.to_dict() or {}).get("author_uid") == uid):
+        raise HTTPException(status_code=403, detail={"code": "comment_not_yours", "message": "You can only delete your own comments."})
+    ref.delete()
+    return True

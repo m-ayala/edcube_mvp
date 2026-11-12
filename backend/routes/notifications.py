@@ -21,6 +21,7 @@ from .teachers import require_org
 from services.firebase_service import FirebaseService
 from firebase.paths import org_col
 from services import entitlements
+from services import sharing_service as _ss
 from schemas.teacher_schema import TEACHER_PROFILES_COLLECTION, TEACHERS_COLLECTION, PERSONAL_SPACE_ID
 
 router = APIRouter(prefix="/api/notifications", tags=["notifications"])
@@ -29,7 +30,7 @@ firebase = FirebaseService()
 
 class ShareRecipient(BaseModel):
     uid: str
-    access_type: str  # "view" or "collaborate"
+    access_type: str  # "view" | "comment" | "collaborate"
 
 
 class ShareCourseRequest(BaseModel):
@@ -38,7 +39,7 @@ class ShareCourseRequest(BaseModel):
     recipients: List[ShareRecipient] = []
     # Public space only: invite by account email. `access_type` applies to these.
     recipient_emails: List[str] = []
-    access_type: str = "view"  # "view" or "collaborate"; used for recipient_emails only
+    access_type: str = "view"  # "view" | "comment" | "collaborate"; used for recipient_emails only
 
 
 # ── Invite-by-email (personal workspace) ────────────────────────────────────
@@ -82,6 +83,8 @@ async def share_course(
     # Plan gate (TASK-031): view-only shares are `share_link_create`, collaborate shares are
     # `invite_collaborator` (plan flag + per-course cap). Expired trial -> 402 plan_inactive.
     course_data = course_doc.to_dict() or {}
+    if any(r.access_type not in _ss.ACCESS_TYPES for r in body.recipients):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="access_type must be 'view', 'comment' or 'collaborate'")
     types = {r.access_type for r in body.recipients} | ({body.access_type} if body.recipient_emails else set())
     wants_collab = "collaborate" in types
     wants_view = any(t != "collaborate" for t in types)
@@ -115,10 +118,7 @@ async def share_course(
     recipients = list(body.recipients)
 
     for recipient in recipients:
-        notif_type = (
-            "course_share_collaborate" if recipient.access_type == "collaborate"
-            else "course_share_view"
-        )
+        notif_type = _ss.share_notif_type(recipient.access_type)
         await firebase.create_notification(
             to_uid=recipient.uid,
             from_uid=from_uid,
@@ -155,8 +155,8 @@ async def _share_personal(body: ShareCourseRequest, current_user: dict, course: 
                             detail={"code": "cannot_share_with_self", "message": "You can't share a course with yourself"})
     emails: List[str] = []
     if body.recipient_emails:
-        if body.access_type not in ("view", "collaborate"):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="access_type must be 'view' or 'collaborate'")
+        if body.access_type not in ss.ACCESS_TYPES:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="access_type must be 'view', 'comment' or 'collaborate'")
         if len(body.recipient_emails) > MAX_EMAILS_PER_REQUEST:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                                 detail={"code": "too_many_emails", "max": MAX_EMAILS_PER_REQUEST})
@@ -179,7 +179,7 @@ async def _share_personal(body: ShareCourseRequest, current_user: dict, course: 
             ss._guard_after_write(db, current_user, course, [], rollback=lambda r=r, prev=prev: (
                 ss.add_shared(db, ws, course, r.uid, prev["accessType"]) if prev else ss.remove_shared(db, ws, course, r.uid)))
         ss.notify(db, ws, r.uid, from_uid, ss.display_name(db, ws, from_uid, "Someone"),
-                  "course_share_collaborate" if r.access_type == "collaborate" else "course_share_view",
+                  ss.share_notif_type(r.access_type),
                   body.course_id, body.course_name, r.access_type)
         shared.append(r.uid)
         results.append({"uid": r.uid, "status": "added", "access_type": r.access_type})

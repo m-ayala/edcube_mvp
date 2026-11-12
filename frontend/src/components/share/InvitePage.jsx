@@ -138,15 +138,16 @@ const InvitePage = () => {
 
   const d = info.data;
   const canEdit = d.access_type === 'collaborate';
+  const canComment = d.access_type === 'comment';
 
   return (
     <Shell>
       <h1 style={{ fontSize: 22, margin: '0 0 8px', color: '#1C1917' }}>{d.course_title || 'A course'}</h1>
       <p style={{ margin: '0 0 6px', color: '#44403C', fontSize: 15.5, lineHeight: 1.55 }}>
-        <strong>{d.inviter_name || 'A teacher'}</strong> invited you to {canEdit ? 'edit' : 'view'} this course.
+        <strong>{d.inviter_name || 'A teacher'}</strong> invited you to {canEdit ? 'edit' : canComment ? 'view and comment on' : 'view'} this course.
       </p>
       <p data-testid="invite-access" style={{ margin: '0 0 4px', color: '#6B6459', fontSize: 14 }}>
-        Access: {canEdit ? 'Can edit' : 'Can view'}
+        Access: {canEdit ? 'Can edit' : canComment ? 'Can comment' : 'Can view'}
       </p>
       {d.email_hint && (
         <p data-testid="invite-email-hint" style={{ margin: '0 0 4px', color: '#6B6459', fontSize: 14 }}>

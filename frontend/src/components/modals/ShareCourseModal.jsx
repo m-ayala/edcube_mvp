@@ -54,6 +54,7 @@ const PersonRow = ({ person, onAccessChange, onRemove }) => (
       }}
     >
       <option value="view">Viewer</option>
+      <option value="comment">Commenter</option>
       <option value="collaborate">Collaborator</option>
     </select>
     <button

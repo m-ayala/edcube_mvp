@@ -40,6 +40,7 @@ export const courseViewState = (doc, { courseId, isOwner = false, accessType = '
     isOwner,
     ownerName,
     isCollaborator: !isOwner && accessType === 'collaborate',
+    accessType: isOwner ? null : accessType,
     ...(built && doc.outline ? { outlineExtras: outlineExtrasOf(doc) } : {}),
   };
 };

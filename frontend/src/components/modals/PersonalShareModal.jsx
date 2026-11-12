@@ -225,7 +225,7 @@ const PersonalShareModal = ({ isOpen, onClose, courseId, courseName }) => {
     }
   };
 
-  const accessLabel = (t) => (t === 'collaborate' ? 'Can edit' : 'Can view');
+  const accessLabel = (t) => ({ collaborate: 'Can edit', comment: 'Can comment' }[t] || 'Can view');
 
   return (
     <div
@@ -336,6 +336,7 @@ const PersonalShareModal = ({ isOpen, onClose, courseId, courseName }) => {
                       <select value={access} onChange={(e) => setAccess(e.target.value)} aria-label="Access"
                         style={{ border: '1px solid #D1D5DB', borderRadius: '8px', padding: '8px', fontSize: '14px', fontFamily: SANS, backgroundColor: '#fff' }}>
                         <option value="collaborate">Can edit</option>
+                        <option value="comment">Can comment</option>
                         <option value="view">Can view</option>
                       </select>
                       <button type="submit" disabled={inviteBusy || !email.trim()} style={primaryBtn(inviteBusy || !email.trim())}>
@@ -383,7 +384,7 @@ const PersonalShareModal = ({ isOpen, onClose, courseId, courseName }) => {
                       <div key={p.id} data-testid="pending-row" style={rowStyle}>
                         <span style={{ flex: 1, fontSize: '14.5px', color: '#1C1917', minWidth: '120px' }}>{p.email}</span>
                         <span style={{ fontSize: '12px', fontWeight: 600, color: '#92400E', background: '#FEF3C7', borderRadius: '999px', padding: '2px 8px' }}>Pending</span>
-                        <span style={{ fontSize: '13px', color: '#57534E' }}>{accessLabel(p.access_type === 'collaborate' ? 'collaborate' : 'view')}</span>
+                        <span style={{ fontSize: '13px', color: '#57534E' }}>{accessLabel(p.access_type)}</span>
                         <button type="button" style={smallBtn()} disabled={inviteBusy} onClick={() => handleCancelInvite(p.id)}>Cancel invite</button>
                       </div>
                     ))}

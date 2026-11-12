@@ -285,6 +285,7 @@ const CourseEditor = ({
   onBack,
   courseName,
   pendingSubsectionIds,
+  footer = null,
 }) => {
   const [activeId, setActiveId] = useState(sections[0]?.id || null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -637,6 +638,8 @@ const CourseEditor = ({
           </>
         )}
       </div>
+
+      {footer}
 
       <ConfirmDialog
         isOpen={actions.deleteConfirm !== null}
