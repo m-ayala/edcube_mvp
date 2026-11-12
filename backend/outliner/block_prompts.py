@@ -323,7 +323,10 @@ COURSE CONTEXT:
 - Core Concept: {core_concept}
 - Learning Objectives:
 {objectives_text}
-- Special Requirements: {requirements}
+- Teacher's Requirements (instructions from the teacher; you MUST follow them when writing every
+  block, and they win over the general rules below if the two conflict. Be literal with anything
+  specific: named tools, kits, software, examples, vocabulary, standards, or things to avoid):
+  {requirements}
 {already_covered_text}
 
 APPROVED BLOCK COMPOSITION (expand each of these, in this exact order, using the given id/type/subtype/title):

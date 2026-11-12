@@ -164,6 +164,44 @@ const CourseDesigner = () => {
     startGeneration(formData, attachedFiles, currentUser.uid, org, targetFolderId);
   };
 
+  // Blank course: skip the AI build and open an empty course (one section per day) in the
+  // workspace, where the teacher writes everything herself. Uses no AI credit; nothing is
+  // saved until the teacher saves in the workspace.
+  const [blankError, setBlankError] = useState('');
+  const startBlankCourse = () => {
+    const name = formData.courseName.trim();
+    if (!name) { setBlankError('Give the course a name first.'); return; }
+    setBlankError('');
+    const days = Math.max(1, Math.min(30, parseInt(formData.numDays, 10) || 1));
+    const a = formData.ageRangeStart;
+    const b = formData.ageRangeEnd;
+    const ages = a && b ? (String(a) === String(b) ? `Age ${a}` : `Ages ${a}–${b}`) : (a || b ? `Age ${a || b}` : '');
+    const hours = formData.hoursPerDay ? `${formData.hoursPerDay} ${Number(formData.hoursPerDay) === 1 ? 'hour' : 'hours'} per day` : '';
+    const stamp = Date.now();
+    const sections = Array.from({ length: days }, (_, i) => ({
+      id: `section-${stamp}-${i + 1}`,
+      title: `Day ${i + 1}`,
+      description: '',
+      subsections: [],
+    }));
+    navigate('/course-workspace', {
+      state: {
+        formData: {
+          ...formData,
+          courseName: name,
+          class: ages,
+          timeDuration: [days > 1 ? `${days} days` : '1 day', hours].filter(Boolean).join(', '),
+          subject: '',
+          topic: '',
+        },
+        sections,
+        isEditing: true,
+        targetFolderId,
+        isOwner: true,
+      },
+    });
+  };
+
   const inputStyle = {
     width: '100%',
     padding: '10px 12px',
@@ -570,6 +608,34 @@ const CourseDesigner = () => {
         >
           {loading ? '⏳ Generating Course...' : '✨ Generate Course with AI'}
         </button>
+
+        {/* Blank course: write it from scratch, no AI build */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: '18px 0 12px', color: '#a0aec0', fontSize: '13px' }}>
+          <div style={{ flex: 1, height: '1px', background: '#e2e8f0' }} />
+          or
+          <div style={{ flex: 1, height: '1px', background: '#e2e8f0' }} />
+        </div>
+        <button
+          type="button"
+          onClick={startBlankCourse}
+          disabled={loading}
+          style={{
+            width: '100%',
+            padding: '13px',
+            background: '#fff',
+            color: '#4a5568',
+            border: '1px solid #cbd5e0',
+            borderRadius: '10px',
+            fontSize: '15px',
+            fontWeight: '600',
+            cursor: loading ? 'not-allowed' : 'pointer',
+          }}
+        >
+          📝 Start with a blank course
+        </button>
+        <p style={{ margin: '8px 0 0', fontSize: '13px', color: blankError ? '#c53030' : '#718096', textAlign: 'center' }} role={blankError ? 'alert' : undefined}>
+          {blankError || 'Skip the AI build and write the course yourself. Only the course name is needed; one empty section is made for each day.'}
+        </p>
       </form>
     </div>
   );

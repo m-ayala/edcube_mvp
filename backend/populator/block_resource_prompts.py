@@ -66,16 +66,22 @@ BLOCK_TYPE_GUIDANCE: Dict[str, Dict[str, str]] = {
             "Use the worksheet's own items, never other examples from the wider topic."
         ),
         "videos": (
-            "OPTIONAL. Only a query for a short video that shows the specific items or process the "
-            "worksheet asks about. Return an empty list if a video would not help with this worksheet."
+            "1 query for a short video that shows the specific items or process the worksheet asks "
+            "about. Return an empty list only if no video could help students with this worksheet."
         ),
     },
     "activity": {
         "kind": "hands-on classroom ACTIVITY",
         "articles": (
-            "A lesson plan or step-by-step procedure for this kind of activity, the background facts "
-            "students need to do it, and a how-to or technique guide (include safety guidance if the "
-            "activity involves tools, heat or chemicals). Not general background on the topic."
+            "Worksheet links for the activity: a printable worksheet, handout, template or recording "
+            "sheet students can use while doing it; a lesson plan or step-by-step procedure for this "
+            "kind of activity; and a how-to or technique guide with the background facts students need "
+            "(include safety guidance if the activity involves tools, heat or chemicals). Not general "
+            "background on the topic."
+        ),
+        "judge": (
+            "For this activity, a free printable worksheet, handout or recording sheet that students "
+            "could use while doing this activity serves a need: score it 7-8 even if it needs light adaptation."
         ),
         "images": (
             "Pictures of what students make or do (models, exemplars, finished examples) and of the "
@@ -128,15 +134,42 @@ def guidance_for(block_type: str) -> Dict[str, str]:
 # 1. Planning: block text -> what to search for
 # ----------------------------------------------------------------------------
 
-def build_plan_prompt(block_text: str, block_type: str, grade: str, max_image_subjects: int) -> str:
+def _teacher_request_part(teacher_request: str, kinds) -> str:
+    """What the teacher asked Edo to find for this block, when Discover was started from Edo."""
+    if not teacher_request:
+        return ""
+    only = ""
+    if kinds:
+        names = {"article": "ARTICLES", "image": "IMAGES", "video": "VIDEOS"}
+        only = (f"\nOnly {' and '.join(names[k] for k in kinds)} will be searched; leave the other "
+                f"group(s) empty.")
+    return f"""
+THE TEACHER ASKED EDO TO FIND:
+\"\"\"
+{teacher_request}
+\"\"\"
+This request comes first. Plan every query to find exactly what the teacher asked for, using any
+names, channels, sites, topics or styles they mention, while still fitting this block and grade.{only}
+"""
+
+
+def build_plan_prompt(block_text: str, block_type: str, grade: str, max_image_subjects: int,
+                      teacher_request: str = "", kinds=None) -> str:
     g = guidance_for(block_type)
     max_image_subjects = int(g.get("max_image_subjects", max_image_subjects))
     grade_part = f" for grade {grade}" if grade else ""
     return f"""A teacher has this {g['kind']}{grade_part}:
 {block_text}
+{_teacher_request_part(teacher_request, kinds)}
+The teacher pressed "Discover" to find links for this block. What to find depends on the block:
+- WORKSHEET or ACTIVITY block: worksheet links students and the teacher can use with it, as
+  articles (printable worksheets, handouts, reference pages, procedures), videos (demonstrations,
+  walkthroughs) and images (the items, steps or finished products). Aim to fill all three groups.
+- CONTENT block: content links that teach exactly what the block covers, as articles (explainers,
+  teacher guides), videos (short explainers) and images (diagrams, real examples).
 
 Plan the web resources to attach to THIS block, in three groups. Read the block's title, subtype and
-full text first: they decide what to search for. A group may be empty if nothing fits.
+full text first: they decide what to search for. Leave a group empty only if nothing could fit.
 For elementary or middle-school grades, phrase article and video queries so they find student-level
 pages (e.g. add "for kids" or "for students"), not university or industry material.
 
@@ -152,7 +185,7 @@ VIDEOS: {g['videos']}
 Return JSON:
 {{"essence": "<one sentence: what this block teaches or has students do>",
   "needs": "<what a teacher needs to deliver this block, 1-2 sentences>",
-  "articles": [{{"role": "<short role, e.g. student_explainer, item_reference, lesson_plan, safety_guide>", "query": "..."}}],
+  "articles": [{{"role": "<short role, e.g. student_explainer, item_reference, printable_worksheet, lesson_plan, safety_guide>", "query": "..."}}],
   "images": [{{"subject": "<what the picture must show>", "why": "<the line or item in the block it illustrates>", "query": "..."}}],
   "videos": ["query"]}}
 Give up to 3 article entries with different roles."""

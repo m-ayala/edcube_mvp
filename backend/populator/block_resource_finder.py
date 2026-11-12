@@ -174,9 +174,16 @@ def _load_pages(urls: List[str], pool: bb.BrowserPool, allow_browser: bool = Tru
 # ----------------------------------------------------------------------------
 
 def _plan(ctx: Dict) -> Optional[Dict]:
-    r = _llm(prompts.build_plan_prompt(ctx["block_text"], ctx["block_type"], ctx["grade"], MAX_IMAGE_SUBJECTS),
+    req = ctx.get("teacher_request") or ""
+    r = _llm(prompts.build_plan_prompt(ctx["block_text"], ctx["block_type"], ctx["grade"], MAX_IMAGE_SUBJECTS,
+                                       teacher_request=req, kinds=ctx.get("kinds")),
              prompts.PLAN_SYSTEM, temperature=0.2)
-    return r if isinstance(r, dict) else None
+    if not isinstance(r, dict):
+        return None
+    if req:
+        # The judges score against "needs", so the teacher's own words are part of it.
+        r["needs"] = f"{r.get('needs', '')} The teacher specifically asked for: {req}".strip()
+    return r
 
 
 # ----------------------------------------------------------------------------
@@ -558,9 +565,14 @@ def _image_group(ctx: Dict, plan: Dict, pool: bb.BrowserPool, deadline: float) -
 def find_block_resources(block_title: str, block_type: str, block_content: Any,
                          topic_title: str = "", topic_description: str = "",
                          subject: str = "", topic: str = "", grade_level: str = "",
-                         block_subtype: str = "", block_duration_minutes: Optional[float] = None
+                         block_subtype: str = "", block_duration_minutes: Optional[float] = None,
+                         teacher_request: str = "", kinds: Optional[List[str]] = None
                          ) -> Dict[str, List[Dict]]:
     """Find articles, images and videos for one lesson block using Browserbase.
+
+    `teacher_request` (optional) is what the teacher asked Edo to find, in their words; the
+    searches are steered by it. `kinds` (optional, any of "article", "image", "video") limits
+    which groups are searched; None or empty means all three.
 
     Synchronous (blocks for up to ~1 minute); call it from an executor. Never
     raises: on any failure returns whatever was found, possibly {"links": []}.
@@ -582,9 +594,12 @@ def find_block_resources(block_title: str, block_type: str, block_content: Any,
                            ("TOPIC DESCRIPTION", topic_description)):
             if val:
                 header.append(f"{label}: {val}")
+        wanted = {k for k in (kinds or []) if k in ("article", "image", "video")} or {"article", "image", "video"}
         ctx = {"block_title": block_title or "", "block_type": block_type or "",
                "grade": (grade_level or "").strip(),
                "duration_minutes": block_duration_minutes,
+               "teacher_request": (teacher_request or "").strip()[:500],
+               "kinds": sorted(wanted) if len(wanted) < 3 else None,
                "block_text": "\n".join(header) + "\n" + _as_text(block_content)}
         plan = _plan(ctx)
         if not plan:
@@ -600,10 +615,11 @@ def find_block_resources(block_title: str, block_type: str, block_content: Any,
                     results[name] = fn()
                 except Exception as e:
                     logger.warning("Resource group %s failed (%s)", name, type(e).__name__)
+            groups = [("article", "articles", lambda: _article_group(ctx, plan, pool, deadline)),
+                      ("image", "images", lambda: _image_group(ctx, plan, pool, deadline)),
+                      ("video", "videos", lambda: _video_group(ctx, plan, deadline))]
             with ThreadPoolExecutor(3) as ex:
-                futs = [ex.submit(run, "articles", lambda: _article_group(ctx, plan, pool, deadline)),
-                        ex.submit(run, "images", lambda: _image_group(ctx, plan, pool, deadline)),
-                        ex.submit(run, "videos", lambda: _video_group(ctx, plan, deadline))]
+                futs = [ex.submit(run, name, fn) for kind, name, fn in groups if kind in wanted]
                 for f in futs:
                     f.result()
         links = results["articles"] + results["images"] + results["videos"]

@@ -137,10 +137,12 @@ export const planDay = async ({ courseContext, outline, dayId, earlierTopics }) 
 
 // More spare blocks for a day's library. Returns { topics, blocks, notices } (notices:
 // teacher-facing [{code, severity, message}]; the technical `warnings` are not passed on).
-export const fetchDayIdeas = async ({ courseContext, outline, dayId, earlierTopics, currentTopics, count = 6 }) => {
+// `teacherRequest`: what the teacher asked Edo for (Stage 2 chat); omitted for plain "More ideas".
+export const fetchDayIdeas = async ({ courseContext, outline, dayId, earlierTopics, currentTopics, count = 6, teacherRequest }) => {
   const res = await postJSON('/api/course-builder/day-ideas', {
     course_context: courseContext, outline, day_id: dayId,
     earlier_topics: earlierTopics || [], current_topics: currentTopics, count,
+    ...(teacherRequest ? { teacher_request: teacherRequest } : {}),
   });
   if (!res.ok) throw await errorFromResponseWithProblems(res, 'Could not come up with more ideas');
   const data = await res.json();

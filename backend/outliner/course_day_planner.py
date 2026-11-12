@@ -47,6 +47,8 @@ MAX_RESOURCES = 12
 MAX_TITLE = 120
 MAX_DESC = 240
 MAX_ATTEMPTS = 2  # first try + one repair retry
+MAX_REQUIREMENTS_CHARS = 6000  # same cap as the outline step
+MAX_TEACHER_REQUEST_CHARS = 2000  # one Edo message in Stage 2
 DEFAULT_ICONS = ["📘", "🧩", "🔧", "🎯", "🧠", "🔍", "🎨", "🧪", "💡", "🚀"]
 
 # Class size / age handling for formats. "rank" (default): every knowledge-base format is
@@ -145,10 +147,14 @@ def parse_context(ctx: Dict) -> Dict:
     if not 1 <= n <= 500:
         raise ValueError("num_students must be between 1 and 500")
     n_hours = whole_hours(hours)
+    # The teacher's own objectives / requirements (echoed back as `objectives`; `requirements` also
+    # accepted). Days are planned against them, not only against the outline.
+    reqs = ctx.get("objectives") or ctx.get("requirements") or ""
     return {
         "course_name": str(ctx.get("course_name") or "")[:300],
         "age_min": age_min, "age_max": age_max, "num_students": n,
         "hours_per_day": n_hours, "hours": n_hours, "slots": n_hours * BLOCKS_PER_HOUR,
+        "requirements": str(reqs)[:MAX_REQUIREMENTS_CHARS] if isinstance(reqs, str) else "",
     }
 
 
@@ -1250,7 +1256,7 @@ def plan_day(course_context: Dict, outline: Dict, day_id: str, earlier_topics: O
         day_number=idx + 1, num_days=len(outline["days"]), day=day, outline_days=outline["days"],
         earlier_topics=_clean_titles(earlier_topics), age_min=ctx["age_min"], age_max=ctx["age_max"],
         band=fx["band"], num_students=ctx["num_students"], hours_per_day=n, spare=spare,
-        formats=fx, categories=fx["categories"],
+        formats=fx, categories=fx["categories"], requirements=ctx["requirements"],
     )
     valid = {c["id"] for c in fx["categories"]}
     default_obj = next((o for o in day.get("objective_ids") or [] if isinstance(o, str) and o in valid), "")
@@ -1360,9 +1366,10 @@ def _assign_home_hours(raw, known: Dict):
 
 def more_ideas(course_context: Dict, outline: Dict, day_id: str, current_topics: List[Dict],
                earlier_topics: Optional[List[str]] = None, count: int = 6,
-               call: Optional[Callable] = None) -> Dict:
+               call: Optional[Callable] = None, teacher_request: str = "") -> Dict:
     """
     Extra spare blocks for a day's library. Never placed on the day (the teacher decides).
+    `teacher_request` is what the teacher asked Edo for (Stage 2 chat); empty for "More ideas".
     Returns {day_id, topics: [new topics], blocks: [new library blocks], warnings}.
     """
     ctx, idx, day = _outline_and_context(course_context, outline, day_id)
@@ -1376,6 +1383,8 @@ def more_ideas(course_context: Dict, outline: Dict, day_id: str, current_topics:
         earlier_topics=_clean_titles(earlier_topics), age_min=ctx["age_min"], age_max=ctx["age_max"],
         band=fx["band"], num_students=ctx["num_students"], formats=fx, categories=fx["categories"],
         current_topics=list(known["topics"].values()), count=count,
+        requirements=ctx["requirements"],
+        teacher_request=str(teacher_request or "").strip()[:MAX_TEACHER_REQUEST_CHARS],
     )
     valid = {c["id"] for c in fx["categories"]}
     default_obj = next((o for o in day.get("objective_ids") or [] if isinstance(o, str) and o in valid), "")

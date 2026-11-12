@@ -538,13 +538,13 @@ const BlockView = ({
                 title={genPaused.blocked ? genPaused.message : undefined}
                 style={{ ...btnBase, background: isGenerating ? '#F0F4FF' : '#F5F3EE', color: isGenerating ? '#4338CA' : '#555', border: isGenerating ? '1px solid rgba(99,102,241,0.3)' : '1px solid rgba(0,0,0,0.12)', cursor: isGenerating ? 'default' : 'pointer', opacity: (!onGenerateLinks && !isGenerating) ? 0.5 : 1 }}
               >
-                {isGenerating ? <><Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> Generating…</> : <><Sparkles size={13} /> Generate</>}
+                {isGenerating ? <><Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> Discovering…</> : <><Sparkles size={13} /> Discover</>}
               </button>
             </div>
             <AiPausedHint kind="generates" style={{ width: '100%' }} />
             {(genEmpty || genError) && (
               <p style={{ margin: '6px 0 0', fontSize: '12px', color: genError ? '#B91C1C' : '#888', fontFamily: "'DM Sans', sans-serif" }}>
-                {genError ? 'Generation failed. Try again.' : 'No results found. Try adding a title or description first.'}
+                {genError ? 'Discover failed. Try again.' : 'No results found. Try adding a title or description first.'}
               </p>
             )}
           </div>
@@ -590,7 +590,7 @@ const BlockView = ({
 
           {links.length === 0 && !isGenerating && !showLinkInput && !showLibraryPicker && (
             <p style={{ margin: 0, fontSize: '13.5px', color: '#AAA', fontStyle: 'italic', fontFamily: "'DM Sans', sans-serif" }}>
-              No links yet — add a URL, pick from your library, or generate with AI.
+              No links yet — add a URL, pick from your library, or press Discover to find articles, images and videos.
             </p>
           )}
 

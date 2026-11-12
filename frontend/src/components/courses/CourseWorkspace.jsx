@@ -193,7 +193,9 @@ const CourseWorkspace = () => {
   const subsectionIndex = activeSubsection ? (activeSection?.subsections?.indexOf(activeSubsection) ?? -1) : -1;
   const activeBlock = (handsOnResources[navPath.subsectionId] || []).find(b => b.id === navPath.blockId) || null;
 
-  const generateLinksForBlock = async (blockId, subsectionId, blockData) => {
+  // Discover. Called by the block's Discover button, and by Edo with { teacherRequest, kinds } when
+  // the teacher asks it to find links. Returns the links that were added ([] when none or on error).
+  const generateLinksForBlock = async (blockId, subsectionId, blockData, { teacherRequest = '', kinds = null } = {}) => {
     console.log('[generateLinksForBlock] START', { blockId, subsectionId, blockType: blockData?.type });
     setLinkGenJobs(prev => ({ ...prev, [blockId]: 'generating' }));
     console.log('[generateLinksForBlock] state set to generating');
@@ -210,6 +212,8 @@ const CourseWorkspace = () => {
         teacherUid: currentUser?.uid || null,
         blockSubtype: blockData.subtype || blockData.subcategory || '',
         blockDurationMinutes: Number(blockData.duration_minutes) || null,
+        teacherRequest,
+        kinds,
       };
       console.log('[generateLinksForBlock] sending payload to backend:', payload);
       let raw;
@@ -231,9 +235,10 @@ const CourseWorkspace = () => {
         );
         actions.updateBlock(subsectionId, blockId, { links: merged });
         setLinkGenJobs(prev => ({ ...prev, [blockId]: 'done' }));
-      } else {
-        setLinkGenJobs(prev => ({ ...prev, [blockId]: 'empty' }));
+        return { added: merged.slice(existing.length) };
       }
+      setLinkGenJobs(prev => ({ ...prev, [blockId]: 'empty' }));
+      return { added: [] };
     } catch (err) {
       console.error('Link generation failed:', err);
       if (err?.quota === true) {
@@ -242,6 +247,7 @@ const CourseWorkspace = () => {
       } else {
         setLinkGenJobs(prev => ({ ...prev, [blockId]: 'error' }));
       }
+      return { added: [], error: err };
     }
   };
 
@@ -1192,6 +1198,8 @@ const CourseWorkspace = () => {
                 handsOnResources={handsOnResources}
                 currentPage={currentPageContext}
                 curriculumId={curriculumId}
+                onDiscoverLinks={readOnly ? null : generateLinksForBlock}
+                linkGenJobs={linkGenJobs}
               />
             )}
           </DragDropContext>
