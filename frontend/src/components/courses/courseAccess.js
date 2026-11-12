@@ -7,11 +7,12 @@ import { getAccess } from '../../services/sharingApi';
 
 export const ACCESS_POLL_MS = 30000;
 
-// What a lock is called in the UI: null (can edit) | 'plan' | 'view' | 'owner_deactivated' | 'removed'.
+// What a lock is called in the UI: null (can edit) | 'plan' | 'view' | 'comment' | 'owner_deactivated' | 'removed'.
 export const lockFromAccess = (access) => {
   // An answer without a clear can_edit (malformed, empty) never locks anyone out.
   if (!access || typeof access.can_edit !== 'boolean' || access.can_edit || access.role === 'owner') return null;
   if (access.role === 'collaborate') return access.reason === 'owner_deactivated' ? 'owner_deactivated' : 'plan';
+  if (access.role === 'comment') return 'comment';
   return 'view';
 };
 
@@ -28,6 +29,7 @@ export const lockFromSaveError = (status, detail) => {
 export const LOCK_MESSAGES = {
   plan: "The owner's plan no longer includes co-editing. You can still view this course.",
   view: 'You now have view-only access.',
+  comment: 'You can view and comment on this course, but not edit it.',
   owner_deactivated: "This course's owner has deactivated their account. You can still view this course.",
   removed: 'You no longer have access to this course.',
 };

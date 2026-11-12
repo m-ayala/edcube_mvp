@@ -217,6 +217,11 @@ service cloud.firestore {
         match /courseFolders/{folderId} {
           allow read, write: if orgAccess(orgId) && request.auth.uid == teacherUid;
         }
+
+        // ── Favorite links (private — owner only) ─────────────────────
+        match /favoriteLinks/{favId} {
+          allow read, write: if orgAccess(orgId) && request.auth.uid == teacherUid;
+        }
       }
 
       // ── Notifications (delete-on-seen inbox) ────────────────────────

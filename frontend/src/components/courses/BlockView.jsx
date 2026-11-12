@@ -6,6 +6,8 @@ import { getLibraryFolders } from '../../firebase/dbService';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAiGate } from '../../contexts/usageContextCore';
 import AiPausedHint from '../AiPausedHint';
+import FavoriteStar from '../common/FavoriteStar';
+import { useFavoriteLinks } from '../../hooks/useFavoriteLinks';
 
 const TYPE_COLORS = {
   content:   { bg: '#EAF0FF', text: '#2A4A9A', border: '#BFD0FF', label: 'Content' },
@@ -148,6 +150,15 @@ const BlockView = ({
 }) => {
   const genPaused = useAiGate('generates');
   const { org } = useAuth();
+  const { isFavorite, toggleFavorite } = useFavoriteLinks();
+  const favLink = (link) => ({
+    url: link.url,
+    title: link.label || link.caption || link.url,
+    description: link.reason || '',
+    kind: linkGroupOf(link),
+    source: link.reason ? 'discover' : 'block',   // Discover results carry a `reason`
+    ...(link.imageUrl ? { imageUrl: link.imageUrl } : {}),
+  });
   const [localTitle, setLocalTitle] = useState(block?.title || '');
   const [localContent, setLocalContent] = useState(block?.content || '');
   const [localCategory] = useState(block?.category || '');
@@ -331,7 +342,8 @@ const BlockView = ({
           {hoveredLinkId === link.id && (
             <button onClick={() => handleStartEditLabel(link)} style={{ ...iconBtn, color: '#9CA3AF' }}><Pencil size={12} /></button>
           )}
-          <button onClick={() => handleRemoveLink(link.id)} style={{ ...iconBtn, color: '#F87171' }}><Trash2 size={12} /></button>
+          <FavoriteStar active={isFavorite(link.url)} onToggle={() => toggleFavorite(favLink(link))} size={13} />
+          <button onClick={() => handleRemoveLink(link.id)} title="Delete link" style={{ ...iconBtn, color: '#F87171' }}><Trash2 size={12} /></button>
         </>
       )}
     </div>
@@ -349,11 +361,17 @@ const BlockView = ({
           style={{ display: 'block', width: '100%', height: '120px', objectFit: 'cover', background: '#EEE' }}
         />
       </a>
-      <div style={{ padding: '6px 28px 7px 9px' }}>
+      <div style={{ padding: '6px 48px 7px 9px' }}>
         <p style={{ margin: 0, fontSize: '12px', color: '#4B5563', lineHeight: 1.35, fontFamily: "'DM Sans', sans-serif", overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
           {link.caption || link.label}
         </p>
       </div>
+      <FavoriteStar
+        active={isFavorite(link.url)}
+        onToggle={() => toggleFavorite(favLink(link))}
+        size={13}
+        style={{ position: 'absolute', right: '26px', bottom: '6px' }}
+      />
       <button
         onClick={() => handleRemoveLink(link.id)}
         aria-label="Remove image"

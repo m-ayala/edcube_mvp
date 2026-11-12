@@ -15,6 +15,8 @@ const CourseViewer = ({
   contentUnavailable = false,
   hideBack = false,
   extraActions = null,
+  accessType = null,   // 'collaborate' | 'comment' | 'view' for someone the course is shared with
+  footer = null,       // rendered under the last section (the comments card)
   navigate
 }) => {
   const [collapsedSections, setCollapsedSections] = useState({});
@@ -406,11 +408,11 @@ const CourseViewer = ({
           </span>
           <span style={{
             fontSize: '12.1px',
-            color: isOwner ? '#1d4ed8' : '#059669',
-            backgroundColor: isOwner ? '#EFF6FF' : '#ECFDF5',
+            color: isOwner ? '#1d4ed8' : accessType === 'comment' ? '#92400E' : '#059669',
+            backgroundColor: isOwner ? '#EFF6FF' : accessType === 'comment' ? '#FEF3C7' : '#ECFDF5',
             padding: '3px 8px', borderRadius: '10px', fontWeight: '600'
           }}>
-            {isOwner ? 'View Mode' : 'View Only'}
+            {isOwner ? 'View Mode' : accessType === 'comment' ? 'Can Comment' : accessType === 'collaborate' ? 'Can Edit' : 'View Only'}
           </span>
           {ownerName && (
             <span style={{
@@ -530,6 +532,7 @@ const CourseViewer = ({
             <SectionView key={section.id} section={section} index={idx} />
           ))
         )}
+        {footer}
       </div>
     </>
   );
