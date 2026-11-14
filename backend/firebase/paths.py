@@ -62,6 +62,7 @@ SHARE_LINKS_COLLECTION = "ShareLinks"     # ShareLinks/{token} (TASK-036), view-
 INVITES_COLLECTION = "Invites"            # Invites/{id} (TASK-036), collaborator/view invites, backend-only
 DOMAINS_COLLECTION = "Domains"            # Domains/{domainKey} (TASK-039), signup-domain aggregate (counts only), backend-only
 ORG_DOMAIN_CLAIMS_COLLECTION = "OrgDomainClaims"   # OrgDomainClaims/{id} (TASK-039), future org domain verification, backend-only
+BLOG_POSTS_COLLECTION = "BlogPosts"       # BlogPosts/{autoId}, front-page blog; admin writes, public reads (published only) via the API
 
 # Synopsis / afterschool routes have no auth today and are ICC-specific.
 # Multi-org synopsis is out of scope (tasks/firestore-reorg-spec.md, decision 4).
@@ -166,6 +167,12 @@ def org_domain_claims_col(db):
 def admin_audit_col(db):
     """`AdminAudit` -- one doc per admin change, written by the backend only."""
     return db.collection(ADMIN_AUDIT_COLLECTION)
+
+
+def blog_posts_col(db):
+    """`BlogPosts` -- front-page blog posts. Written by admins through /api/admin/blog only;
+    the public reads published posts through /api/blog (no client Firestore access)."""
+    return db.collection(BLOG_POSTS_COLLECTION)
 
 
 def kb_doc(db):

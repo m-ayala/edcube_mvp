@@ -4,12 +4,22 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { logoutTeacher } from '../../firebase/authService';
+import { listPosts } from '../../services/blogApi';
+import { excerpt, postDate } from '../../utils/blogFormat';
 
 const SORA = "'Sora', sans-serif";
 
 const LandingPage = () => {
   const navigate = useNavigate();
-  const { currentUser } = useAuth();
+  const { currentUser, isAdmin } = useAuth();
+  const [posts, setPosts] = useState([]);
+
+  // Latest published blog posts. The section stays hidden if there are none or the API is down.
+  useEffect(() => {
+    let live = true;
+    listPosts(3).then((r) => { if (live) setPosts(r.posts || []); }).catch(() => {});
+    return () => { live = false; };
+  }, []);
 
   useEffect(() => { document.title = 'EdCube — A Studio for Educators'; }, []);
 
@@ -37,6 +47,7 @@ const LandingPage = () => {
       <nav className="lp-nav">
         <div style={{ fontFamily: SORA, fontWeight: 700, fontSize: 20, letterSpacing: '-0.5px' }}>EdCube</div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <button className="btn-outline nav-btn nav-hide" onClick={() => navigate('/blog')}>Blog</button>
           {currentUser ? (
             <>
               <span className="nav-hide" style={{ fontSize: 13, color: '#6B6459', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -241,6 +252,40 @@ const LandingPage = () => {
           <p className="body" style={{ marginTop: 20 }}>Currently designed for K through 8, growing into middle and high school.</p>
         </div>
       </section>
+
+      {/* FROM THE BLOG (only when there are published posts; written in Admin → Blog) */}
+      {(posts.length > 0 || isAdmin) && (
+        <section className="sec-pad" style={{ paddingTop: 0 }}>
+          <div className="wrap">
+            <div className="sec-head">
+              <p className="sec-label">From the blog</p>
+              <h2 className="sec">Notes from EdCube.</h2>
+            </div>
+            {posts.length === 0 ? (
+              <p className="body" style={{ textAlign: 'center' }}>
+                No posts yet. <a href="/admin?tab=blog" style={{ textDecoration: 'underline' }}>Write the first one</a> (only you see this).
+              </p>
+            ) : (
+              <div className="blog-grid">
+                {posts.map((p) => (
+                  <a key={p.id} href={`/blog/${p.id}`} className="blog-card" onClick={(e) => { e.preventDefault(); navigate(`/blog/${p.id}`); }}>
+                    <span className="blog-date">{postDate(p)}</span>
+                    <h3>{p.title}</h3>
+                    <p>{excerpt(p)}</p>
+                    <span className="blog-more">Read more →</span>
+                  </a>
+                ))}
+              </div>
+            )}
+            {posts.length > 0 && (
+              <div style={{ textAlign: 'center', marginTop: 28 }}>
+                <button className="btn-outline" onClick={() => navigate('/blog')}>See all posts</button>
+                {isAdmin && <button className="btn-outline" style={{ marginLeft: 10 }} onClick={() => navigate('/admin?tab=blog')}>Write a post</button>}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       {/* 9. MEET THE FOUNDER */}
       <section className="sec-pad" style={{ paddingTop: 0 }}>
@@ -789,6 +834,14 @@ const LANDING_CSS = `
   .lp-root .cta-title { font-size: 52px; font-weight: 300; line-height: 1.18; letter-spacing: -1.5px; color: #FAF8F4; position: relative; margin-bottom: 28px; max-width: 760px; }
   .cta-title em { font-size: 1.1em; }
   .cta-btn { background: #FAF8F4; color: #1C1917; padding: 16px 40px; border-radius: 100px; font-size: 16px; font-weight: 700; border: none; letter-spacing: -0.3px; position: relative; }
+
+  .blog-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
+  .blog-card { display: flex; flex-direction: column; gap: 10px; background: rgba(255,255,255,0.8); border: 0.5px solid #E5E0D8; border-radius: 20px; padding: 28px; text-align: left; transition: transform .25s, box-shadow .25s; }
+  .blog-card:hover { transform: translateY(-4px); box-shadow: 0 14px 32px rgba(28,25,23,0.10); }
+  .blog-date { font-size: 13px; color: #A89F94; }
+  .lp-root .blog-card h3 { font-size: 21px; font-weight: 700; letter-spacing: -0.4px; line-height: 1.25; }
+  .lp-root .blog-card p { font-size: 15px; color: #6B6459; line-height: 1.65; flex: 1; }
+  .blog-more { font-size: 14px; font-weight: 700; color: #C05A2A; }
 
   .lp-footer { text-align: center; padding: 24px 48px; font-size: 13px; color: #A89F94; border-top: 0.5px solid #E5E0D8; background: #FAF8F4; }
 

@@ -526,3 +526,13 @@ Backend: pytest suite in `backend/tests/` (offline, in-memory Firestore with tra
 
 ## 2026-10-22 — TASK-042 — landing page redesign
 Frontend: `LandingPage.jsx` rewritten. New order: hero, demo video, MLA framework, four flip cards, Create / Collaborate / Discover feature rows, Edo AI preview, mission and vision, audience marquee, founder, CTA. Sora only. Copy reworded to match what is built (no fork, public publishing, comments, real-time editing or citation promises). Photos and screenshots load from `frontend/public/landing/` with placeholders until the files are added (pending from the person).
+
+## 2026-11-13 — Front-page blog (branch feature/blog, not yet deployed)
+Admins (custom claim `admin: true`) write blog posts in a new Admin → Blog tab: title, optional
+summary, plain-text body (blank line = new paragraph, links auto-linked), draft/publish/unpublish,
+edit, delete. Posts live in `BlogPosts/{autoId}` (backend only; `firestore.rules` denies all
+client access). Backend: `routes/blog.py` with public `GET /api/blog/posts[/{id}]` (published
+only, no token) and admin `GET/POST/PATCH/DELETE /api/admin/blog/posts`, each change logged to
+`AdminAudit` (`blog_create`/`blog_update`/`blog_delete`). Frontend: "From the blog" section on the
+landing page (3 newest, hidden when there are none), a Blog nav button, and public `/blog` and
+`/blog/:postId` pages. Tests: `backend/tests/test_blog.py` (8 tests); full suite 113 passed.
