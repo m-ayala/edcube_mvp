@@ -6,7 +6,7 @@ import { Link, useParams, useNavigate } from 'react-router-dom';
 import { listPosts, getPost } from '../../services/blogApi';
 import { useAuth } from '../../contexts/AuthContext';
 import { PostBody } from './blogText';
-import { excerpt, postDate } from '../../utils/blogFormat';
+import { excerpt, plainText, postDate } from '../../utils/blogFormat';
 
 const SORA = "'Sora', sans-serif";
 
@@ -58,7 +58,10 @@ const BlogPage = () => {
           <article>
             <Link to="/blog" style={{ color: '#6B6459', fontSize: 14, textDecoration: 'none' }}>← All posts</Link>
             <h1 style={{ fontSize: 40, fontWeight: 700, letterSpacing: '-1px', lineHeight: 1.15, margin: '20px 0 10px' }}>{post.title}</h1>
-            <div style={{ fontSize: 14, color: '#A89F94', marginBottom: 32 }}>
+            {post.summary && (
+              <p style={{ fontSize: 21, fontWeight: 300, color: '#6B6459', lineHeight: 1.45, margin: '0 0 18px' }}>{plainText(post.summary)}</p>
+            )}
+            <div style={{ fontSize: 14, color: '#A89F94', paddingBottom: 24, marginBottom: 32, borderBottom: '0.5px solid #E5E0D8' }}>
               {[post.author_name, postDate(post)].filter(Boolean).join(' · ')}
             </div>
             <PostBody text={post.body} style={{ fontSize: 17.5, lineHeight: 1.8, color: '#33302B', margin: '0 0 22px', fontWeight: 300 }} />
