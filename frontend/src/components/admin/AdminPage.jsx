@@ -9,22 +9,24 @@ import AccountsTab from './AccountsTab';
 import WaitlistTab from './WaitlistTab';
 import CostsTab from './CostsTab';
 import DomainsTab from './DomainsTab';
+import BlogTab from './BlogTab';
 
 const TABS = [
   { id: 'accounts', label: 'Accounts' },
   { id: 'waitlist', label: 'Waitlist' },
   { id: 'domains', label: 'Domains' },
   { id: 'costs', label: 'Costs' },
+  { id: 'blog', label: 'Blog' },
 ];
 
 const AdminPage = () => {
   const { isAdmin } = useAuth();
-  const [tab, setTab] = useState('accounts');
+  const [tab, setTab] = useState(() => (new URLSearchParams(window.location.search).get('tab') === 'blog' ? 'blog' : 'accounts'));
   if (!isAdmin) return <Navigate to="/my-courses" replace />;
   return (
     <div style={{ padding: '32px 40px', fontFamily: "'DM Sans', sans-serif", color: '#1C1917', maxWidth: 1200 }}>
       <h1 style={{ fontFamily: "'Fraunces', serif", fontSize: 28, margin: '0 0 4px', color: '#2C5F3A' }}>Admin</h1>
-      <p style={{ margin: '0 0 20px', color: '#78716C', fontSize: 14 }}>Plans, credits, the waitlist and AI costs. Changes here are logged.</p>
+      <p style={{ margin: '0 0 20px', color: '#78716C', fontSize: 14 }}>Plans, credits, the waitlist, AI costs and the front-page blog. Changes here are logged.</p>
       <div role="tablist" style={{ display: 'flex', gap: 6, borderBottom: '1px solid #E7E5E4', marginBottom: 20 }}>
         {TABS.map((t) => (
           <button
@@ -46,6 +48,7 @@ const AdminPage = () => {
       {tab === 'waitlist' && <WaitlistTab />}
       {tab === 'domains' && <DomainsTab />}
       {tab === 'costs' && <CostsTab />}
+      {tab === 'blog' && <BlogTab />}
     </div>
   );
 };

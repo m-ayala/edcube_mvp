@@ -23,6 +23,7 @@ import CourseBuilderShell from './components/courseBuilder/CourseBuilderShell';
 import OutlineStage from './components/courseBuilder/OutlineStage';
 import PlanStage from './components/courseBuilder/PlanStage';
 import AdminPage from './components/admin/AdminPage';
+import BlogPage from './components/blog/BlogPage';
 import OrgOnly from './components/auth/OrgOnly';
 import PublicSharePage from './components/share/PublicSharePage';
 import InvitePage from './components/share/InvitePage';
@@ -43,6 +44,8 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/contact" element={<ContactPage />} />
+          <Route path="/blog" element={<BlogPage />} />
+          <Route path="/blog/:postId" element={<BlogPage />} />
 
           {/* Protected Routes — pathless layout wrapper */}
           <Route
