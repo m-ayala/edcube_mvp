@@ -137,6 +137,79 @@ def _round_robin(buckets: List[List[Dict]], limit: int) -> List[Dict]:
     return out
 
 
+_WORD = re.compile(r"[a-z0-9]+")
+_STOP = {"the", "and", "for", "of", "a", "an", "to", "in", "on", "with", "students", "kids", "explained",
+         "what", "how", "is", "are", "video", "youtube", "worksheet", "diagram"}
+
+
+def _words(text: str) -> set:
+    return {w for w in _WORD.findall((text or "").lower()) if w not in _STOP and len(w) > 1}
+
+
+def _assign_boxes(plan: Dict, boxes: List[str]) -> Dict:
+    """Give every plan entry without a valid "box" the box whose title shares the most words with
+    its query (or subject). Entries that match no box are left without one."""
+    n = len(boxes)
+    if not n:
+        return plan
+    titles = [_words(b) for b in boxes]
+
+    def fix(entry):
+        if not isinstance(entry, dict):
+            entry = {"query": entry} if isinstance(entry, str) else entry
+        if not isinstance(entry, dict):
+            return entry
+        b = _box_of(entry)
+        if b and b <= n:
+            return entry
+        words = _words(f"{entry.get('query', '')} {entry.get('subject', '')}")
+        overlap = [len(words & t) for t in titles]
+        best = max(overlap)
+        return {**entry, "box": overlap.index(best) + 1} if best else {k: v for k, v in entry.items() if k != "box"}
+
+    for key in ("articles", "images", "videos"):
+        if isinstance(plan.get(key), list):
+            plan[key] = [fix(e) for e in plan[key]]
+    return plan
+
+
+def _box_of(entry) -> Optional[int]:
+    """1-based box number a plan entry was written for (None when absent or invalid)."""
+    try:
+        b = int(entry.get("box")) if isinstance(entry, dict) and entry.get("box") is not None else None
+    except (TypeError, ValueError):
+        return None
+    return b if b and b > 0 else None
+
+
+def _by_query_round_robin(items: List[Dict], cap: int) -> List[Dict]:
+    """Interleave search results by the query that found them, so every query (and so every box)
+    keeps some candidates when the list is capped."""
+    buckets: Dict[str, List[Dict]] = {}
+    for i in items:
+        buckets.setdefault(i.get("query", ""), []).append(i)
+    return _round_robin(list(buckets.values()), cap)
+
+
+def _cover_boxes(judged: List[Dict], limit: int, box_count: int, floor: int) -> List[Dict]:
+    """Pick up to `limit` results: first the best result for each box (a box with nothing at the
+    normal cutoff may take its best result down to `floor`), then the best of the rest.
+    `judged` is sorted best-first and carries "box"."""
+    picked, used = [], set()
+    for b in range(1, box_count + 1):
+        best = next((j for j in judged if j.get("box") == b and j["url"] not in used and j["score"] >= floor), None)
+        if best and len(picked) < limit:
+            picked.append(best)
+            used.add(best["url"])
+    for j in judged:
+        if len(picked) >= limit:
+            break
+        if j["url"] not in used and j["score"] >= MIN_TEXT_SCORE:
+            picked.append(j)
+            used.add(j["url"])
+    return picked
+
+
 def _search_many(queries: List[str], n: int) -> List[Dict]:
     """Run queries in parallel; return unique results in query order."""
     queries = [q for q in queries if q and q.strip()]
@@ -176,10 +249,12 @@ def _load_pages(urls: List[str], pool: bb.BrowserPool, allow_browser: bool = Tru
 def _plan(ctx: Dict) -> Optional[Dict]:
     req = ctx.get("teacher_request") or ""
     r = _llm(prompts.build_plan_prompt(ctx["block_text"], ctx["block_type"], ctx["grade"], MAX_IMAGE_SUBJECTS,
-                                       teacher_request=req, kinds=ctx.get("kinds")),
+                                       teacher_request=req, kinds=ctx.get("kinds"), boxes=ctx.get("boxes")),
              prompts.PLAN_SYSTEM, temperature=0.2)
     if not isinstance(r, dict):
         return None
+    if ctx.get("boxes"):
+        r = _assign_boxes(r, ctx["boxes"])
     if req:
         # The judges score against "needs", so the teacher's own words are part of it.
         r["needs"] = f"{r.get('needs', '')} The teacher specifically asked for: {req}".strip()
@@ -295,13 +370,16 @@ def _video_cap(ctx: Dict) -> float:
 
 
 def _article_group(ctx: Dict, plan: Dict, pool: bb.BrowserPool, deadline: float) -> List[Dict]:
-    queries = []
-    for a in (plan.get("articles") or [])[:3]:
+    nbox = len(ctx.get("boxes") or [])
+    queries, box_of_query = [], {}
+    for a in (plan.get("articles") or [])[:max(3, min(6, nbox))]:
         q = a.get("query") if isinstance(a, dict) else str(a)
         if q:
             queries.append(q)
-    items = [i for i in _search_many(queries, 6)
-             if not _matches(i["url"], VIDEO_HOSTS) and not _matches(i["url"], ("pinterest.",))][:14]
+            box_of_query[q] = _box_of(a)
+    found = [i for i in _search_many(queries, 6)
+             if not _matches(i["url"], VIDEO_HOSTS) and not _matches(i["url"], ("pinterest.",))]
+    items = _by_query_round_robin(found, min(20, 14 + 2 * max(0, nbox - 3))) if nbox else found[:14]
     if not items or time.monotonic() > deadline:
         return []
     pages = _load_pages([i["url"] for i in items], pool)
@@ -312,6 +390,12 @@ def _article_group(ctx: Dict, plan: Dict, pool: bb.BrowserPool, deadline: float)
     with ThreadPoolExecutor(8) as ex:
         judged = list(ex.map(lambda i: _judge_text(ctx, plan, i, "articles"), items))
     logger.debug("article scores: %s", [(j["score"], j["raw_score"], j["title"][:40]) for j in judged])
+    if nbox:
+        judged = [{**j, "box": box_of_query.get(j.get("query"))} for j in judged]
+        judged.sort(key=lambda j: -j["score"])
+        chosen = _cover_boxes(judged, max(MAX_ARTICLES, min(6, nbox)), nbox, MIN_TEXT_SCORE - 2)
+        return [{"url": j["url"], "label": _clean_title(j["title"], j["url"]), "type": "article",
+                 "reason": j["reason"], **({"box": j["box"]} if j.get("box") else {})} for j in chosen]
     judged = [j for j in judged if j["score"] >= MIN_TEXT_SCORE]
     judged.sort(key=lambda j: -j["score"])
     # one per site first (variety), then fill remaining slots with a second page from the same site
@@ -324,15 +408,25 @@ def _article_group(ctx: Dict, plan: Dict, pool: bb.BrowserPool, deadline: float)
 
 
 def _video_group(ctx: Dict, plan: Dict, deadline: float) -> List[Dict]:
-    base = [q for q in (plan.get("videos") or [])[:2] if isinstance(q, str) and q.strip()]
+    nbox = len(ctx.get("boxes") or [])
+    entries = []
+    for v in (plan.get("videos") or [])[:max(2, min(6, nbox))]:
+        q = v.get("query") if isinstance(v, dict) else v
+        if isinstance(q, str) and q.strip():
+            entries.append((q.strip(), _box_of(v)))
+    base = [q for q, _ in entries]
+    box_of_query = {}
+    for q, b in entries:
+        box_of_query[f"{q} youtube video"] = b
+        box_of_query[f"{q} site:youtube.com"] = b
     queries = [f"{q} youtube video" for q in base] + [f"{q} site:youtube.com" for q in base[:1]]
     seen, items = set(), []
     for r in _search_many(queries, 6):
         canon = _video_url(r["url"])
         if canon and canon not in seen:
             seen.add(canon)
-            items.append({**r, "url": canon})
-    items = items[:8]
+            items.append({**r, "url": canon, "box": box_of_query.get(r.get("query"))})
+    items = _by_query_round_robin(items, min(12, 8 + max(0, nbox - 2))) if nbox else items[:8]
     if not items or time.monotonic() > deadline:
         return []
 
@@ -377,10 +471,15 @@ def _video_group(ctx: Dict, plan: Dict, deadline: float) -> List[Dict]:
         judged = list(ex.map(lambda i: _judge_text(ctx, plan, i, "videos"), kept))
     logger.debug("video scores: %s",
                  [(j["score"], j["appropriate"], j["language_ok"], j["title"][:50]) for j in judged])
-    judged = [j for j in judged if j["score"] >= MIN_TEXT_SCORE and j["appropriate"] and j["language_ok"]]
+    judged = [j for j in judged if j["appropriate"] and j["language_ok"]]
     judged.sort(key=lambda j: -j["score"])
+    if nbox:
+        judged = _cover_boxes(judged, max(MAX_VIDEOS, min(6, nbox)), nbox, MIN_TEXT_SCORE - 2)
+    else:
+        judged = [j for j in judged if j["score"] >= MIN_TEXT_SCORE][:MAX_VIDEOS]
     return [{"url": j["url"], "label": _clean_title(re.sub(r"\s-\sYouTube$", "", j["title"]), j["url"]),
-             "type": "video", "reason": j["reason"]} for j in judged[:MAX_VIDEOS]]
+             "type": "video", "reason": j["reason"], **({"box": j["box"]} if j.get("box") else {})}
+            for j in judged]
 
 
 # ----------------------------------------------------------------------------
@@ -523,13 +622,15 @@ def _image_subject(ctx: Dict, spec: Dict, pool: bb.BrowserPool, deadline: float,
     logger.debug("image scores for %r: %s", subject, [(c["score"], c.get("caption", "")[:40]) for c in judged])
     good = [{**c, "subject": subject, "why": spec.get("why", ""), "rank": _source_rank(c["source_page"])}
             for c in judged if c["score"] >= MIN_IMAGE_SCORE]
+    if _box_of(spec):
+        good = [{**c, "box": _box_of(spec)} for c in good]
     good.sort(key=lambda c: (c["rank"] >= 2, -c["score"], c["rank"]))
     return good
 
 
 def _image_group(ctx: Dict, plan: Dict, pool: bb.BrowserPool, deadline: float) -> List[Dict]:
     g = prompts.guidance_for(ctx["block_type"])
-    max_subjects = int(g.get("max_image_subjects", MAX_IMAGE_SUBJECTS))
+    max_subjects = max(int(g.get("max_image_subjects", MAX_IMAGE_SUBJECTS)), min(6, len(ctx.get("boxes") or [])))
     per_subject_cap = int(g.get("images_per_subject", 2))
     specs = [s for s in (plan.get("images") or []) if isinstance(s, dict) and s.get("subject") and s.get("query")]
     specs = specs[:max_subjects]
@@ -555,7 +656,8 @@ def _image_group(ctx: Dict, plan: Dict, pool: bb.BrowserPool, deadline: float) -
         buckets.append(kept[:per_subject_cap])  # e.g. 2 each for 3 subjects, 1 each for 6 worksheet items
     chosen = _round_robin(buckets, MAX_IMAGES)
     return [{"url": c["source_page"], "label": c["subject"], "type": "image",
-             "imageUrl": c["image_url"], "caption": c["caption"], "reason": c["why"]} for c in chosen]
+             "imageUrl": c["image_url"], "caption": c["caption"], "reason": c["why"],
+             **({"box": c["box"]} if c.get("box") else {})} for c in chosen]
 
 
 # ----------------------------------------------------------------------------
@@ -566,7 +668,8 @@ def find_block_resources(block_title: str, block_type: str, block_content: Any,
                          topic_title: str = "", topic_description: str = "",
                          subject: str = "", topic: str = "", grade_level: str = "",
                          block_subtype: str = "", block_duration_minutes: Optional[float] = None,
-                         teacher_request: str = "", kinds: Optional[List[str]] = None
+                         teacher_request: str = "", kinds: Optional[List[str]] = None,
+                         boxes: Optional[List[str]] = None,
                          ) -> Dict[str, List[Dict]]:
     """Find articles, images and videos for one lesson block using Browserbase.
 
@@ -581,6 +684,10 @@ def find_block_resources(block_title: str, block_type: str, block_content: Any,
       {"url", "label", "type": "article"|"image"|"video", "reason"?}
     Image links also carry "imageUrl" (direct picture) and "caption"; their "url"
     is the page the picture came from. Up to 4 articles, 6 images, 3 videos.
+
+    `boxes` (optional): titles of the lesson boxes in a topic, when Discover runs for a whole topic.
+    The search is then planned so every box gets at least one link where one can be found, and each
+    link carries "box" (1-based index into `boxes`) for the box it was found for.
     """
     t0 = time.monotonic()
     try:
@@ -600,6 +707,7 @@ def find_block_resources(block_title: str, block_type: str, block_content: Any,
                "duration_minutes": block_duration_minutes,
                "teacher_request": (teacher_request or "").strip()[:500],
                "kinds": sorted(wanted) if len(wanted) < 3 else None,
+               "boxes": [b.strip() for b in (boxes or []) if isinstance(b, str) and b.strip()][:8],
                "block_text": "\n".join(header) + "\n" + _as_text(block_content)}
         plan = _plan(ctx)
         if not plan:

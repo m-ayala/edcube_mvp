@@ -42,6 +42,14 @@ const useCourseActions = ({
     setSections(prev => prev.map(s => s.id === sectionId ? { ...s, description: newDesc } : s));
   };
 
+  // Subsection-level links (Discover / Add link / Library next to the subsection's boxes).
+  const updateSubsectionLinks = (sectionId, subId, links) => {
+    setSections(prev => prev.map(section => section.id !== sectionId ? section : {
+      ...section,
+      subsections: (section.subsections || []).map(sub => sub.id === subId ? { ...sub, links } : sub),
+    }));
+  };
+
   const addSectionWithContent = (title, description) => {
     setSections(prev => [...prev, {
       id: `section-${Date.now()}`,
@@ -523,6 +531,7 @@ const useCourseActions = ({
     addSubsectionWithContent,
     updateSubsectionTitle,
     updateSubsectionDescription,
+    updateSubsectionLinks,
     updateSubsectionFull,
     removeSubsection,
 

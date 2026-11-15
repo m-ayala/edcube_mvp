@@ -6,7 +6,6 @@ import { trackAiOutlineGenerated } from '../../firebase/analytics';
 import { useGeneration } from '../../contexts/GenerationContext';
 import { useAiGate } from '../../contexts/usageContextCore';
 import AiPausedHint from '../AiPausedHint';
-import { COURSE_BUILDER_ENABLED } from '../../constants/featureFlags';
 
 // Map file extension → icon + label
 const FILE_TYPE_META = {
@@ -35,10 +34,10 @@ const CourseDesigner = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { targetFolderId } = location.state || {};
-  const { genState, startGeneration, clearGeneration } = useGeneration();
+  const { genState, startGeneration } = useGeneration();
   // A new AI course uses one 'courses' credit; when none is left only this button pauses.
   const courseGate = useAiGate('courses');
-  // Message from the Course Builder when it sent the teacher back here (e.g. after a refresh).
+  // Message passed in by whichever page sent the teacher back here.
   const builderNotice = location.state?.notice || null;
 
   const loading = genState.status === 'generating-outline' || genState.status === 'generating-candidates';
@@ -82,27 +81,6 @@ const CourseDesigner = () => {
         },
       });
     }
-  }, [genState.status]);
-
-  // Course Builder (flag on): leftover builder state from an earlier visit must not bounce
-  // the teacher back into a stale flow, so clear it on arrival. Declared before the
-  // navigation effect so that effect can skip the stale status in the same commit.
-  const justClearedStale = useRef(false);
-  useEffect(() => {
-    if (genState.builder) {
-      justClearedStale.current = true;
-      clearGeneration();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Course Builder: outlines arrived. Multi-day courses land on the Stage 1 outline page;
-  // one-day courses skip it and go straight to the Stage 2 hand-off.
-  useEffect(() => {
-    if (justClearedStale.current) { justClearedStale.current = false; return; }
-    if (genState.status === 'outlines-ready') navigate('/course-builder/outline');
-    else if (genState.status === 'builder-planning') navigate('/course-builder/plan');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [genState.status]);
 
   const handleChange = (e) => {
@@ -396,17 +374,12 @@ const CourseDesigner = () => {
                 onChange={handleChange}
                 required
                 disabled={loading}
-                min={COURSE_BUILDER_ENABLED ? '1' : '0.5'}
+                min="0.5"
                 max="8"
-                step={COURSE_BUILDER_ENABLED ? '1' : '0.5'}
+                step="0.5"
                 placeholder="e.g., 2"
                 style={inputStyle}
               />
-              {COURSE_BUILDER_ENABLED && (
-                <p style={{ margin: '6px 0 0', fontSize: '13px', color: '#718096' }}>
-                  Whole hours only (1, 2, 3 ...). Each hour is one lesson of four 15-minute blocks.
-                </p>
-              )}
             </div>
           </div>
 

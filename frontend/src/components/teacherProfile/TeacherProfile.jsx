@@ -11,7 +11,7 @@ import EditProfileModal from '../modals/EditProfileModal';
 import NotificationBell from '../notifications/NotificationBell';
 import UsageMeter from '../layout/UsageMeter';
 import { navSectionsFromDoc, builderBlocksMissing, outlineExtrasOf } from '../../utils/builderCourse';
-import { fetchCourseDocument } from '../../services/courseBuilderApi';
+import { fetchCourseDocument } from '../../services/courseApi';
 import './TeacherProfile.css';
 
 // Thrown when a public-space viewer can no longer open a course (private or deleted).

@@ -181,6 +181,40 @@ export const generateBlockLinks = async ({
 };
 
 /**
+ * Discover for a whole section: one web search covering every topic (subsection) in it.
+ * `topics` is [{ title, blockTitles: [] }]. Returns { links: [{ url, label, type, ... }] }.
+ */
+export const generateSectionLinks = async ({
+  sectionTitle,
+  sectionDescription = '',
+  topics = [],
+  subject = '',
+  topic = '',
+  gradeLevel = '',
+  teacherUid = null,
+  teacherRequest = '', // Edo: what the teacher asked to find
+  kinds = null,        // Edo: subset of ['article', 'image', 'video']; null = all
+}) => {
+  const response = await authFetch(`${API_BASE_URL}/curriculum/generate-section-links`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sectionTitle,
+      sectionDescription,
+      topics,
+      subject,
+      topic,
+      gradeLevel,
+      teacherUid,
+      ...(teacherRequest ? { teacherRequest } : {}),
+      ...(kinds?.length ? { kinds } : {}),
+    }),
+  });
+  if (!response.ok) throw await legacyErrorFromResponse(response, 'Link generation failed');
+  return await response.json();
+};
+
+/**
  * Generate a one-paragraph course description from course info.
  * @param {Object} params
  * @param {string} params.courseName

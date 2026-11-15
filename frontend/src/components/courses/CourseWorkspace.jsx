@@ -6,7 +6,6 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import CourseEditor, { EditableField } from './CourseEditor';
 import CourseViewer from './CourseViewer';
-import SubsectionView from './SubsectionView';
 import BlockView from './BlockView';
 import SubsectionSelectionMatrix from './SubsectionSelectionMatrix';
 import ContentLibraryPanel from './ContentLibraryPanel';
@@ -24,7 +23,7 @@ import LeaveCourseButton from './LeaveCourseButton';
 import {
   useCourseAccess, lockFromAccess, lockFromSaveError, saveDraft, clearDraft, courseToText,
 } from './courseAccess';
-import { generateBlockLinks } from '../../utils/curriculumApi';
+import { generateSectionLinks } from '../../utils/curriculumApi';
 import { mergeLinks } from '../../utils/blockLinks';
 import CourseComments from './CourseComments';
 import { authFetch } from '../../services/authFetch';
@@ -90,7 +89,7 @@ const CourseWorkspace = () => {
   const [courseAttachments, setCourseAttachments] = useState([]);
   const [courseInfoNotes, setCourseInfoNotes] = useState('');
   const [trayItems, setTrayItems] = useState([]);
-  const [linkGenJobs, setLinkGenJobs] = useState({}); // { [blockId]: 'generating'|'done'|'error' }
+  const [linkJobs, setLinkJobs] = useState({}); // { [subsectionId]: 'generating'|'done'|'empty'|'error' }
 
   // Course Builder courses open in this same classic workspace. What is kept for them is data
   // only (see utils/builderCourse.js). Save guard: the sections this course was loaded with as
@@ -162,92 +161,82 @@ const CourseWorkspace = () => {
   // survives toggling between Outline and Library.
   const [dayLanes, setDayLanes] = useState({});
 
-  // ── Page Navigation ───────────────────────────────────────────────────
-  // navPage: 'outline' | 'subsection' | 'block'
-  const [navPage, setNavPage] = useState('outline');
-  const [navPath, setNavPath] = useState({ sectionId: null, subsectionId: null, blockId: null });
+  // ── Topic-box pop-up ──────────────────────────────────────────────────
+  // The workspace is one page: the section view. A topic box (block) opens in a pop-up over it.
+  // `outlineSectionId` is the section the section view is showing (reported by CourseEditor).
+  const [openBlock, setOpenBlock] = useState(null); // { sectionId, subsectionId, blockId } | null
+  const [outlineSectionId, setOutlineSectionId] = useState(null);
+  const navPage = openBlock ? 'block' : 'outline';
 
-  const navigateToSubsection = (sectionId, subsectionId) => {
-    setNavPage('subsection');
-    setNavPath({ sectionId, subsectionId, blockId: null });
-    setTrayItems([]);
-  };
   const navigateToBlock = (sectionId, subsectionId, blockId) => {
-    setNavPage('block');
-    setNavPath({ sectionId, subsectionId, blockId });
+    setOpenBlock({ sectionId, subsectionId, blockId });
     setTrayItems([]);
   };
-  const navigateBack = () => {
-    if (navPage === 'block') {
-      setNavPage('subsection');
-      setNavPath(p => ({ ...p, blockId: null }));
-    } else if (navPage === 'subsection') {
-      setNavPage('outline');
-      setNavPath({ sectionId: null, subsectionId: null, blockId: null });
-    }
+  const closeBlock = () => {
+    setOpenBlock(null);
     setTrayItems([]);
   };
+  useEffect(() => {
+    if (!openBlock) return;
+    const onKey = (e) => { if (e.key === 'Escape') setOpenBlock(null); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [openBlock]);
 
-  // Derived active objects from navigation path
-  const activeSection = sections.find(s => s.id === navPath.sectionId) || null;
-  const activeSubsection = activeSection?.subsections?.find(ss => ss.id === navPath.subsectionId) || null;
-  const sectionIndex = activeSection ? sections.indexOf(activeSection) : -1;
-  const subsectionIndex = activeSubsection ? (activeSection?.subsections?.indexOf(activeSubsection) ?? -1) : -1;
-  const activeBlock = (handsOnResources[navPath.subsectionId] || []).find(b => b.id === navPath.blockId) || null;
+  const activeSection = sections.find(s => s.id === openBlock?.sectionId) || null;
+  const activeSubsection = activeSection?.subsections?.find(ss => ss.id === openBlock?.subsectionId) || null;
+  const activeBlock = openBlock
+    ? (handsOnResources[openBlock.subsectionId] || []).find(b => b.id === openBlock.blockId) || null
+    : null;
 
-  // Discover. Called by the block's Discover button, and by Edo with { teacherRequest, kinds } when
-  // the teacher asks it to find links. Returns the links that were added ([] when none or on error).
-  const generateLinksForBlock = async (blockId, subsectionId, blockData, { teacherRequest = '', kinds = null } = {}) => {
-    console.log('[generateLinksForBlock] START', { blockId, subsectionId, blockType: blockData?.type });
-    setLinkGenJobs(prev => ({ ...prev, [blockId]: 'generating' }));
-    console.log('[generateLinksForBlock] state set to generating');
+  // Discover for one subsection: ONE search that covers the subsection (topic) and all its boxes,
+  // instead of one per box. The links land only on that subsection (sub.links). Called by the
+  // subsection's Discover button and by Edo with { teacherRequest, kinds }.
+  // Returns { added } ([] when none) or { added: [], error }.
+  const generateLinksForSubsection = async (sectionId, subsectionId, { teacherRequest = '', kinds = null } = {}) => {
+    const section = sections.find(s => s.id === sectionId);
+    const sub = section?.subsections?.find(ss => ss.id === subsectionId);
+    if (!sub) return { added: [] };
+    setLinkJobs(prev => ({ ...prev, [subsectionId]: 'generating' }));
     try {
-      const payload = {
-        blockType: blockData.type || 'content',
-        blockTitle: blockData.title || '',
-        blockContent: blockData.content || '',
-        topicTitle: activeSubsection?.title || '',
-        topicDescription: activeSubsection?.description || '',
+      // The topic boxes Discover must cover (at most 8). Each returned link says which one it was
+      // found for (topicIndex into this list); it is stored on the link as forBlockId.
+      const boxBlocks = (handsOnResources[subsectionId] || []).filter(b => (b.title || '').trim()).slice(0, 8);
+      const boxes = boxBlocks.map(b => ({ title: b.title.trim(), blockTitles: [] }));
+      const { links: generated = [] } = await generateSectionLinks({
+        sectionTitle: sub.title || '',
+        sectionDescription: [section.title ? `Part of: ${section.title}.` : '', sub.description || ''].filter(Boolean).join(' '),
+        topics: boxes,
         subject: formData?.subject || '',
         topic: formData?.topic || '',
         gradeLevel: formData?.class || '',
         teacherUid: currentUser?.uid || null,
-        blockSubtype: blockData.subtype || blockData.subcategory || '',
-        blockDurationMinutes: Number(blockData.duration_minutes) || null,
         teacherRequest,
         kinds,
-      };
-      console.log('[generateLinksForBlock] sending payload to backend:', payload);
-      let raw;
-      try {
-        raw = await generateBlockLinks(payload);
-        console.log('[generateLinksForBlock] raw response from backend:', raw);
-      } catch (fetchErr) {
-        console.error('[generateLinksForBlock] fetch/parse error:', fetchErr);
-        throw fetchErr;
-      }
-      const { links: generated } = raw;
-      console.log('[generateLinksForBlock] links count:', generated?.length, 'links:', generated);
-      if (generated?.length > 0) {
-        const existing = (handsOnResources[subsectionId] || [])
-          .find(b => b.id === blockId)?.links || [];
+      });
+      if (generated.length > 0) {
+        const existing = sub.links || [];
         const merged = mergeLinks(
           existing,
-          generated.map(l => ({ id: `link-${Date.now()}-${Math.random().toString(36).slice(2)}`, ...l })),
+          generated.map(({ topicIndex, ...l }) => ({
+            id: `link-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            ...l,
+            ...(Number.isInteger(topicIndex) && boxBlocks[topicIndex] ? { forBlockId: boxBlocks[topicIndex].id } : {}),
+          })),
         );
-        actions.updateBlock(subsectionId, blockId, { links: merged });
-        setLinkGenJobs(prev => ({ ...prev, [blockId]: 'done' }));
+        actions.updateSubsectionLinks(sectionId, subsectionId, merged);
+        setLinkJobs(prev => ({ ...prev, [subsectionId]: 'done' }));
         return { added: merged.slice(existing.length) };
       }
-      setLinkGenJobs(prev => ({ ...prev, [blockId]: 'empty' }));
+      setLinkJobs(prev => ({ ...prev, [subsectionId]: 'empty' }));
       return { added: [] };
     } catch (err) {
-      console.error('Link generation failed:', err);
+      console.error('Subsection link generation failed:', err);
       if (err?.quota === true) {
         // The quota modal is already open (authFetch raised it); don't add a second error line.
-        setLinkGenJobs(prev => { const next = { ...prev }; delete next[blockId]; return next; });
+        setLinkJobs(prev => { const next = { ...prev }; delete next[subsectionId]; return next; });
       } else {
-        setLinkGenJobs(prev => ({ ...prev, [blockId]: 'error' }));
+        setLinkJobs(prev => ({ ...prev, [subsectionId]: 'error' }));
       }
       return { added: [], error: err };
     }
@@ -255,16 +244,17 @@ const CourseWorkspace = () => {
 
   // Derived Edo context from navigation state
   const currentPageContext = useMemo(() => {
-    const sec = sections.find(s => s.id === navPath.sectionId);
-    const sub = sec?.subsections?.find(ss => ss.id === navPath.subsectionId);
-    const block = (handsOnResources[navPath.subsectionId] || []).find(b => b.id === navPath.blockId);
+    const sectionId = openBlock?.sectionId || outlineSectionId || sections.find(s => s.type !== 'break')?.id || null;
+    const sec = sections.find(s => s.id === sectionId);
+    const sub = sec?.subsections?.find(ss => ss.id === openBlock?.subsectionId);
+    const block = openBlock ? (handsOnResources[openBlock.subsectionId] || []).find(b => b.id === openBlock.blockId) : null;
     return {
       page: navPage,
-      sectionId: navPath.sectionId, sectionTitle: sec?.title,
-      subsectionId: navPath.subsectionId, subsectionTitle: sub?.title,
-      blockId: navPath.blockId, blockTitle: block?.title,
+      sectionId, sectionTitle: sec?.title,
+      subsectionId: openBlock?.subsectionId || null, subsectionTitle: sub?.title,
+      blockId: openBlock?.blockId || null, blockTitle: block?.title,
     };
-  }, [navPage, navPath, sections, handsOnResources]);
+  }, [navPage, openBlock, outlineSectionId, sections, handsOnResources]);
 
   // ── Initialize Actions Hook ────────────────────────────────���──────────
   const actions = useCourseActions({
@@ -383,6 +373,7 @@ const CourseWorkspace = () => {
               description: sub.description || '',
               learning_objectives: sub.learning_objectives || [],
               duration_minutes: sub.duration_minutes ?? 20,
+              ...(Array.isArray(sub.links) ? { links: sub.links } : {}),
               // Preserve the "suggested" origin tag (set when an Edo tray item is
               // merged in — see handleDragEnd) across this migration/hydration pass.
               ...(sub.source ? { source: sub.source } : {}),
@@ -398,6 +389,7 @@ const CourseWorkspace = () => {
               ? sub.learning_objectives
               : (first.learning_objectives || []),
             duration_minutes: sub.duration_minutes ?? first.duration_minutes ?? 20,
+            ...(Array.isArray(sub.links) ? { links: sub.links } : {}),
             ...(sub.source ? { source: sub.source } : {}),
           };
         })
@@ -550,6 +542,8 @@ const CourseWorkspace = () => {
         worksheets: (handsOnResources[sub.id] || []).filter(r => r.type === 'worksheet'),
         activities: (handsOnResources[sub.id] || []).filter(r => r.type === 'activity'),
         video_resources: videosByTopic[sub.id] || [],
+        // Subsection resources (Discover / Add link / Library), additive passthrough field.
+        ...(Array.isArray(sub.links) ? { links: sub.links } : {}),
         // "Suggested" origin tag (content library badge) — additive field, backend
         // stores/returns curricula.sections as a passthrough dict so this survives
         // save/reload without needing a schema change.
@@ -968,8 +962,8 @@ const CourseWorkspace = () => {
             flexShrink: 0, zIndex: 10, fontFamily: "'DM Sans', sans-serif",
           }}>
             <button
-              onClick={isSelectingSubsections ? handleBackToGeneration : (navPage === 'outline' ? handleBack : navigateBack)}
-              title={isSelectingSubsections ? 'Back to course generation' : navPage === 'outline' ? 'Back to course view' : navPage === 'block' ? 'Back to topic' : 'Back to sections'}
+              onClick={isSelectingSubsections ? handleBackToGeneration : handleBack}
+              title={isSelectingSubsections ? 'Back to course generation' : 'Back to course view'}
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 width: '32px', height: '32px', borderRadius: '9px', flexShrink: 0,
@@ -1009,7 +1003,7 @@ const CourseWorkspace = () => {
                   {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'error' ? 'Error' : 'Saved'}
                 </div>
 
-                {Object.values(linkGenJobs).some(s => s === 'generating') && (
+                {Object.values(linkJobs).some(s => s === 'generating') && (
                   <div style={{ ...pillStyle('blueActive'), cursor: 'default' }}>
                     <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#6366F1', display: 'inline-block', animation: 'pulse 1.5s ease-in-out infinite' }} />
                     Links…
@@ -1097,10 +1091,10 @@ const CourseWorkspace = () => {
           {/* ── Page + Edo row ── */}
           <div ref={editorRowRef} style={{ flex: 1, display: 'flex', flexDirection: 'row', overflow: 'hidden' }}>
           <DragDropContext onDragEnd={handleDragEnd}>
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0, position: 'relative' }}>
 
               {/* ── Subsection Selection Matrix (Phase 1.5 review) ── */}
-              {navPage === 'outline' && isSelectingSubsections && (
+              {isSelectingSubsections && (
                 <SubsectionSelectionMatrix
                   sections={sections}
                   candidatesBySection={genState.candidatesBySection}
@@ -1109,7 +1103,7 @@ const CourseWorkspace = () => {
               )}
 
               {/* ── Course Outline Page ── */}
-              {navPage === 'outline' && !isSelectingSubsections && !showLibraryView && (
+              {!isSelectingSubsections && !showLibraryView && (
                 <CourseEditor
                   courseClass={courseClass}
                   setCourseClass={setCourseClass}
@@ -1125,7 +1119,9 @@ const CourseWorkspace = () => {
                   actions={actions}
                   onAddBreak={() => setShowBreakModal(true)}
                   navigate={navigate}
-                  onNavigateToSubsection={navigateToSubsection}
+                  onDiscoverSubsection={readOnly ? null : generateLinksForSubsection}
+                  linkJobs={linkJobs}
+                  onActiveSectionChange={setOutlineSectionId}
                   pendingSubsectionIds={isGenerating ? genState.pendingSubsectionIds : null}
                   footer={isGenerating ? null : (
                     <div style={{ padding: '0 28px' }}>
@@ -1139,7 +1135,7 @@ const CourseWorkspace = () => {
                     the local `showLibraryView` toggle. Built as a separate
                     sibling view so the existing CourseEditor flow above is
                     untouched when this is off. ── */}
-              {navPage === 'outline' && !isSelectingSubsections && showLibraryView && (
+              {!isSelectingSubsections && showLibraryView && (
                 <ContentLibraryPanel
                   sections={sections}
                   handsOnResources={handsOnResources}
@@ -1152,44 +1148,37 @@ const CourseWorkspace = () => {
                 />
               )}
 
-              {/* ── Subsection Page ── */}
-              {navPage === 'subsection' && activeSubsection && (
-                <SubsectionView
-                  subsection={activeSubsection}
-                  sectionId={navPath.sectionId}
-                  sectionTitle={activeSection?.title}
-                  sectionNumber={sectionIndex + 1}
-                  subsectionNumber={subsectionIndex + 1}
-                  handsOnResources={handsOnResources}
-                  actions={actions}
-                  onBack={navigateBack}
-                  onNavigateToBlock={navigateToBlock}
-                  trayBlocks={trayItems.filter(i => i.type === 'BLOCK')}
-                  onAddBlockFromTray={(item) => {
-                    actions.addBlock(navPath.subsectionId, item.data);
-                    setTrayItems(prev => prev.filter(i => i.id !== item.id));
+              {/* ── Topic box pop-up (over the section view) ── */}
+              {activeBlock && (
+                <div
+                  onMouseDown={(e) => { if (e.target === e.currentTarget) closeBlock(); }}
+                  style={{
+                    position: 'absolute', inset: 0, zIndex: 60, background: 'rgba(17,24,39,0.45)',
+                    display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '40px 24px',
                   }}
-                />
-              )}
-
-              {/* ── Block Page ── */}
-              {navPage === 'block' && activeBlock && (
-                <BlockView
-                  block={activeBlock}
-                  topicId={navPath.subsectionId}
-                  topicTitle={null}
-                  subsectionTitle={activeSubsection?.title}
-                  sectionTitle={activeSection?.title}
-                  sectionId={navPath.sectionId}
-                  subsectionId={navPath.subsectionId}
-                  onBack={navigateBack}
-                  actions={actions}
-                  currentUser={currentUser}
-                  onGenerateLinks={generateLinksForBlock}
-                  linkGenStatus={linkGenJobs[navPath.blockId]}
-                  handsOnResources={handsOnResources}
-                  onNavigateToBlock={navigateToBlock}
-                />
+                >
+                  <div
+                    role="dialog" aria-modal="true" aria-label={activeBlock.title || 'Topic box'}
+                    style={{
+                      width: '100%', maxWidth: '920px', maxHeight: '100%', display: 'flex',
+                      background: '#F7F7F5', borderRadius: '16px', boxShadow: '0 24px 64px rgba(0,0,0,0.25)', overflow: 'hidden',
+                    }}
+                  >
+                    <BlockView
+                      key={activeBlock.id}
+                      block={activeBlock}
+                      topicId={openBlock.subsectionId}
+                      subsectionTitle={activeSubsection?.title}
+                      sectionTitle={activeSection?.title}
+                      sectionId={openBlock.sectionId}
+                      subsectionId={openBlock.subsectionId}
+                      onBack={closeBlock}
+                      actions={actions}
+                      handsOnResources={handsOnResources}
+                      onNavigateToBlock={navigateToBlock}
+                    />
+                  </div>
+                </div>
               )}
             </div>
 
@@ -1207,8 +1196,8 @@ const CourseWorkspace = () => {
                 handsOnResources={handsOnResources}
                 currentPage={currentPageContext}
                 curriculumId={curriculumId}
-                onDiscoverLinks={readOnly ? null : generateLinksForBlock}
-                linkGenJobs={linkGenJobs}
+                onDiscoverLinks={readOnly ? null : generateLinksForSubsection}
+                linkGenJobs={linkJobs}
               />
             )}
           </DragDropContext>

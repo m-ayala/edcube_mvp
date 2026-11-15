@@ -536,3 +536,28 @@ only, no token) and admin `GET/POST/PATCH/DELETE /api/admin/blog/posts`, each ch
 `AdminAudit` (`blog_create`/`blog_update`/`blog_delete`). Frontend: "From the blog" section on the
 landing page (3 newest, hidden when there are none), a Blog nav button, and public `/blog` and
 `/blog/:postId` pages. Tests: `backend/tests/test_blog.py` (8 tests); full suite 113 passed.
+
+## 2026-11-14 — Strip-down: one workspace, subsection Discover, teacher intent
+The full earlier version is kept on branch `full-featured-2026-11` (from c4c09b4).
+Removed the Course Builder (Outline/Plan stages, `components/courseBuilder/*`,
+`services/courseBuilderApi.js`, `constants/featureFlags.js`); course creation always uses the
+outline → subsection selection → blocks flow and lands in the workspace. `fetchCourseDocument`
+moved to `services/courseApi.js`. Removed the Description and Synopsis tabs from the course view
+(stored values are kept and passed through on save). Removed the Subsection page: subsection
+titles are edited inline in the section view. Topic boxes (blocks) open in a pop-up over the
+section view (same editing as the old page, without the links box). Discover / Add link / Library
+moved to a "Resources" box beside each subsection's boxes (`LinksPanel.jsx`, `subsection.links`),
+backed by the new `POST /api/curriculum/generate-section-links` (one search for the subsection and
+all its boxes); Edo's "find links" targets the open box's subsection. Links saved on blocks before
+this stay in the data but are no longer shown.
+The Requirements Interpreter now always returns `teacher_intent` (requested topics, focus per
+topic, objectives, emphasis, constraints, equipment, not-requested); it is appended to the
+requirements text of every generation prompt and carried on the outline to generate-blocks and
+generate-more-subsections. Tests: `tests/test_section_links.py`, `tests/test_teacher_intent.py`.
+Follow-ups the same day: topic-box text is laid out with each **Header** on its own line
+(`utils/content_format.py` at generation, `frontend/src/utils/contentFormat.js` on display, plus
+layout rules in the block and Edo prompts). Subsection Discover now covers every topic box:
+`find_block_resources(boxes=...)` plans at least one query per box, tags each link with its box and
+keeps each box's best link first; the workspace stores it as `forBlockId` and Resources shows a
+"For: <box>" tag that opens the box. Tests: `tests/test_content_format.py`, more in
+`tests/test_section_links.py`.

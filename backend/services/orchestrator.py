@@ -15,6 +15,16 @@ from typing import Dict, List, Optional, AsyncGenerator
 logger = logging.getLogger(__name__)
 
 
+def _requirements(teacher_input: Dict) -> str:
+    """Requirements text for every generation prompt: the teacher's own words, followed by the
+    teacher-intent block (requested topics, focus per topic, constraints, not-requested) when the
+    Requirements Interpreter produced one. `teacher_intent` may be given directly (Phase 2 and
+    "more subsections" get it back from the outline) or read off `interpreted_requirements`."""
+    from interpreter.requirements_interpreter import requirements_with_intent, teacher_intent_of
+    intent = teacher_input.get('teacher_intent') or teacher_intent_of(teacher_input.get('interpreted_requirements'))
+    return requirements_with_intent(teacher_input.get('objectives') or '', intent)
+
+
 def _distribute_budget(total: int, buckets: int) -> List[int]:
     """
     Split a course-wide total (e.g. numWorksheets) evenly across `buckets` days/
@@ -59,7 +69,7 @@ class CurriculumOrchestrator:
                 'num_students':    teacher_input.get('num_students', ''),
                 'num_days':        num_days,
                 'hours_per_day':   hours_per_day,
-                'requirements':    teacher_input.get('objectives', 'None'),
+                'requirements':    _requirements(teacher_input),
             }
 
             # Call synchronously — blocks the event loop but acceptable for single-user SSE
@@ -110,7 +120,7 @@ class CurriculumOrchestrator:
             'topic':            teacher_input.get('topic', ''),
             'age_range_start':  teacher_input.get('age_range_start', ''),
             'age_range_end':    teacher_input.get('age_range_end', ''),
-            'requirements':     teacher_input.get('objectives', 'None'),
+            'requirements':     _requirements(teacher_input),
         }
         hours_per_day = teacher_input.get('hours_per_day', 1.0)
         num_days = teacher_input.get('num_days', 1)
@@ -202,7 +212,7 @@ class CurriculumOrchestrator:
             'topic':            teacher_input.get('topic', ''),
             'age_range_start':  teacher_input.get('age_range_start', ''),
             'age_range_end':    teacher_input.get('age_range_end', ''),
-            'requirements':     teacher_input.get('objectives', 'None'),
+            'requirements':     _requirements(teacher_input),
         }
         num_days = teacher_input.get('num_days', 1)
 
@@ -245,6 +255,7 @@ class CurriculumOrchestrator:
           {'type': 'done', 'blocks_by_subsection': {subsection_id: [block, ...]}}
         """
         from outliner.block_prompts import get_block_generation_prompt, _filter_excluded_block_specs
+        from utils.content_format import tidy_block_content
         from outliner.context_utils import build_subsection_labels
         from utils.llm_handler import call_openai
 
@@ -306,7 +317,7 @@ class CurriculumOrchestrator:
                         'topic':           teacher_input.get('topic', ''),
                         'age_range_start': teacher_input.get('age_range_start', ''),
                         'age_range_end':   teacher_input.get('age_range_end', ''),
-                        'requirements':    teacher_input.get('objectives', 'None'),
+                        'requirements':    _requirements(teacher_input),
                     },
                     subsection=sub,
                     section_title=section_title,
@@ -341,6 +352,8 @@ class CurriculumOrchestrator:
                     if not block.get('id') and i < len(spec_ids_by_position):
                         block['id'] = spec_ids_by_position[i]
                     block.setdefault('addedAt', None)
+                    if isinstance(block.get('content'), str):
+                        block['content'] = tidy_block_content(block['content'])
                     stamped.append(block)
 
                 if len(stamped) > 1:

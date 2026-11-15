@@ -1,13 +1,8 @@
 // src/components/courses/BlockView.jsx
-import { useState, useEffect, useRef } from 'react';
-import { ExternalLink, Trash2, Plus, Sparkles, Loader2, Library, Check, X, Pencil, Clock, ChevronRight, BookOpen, FileText, Image as ImageIcon, PlayCircle } from 'lucide-react';
-import { linkGroupOf, manualLink, mergeLinks } from '../../utils/blockLinks';
-import { getLibraryFolders } from '../../firebase/dbService';
-import { useAuth } from '../../contexts/AuthContext';
-import { useAiGate } from '../../contexts/usageContextCore';
-import AiPausedHint from '../AiPausedHint';
-import FavoriteStar from '../common/FavoriteStar';
-import { useFavoriteLinks } from '../../hooks/useFavoriteLinks';
+import { useState } from 'react';
+import { ExternalLink, X, Clock, ChevronRight, BookOpen } from 'lucide-react';
+
+import { tidyBlockContent } from '../../utils/contentFormat';
 
 const TYPE_COLORS = {
   content:   { bg: '#EAF0FF', text: '#2A4A9A', border: '#BFD0FF', label: 'Content' },
@@ -135,78 +130,24 @@ const TeacherNotesPanel = ({ block }) => {
 const BlockView = ({
   block,
   topicId,
-  topicTitle,
   subsectionTitle,
   sectionTitle,
   sectionId,
   subsectionId,
   actions,
   onBack,
-  currentUser,
-  onGenerateLinks,
-  linkGenStatus,
   handsOnResources,
   onNavigateToBlock,
 }) => {
-  const genPaused = useAiGate('generates');
-  const { org } = useAuth();
-  const { isFavorite, toggleFavorite } = useFavoriteLinks();
-  const favLink = (link) => ({
-    url: link.url,
-    title: link.label || link.caption || link.url,
-    description: link.reason || '',
-    kind: linkGroupOf(link),
-    source: link.reason ? 'discover' : 'block',   // Discover results carry a `reason`
-    ...(link.imageUrl ? { imageUrl: link.imageUrl } : {}),
-  });
   const [localTitle, setLocalTitle] = useState(block?.title || '');
-  const [localContent, setLocalContent] = useState(block?.content || '');
+  const [localContent, setLocalContent] = useState(tidyBlockContent(block?.content || ''));
   const [localCategory] = useState(block?.category || '');
   const [localSubcategory] = useState(block?.subcategory || '');
   const [localDuration, setLocalDuration] = useState(block?.duration_minutes ?? 15);
   const [editingTitle, setEditingTitle] = useState(false);
   const [editingDuration, setEditingDuration] = useState(false);
   const [isEditingContent, setIsEditingContent] = useState(false);
-  const [links, setLinks] = useState(block?.links || []);
-  const [newLinkUrl, setNewLinkUrl] = useState('');
-  const [newLinkLabel, setNewLinkLabel] = useState('');
-  const [showLinkInput, setShowLinkInput] = useState(false);
-
-  const [editingLinkId, setEditingLinkId] = useState(null);
-  const [editingLinkLabel, setEditingLinkLabel] = useState('');
-  const [hoveredLinkId, setHoveredLinkId] = useState(null);
-  // Image links whose picture failed to load (e.g. hotlinking blocked) show as a plain link row.
-  const [brokenImageIds, setBrokenImageIds] = useState(() => new Set());
-
-  const [showLibraryPicker, setShowLibraryPicker] = useState(false);
-  const [libraryFolders, setLibraryFolders] = useState([]);
-  const [libraryLoading, setLibraryLoading] = useState(false);
-  const [expandedLibFolders, setExpandedLibFolders] = useState({});
-  const libraryRef = useRef(null);
-
-  useEffect(() => {
-    if (!showLibraryPicker) return;
-    const handleOutside = (e) => {
-      if (libraryRef.current && !libraryRef.current.contains(e.target)) {
-        setShowLibraryPicker(false);
-      }
-    };
-    document.addEventListener('mousedown', handleOutside);
-    return () => document.removeEventListener('mousedown', handleOutside);
-  }, [showLibraryPicker]);
-
-  useEffect(() => {
-    setLocalTitle(block?.title || '');
-    setLocalContent(block?.content || '');
-    setLocalDuration(block?.duration_minutes ?? 15);
-    setLinks(block?.links || []);
-    setEditingTitle(false);
-    setIsEditingContent(false);
-    setEditingDuration(false);
-  }, [block?.id]);
-
-  useEffect(() => { setLinks(block?.links || []); }, [block?.links]);
-
+  // The pop-up is keyed by block id (see CourseWorkspace), so local state starts fresh per block.
   const blockType = block?.type || 'content';
   const typeStyle = TYPE_COLORS[blockType] || TYPE_COLORS.content;
 
@@ -216,7 +157,6 @@ const BlockView = ({
       content: localContent,
       category: localCategory,
       subcategory: localSubcategory,
-      links,
       ...overrides,
     });
   };
@@ -226,187 +166,51 @@ const BlockView = ({
     ? (handsOnResources?.[subsectionId] || []).find(b => b.id === block.parentContentBlockId)
     : null;
 
-  const handleAddLink = () => {
-    const url = newLinkUrl.trim();
-    if (!url) return;
-    const updatedLinks = mergeLinks(links, [manualLink(url, newLinkLabel.trim())]);
-    setLinks(updatedLinks);
-    setNewLinkUrl('');
-    setNewLinkLabel('');
-    setShowLinkInput(false);
-    actions?.updateBlock?.(topicId, block.id, { links: updatedLinks });
-  };
-
-  const handleRemoveLink = (linkId) => {
-    const updatedLinks = links.filter(l => l.id !== linkId);
-    setLinks(updatedLinks);
-    actions?.updateBlock?.(topicId, block.id, { links: updatedLinks });
-  };
-
-  const handleStartEditLabel = (link) => {
-    setEditingLinkId(link.id);
-    setEditingLinkLabel(link.label);
-  };
-
-  const handleSaveLinkLabel = (linkId) => {
-    const label = editingLinkLabel.trim();
-    if (!label) { setEditingLinkId(null); return; }
-    const updated = links.map(l => l.id === linkId ? { ...l, label } : l);
-    setLinks(updated);
-    actions?.updateBlock?.(topicId, block.id, { links: updated });
-    setEditingLinkId(null);
-  };
-
-  const loadLibrary = async () => {
-    if (!currentUser?.uid || !org) return;
-    setLibraryLoading(true);
-    try {
-      const folders = await getLibraryFolders(currentUser.uid, org);
-      setLibraryFolders(folders);
-    } catch (e) {
-      console.error('Library load failed:', e);
-    } finally {
-      setLibraryLoading(false);
-    }
-  };
-
-  const handleToggleLibrary = async () => {
-    if (!showLibraryPicker && libraryFolders.length === 0) await loadLibrary();
-    setShowLibraryPicker(p => !p);
-  };
-
-  const handleAddLibraryLink = (libLink) => {
-    const updated = mergeLinks(links, [manualLink(libLink.url, libLink.title)]);
-    setLinks(updated);
-    actions?.updateBlock?.(topicId, block.id, { links: updated });
-    setShowLibraryPicker(false);
-  };
-
-  const renderContentPreview = (text) => {
+  const renderContentPreview = (raw) => {
+    const text = tidyBlockContent(raw);
     if (!text) return <span style={{ color: '#AAA', fontStyle: 'italic' }}>Add content…</span>;
-    return text.split('\n').map((line, i) => {
-      const isBold = line.match(/^\*\*(.+)\*\*$/);
-      if (isBold) return <p key={i} style={{ margin: '14px 0 5px', fontWeight: '700', fontSize: '12px', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '.06em' }}>{isBold[1]}</p>;
-      if (line.startsWith('- ')) return <li key={i} style={{ margin: '2px 0', fontSize: '13.5px', color: '#374151', marginLeft: '16px' }}>{line.slice(2)}</li>;
-      if (/^\d+\.\s/.test(line)) return <li key={i} style={{ margin: '2px 0', fontSize: '13.5px', color: '#374151', marginLeft: '16px', listStyle: 'decimal' }}>{line.replace(/^\d+\.\s/, '')}</li>;
-      if (line.trim() === '') return <br key={i} />;
-      return <p key={i} style={{ margin: '3px 0', fontSize: '13.5px', color: '#374151', lineHeight: '1.65' }}>{line}</p>;
+    // Inline **bold** inside a line.
+    const inline = (line) => line.split(/(\*\*[^*]+\*\*)/g).map((part, j) => (
+      /^\*\*[^*]+\*\*$/.test(part) ? <strong key={j} style={{ fontWeight: 600, color: '#111' }}>{part.slice(2, -2)}</strong> : part
+    ));
+    const out = [];
+    let list = null; // { ordered, items: [] }
+    const flush = () => {
+      if (!list) return;
+      const Tag = list.ordered ? 'ol' : 'ul';
+      out.push(
+        <Tag key={`l${out.length}`} style={{ margin: '4px 0 10px', paddingLeft: '22px', color: '#374151', fontSize: '14px', lineHeight: '1.65' }}>
+          {list.items.map((it, j) => <li key={j} style={{ margin: '3px 0' }}>{inline(it)}</li>)}
+        </Tag>
+      );
+      list = null;
+    };
+    text.split('\n').forEach((line, i) => {
+      const t = line.trim();
+      const heading = t.match(/^\*\*(.+?)\*\*:?$/);
+      const bullet = t.match(/^[-•*]\s+(.*)$/);
+      const numbered = t.match(/^\d+[.)]\s+(.*)$/);
+      if (bullet || numbered) {
+        const ordered = !!numbered;
+        if (list && list.ordered !== ordered) flush();
+        if (!list) list = { ordered, items: [] };
+        list.items.push((bullet || numbered)[1]);
+        return;
+      }
+      flush();
+      if (!t) return;
+      if (heading) {
+        out.push(
+          <h4 key={i} style={{ margin: out.length ? '20px 0 6px' : '0 0 6px', fontSize: '15px', fontWeight: 700, color: '#1F2937', fontFamily: "'DM Sans', sans-serif" }}>
+            {heading[1]}
+          </h4>
+        );
+        return;
+      }
+      out.push(<p key={i} style={{ margin: '0 0 10px', fontSize: '14px', color: '#374151', lineHeight: '1.7' }}>{inline(t)}</p>);
     });
-  };
-
-  const btnBase = {
-    display: 'flex', alignItems: 'center', gap: '5px',
-    padding: '5px 12px', borderRadius: '7px', cursor: 'pointer',
-    fontSize: '12.7px', fontWeight: '600',
-    background: '#F5F3EE', color: '#555',
-    border: '1px solid rgba(0,0,0,0.12)',
-    fontFamily: "'DM Sans', sans-serif",
-  };
-
-  const isGenerating = linkGenStatus === 'generating';
-  const genEmpty = linkGenStatus === 'empty';
-  const genError = linkGenStatus === 'error';
-
-  const groupedLinks = { article: [], image: [], video: [] };
-  links.forEach(link => groupedLinks[linkGroupOf(link)].push(link));
-
-  const iconBtn = { background: 'none', border: 'none', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center', flexShrink: 0 };
-
-  const renderLinkRow = (link) => (
-    <div
-      key={link.id}
-      onMouseEnter={() => setHoveredLinkId(link.id)}
-      onMouseLeave={() => setHoveredLinkId(null)}
-      style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: '#FAFAF8', border: '1px solid rgba(0,0,0,0.08)', borderRadius: '8px', minWidth: 0 }}
-    >
-      <ExternalLink size={13} color="#6B7280" style={{ flexShrink: 0 }} />
-      {editingLinkId === link.id ? (
-        <>
-          <input
-            autoFocus type="text" value={editingLinkLabel}
-            onChange={e => setEditingLinkLabel(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') handleSaveLinkLabel(link.id); if (e.key === 'Escape') setEditingLinkId(null); }}
-            style={{ flex: 1, minWidth: 0, fontSize: '13.5px', color: '#111', fontFamily: "'DM Sans', sans-serif", border: '1px solid rgba(99,102,241,0.4)', borderRadius: '5px', padding: '2px 8px', outline: 'none', background: '#fff' }}
-          />
-          <button onClick={() => handleSaveLinkLabel(link.id)} style={{ ...iconBtn, color: '#2C5F3A' }}><Check size={13} /></button>
-          <button onClick={() => setEditingLinkId(null)} style={{ ...iconBtn, color: '#9CA3AF' }}><X size={13} /></button>
-        </>
-      ) : (
-        <>
-          <a href={link.url} target="_blank" rel="noopener noreferrer"
-            title={link.reason || link.url}
-            style={{ flex: 1, minWidth: 0, fontSize: '13.5px', color: '#2563EB', fontFamily: "'DM Sans', sans-serif", textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-            onMouseEnter={e => e.currentTarget.style.textDecoration = 'underline'}
-            onMouseLeave={e => e.currentTarget.style.textDecoration = 'none'}
-          >{link.label || link.caption || link.url}</a>
-          {hoveredLinkId === link.id && (
-            <button onClick={() => handleStartEditLabel(link)} style={{ ...iconBtn, color: '#9CA3AF' }}><Pencil size={12} /></button>
-          )}
-          <FavoriteStar active={isFavorite(link.url)} onToggle={() => toggleFavorite(favLink(link))} size={13} />
-          <button onClick={() => handleRemoveLink(link.id)} title="Delete link" style={{ ...iconBtn, color: '#F87171' }}><Trash2 size={12} /></button>
-        </>
-      )}
-    </div>
-  );
-
-  const renderImageCard = (link) => (
-    <div key={link.id} style={{ position: 'relative', background: '#FAFAF8', border: '1px solid rgba(0,0,0,0.08)', borderRadius: '8px', overflow: 'hidden', minWidth: 0 }}>
-      <a href={link.url} target="_blank" rel="noopener noreferrer" title={link.reason || link.url} style={{ display: 'block' }}>
-        <img
-          src={link.imageUrl || link.url}
-          alt={link.caption || link.label || ''}
-          loading="lazy"
-          referrerPolicy="no-referrer"
-          onError={() => setBrokenImageIds(prev => new Set(prev).add(link.id))}
-          style={{ display: 'block', width: '100%', height: '120px', objectFit: 'cover', background: '#EEE' }}
-        />
-      </a>
-      <div style={{ padding: '6px 48px 7px 9px' }}>
-        <p style={{ margin: 0, fontSize: '12px', color: '#4B5563', lineHeight: 1.35, fontFamily: "'DM Sans', sans-serif", overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
-          {link.caption || link.label}
-        </p>
-      </div>
-      <FavoriteStar
-        active={isFavorite(link.url)}
-        onToggle={() => toggleFavorite(favLink(link))}
-        size={13}
-        style={{ position: 'absolute', right: '26px', bottom: '6px' }}
-      />
-      <button
-        onClick={() => handleRemoveLink(link.id)}
-        aria-label="Remove image"
-        style={{ ...iconBtn, position: 'absolute', right: '6px', bottom: '6px', color: '#F87171' }}
-      ><Trash2 size={12} /></button>
-    </div>
-  );
-
-  const renderGroup = (key, title, Icon, emptyText) => {
-    const items = groupedLinks[key];
-    const images = key === 'image' ? items.filter(l => !brokenImageIds.has(l.id)) : [];
-    const rows = key === 'image' ? items.filter(l => brokenImageIds.has(l.id)) : items;
-    return (
-      <div key={key} style={{ marginTop: '14px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px', fontSize: '12px', fontWeight: '700', color: '#6B7280', fontFamily: "'DM Sans', sans-serif" }}>
-          <Icon size={13} /> {title}
-          {items.length > 0 && <span style={{ fontWeight: '500', color: '#AAA' }}>({items.length})</span>}
-        </div>
-        {items.length === 0 && (
-          <p style={{ margin: 0, fontSize: '13px', color: '#AAA', fontStyle: 'italic', fontFamily: "'DM Sans', sans-serif" }}>
-            {isGenerating ? 'Searching…' : emptyText}
-          </p>
-        )}
-        {images.length > 0 && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '8px', marginBottom: rows.length ? '8px' : 0 }}>
-            {images.map(renderImageCard)}
-          </div>
-        )}
-        {rows.length > 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            {rows.map(renderLinkRow)}
-          </div>
-        )}
-      </div>
-    );
+    flush();
+    return out;
   };
 
   return (
@@ -423,7 +227,8 @@ const BlockView = ({
               background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.12)', color: '#111',
               whiteSpace: 'nowrap', flexShrink: 0,
             }}
-          >←</button>
+            aria-label="Close"
+          ><X size={15} style={{ verticalAlign: 'middle' }} /></button>
           {sectionTitle && subsectionTitle && (
             <span style={{ color: '#555', fontSize: '13px', fontWeight: '500', fontFamily: "'DM Sans', sans-serif" }}>
               {sectionTitle} <span style={{ color: '#BBB' }}>›</span>{' '}
@@ -512,7 +317,7 @@ const BlockView = ({
               autoFocus value={localContent}
               onChange={e => setLocalContent(e.target.value)}
               onBlur={() => { setIsEditingContent(false); save(); }}
-              onKeyDown={e => { if (e.key === 'Escape') { setLocalContent(block?.content || ''); setIsEditingContent(false); } }}
+              onKeyDown={e => { if (e.key === 'Escape') { setLocalContent(tidyBlockContent(block?.content || '')); setIsEditingContent(false); } }}
               placeholder={
                 blockType === 'content'
                   ? '**Explain It**\nWrite a clear explanation here...\n\n**In Real Life**\n- Example 1\n- Example 2\n\n**Why It Matters**\nWhy students should care...'
@@ -537,119 +342,6 @@ const BlockView = ({
         {/* Teacher Notes (content blocks only) */}
         {blockType === 'content' && <TeacherNotesPanel block={block} />}
 
-        {/* Links & Resources */}
-        <div style={{ background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.08)', borderRadius: '12px', padding: '20px 24px', boxShadow: '0 1px 4px rgba(0,0,0,0.05)', position: 'relative' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', marginBottom: '12px', gap: '8px' }}>
-            <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#999', textTransform: 'uppercase', letterSpacing: '.06em', whiteSpace: 'nowrap' }}>
-              Links & Resources
-            </label>
-            <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
-              <button onClick={() => setShowLinkInput(p => !p)} style={btnBase}>
-                <Plus size={13} /> Add Link
-              </button>
-              <button onClick={handleToggleLibrary} style={btnBase}>
-                <Library size={13} /> Library
-              </button>
-              <button
-                onClick={() => onGenerateLinks?.(block.id, topicId, block)}
-                disabled={isGenerating || !onGenerateLinks || genPaused.blocked}
-                title={genPaused.blocked ? genPaused.message : undefined}
-                style={{ ...btnBase, background: isGenerating ? '#F0F4FF' : '#F5F3EE', color: isGenerating ? '#4338CA' : '#555', border: isGenerating ? '1px solid rgba(99,102,241,0.3)' : '1px solid rgba(0,0,0,0.12)', cursor: isGenerating ? 'default' : 'pointer', opacity: (!onGenerateLinks && !isGenerating) ? 0.5 : 1 }}
-              >
-                {isGenerating ? <><Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> Discovering…</> : <><Sparkles size={13} /> Discover</>}
-              </button>
-            </div>
-            <AiPausedHint kind="generates" style={{ width: '100%' }} />
-            {(genEmpty || genError) && (
-              <p style={{ margin: '6px 0 0', fontSize: '12px', color: genError ? '#B91C1C' : '#888', fontFamily: "'DM Sans', sans-serif" }}>
-                {genError ? 'Discover failed. Try again.' : 'No results found. Try adding a title or description first.'}
-              </p>
-            )}
-          </div>
-
-          {/* Library picker */}
-          {showLibraryPicker && (
-            <div ref={libraryRef} style={{ background: '#F9FAFB', border: '1px solid rgba(0,0,0,0.1)', borderRadius: '8px', marginBottom: '12px', maxHeight: '220px', overflowY: 'auto' }}>
-              {libraryLoading && <p style={{ margin: 0, padding: '12px 14px', fontSize: '13px', color: '#999', fontFamily: "'DM Sans', sans-serif" }}>Loading library…</p>}
-              {!libraryLoading && libraryFolders.length === 0 && <p style={{ margin: 0, padding: '12px 14px', fontSize: '13px', color: '#AAA', fontStyle: 'italic', fontFamily: "'DM Sans', sans-serif" }}>No library folders yet.</p>}
-              {libraryFolders.map(folder => (
-                <div key={folder.id}>
-                  <div
-                    onClick={() => setExpandedLibFolders(p => ({ ...p, [folder.id]: !p[folder.id] }))}
-                    style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', cursor: 'pointer', fontWeight: '600', fontSize: '13px', color: '#333', fontFamily: "'DM Sans', sans-serif", borderBottom: '1px solid rgba(0,0,0,0.05)', userSelect: 'none' }}
-                  >
-                    <span>{expandedLibFolders[folder.id] ? '▾' : '▸'}</span>
-                    <span style={{ flex: 1 }}>{folder.name}</span>
-                    <span style={{ color: '#AAA', fontWeight: '400', fontSize: '12px' }}>({folder.links?.length || 0})</span>
-                  </div>
-                  {expandedLibFolders[folder.id] && (folder.links || []).map(libLink => (
-                    <div
-                      key={libLink.id}
-                      onClick={() => handleAddLibraryLink(libLink)}
-                      style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 14px 6px 30px', cursor: 'pointer', fontSize: '13px', color: '#444', fontFamily: "'DM Sans', sans-serif", transition: 'background 0.1s' }}
-                      onMouseEnter={e => e.currentTarget.style.background = '#EEF2FF'}
-                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                    >
-                      <ExternalLink size={11} color="#6B7280" style={{ flexShrink: 0 }} />
-                      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{libLink.title}</span>
-                      <Plus size={11} color="#4F46E5" style={{ flexShrink: 0 }} />
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {isGenerating && (
-            <p style={{ margin: '0 0 4px', fontSize: '12.5px', color: '#4338CA', fontFamily: "'DM Sans', sans-serif" }}>
-              Finding articles, images and videos for this block. This can take up to a minute.
-            </p>
-          )}
-
-          {links.length === 0 && !isGenerating && !showLinkInput && !showLibraryPicker && (
-            <p style={{ margin: 0, fontSize: '13.5px', color: '#AAA', fontStyle: 'italic', fontFamily: "'DM Sans', sans-serif" }}>
-              No links yet — add a URL, pick from your library, or press Discover to find articles, images and videos.
-            </p>
-          )}
-
-          {/* Existing links, in three groups */}
-          <div style={{ marginBottom: showLinkInput ? '12px' : 0 }}>
-            {renderGroup('article', 'Articles', FileText, 'No articles yet.')}
-            {renderGroup('image', 'Images', ImageIcon, 'No images yet.')}
-            {renderGroup('video', 'Videos', PlayCircle, 'No videos yet.')}
-          </div>
-
-          {/* Add link form */}
-          {showLinkInput && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <input
-                type="url" value={newLinkUrl}
-                onChange={e => setNewLinkUrl(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') handleAddLink(); if (e.key === 'Escape') { setShowLinkInput(false); setNewLinkUrl(''); setNewLinkLabel(''); } }}
-                placeholder="https://…"
-                autoFocus
-                style={{ fontFamily: "'DM Sans', sans-serif", fontSize: '13.5px', color: '#111', border: '1.5px solid rgba(0,0,0,0.15)', borderRadius: '7px', padding: '8px 12px', outline: 'none', background: '#FAFAFA', width: '100%', boxSizing: 'border-box' }}
-              />
-              <input
-                type="text" value={newLinkLabel}
-                onChange={e => setNewLinkLabel(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') handleAddLink(); if (e.key === 'Escape') { setShowLinkInput(false); setNewLinkUrl(''); setNewLinkLabel(''); } }}
-                placeholder="Label (optional)"
-                style={{ fontFamily: "'DM Sans', sans-serif", fontSize: '13.5px', color: '#111', border: '1.5px solid rgba(0,0,0,0.15)', borderRadius: '7px', padding: '8px 12px', outline: 'none', background: '#FAFAFA', width: '100%', boxSizing: 'border-box' }}
-              />
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button
-                  onClick={handleAddLink} disabled={!newLinkUrl.trim()}
-                  style={{ padding: '7px 16px', borderRadius: '7px', cursor: newLinkUrl.trim() ? 'pointer' : 'default', fontSize: '13px', fontWeight: '600', background: newLinkUrl.trim() ? '#111' : '#E5E7EB', color: newLinkUrl.trim() ? '#FFF' : '#9CA3AF', border: 'none', fontFamily: "'DM Sans', sans-serif" }}
-                >Add Link</button>
-                <button
-                  onClick={() => { setShowLinkInput(false); setNewLinkUrl(''); setNewLinkLabel(''); }}
-                  style={{ padding: '7px 16px', borderRadius: '7px', cursor: 'pointer', fontSize: '13px', fontWeight: '500', background: 'transparent', color: '#6B7280', border: '1px solid rgba(0,0,0,0.12)', fontFamily: "'DM Sans', sans-serif" }}
-                >Cancel</button>
-              </div>
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );

@@ -3,7 +3,7 @@
 // Redesign note (2026-08-22, frontend-agent): this page's Outline view was reskinned
 // to match the confirmed Figma "Course Outline" screen (file W6EmBQhcVXKgFQa9kMwZID,
 // node 28:139), validated with the user as a click-through HTML prototype before this
-// port. The Course Outline / Description / Synopsis / Course Information control
+// port. The Course Outline / Course Information control
 // (node 28:1345) is an in-page 4-way switcher, not navigation — see `activeView`
 // below, unchanged in spirit from the pre-existing tab implementation, just reskinned.
 // Section accordions are per-section expand/collapse only (see `collapsedSections`) —
@@ -12,13 +12,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  FileText, AlignLeft, ScrollText, Info, ChevronDown, ChevronRight,
+  FileText, Info, ChevronDown, ChevronRight,
   Clock, Grid2x2, Pencil,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { useAiGate } from '../../contexts/usageContextCore';
 import AiPausedHint from '../AiPausedHint';
-import { generateSynopsis, generateCourseDescription } from '../../utils/curriculumApi';
 import html2pdf from 'html2pdf.js';
 import { INCOMPLETE_COURSE_MESSAGE } from '../../utils/builderCourse';
 import { workspaceHeader } from '../../services/authFetch';
@@ -69,14 +67,12 @@ const BLOCK_CONFIG = {
   activity:  { label: 'Activity',  bg: '#EDFFF3', color: '#5CC97C' },
 };
 
-// ── Course Outline / Description / Synopsis / Course Information switcher ──────
+// ── Course Outline / Course Information switcher ──────
 // Source: Figma node 28:1345 — a single control with 4 variants; whichever is
 // "active" renders filled-blue on top, the other 3 as bordered options below.
 // This swaps `activeView` in place — it is not navigation (no route change).
 const TAB_ITEMS = {
   outline:       { key: 'outline',       label: 'Course Outline',      icon: FileText },
-  description:   { key: 'description',   label: 'Description',        icon: AlignLeft },
-  synopsis:      { key: 'synopsis',      label: 'Synopsis',           icon: ScrollText },
   'course-info': { key: 'course-info',   label: 'Course Information', icon: Info },
 };
 
@@ -393,7 +389,7 @@ const CourseViewPage = () => {
   const [activeView, setActiveView] = useState('outline');
   const docRef = useRef(null);
 
-  // ── Course Outline / Description / Synopsis / Course Information switcher ──
+  // ── Course Outline / Course Information switcher ──
   // Node 28:1345 — a single control, not navigation. `activeView` above already
   // drives which panel renders; `switcherOpen` just controls the dropdown itself.
   const [switcherOpen, setSwitcherOpen] = useState(false);
@@ -428,18 +424,6 @@ const CourseViewPage = () => {
     timeUnit:      incomingFormData?.timeUnit      || '',
     objectives:    incomingFormData?.objectives    || '',
   });
-
-  // ── Description state ─────────────────────────────────────────────────
-  const [courseDescription, setCourseDescription] = useState(incomingFormData?.courseDescription || '');
-  const [descriptionLoading, setDescriptionLoading] = useState(false);
-  const genGate = useAiGate('generates');
-  const [descriptionError, setDescriptionError] = useState(null);
-
-  // ── Synopsis state ────────────────────────────────────────────────────
-  const [synopsis, setSynopsis] = useState(incomingFormData?.synopsis || '');
-  const [selectedBlockIds, setSelectedBlockIds] = useState(new Set());
-  const [synopsisLoading, setSynopsisLoading] = useState(false);
-  const [showSelectionUI, setShowSelectionUI] = useState(false);
 
   const courseName = editableFormData.courseName || incomingFormData?.courseName || '';
 
@@ -526,7 +510,8 @@ const CourseViewPage = () => {
     }
   };
 
-  const currentFormData = () => ({ ...incomingFormData, ...editableFormData, courseDescription, synopsis });
+  // courseDescription / synopsis are no longer edited here; any stored values ride along in incomingFormData.
+  const currentFormData = () => ({ ...incomingFormData, ...editableFormData });
 
   const handleEditInWorkspace = () =>
     !blocksIncomplete && navigate('/course-workspace', {
@@ -537,95 +522,6 @@ const CourseViewPage = () => {
     !blocksIncomplete && navigate('/course-workspace', {
       state: { formData: currentFormData(), sections, handsOnResources, isEditing: true, curriculumId, isPublic, readOnly: false, isOwner: false, isCollaborator: true, ...(blocksIncomplete ? { blocksIncomplete: true } : {}), ...(outlineExtras ? { outlineExtras } : {}) }
     });
-
-  // ── Synopsis: collect all selectable blocks ───────────────────────────
-  const allSelectableBlocks = [];
-  sections.forEach(section => {
-    if (section.type === 'break') return;
-    (section.subsections || []).forEach(sub => {
-      const blocks = handsOnResources[sub.id] || [];
-      blocks.forEach(block => {
-        allSelectableBlocks.push({
-          id: block.id,
-          sectionTitle: section.title,
-          subsectionTitle: sub.title,
-          blockType: block.type,
-          blockTitle: block.title,
-          blockContent: block.content || '',
-        });
-      });
-    });
-  });
-
-  const toggleBlock = (id) => {
-    setSelectedBlockIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  };
-
-  const selectAll = () => setSelectedBlockIds(new Set(allSelectableBlocks.map(b => b.id)));
-  const clearAll  = () => setSelectedBlockIds(new Set());
-
-  const handleGenerateSynopsis = async () => {
-    const selected = allSelectableBlocks.filter(b => selectedBlockIds.has(b.id));
-    if (selected.length === 0) return;
-    setSynopsisLoading(true);
-    try {
-      const result = await generateSynopsis({
-        courseName,
-        subject: editableFormData.subject || '',
-        topic: editableFormData.topic || '',
-        classLevel: editableFormData.ageRangeStart && editableFormData.ageRangeEnd
-          ? `${editableFormData.ageRangeStart}–${editableFormData.ageRangeEnd}`
-          : incomingFormData?.class || '',
-        teacherUid: currentUser?.uid || null,
-        selectedBlocks: selected,
-      });
-      if (result.synopsis) {
-        setSynopsis(result.synopsis);
-        setShowSelectionUI(false);
-        await saveField({ synopsis: result.synopsis });
-      }
-    } catch (err) {
-      console.error('Synopsis generation error:', err);
-    } finally {
-      setSynopsisLoading(false);
-    }
-  };
-
-  const handleGenerateDescription = async () => {
-    console.log('[desc] clicked, courseName=', courseName, 'formData=', editableFormData);
-    setDescriptionLoading(true);
-    setDescriptionError(null);
-    try {
-      const result = await generateCourseDescription({
-        courseName,
-        subject: editableFormData.subject || '',
-        topic: editableFormData.topic || '',
-        ageRangeStart: editableFormData.ageRangeStart,
-        ageRangeEnd:   editableFormData.ageRangeEnd,
-        numStudents:   editableFormData.numStudents,
-        timeDuration:  editableFormData.timeDuration,
-        timeUnit:      editableFormData.timeUnit,
-        objectives:    editableFormData.objectives,
-        teacherUid:    currentUser?.uid || null,
-      });
-      console.log('[desc] result=', result);
-      if (result.description) {
-        setCourseDescription(result.description);
-        await saveField({ courseDescription: result.description });
-      } else {
-        setDescriptionError('No description returned. Please try again.');
-      }
-    } catch (err) {
-      console.error('[desc] error:', err);
-      setDescriptionError(err.message || 'Generation failed. Please try again.');
-    } finally {
-      setDescriptionLoading(false);
-    }
-  };
 
   // ── Stats ─────────────────────────────────────────────────────────────
   const sectionCount = sections.filter(s => s.type !== 'break').length;
@@ -663,7 +559,7 @@ const CourseViewPage = () => {
     }}>
 
       {/*
-        ── Action row: breadcrumb + Course Outline/Description/Synopsis/Course
+        ── Action row: breadcrumb + Course Outline/Course
         Information switcher + Edit Workspace ──────────────────────────────
         Persists identically across all 4 switcher states, per the confirmed
         Figma design (node 28:139) — only the panel below it swaps.
@@ -691,7 +587,7 @@ const CourseViewPage = () => {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          {/* Course Outline / Description / Synopsis / Course Information switcher */}
+          {/* Course Outline / Course Information switcher */}
           <div style={{ position: 'relative' }} ref={switcherRef}>
             <button
               onClick={() => setSwitcherOpen(o => !o)}
@@ -789,313 +685,6 @@ const CourseViewPage = () => {
         margin: '0 auto',
         padding: activeView === 'outline' ? '26px 40px 60px' : '40px 24px 100px',
       }}>
-
-        {/* ── Description tab ──────────────────────────────────────────────── */}
-        {activeView === 'description' && (
-          <div style={{ background: '#fff', borderRadius: '16px', padding: '48px', boxShadow: '0 2px 16px rgba(0,0,0,0.07)', border: '1px solid rgba(0,0,0,0.05)' }}>
-            <h2 style={{ fontFamily: SERIF, fontSize: '28px', color: '#111', letterSpacing: '-0.4px', margin: '0 0 8px' }}>
-              About this Course
-            </h2>
-            <p style={{ fontSize: '13px', color: '#aaa', fontFamily: SANS, margin: '0 0 28px' }}>
-              {isOwner ? 'A brief overview for parents to understand what this course covers.' : 'A brief overview of this course.'}
-            </p>
-
-            {isOwner ? (
-              <div>
-                <div style={{ position: 'relative' }}>
-                  <textarea
-                    value={courseDescription}
-                    onChange={e => setCourseDescription(e.target.value)}
-                    placeholder="Write a short description of what this course covers — its key objectives, what students will learn, and why parents should sign their child up…"
-                    rows={8}
-                    style={{
-                      width: '100%', boxSizing: 'border-box',
-                      fontFamily: SANS, fontSize: '15.5px', color: '#111',
-                      lineHeight: '1.75', letterSpacing: '0.01em',
-                      border: '1.5px solid rgba(0,0,0,0.1)',
-                      borderRadius: '10px', padding: '16px 18px',
-                      outline: 'none', resize: 'vertical',
-                      background: '#FAFAFA',
-                      transition: 'border-color 0.15s',
-                    }}
-                    onFocus={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.3)'; e.currentTarget.style.background = '#fff'; }}
-                    onBlur={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.1)'; e.currentTarget.style.background = '#FAFAFA'; saveField({ courseDescription: e.currentTarget.value }); }}
-                  />
-                  {courseDescription && (
-                    <span style={{ position: 'absolute', bottom: '10px', right: '14px', fontSize: '11px', color: '#ccc', fontFamily: SANS }}>
-                      auto-saved
-                    </span>
-                  )}
-                </div>
-                <div style={{ marginTop: '14px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <button
-                    onClick={handleGenerateDescription}
-                    disabled={descriptionLoading || genGate.blocked}
-                    title={genGate.blocked ? genGate.message : undefined}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: '7px',
-                      padding: '9px 18px',
-                      background: descriptionLoading ? '#f0f0f0' : '#111',
-                      color: descriptionLoading ? '#aaa' : '#fff',
-                      border: 'none', borderRadius: '8px',
-                      fontFamily: SANS, fontSize: '13.5px', fontWeight: '500',
-                      cursor: descriptionLoading ? 'not-allowed' : 'pointer',
-                      transition: 'background 0.15s, color 0.15s',
-                    }}
-                  >
-                    {descriptionLoading ? (
-                      <>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ animation: 'spin 0.8s linear infinite' }}>
-                          <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
-                        </svg>
-                        Generating…
-                      </>
-                    ) : (
-                      <>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                          <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/>
-                        </svg>
-                        {courseDescription ? 'Regenerate Description' : 'Generate Description'}
-                      </>
-                    )}
-                  </button>
-                  <AiPausedHint kind="generates" style={{ margin: 0 }} />
-                  {descriptionError && (
-                    <span style={{ fontSize: '12px', color: '#c0392b', fontFamily: SANS }}>
-                      {descriptionError}
-                    </span>
-                  )}
-                  {!descriptionError && courseDescription && !descriptionLoading && (
-                    <span style={{ fontSize: '12px', color: '#aaa', fontFamily: SANS }}>
-                      You can edit the generated text directly above.
-                    </span>
-                  )}
-                </div>
-              </div>
-            ) : (
-              courseDescription ? (
-                <p style={{ fontFamily: SANS, fontSize: '15.5px', color: '#333', lineHeight: '1.75', whiteSpace: 'pre-wrap', margin: 0 }}>
-                  {courseDescription}
-                </p>
-              ) : (
-                <p style={{ fontFamily: SANS, fontSize: '14px', color: '#bbb', fontStyle: 'italic', margin: 0 }}>
-                  No description has been added yet.
-                </p>
-              )
-            )}
-          </div>
-        )}
-
-        {/* ── Synopsis tab ─────────────────────────────────────────────────── */}
-        {activeView === 'synopsis' && (
-          <div>
-            {/* Owner — show synopsis or selection UI */}
-            {isOwner && (synopsis && !showSelectionUI) ? (
-              // Synopsis exists: show it with a regenerate button
-              <div style={{ background: '#fff', borderRadius: '16px', padding: '48px', boxShadow: '0 2px 16px rgba(0,0,0,0.07)', border: '1px solid rgba(0,0,0,0.05)' }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '28px', gap: '16px' }}>
-                  <div>
-                    <h2 style={{ fontFamily: SERIF, fontSize: '28px', color: '#111', letterSpacing: '-0.4px', margin: '0 0 6px' }}>
-                      Course Synopsis
-                    </h2>
-                    <p style={{ fontSize: '13px', color: '#aaa', fontFamily: SANS, margin: 0 }}>
-                      A detailed summary of what was covered — for parents.
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => { setShowSelectionUI(true); setSelectedBlockIds(new Set()); }}
-                    style={{
-                      fontFamily: SANS, fontSize: '12.5px', fontWeight: '500',
-                      padding: '7px 14px', borderRadius: '8px', cursor: 'pointer',
-                      background: 'transparent', border: '1px solid rgba(0,0,0,0.15)',
-                      color: '#555', whiteSpace: 'nowrap', flexShrink: 0,
-                      transition: 'background 0.15s',
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(0,0,0,0.04)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
-                  >
-                    ↻ Generate New Synopsis
-                  </button>
-                </div>
-                <div style={{ height: '1px', background: 'rgba(0,0,0,0.06)', marginBottom: '28px' }} />
-                <p style={{ fontFamily: SANS, fontSize: '15.5px', color: '#333', lineHeight: '1.85', whiteSpace: 'pre-wrap', margin: 0 }}>
-                  {synopsis}
-                </p>
-              </div>
-            ) : isOwner ? (
-              // Owner — show block selection UI
-              <div>
-                <div style={{ background: '#fff', borderRadius: '16px', padding: '32px 40px', boxShadow: '0 2px 16px rgba(0,0,0,0.07)', border: '1px solid rgba(0,0,0,0.05)', marginBottom: '16px' }}>
-                  <h2 style={{ fontFamily: SERIF, fontSize: '26px', color: '#111', letterSpacing: '-0.4px', margin: '0 0 8px' }}>
-                    Generate Synopsis
-                  </h2>
-                  <p style={{ fontSize: '13.5px', color: '#666', fontFamily: SANS, margin: '0 0 24px', lineHeight: '1.6' }}>
-                    Select the content, worksheets, and activities that were completed during this course. EdCube will generate a detailed parent-facing synopsis.
-                  </p>
-
-                  {allSelectableBlocks.length === 0 ? (
-                    <p style={{ fontFamily: SANS, fontSize: '14px', color: '#bbb', fontStyle: 'italic' }}>
-                      No blocks found in this course. Add content, worksheets, or activities in the workspace first.
-                    </p>
-                  ) : (
-                    <>
-                      {/* Controls row */}
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                          <button onClick={selectAll} style={{ fontFamily: SANS, fontSize: '12px', padding: '5px 12px', borderRadius: '6px', cursor: 'pointer', background: 'transparent', border: '1px solid rgba(0,0,0,0.15)', color: '#555' }}>
-                            Select All
-                          </button>
-                          <button onClick={clearAll} style={{ fontFamily: SANS, fontSize: '12px', padding: '5px 12px', borderRadius: '6px', cursor: 'pointer', background: 'transparent', border: '1px solid rgba(0,0,0,0.15)', color: '#555' }}>
-                            Clear All
-                          </button>
-                        </div>
-                        <span style={{ fontSize: '13px', color: '#888', fontFamily: SANS }}>
-                          {selectedBlockIds.size} of {allSelectableBlocks.length} block{allSelectableBlocks.length !== 1 ? 's' : ''} selected
-                        </span>
-                      </div>
-
-                      {/* Block selection list grouped by section/subsection */}
-                      {sections.filter(s => s.type !== 'break').map((section, sIdx) => {
-                        const sectionBlocks = allSelectableBlocks.filter(b => b.sectionTitle === section.title);
-                        if (sectionBlocks.length === 0) return null;
-
-                        // Group by subsection
-                        const bySubsection = {};
-                        sectionBlocks.forEach(b => {
-                          if (!bySubsection[b.subsectionTitle]) bySubsection[b.subsectionTitle] = [];
-                          bySubsection[b.subsectionTitle].push(b);
-                        });
-
-                        return (
-                          <div key={section.id} style={{ marginBottom: '20px' }}>
-                            {/* Section header */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-                              <div style={{ width: '20px', height: '2px', borderRadius: '1px', background: SECTION_GRADIENTS[sIdx % SECTION_GRADIENTS.length], flexShrink: 0 }} />
-                              <span style={{ fontSize: '10.5px', fontWeight: '700', letterSpacing: '0.8px', textTransform: 'uppercase', color: '#999', fontFamily: SANS }}>
-                                Section {sIdx + 1} — {section.title}
-                              </span>
-                            </div>
-
-                            {Object.entries(bySubsection).map(([subTitle, blocks]) => (
-                              <div key={subTitle} style={{ marginBottom: '14px', paddingLeft: '12px' }}>
-                                <div style={{ fontSize: '13px', fontWeight: '500', color: '#555', fontFamily: SANS, marginBottom: '8px' }}>
-                                  {subTitle}
-                                </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '8px' }}>
-                                  {blocks.map(block => {
-                                    const cfg = BLOCK_CONFIG[block.blockType] || BLOCK_CONFIG.content;
-                                    const selected = selectedBlockIds.has(block.id);
-                                    return (
-                                      <button
-                                        key={block.id}
-                                        onClick={() => toggleBlock(block.id)}
-                                        style={{
-                                          position: 'relative',
-                                          aspectRatio: '1/1',
-                                          backgroundColor: selected ? cfg.bg : '#F9F9F9',
-                                          border: selected ? `2px solid ${cfg.color}` : '2px solid #e5e7eb',
-                                          borderRadius: '10px',
-                                          padding: '12px',
-                                          display: 'flex',
-                                          flexDirection: 'column',
-                                          justifyContent: 'space-between',
-                                          cursor: 'pointer',
-                                          textAlign: 'left',
-                                          transition: 'border-color 0.15s, background-color 0.15s',
-                                        }}
-                                      >
-                                        {/* Checkmark */}
-                                        <div style={{
-                                          position: 'absolute', top: '8px', right: '8px',
-                                          width: '18px', height: '18px', borderRadius: '50%',
-                                          background: selected ? cfg.color : '#e5e7eb',
-                                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                          transition: 'background 0.15s',
-                                          fontSize: '10px', color: 'white', flexShrink: 0,
-                                        }}>
-                                          {selected ? '✓' : ''}
-                                        </div>
-                                        <div>
-                                          <span style={{
-                                            fontSize: '10px', fontWeight: '700', textTransform: 'uppercase',
-                                            letterSpacing: '0.5px', color: cfg.color,
-                                            backgroundColor: `${cfg.color}22`,
-                                            padding: '2px 6px', borderRadius: '4px',
-                                            display: 'inline-block', marginBottom: '8px',
-                                          }}>
-                                            {cfg.label}
-                                          </span>
-                                          <p style={{
-                                            margin: 0, fontSize: '12.5px', fontWeight: '500',
-                                            color: '#111', lineHeight: '1.35', fontFamily: SANS,
-                                            overflow: 'hidden',
-                                            display: '-webkit-box',
-                                            WebkitLineClamp: 3,
-                                            WebkitBoxOrient: 'vertical',
-                                          }}>
-                                            {block.blockTitle}
-                                          </p>
-                                        </div>
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        );
-                      })}
-
-                      {/* Generate button */}
-                      <AiPausedHint kind="generates" style={{ marginTop: '16px' }} />
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '24px' }}>
-                        <button
-                          onClick={handleGenerateSynopsis}
-                          disabled={selectedBlockIds.size === 0 || synopsisLoading || genGate.blocked}
-                          title={genGate.blocked ? genGate.message : undefined}
-                          style={{
-                            fontFamily: SANS, fontSize: '14px', fontWeight: '600',
-                            padding: '10px 24px', borderRadius: '10px', cursor: selectedBlockIds.size === 0 || synopsisLoading ? 'not-allowed' : 'pointer',
-                            background: selectedBlockIds.size === 0 ? '#e5e7eb' : '#111',
-                            border: 'none',
-                            color: selectedBlockIds.size === 0 ? '#aaa' : '#fff',
-                            transition: 'background 0.15s',
-                            display: 'flex', alignItems: 'center', gap: '8px',
-                          }}
-                        >
-                          {synopsisLoading ? (
-                            <>
-                              <span style={{ width: '14px', height: '14px', border: '2px solid rgba(255,255,255,0.4)', borderTopColor: '#fff', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.8s linear infinite' }} />
-                              Generating…
-                            </>
-                          ) : (
-                            `Generate Synopsis`
-                          )}
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-            ) : (
-              // Non-owner: show synopsis read-only
-              <div style={{ background: '#fff', borderRadius: '16px', padding: '48px', boxShadow: '0 2px 16px rgba(0,0,0,0.07)', border: '1px solid rgba(0,0,0,0.05)' }}>
-                <h2 style={{ fontFamily: SERIF, fontSize: '28px', color: '#111', letterSpacing: '-0.4px', margin: '0 0 28px' }}>
-                  Course Synopsis
-                </h2>
-                {synopsis ? (
-                  <p style={{ fontFamily: SANS, fontSize: '15.5px', color: '#333', lineHeight: '1.85', whiteSpace: 'pre-wrap', margin: 0 }}>
-                    {synopsis}
-                  </p>
-                ) : (
-                  <p style={{ fontFamily: SANS, fontSize: '14px', color: '#bbb', fontStyle: 'italic', margin: 0 }}>
-                    The teacher hasn&apos;t generated a synopsis yet.
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
-        )}
 
         {/* ── Course Info tab ───────────────────────────────────────────────── */}
         {activeView === 'course-info' && (

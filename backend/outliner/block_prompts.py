@@ -188,7 +188,7 @@ def get_worksheet_subtype_compatibility() -> Dict[str, List[str]]:
 CONTENT_SECTION_TOOLKIT = """
 Available sections (choose 3-5 that fit the concept — do NOT use sections that don't apply):
 
-  Explain It        — Always include. Core explanation: what this concept IS, 4-6 sentences.
+  Explain It        — Always include. Core explanation: what this concept IS, 4-6 sentences in two short paragraphs.
   How It Works      — For processes, mechanisms, systems, or cause-and-effect.
   Key Points        — For fact-heavy topics. 3-5 bullet points that would work on a PPT slide.
   Parts / Structure — For anatomy, components, or physical structures (what are the pieces?).
@@ -202,6 +202,16 @@ Available sections (choose 3-5 that fit the concept — do NOT use sections that
 
 Write the chosen sections as natural flowing prose or lists — NOT as a rigid form.
 The content must read the way a knowledgeable teacher would explain it, not like a template.
+
+LAYOUT (the text is shown as-is, so line breaks matter — use "\n" newlines in the JSON string):
+  - Each section header is on its OWN line, as **Header** (no colon after it), followed by a newline.
+  - Leave a blank line ("\n\n") between sections.
+  - Keep paragraphs short: 2-3 sentences each; split a longer explanation into two paragraphs.
+  - Examples, key points and parts go as a list, one item per line starting with "- ".
+  - Steps go as a numbered list, one step per line ("1. ", "2. ", ...).
+  - Never run several sections together in one paragraph.
+  Example:
+  **Explain It**\nSoldering joins metal parts by melting a filler metal called solder.\n\nThe solder cools into a solid joint that conducts electricity.\n\n**In Real Life**\n- Phones and laptops\n- Game controllers\n\n**Why It Matters**\nIt is how most electronics are built and repaired.
 """
 
 
@@ -418,7 +428,7 @@ OUTPUT FORMAT (strict JSON, no other text, one entry per approved block spec abo
       "type": "content",
       "subtype": "string — copied from the approved composition",
       "title": "string — copied from the approved composition",
-      "content": "string — natural prose using 3-5 chosen sections from the toolkit, written with **Section Name** as bold headers",
+      "content": "string — 3-5 chosen sections from the toolkit, each **Section Name** header on its own line, blank line between sections, short paragraphs and '- ' lists (see LAYOUT)",
       "key_takeaways": ["string", "string", "string"],
       "pedagogy": {{
         "teaching_approach": "string",

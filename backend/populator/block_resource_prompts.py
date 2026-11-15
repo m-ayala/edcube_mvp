@@ -153,14 +153,34 @@ names, channels, sites, topics or styles they mention, while still fitting this 
 """
 
 
+def _boxes_part(boxes) -> str:
+    """Discover for a whole topic: the plan must cover every box, and say which box each entry is for."""
+    if not boxes:
+        return ""
+    listed = "\n".join(f"  {i}. {b}" for i, b in enumerate(boxes, 1))
+    n = len(boxes)
+    return f"""
+THIS TOPIC HAS {n} LESSON BOXES:
+{listed}
+EVERY box must get at least one article OR video query written for it (an image subject too where a
+picture helps). Add "box": <its number> to EVERY article, image and video entry, and write each query
+for that box specifically. Give up to {max(3, min(6, n))} article entries and up to {max(2, min(6, n))}
+video entries, so all boxes are covered. Videos are objects here: {{"query": "...", "box": <number>}}.
+"""
+
+
 def build_plan_prompt(block_text: str, block_type: str, grade: str, max_image_subjects: int,
-                      teacher_request: str = "", kinds=None) -> str:
+                      teacher_request: str = "", kinds=None, boxes=None) -> str:
     g = guidance_for(block_type)
-    max_image_subjects = int(g.get("max_image_subjects", max_image_subjects))
+    max_image_subjects = max(int(g.get("max_image_subjects", max_image_subjects)), min(6, len(boxes or [])))
     grade_part = f" for grade {grade}" if grade else ""
+    box_field = ', "box": <box number>' if boxes else ""
+    video_entry = '{"query": "...", "box": <box number>}' if boxes else '"query"'
+    count_line = ("Cover EVERY box: each box number appears on at least one article or video entry."
+                  if boxes else "Give up to 3 article entries with different roles.")
     return f"""A teacher has this {g['kind']}{grade_part}:
 {block_text}
-{_teacher_request_part(teacher_request, kinds)}
+{_teacher_request_part(teacher_request, kinds)}{_boxes_part(boxes)}
 The teacher pressed "Discover" to find links for this block. What to find depends on the block:
 - WORKSHEET or ACTIVITY block: worksheet links students and the teacher can use with it, as
   articles (printable worksheets, handouts, reference pages, procedures), videos (demonstrations,
@@ -185,10 +205,10 @@ VIDEOS: {g['videos']}
 Return JSON:
 {{"essence": "<one sentence: what this block teaches or has students do>",
   "needs": "<what a teacher needs to deliver this block, 1-2 sentences>",
-  "articles": [{{"role": "<short role, e.g. student_explainer, item_reference, printable_worksheet, lesson_plan, safety_guide>", "query": "..."}}],
-  "images": [{{"subject": "<what the picture must show>", "why": "<the line or item in the block it illustrates>", "query": "..."}}],
-  "videos": ["query"]}}
-Give up to 3 article entries with different roles."""
+  "articles": [{{"role": "<short role, e.g. student_explainer, item_reference, printable_worksheet, lesson_plan, safety_guide>", "query": "..."{box_field}}}],
+  "images": [{{"subject": "<what the picture must show>", "why": "<the line or item in the block it illustrates>", "query": "..."{box_field}}}],
+  "videos": [{video_entry}]}}
+{count_line}"""
 
 
 PLAN_SYSTEM = "You plan classroom resources precisely from lesson text, for any school subject."

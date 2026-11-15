@@ -17,6 +17,7 @@ import tempfile
 import uuid
 from datetime import datetime
 from services.orchestrator import CurriculumOrchestrator
+from interpreter.requirements_interpreter import teacher_intent_of
 from services.firebase_service import FirebaseService
 from schemas.generation_schema import GenerateRequest, GenerateResponse
 from services.generation_service import GenerationService
@@ -271,6 +272,13 @@ async def generate_curriculum(
                 images=combined_vision_images or None,
             )
 
+            if outline_data:
+                # Carried on the outline so Phase 2 (generate-blocks) and "more subsections" use the
+                # same teacher intent without re-interpreting the requirements.
+                intent = teacher_intent_of(interpreted_requirements)
+                if intent:
+                    outline_data['teacher_intent'] = intent
+
             if not outline_data:
                 state["partial"].update(stage="outline", error="no outline")
                 yield f"data: {json.dumps({'phase': 1, 'message': 'Error: Failed to generate outline', 'progress': 0, 'error': True})}\n\n"
@@ -344,6 +352,7 @@ class GenerateMoreSubsectionsRequest(BaseModel):
     numWorksheets: int = 0
     numActivities: int = 0
     existingSubsections: List[SubsectionLabel] = []
+    teacherIntent: Optional[Dict[str, Any]] = None  # from the outline (see generate-curriculum)
 
 
 @router.post("/generate-more-subsections", dependencies=[Depends(enforce_quota("generates", "generate_more_subsections"))])
@@ -371,6 +380,7 @@ async def generate_more_subsections(body: GenerateMoreSubsectionsRequest, curren
             'num_days':        body.numDays,
             'num_worksheets':  body.numWorksheets,
             'num_activities':  body.numActivities,
+            'teacher_intent':  teacher_intent_of({'teacher_intent': body.teacherIntent}),
         }
         existing_subsections = [s.model_dump() for s in body.existingSubsections]
 
@@ -456,6 +466,8 @@ async def generate_blocks(body: GenerateBlocksRequest, current_user: dict = Depe
                 'num_days':        body.numDays,
                 'hours_per_day':   body.hoursPerDay,
                 'objectives':      body.objectives,
+                # Worked out once in generate-curriculum and carried on the approved outline.
+                'teacher_intent':  teacher_intent_of({'teacher_intent': body.outline.get('teacher_intent')}),
             }
 
             approved_subsections = []
@@ -1607,8 +1619,9 @@ When the teacher asks for a resource block while focused on a TOPIC BOX:
     Choose 3-5 sections from this toolkit that best fit the concept. Do not use sections that don't apply.
     Write naturally — like a knowledgeable teacher explaining it, not filling out a form.
 
-    Available sections (use **Section Name** as bold headers):
-      Explain It        — Always include. Core explanation: what this concept IS, 4-6 sentences.
+    Available sections (use **Section Name** as bold headers, each header on its OWN line with no colon, a blank
+    line between sections, short 2-3 sentence paragraphs, '- ' lists one item per line; never run sections together):
+      Explain It        — Always include. Core explanation: what this concept IS, 4-6 sentences in two short paragraphs.
       How It Works      — For processes, mechanisms, systems, or cause-and-effect.
       Key Points        — For fact-heavy topics. 3-5 bullet points that could appear on a PPT slide.
       Parts / Structure — For anatomy, components, or physical structures.
@@ -1947,6 +1960,114 @@ async def generate_block_links(request: GenerateBlockLinksRequest, current_user:
         return {"links": links}
     except Exception as e:
         logger.error(f"Browserbase block link generation error: {type(e).__name__}: {e}", exc_info=True)
+        refund_charge(current_user, "generates")  # swallowed failure: nothing delivered
+        return {"links": []}
+
+
+class SectionTopic(BaseModel):
+    title: str = Field("", max_length=200)
+    blockTitles: List[str] = Field(default_factory=list, max_length=12)
+
+
+class GenerateSectionLinksRequest(BaseModel):
+    sectionTitle: str = Field("", max_length=200)
+    sectionDescription: Optional[str] = Field("", max_length=1200)
+    topics: List[SectionTopic] = Field(default_factory=list, max_length=30)
+    subject: Optional[str] = ""
+    topic: Optional[str] = ""
+    gradeLevel: Optional[str] = ""
+    teacherUid: Optional[str] = None
+    teacherRequest: Optional[str] = Field("", max_length=500)  # Edo: what the teacher asked to find
+    kinds: Optional[List[str]] = Field(None, max_length=3)     # Edo: "article" | "image" | "video"; None = all
+
+
+def section_links_text(request: GenerateSectionLinksRequest) -> str:
+    """The section as text for the resource planner: one search plan that covers every topic.
+    Kept compact (titles only) so the planner call stays small."""
+    lines = [
+        "This is one part of a course (a topic and the lesson boxes in it), not a single lesson block. "
+        "Find resources that cover it as a whole: spread them across the parts listed below rather than "
+        "all on one, and stay on what they are about (do not drift into neighbouring subjects).",
+    ]
+    if request.sectionDescription:
+        lines.append(f"DESCRIPTION: {request.sectionDescription.strip()}")
+    topics = [t for t in request.topics if (t.title or "").strip()]
+    if topics:
+        lines.append("PARTS TO COVER:")
+        for i, t in enumerate(topics, 1):
+            boxes = [b.strip() for b in t.blockTitles if (b or "").strip()][:8]
+            lines.append(f"{i}. {t.title.strip()}" + (f" (boxes: {'; '.join(boxes)})" if boxes else ""))
+    return "\n".join(lines)
+
+
+def _with_topic_index(link: dict, named: list) -> dict:
+    """Swap the finder's 1-based "box" for "topicIndex": the 0-based position in request.topics of
+    the box (topic) the link was found for. Links without a valid box are left without one."""
+    out = {k: v for k, v in link.items() if k != "box"}
+    box = link.get("box")
+    if isinstance(box, int) and 1 <= box <= len(named):
+        out["topicIndex"] = named[box - 1][0]
+    return out
+
+
+@router.post("/curriculum/generate-section-links", dependencies=[Depends(enforce_quota("generates", "generate_section_links"))])
+async def generate_section_links(request: GenerateSectionLinksRequest, current_user: dict = Depends(require_org)):
+    """
+    Discover for one part of a course: ONE resource search covering a subsection (topic) and all
+    its boxes, instead of one search per box. The workspace sends the subsection title as
+    sectionTitle and its boxes as topics; a whole section (title + its topics) works the same way. Same providers as generate-block-links
+    (RESOURCE_SEARCH_PROVIDER, legacy fallback when BROWSERBASE_API_KEY is missing).
+    Returns { "links": [{ "url", "label", "type", ... }] }.
+    """
+    resolve_caller_uid(current_user, request.teacherUid)  # optional field; 403 if it mismatches the token
+    from config import APIConfig
+
+    title = (request.sectionTitle or "").strip() or next((t.title for t in request.topics if t.title), "")
+    text = section_links_text(request)
+    # The boxes (topics) the search must cover, and where each sits in request.topics.
+    named = [(i, t.title.strip()) for i, t in enumerate(request.topics) if (t.title or "").strip()][:8]
+    topic_titles = ", ".join(t.title for t in request.topics if t.title)[:500]
+
+    provider = (APIConfig.RESOURCE_SEARCH_PROVIDER or "").strip().lower()
+    if provider not in ("browserbase", "legacy"):
+        provider = "browserbase"
+    if provider == "browserbase" and not APIConfig.BROWSERBASE_API_KEY:
+        logger.warning("[generate-section-links] BROWSERBASE_API_KEY is not set; falling back to legacy provider")
+        provider = "legacy"
+
+    if provider == "legacy":
+        return await _generate_block_links_legacy(GenerateBlockLinksRequest(
+            blockType="content", blockTitle=title, blockContent=text,
+            topicTitle=title, topicDescription=topic_titles,
+            subject=request.subject or "", topic=request.topic or "", gradeLevel=request.gradeLevel or "",
+            teacherUid=request.teacherUid, teacherRequest=request.teacherRequest or "", kinds=request.kinds,
+        ), current_user)
+
+    try:
+        from populator.block_resource_finder import find_block_resources
+
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(
+            None,
+            lambda: find_block_resources(
+                block_title=title,
+                block_type="section",
+                block_content=text,
+                topic_title=title,
+                topic_description=(request.sectionDescription or "").strip(),
+                subject=request.subject or "",
+                topic=request.topic or "",
+                grade_level=request.gradeLevel or "",
+                teacher_request=request.teacherRequest or "",
+                kinds=request.kinds,
+                boxes=[t for _, t in named],
+            ),
+        )
+        links = [_with_topic_index(link, named) for link in ((result or {}).get("links") or [])]
+        logger.info(f"[generate-section-links] {len(request.topics)} topic(s) -> {len(links)} link(s)")
+        return {"links": links}
+    except Exception as e:
+        logger.error(f"Section link generation error: {type(e).__name__}: {e}", exc_info=True)
         refund_charge(current_user, "generates")  # swallowed failure: nothing delivered
         return {"links": []}
 

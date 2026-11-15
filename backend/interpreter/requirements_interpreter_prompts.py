@@ -96,6 +96,26 @@ YOUR TASK — read the text above and determine:
    If a question was asked, actually answer it briefly in "answers_to_teacher_questions" based on
    what you can infer from the rest of the text — don't just restate the question.
 
+5. TEACHER INTENT (ALWAYS fill this, whether or not the text is day-by-day): work out what the teacher
+   actually wants students to learn, not just the words they used. Read the whole request, including any
+   numbered list, the summary lines ("Three things: ..."), product names and time limits.
+   - requested_topics: every topic the teacher asked for, in the teacher's order, close to their wording.
+     Merge items the teacher clearly repeated (e.g. "how to solder" and "how to solder and safe practices").
+   - focus_per_topic: for EACH requested topic, one line saying what it is really about and what it is NOT
+     about, inferred from the teacher's wording. Example: "Intro to the accelerometer" with "what an
+     accelerometer is and how it works" → focus "what it measures (acceleration, tilt from gravity) and how
+     it senses motion — NOT pinouts, wiring or connections". Only add a NOT when a generic course would
+     plausibly drift there.
+   - deduced_objectives: 3-6 things students should be able to do by the end, inferred from the whole
+     request (measurable verbs).
+   - emphasis: what the teacher signals matters most (e.g. hands-on time, a specific skill).
+   - constraints: explicit limits (time caps like "no more than 40 minutes", "very quickly", order, equipment).
+   - equipment: the exact hardware/materials named (e.g. "ADXL345 accelerometer", "0.96in SSD1306 I2C OLED").
+     Equipment is CONTEXT for examples; it is NOT a request to teach its pins or wiring unless the
+     teacher asked for that.
+   - not_requested: topics a generic course on this subject would add that the teacher did NOT ask for
+     (e.g. "accelerometer pin wiring", "OLED library installation"). Leave empty if nothing obvious.
+
 OUTPUT FORMAT (strict JSON, no other text):
 {{
   "detected_subject": "string — e.g. 'Biology'",
@@ -118,7 +138,16 @@ OUTPUT FORMAT (strict JSON, no other text):
     }}
   ],
   "gap_flags": ["string"],
-  "answers_to_teacher_questions": ["string"]
+  "answers_to_teacher_questions": ["string"],
+  "teacher_intent": {{
+    "requested_topics": ["string"],
+    "focus_per_topic": [{{"topic": "string", "focus": "string"}}],
+    "deduced_objectives": ["string"],
+    "emphasis": ["string"],
+    "constraints": ["string"],
+    "equipment": ["string"],
+    "not_requested": ["string"]
+  }}
 }}
 
 If there's no recurring structure, set "recurring_structure" to null (not an object with empty

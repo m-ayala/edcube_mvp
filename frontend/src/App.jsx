@@ -19,16 +19,12 @@ import Search from './components/search/Search';
 import ContactPage from './components/pages/ContactPage';
 import SynopsisPage from './components/synopsis/SynopsisPage';
 import AfterschoolSynopsisPage from './components/afterschoolSynopsis/AfterschoolSynopsisPage';
-import CourseBuilderShell from './components/courseBuilder/CourseBuilderShell';
-import OutlineStage from './components/courseBuilder/OutlineStage';
-import PlanStage from './components/courseBuilder/PlanStage';
 import AdminPage from './components/admin/AdminPage';
 import BlogPage from './components/blog/BlogPage';
 import OrgOnly from './components/auth/OrgOnly';
 import PublicSharePage from './components/share/PublicSharePage';
 import InvitePage from './components/share/InvitePage';
 import PendingInviteRedirect from './components/share/PendingInviteRedirect';
-import { COURSE_BUILDER_ENABLED } from './constants/featureFlags';
 
 function App() {
   return (
@@ -57,13 +53,6 @@ function App() {
           >
             <Route path="/my-courses" element={<MyCourses />} />
             <Route path="/course-designer" element={<CourseDesigner />} />
-            {/* Course Builder (behind COURSE_BUILDER_ENABLED, see constants/featureFlags.js) */}
-            {COURSE_BUILDER_ENABLED && (
-              <Route path="/course-builder" element={<CourseBuilderShell />}>
-                <Route path="outline" element={<OutlineStage />} />
-                <Route path="plan" element={<PlanStage />} />
-              </Route>
-            )}
             <Route path="/course-workspace" element={<CourseWorkspace />} />
             <Route path="/course-view" element={<CourseViewPage />} />
             <Route path="/profile" element={<TeacherProfile />} />

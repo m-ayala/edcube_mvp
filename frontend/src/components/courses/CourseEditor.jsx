@@ -3,6 +3,8 @@ import { Droppable, Draggable } from '@hello-pangea/dnd';
 import { GripVertical, Edit2, Check, Trash2, Plus, ChevronDown, ChevronLeft, Pencil } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { FONT, T, BLOCK_TAG } from '../../constants/editorTheme';
+import LinksPanel from './LinksPanel';
+import { tidyBlockContent } from '../../utils/contentFormat';
 
 // Extracted outside CourseEditor so React keeps stable identity across renders
 export const EditableField = ({
@@ -280,8 +282,10 @@ const CourseEditor = ({
   actions,
   onAddBreak,
   navigate,
-  onNavigateToSubsection,
   onNavigateToBlock,
+  onDiscoverSubsection = null,
+  linkJobs = {},
+  onActiveSectionChange = null,
   onBack,
   courseName,
   pendingSubsectionIds,
@@ -297,6 +301,10 @@ const CourseEditor = ({
   const section = sections[activeIndex] || null;
   const secNum = activeIndex + 1;
 
+  // Tell the workspace which section is on screen (Edo's "find links" targets it).
+  const shownSectionId = section?.id ?? null;
+  useEffect(() => { onActiveSectionChange?.(shownSectionId); }, [shownSectionId, onActiveSectionChange]);
+
   const addBlockToSub = (subId) => {
     if (!section) return;
     const id = nextBlockId();
@@ -306,7 +314,7 @@ const CourseEditor = ({
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', background: '#FFFFFF', fontFamily: FONT, position: 'relative', zIndex: 1 }}>
-      <div style={{ maxWidth: 1240, margin: '0 auto', padding: '26px 44px 120px' }}>
+      <div style={{ maxWidth: 1480, margin: '0 auto', padding: '26px 44px 120px' }}>
 
         {/* ── Breadcrumb ── */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '15px', fontWeight: 600 }}>
@@ -435,7 +443,6 @@ const CourseEditor = ({
                                 {...dragProv.draggableProps}
                                 onMouseEnter={() => setHoveredSub(sub.id)}
                                 onMouseLeave={() => setHoveredSub(null)}
-                                onClick={() => onNavigateToSubsection?.(section.id, sub.id)}
                                 style={{
                                   ...dragProv.draggableProps.style,
                                   border: `1px solid ${T.rowBorder}`,
@@ -465,12 +472,14 @@ const CourseEditor = ({
                                     display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '2px',
                                   }}>{secNum}.{subIdx + 1}</span>
                                   <div style={{ flex: 1, minWidth: 0, paddingTop: '3px' }}>
-                                    <div style={{
-                                      fontFamily: FONT, fontWeight: 700, fontSize: '20px', lineHeight: 1.3,
-                                      color: T.cardTitle, textTransform: 'capitalize',
-                                    }}>
-                                      {sub.title || 'Untitled subsection'}
-                                    </div>
+                                    <EditableField
+                                      value={sub.title}
+                                      onChange={(v) => actions.updateSubsectionTitle(section.id, sub.id, v)}
+                                      placeholder="Untitled subsection"
+                                      accentColor={T.primary}
+                                      maxLength={120}
+                                      inputStyle={{ fontFamily: FONT, fontWeight: 700, fontSize: '20px', lineHeight: 1.3, color: T.cardTitle }}
+                                    />
                                     {pending && (
                                       <span style={{
                                         display: 'inline-flex', alignItems: 'center', gap: '6px', marginTop: '6px',
@@ -484,13 +493,6 @@ const CourseEditor = ({
                                   </div>
                                   <div style={{ display: 'flex', gap: '8px', flexShrink: 0, marginTop: '2px' }}>
                                     <button
-                                      onClick={(e) => { e.stopPropagation(); onNavigateToSubsection?.(section.id, sub.id); }}
-                                      style={iconBtn(T.iconEditBg, T.iconEditFg)}
-                                      title="Open subsection to edit"
-                                    >
-                                      <Pencil size={16} />
-                                    </button>
-                                    <button
                                       onClick={(e) => { e.stopPropagation(); actions.confirmDeleteSubsection(section.id, sub.id); }}
                                       style={iconBtn(T.iconDelBg, T.iconDelFg)}
                                       title="Delete subsection"
@@ -500,6 +502,8 @@ const CourseEditor = ({
                                   </div>
                                 </div>
 
+                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '20px' }}>
+                                <div style={{ flex: 1, minWidth: 0 }}>
                                 {/* Block cards */}
                                 <Droppable droppableId={`blocks-${sub.id}`} type="BLOCK" direction="horizontal">
                                   {(blockDrop, blockSnap) => (
@@ -515,7 +519,9 @@ const CourseEditor = ({
                                     >
                                       {blocks.map((block, blockIdx) => {
                                         const tag = BLOCK_TAG[block.type] || BLOCK_TAG.content;
-                                        const preview = (block.content || block.description || '').replace(/[#*_`>[\]]/g, '').trim();
+                                        const preview = (tidyBlockContent(block.content || block.description || '') || '')
+                                          .split('\n').filter(l => !/^\*\*[^*]+\*\*:?$/.test(l.trim())).join(' ')
+                                          .replace(/[#*_`>[\]]/g, '').replace(/\s+/g, ' ').trim();
                                         const dur = block.duration_minutes || block.duration;
                                         return (
                                           <Draggable key={block.id} draggableId={block.id} index={blockIdx}>
@@ -612,6 +618,31 @@ const CourseEditor = ({
                                     </div>
                                   )}
                                 </Droppable>
+                                </div>
+
+                                {/* ── Subsection resources: one Discover for this topic and all its boxes ── */}
+                                <aside style={{
+                                  width: '300px', flexShrink: 0, marginTop: '18px', boxSizing: 'border-box',
+                                  maxHeight: '420px', overflowY: 'auto',
+                                  background: '#FAFAF8', border: `1px solid ${T.cardBorder}`, borderRadius: '12px', padding: '14px',
+                                }}>
+                                  <LinksPanel
+                                    heading="Resources"
+                                    links={sub.links || []}
+                                    onChange={(next) => actions.updateSubsectionLinks(section.id, sub.id, next)}
+                                    onDiscover={onDiscoverSubsection ? () => onDiscoverSubsection(section.id, sub.id) : null}
+                                    discoverStatus={linkJobs[sub.id]}
+                                    searchingText="Finding articles, images and videos for this topic and its boxes. This can take up to a minute."
+                                    emptyText="No links yet. Discover searches once for this topic and all its boxes, or add a URL or pick from your library."
+                                    imageMinWidth={110}
+                                    boxTitleOf={(link) => {
+                                      const b = link.forBlockId && blocks.find(x => x.id === link.forBlockId);
+                                      return b ? (b.title || 'Untitled box') : null;
+                                    }}
+                                    onOpenBox={(link) => onNavigateToBlock?.(section.id, sub.id, link.forBlockId)}
+                                  />
+                                </aside>
+                                </div>
                               </div>
                             )}
                           </Draggable>

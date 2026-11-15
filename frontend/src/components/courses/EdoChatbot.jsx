@@ -441,16 +441,17 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
   };
 
   // ── Discover from chat ─────────────────────────────────────────────────
-  // The teacher asked Edo to find links ("find me some videos on..."). Edo runs the same web search
-  // as the block's Discover button, steered by the request, and the links land in the block's
-  // Links & Resources (where the teacher can remove any of them).
+  // The teacher asked Edo to find links ("find me some videos on..."). Edo runs the same search as
+  // a subsection's Discover button (one search for the topic and all its boxes), steered by the
+  // request. The links land in that subsection's Resources, where the teacher can remove any of them.
+  // Target: the subsection of the open topic box; else the only subsection of the section on screen.
   const KIND_LABELS = { article: 'Article', image: 'Image', video: 'Video' };
   const runDiscover = async ({ focus, kinds, message }) => {
-    const subId = currentPage?.subsectionId;
-    const blockId = currentPage?.blockId;
-    const block = currentPage?.page === 'block' ? (handsOnResources[subId] || []).find(b => b.id === blockId) : null;
-    if (!block) {
-      addTextMessage('ai-text', 'Open the block you want links for, then ask me again and I will search for them.');
+    const section = sections.find(s => s.id === currentPage?.sectionId && s.type !== 'break');
+    const subs = section?.subsections || [];
+    const sub = subs.find(ss => ss.id === currentPage?.subsectionId) || (subs.length === 1 ? subs[0] : null);
+    if (!sub) {
+      addTextMessage('ai-text', 'Which topic should I find links for? Open one of its boxes and ask me again, or press Discover in that topic\'s Resources.');
       return;
     }
     if (!onDiscoverLinks) {
@@ -458,15 +459,15 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
       return;
     }
     if (genBlocked) {
-      addTextMessage('ai-text', 'Discover is paused for now. You can still add links by hand with "Add Link".');
+      addTextMessage('ai-text', 'Discover is paused for now. You can still add links by hand with "Add link" in the topic\'s Resources.');
       return;
     }
-    if (linkGenJobs[blockId] === 'generating') {
-      addTextMessage('ai-text', 'I am already searching for links for this block. They will show up under Links & Resources in a moment.');
+    if (linkGenJobs[sub.id] === 'generating') {
+      addTextMessage('ai-text', 'I am already searching for links for this topic. They will show up in its Resources in a moment.');
       return;
     }
     addTextMessage('ai-text', `${message || 'Let me search the web for that.'} This can take up to a minute.`);
-    const { added = [], error } = (await onDiscoverLinks(blockId, subId, block, { teacherRequest: focus, kinds })) || {};
+    const { added = [], error } = (await onDiscoverLinks(section.id, sub.id, { teacherRequest: focus, kinds })) || {};
     if (error) {
       addTextMessage('ai-text', quotaReply(error, 'The search did not work this time. Please try again in a moment.'));
     } else if (added.length === 0) {
@@ -474,7 +475,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
     } else {
       const lines = added.slice(0, 10).map(l => `- **${KIND_LABELS[l.type] || 'Link'}:** ${l.label || l.url}`);
       const more = added.length > 10 ? `\n…and ${added.length - 10} more.` : '';
-      addTextMessage('ai-text', `I added ${added.length} link${added.length === 1 ? '' : 's'} to this block's Links & Resources:\n${lines.join('\n')}${more}\nRemove any you don't want.`);
+      addTextMessage('ai-text', `I added ${added.length} link${added.length === 1 ? '' : 's'} to the Resources of "${sub.title || 'this topic'}":\n${lines.join('\n')}${more}\nRemove any you don't want.`);
     }
   };
 
@@ -589,10 +590,10 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
   // Same as the block's Discover button, from the chat (no Edo message is spent).
   const handleFindLinks = async () => {
     if (isTyping || genBlocked) return;
-    addTextMessage('user', 'Find videos and links for this block');
+    addTextMessage('user', 'Find videos and links for this topic');
     setIsTyping(true);
     try {
-      await runDiscover({ focus: '', kinds: null, message: 'Searching for articles, images and videos for this block.' });
+      await runDiscover({ focus: '', kinds: null, message: 'Searching for articles, images and videos for this topic and its boxes.' });
     } finally {
       setIsTyping(false);
     }
@@ -1479,7 +1480,7 @@ const EdoChatbot = ({ sections, courseName, formData, actions, currentUser, onCl
                 opacity: (isTyping || genBlocked) ? 0.55 : 1, transition: 'all 0.15s', textAlign: 'center',
               }}
             >
-              🔎 Find videos & links
+              🔎 Find links for this topic
             </button>
           )}
         </div>

@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { logoutTeacher } from '../../firebase/authService';
-import { fetchCourseDocument } from '../../services/courseBuilderApi';
+import { fetchCourseDocument } from '../../services/courseApi';
 import { acceptInvite, getInviteInfo } from '../../services/sharingApi';
 import { courseViewState } from '../../utils/courseNav';
 import { forgetInvite, pendingInviteToken, rememberInvite } from '../../utils/pendingInvite';
